@@ -765,7 +765,18 @@ def api_templates_uploader_zip_contents():
         file_url = None
         last_error = None
         for _ in range(8):  # retry up to ~8 seconds
-            resp = requests.post(graphql_url, headers=headers, json={'query': query, 'variables': {'id': file_global_id}})
+            # Handle redirects for GraphQL requests
+            resp = requests.post(graphql_url, headers=headers, json={'query': query, 'variables': {'id': file_global_id}}, allow_redirects=False)
+            
+            # If redirected, follow it
+            if resp.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = resp.headers.get('Location', graphql_url)
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(graphql_url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                resp = requests.post(redirect_url, headers=headers, json={'query': query, 'variables': {'id': file_global_id}}, allow_redirects=True)
+            
             if resp.status_code != 200:
                 last_error = f'GraphQL HTTP {resp.status_code}'
                 time.sleep(1)
@@ -950,7 +961,18 @@ def api_templates_uploader_use_version():
                 'value': file_global_id
             }]
         }
-        resp = requests.post(graphql_url, headers=headers, json={'query': mutation, 'variables': variables})
+        # Handle redirects for GraphQL requests
+        resp = requests.post(graphql_url, headers=headers, json={'query': mutation, 'variables': variables}, allow_redirects=False)
+        
+        # If redirected, follow it
+        if resp.status_code in [301, 302, 303, 307, 308]:
+            redirect_url = resp.headers.get('Location', graphql_url)
+            if redirect_url.startswith('/'):
+                from urllib.parse import urlparse
+                parsed = urlparse(graphql_url)
+                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+            resp = requests.post(redirect_url, headers=headers, json={'query': mutation, 'variables': variables}, allow_redirects=True)
+        
         if resp.status_code != 200:
             return jsonify({'success': False, 'error': f'GraphQL HTTP {resp.status_code}'}), 400
         j = resp.json()

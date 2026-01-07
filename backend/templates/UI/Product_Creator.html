@@ -1465,6 +1465,16 @@
             cursor: move;
             user-select: none;
         }
+        
+        .media-preview-item img,
+        .media-preview-item video {
+            pointer-events: none;
+        }
+        
+        .media-preview-item .remove-media,
+        .media-preview-item .drag-handle {
+            pointer-events: auto;
+        }
 
         .media-preview-item.dragging {
             opacity: 0.5;
@@ -1742,43 +1752,17 @@ Dietary</textarea>
                             <label class="form-label">Product Media (Images/Videos)</label>
                             
                             <!-- Media Source Selection -->
-                            <div class="media-source-tabs">
-                                <button type="button" class="media-tab active" onclick="switchMediaTab('upload')" id="uploadTab">
-                                    <i class="fas fa-cloud-upload-alt"></i> Upload New Files
-                                </button>
-                                <button type="button" class="media-tab" onclick="switchMediaTab('select')" id="selectTab">
-                                    <i class="fas fa-folder-open"></i> Select from Shopify
-                                </button>
-                            </div>
-                            
-                            <!-- Upload Tab Content -->
-                            <div class="media-tab-content" id="uploadTabContent">
-                                <div class="media-upload-container">
-                                    <div class="media-upload-area" id="mediaUploadArea">
-                                        <div class="upload-icon">
-                                            <i class="fas fa-cloud-upload-alt"></i>
-                                        </div>
-                                        <div class="upload-text">
-                                            <p>Drag & drop images/videos here or click to browse</p>
-                                            <p class="upload-limit">• Maximum 250 files •</p>
-                                        </div>
-                                        <input type="file" id="mediaFiles" name="mediaFiles" multiple accept="image/*,video/*" style="display: none;">
+                            <!-- Upload Content -->
+                            <div class="media-upload-container">
+                                <div class="media-upload-area" id="mediaUploadArea">
+                                    <div class="upload-icon">
+                                        <i class="fas fa-cloud-upload-alt"></i>
                                     </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Select Tab Content -->
-                            <div class="media-tab-content" id="selectTabContent" style="display: none;">
-                                <div class="shopify-media-container">
-                                    <div class="shopify-media-header">
-                                        <div class="media-search-box">
-                                            <input type="text" id="mediaSearchInput" placeholder="Search media files..." onkeyup="filterShopifyMedia()">
-                                            <i class="fas fa-search"></i>
-                                        </div>
+                                    <div class="upload-text">
+                                        <p>Drag & drop images/videos here or click to browse</p>
+                                        <p class="upload-limit">• Maximum 250 files •</p>
                                     </div>
-                                    <div class="shopify-media-grid" id="shopifyMediaGrid">
-                                        
-                                    </div>
+                                    <input type="file" id="mediaFiles" name="mediaFiles" multiple accept="image/*,video/*" style="display: none;">
                                 </div>
                             </div>
                             
@@ -2178,8 +2162,8 @@ Dietary</textarea>
         function sanitizeBase(s) {
             let base = (s || '').trim().replace(/\r|\n/g, ' ');
             const forbidden = /[<>:"/\\|?*]/g;
-            base = base.replace(forbidden, '');
-            base = base.split(/\s+/).filter(Boolean).join('_');
+            base = (base || '').replace(forbidden, '');
+            base = (base || '').split(/\s+/).filter(Boolean).join('_');
             return base;
         }
 
@@ -3496,7 +3480,7 @@ Dietary</textarea>
                 
                 // Special case for product_size - create 3 separate input fields
                 if (isProductSize) {
-                    const sizeParts = currentValue.split('*').map(part => part.trim());
+                    const sizeParts = (currentValue || '').split('*').map(part => part.trim());
                     const length = sizeParts[0] || '';
                     const width = sizeParts[1] || '';
                     const height = sizeParts[2] || '';
@@ -3890,6 +3874,9 @@ Dietary</textarea>
         function textToHtml(text) {
             // Convert plain text to HTML format with the original working format
             console.log('🔍 textToHtml input:', JSON.stringify(text));
+            if (!text || typeof text !== 'string') {
+                return '';
+            }
             const result = text
                 .split('\n')
                 .map(line => {
@@ -4162,7 +4149,26 @@ Dietary</textarea>
                     });
                 }
                 
+                // Check if the response is actually successful
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch (e) {
+                        errorData = { error: errorText };
+                    }
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const result = await response.json();
+                
+                console.log('📦 Full API response:', result);
+                
+                // Validate that we got a proper response
+                if (!result) {
+                    throw new Error('Empty response from server');
+                }
                 
                 // Hide loading
                 document.getElementById('loading').style.display = 'none';
@@ -4172,6 +4178,10 @@ Dietary</textarea>
                 resultDiv.style.display = 'block';
                 
                 if (result.success) {
+                    // Validate that product data exists
+                    if (!result.product || !result.product.id) {
+                        throw new Error('Product creation reported success but no product data was returned');
+                    }
                     resultDiv.className = 'result-message result-success';
                     const actionText = isEditingProduct ? 'Updated' : 'Created';
                     const actionVerb = isEditingProduct ? 'updated' : 'created';
@@ -4181,7 +4191,7 @@ Dietary</textarea>
                         <div class="product-link">
                             <strong>Product ID:</strong> ${result.product.id}<br>
                             <strong>Handle:</strong> ${result.product.handle}<br>
-                            <a href="https://${result.product.admin_graphql_api_id.split('/').pop()}.myshopify.com/admin/products/${result.product.id}" target="_blank">
+                            <a href="https://${result.product.admin_graphql_api_id ? result.product.admin_graphql_api_id.split('/').pop() : 'admin'}.myshopify.com/admin/products/${result.product.id}" target="_blank">
                             </a>
                         </div>
                     `;
@@ -4211,13 +4221,17 @@ Dietary</textarea>
                     `;
                 }
             } catch (error) {
+                console.error('❌ Error creating product:', error);
+                console.error('❌ Error stack:', error.stack);
                 document.getElementById('loading').style.display = 'none';
                 const resultDiv = document.getElementById('resultMessage');
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result-message result-error';
+                const errorMessage = error.message || 'Unknown error occurred';
                 resultDiv.innerHTML = `
                     <h4><i class="fas fa-exclamation-triangle"></i> Network Error</h4>
-                    <p>Failed to create product: ${error.message}</p>
+                    <p>Failed to create product: ${errorMessage}</p>
+                    ${error.stack ? `<details><summary>Error Details</summary><pre style="font-size: 11px; max-height: 200px; overflow: auto;">${error.stack}</pre></details>` : ''}
                 `;
             }
         });
@@ -4378,6 +4392,7 @@ Dietary</textarea>
 
         // Media Upload Functionality
         let selectedMediaFiles = [];
+        let selectedShopifyMedia = []; // Declare early to prevent ReferenceError
         const maxFiles = 250;
 
         // Initialize media upload functionality
@@ -4417,7 +4432,7 @@ Dietary</textarea>
             loadSubcategoryOptions();
 
             // Load Shopify media on page load
-            try { loadShopifyMedia(); } catch (e) { console.log('Load media on init failed'); }
+            // Removed loadShopifyMedia() - no longer using Shopify media selection tab
 
             // Load products for search (cached)
             try {
@@ -4619,7 +4634,7 @@ Dietary</textarea>
                 // Handle color loading separately since we skipped displayMetafields
                 try {
                     const coloursMetafield = mfs.find(m => m.key === 'product_colours' && m.namespace === 'custom');
-                    if (coloursMetafield && coloursMetafield.value) {
+                    if (coloursMetafield && coloursMetafield.value && typeof coloursMetafield.value === 'string') {
                         console.log('🔍 Loading colours from metafield:', coloursMetafield.value);
                         loadColoursIntoInputs(coloursMetafield.value);
                     } else {
@@ -4802,7 +4817,7 @@ Dietary</textarea>
                 
                 // Special handling for product_size field with 3 separate inputs
                 if (key === 'product_size' && namespace === 'custom') {
-                    const sizeParts = value.split('*').map(part => part.trim());
+                    const sizeParts = (value || '').split('*').map(part => part.trim());
                     const length = sizeParts[0] || '';
                     const width = sizeParts[1] || '';
                     const height = sizeParts[2] || '';
@@ -5044,7 +5059,7 @@ Dietary</textarea>
                     let name = f.filename || f.alt || '';
                     if (!name) {
                         const url = f.url || '';
-                        if (url) name = url.split('/').pop().split('?')[0];
+                        if (url && typeof url === 'string') name = url.split('/').pop().split('?')[0];
                     }
                     const m = name && name.match(re);
                     if (m) {
@@ -5203,12 +5218,12 @@ Dietary</textarea>
                     <span>${index + 1}</span>
                 </div>
                 <div class="media-type ${mediaTypeClass}">${mediaType.toUpperCase()}</div>
-                <button class="remove-media" title="Remove file">
+                <button class="remove-media" title="Remove file" draggable="false">
                     <i class="fas fa-times"></i>
                 </button>
                 ${isVideo ? 
-                    `<video><source src="${URL.createObjectURL(file)}" type="${file.type}"></video>` :
-                    `<img src="${URL.createObjectURL(file)}" alt="${file.name}">`
+                    `<video draggable="false"><source src="${URL.createObjectURL(file)}" type="${file.type}"></video>` :
+                    `<img src="${URL.createObjectURL(file)}" alt="${file.name}" draggable="false">`
                 }
                 <div class="media-info">
                     <div class="media-name" title="${file.name}">${file.name}</div>
@@ -5220,6 +5235,7 @@ Dietary</textarea>
             const removeBtn = previewItem.querySelector('.remove-media');
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent event bubbling
+                e.preventDefault(); // Prevent any default behavior
                 // Store file reference for comparison
                 const fileToRemove = file;
                 console.log(`🗑️ Remove button clicked for uploaded file: ${fileToRemove.name}`);
@@ -5251,10 +5267,15 @@ Dietary</textarea>
         }
 
         function clearAllMedia() {
-            if (selectedMediaFiles.length > 0 && confirm('Are you sure you want to remove all selected media files?')) {
-                selectedMediaFiles = [];
-                updateMediaPreview();
-                document.getElementById('mediaFiles').value = '';
+            if ((selectedMediaFiles && selectedMediaFiles.length > 0) || (selectedShopifyMedia && selectedShopifyMedia.length > 0)) {
+                if (confirm('Are you sure you want to remove all selected media files?')) {
+                    selectedMediaFiles = [];
+                    if (selectedShopifyMedia) {
+                        selectedShopifyMedia = [];
+                    }
+                    updateMediaPreview();
+                    document.getElementById('mediaFiles').value = '';
+                }
             }
         }
 
@@ -5282,6 +5303,7 @@ Dietary</textarea>
         function handleDragStart(e) {
             draggedElement = this;
             draggedIndex = parseInt(this.dataset.index);
+            console.log('🖱️ Drag started: index=', draggedIndex, 'type=', this.dataset.type);
             this.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/html', this.outerHTML);
@@ -5300,13 +5322,17 @@ Dietary</textarea>
 
         function handleDragOver(e) {
             e.preventDefault();
+            e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
+            // Allow drop on any media preview item, regardless of type
+            return false;
         }
 
         function handleDragEnter(e) {
             e.preventDefault();
             if (this !== draggedElement) {
                 this.classList.add('drag-over');
+                console.log('📍 Drag enter: index=', this.dataset.index, 'type=', this.dataset.type);
             }
         }
 
@@ -5316,9 +5342,18 @@ Dietary</textarea>
 
         function handleDrop(e) {
             e.preventDefault();
+            e.stopPropagation();
             this.classList.remove('drag-over');
             
+            console.log('🎯 Drop event fired!');
+            
             if (this === draggedElement) {
+                console.log('⚠️ Dropped on self, ignoring');
+                return;
+            }
+            
+            if (!draggedElement || draggedIndex === null || draggedIndex === undefined) {
+                console.error('❌ No dragged element or index');
                 return;
             }
             
@@ -5326,158 +5361,115 @@ Dietary</textarea>
             const draggedType = draggedElement.dataset.type;
             const dropType = this.dataset.type;
             
-            // Create combined array for reordering
+            console.log('🎯 Drop: draggedIndex=', draggedIndex, 'draggedType=', draggedType, 'dropIndex=', dropIndex, 'dropType=', dropType);
+            
+            // Validate indices
+            if (isNaN(dropIndex) || dropIndex < 0) {
+                console.error('❌ Invalid dropIndex:', dropIndex, 'from dataset.index:', this.dataset.index);
+                return;
+            }
+            
+            if (isNaN(draggedIndex) || draggedIndex < 0) {
+                console.error('❌ Invalid draggedIndex:', draggedIndex);
+                return;
+            }
+            
+            // Create combined array for reordering - MUST match the order in updateMediaPreview
+            if (!selectedMediaFiles) selectedMediaFiles = [];
+            if (!selectedShopifyMedia) selectedShopifyMedia = [];
+            
+            // Build array in the SAME order as displayed in preview (uploaded first, then shopify)
             const allMedia = [
                 ...selectedMediaFiles.map((file, i) => ({ type: 'uploaded', item: file, originalIndex: i })),
                 ...selectedShopifyMedia.map((media, i) => ({ type: 'shopify', item: media, originalIndex: i }))
             ];
             
-            // Perform the reorder
-            const draggedItem = allMedia[draggedIndex];
-            allMedia.splice(draggedIndex, 1);
-            allMedia.splice(dropIndex, 0, draggedItem);
+            console.log('📊 allMedia array:', allMedia.map((m, i) => `${i}: ${m.type}`));
+            console.log('📊 Current arrays: uploaded=', selectedMediaFiles.length, 'shopify=', selectedShopifyMedia.length);
             
-            // Separate back into the two arrays
-            selectedMediaFiles = [];
-            selectedShopifyMedia = [];
+            // Validate indices are within bounds
+            if (draggedIndex >= allMedia.length) {
+                console.error('❌ draggedIndex out of bounds:', draggedIndex, '>=', allMedia.length);
+                return;
+            }
+            
+            if (dropIndex >= allMedia.length) {
+                console.error('❌ dropIndex out of bounds:', dropIndex, '>=', allMedia.length);
+                return;
+            }
+            
+            const draggedItem = allMedia[draggedIndex];
+            if (!draggedItem) {
+                console.error('❌ No item at draggedIndex:', draggedIndex);
+                return;
+            }
+            
+            console.log('✅ Dragged item:', draggedItem.type, 'from index', draggedIndex);
+            
+            // Perform the reorder
+            allMedia.splice(draggedIndex, 1);
+            // Adjust dropIndex if we removed an item before it
+            const adjustedDropIndex = draggedIndex < dropIndex ? dropIndex - 1 : dropIndex;
+            allMedia.splice(adjustedDropIndex, 0, draggedItem);
+            
+            console.log('✅ Reordered. New order:', allMedia.map((m, i) => `${i}: ${m.type}`));
+            
+            // Separate back into the two arrays - preserve the exact order
+            const newSelectedMediaFiles = [];
+            const newSelectedShopifyMedia = [];
             
             allMedia.forEach(mediaItem => {
                 if (mediaItem.type === 'uploaded') {
-                    selectedMediaFiles.push(mediaItem.item);
-                } else {
-                    selectedShopifyMedia.push(mediaItem.item);
+                    newSelectedMediaFiles.push(mediaItem.item);
+                } else if (mediaItem.type === 'shopify') {
+                    newSelectedShopifyMedia.push(mediaItem.item);
                 }
+            });
+            
+            // Update the global arrays
+            selectedMediaFiles = newSelectedMediaFiles;
+            selectedShopifyMedia = newSelectedShopifyMedia;
+            
+            console.log('✅ Separated: uploaded=', selectedMediaFiles.length, 'shopify=', selectedShopifyMedia.length);
+            console.log('✅ Final order check:', {
+                uploaded: selectedMediaFiles.map((f, i) => `${i}: ${f.name || 'file'}`),
+                shopify: selectedShopifyMedia.map((m, i) => `${i}: ${m.id || m.rest_api_id || 'media'}`)
             });
             
             // Update the preview to reflect the new order
             updateMediaPreview();
+            
+            // Re-attach drag handlers after preview update (all elements are recreated)
+            setTimeout(() => {
+                const allPreviewItems = document.querySelectorAll('.media-preview-item');
+                allPreviewItems.forEach(item => {
+                    addDragAndDropListeners(item);
+                });
+            }, 50);
         }
 
         // Note: addMediaToFormData is defined later with full Shopify media support
 
-        // Media Tab Switching
-        function switchMediaTab(tab) {
-            const uploadTab = document.getElementById('uploadTab');
-            const selectTab = document.getElementById('selectTab');
-            const uploadContent = document.getElementById('uploadTabContent');
-            const selectContent = document.getElementById('selectTabContent');
-            
-            if (tab === 'upload') {
-                uploadTab.classList.add('active');
-                selectTab.classList.remove('active');
-                uploadContent.style.display = 'block';
-                selectContent.style.display = 'none';
-            } else {
-                selectTab.classList.add('active');
-                uploadTab.classList.remove('active');
-                selectContent.style.display = 'block';
-                uploadContent.style.display = 'none';
-            }
-        }
+        // Media Tab Switching - removed (no longer needed)
 
         // Shopify Media Selection
         let shopifyMediaFiles = [];
-        let selectedShopifyMedia = [];
+        // selectedShopifyMedia already declared above with selectedMediaFiles
 
-        function loadShopifyMedia() {
-            const grid = document.getElementById('shopifyMediaGrid');
-            grid.innerHTML = '<div class="loading-placeholder"><i class="fas fa-spinner fa-spin"></i><p>Loading Shopify media files...</p></div>';
-            
-            fetch('/api/shopify-media')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        shopifyMediaFiles = data.media_files;
-                        displayShopifyMedia(shopifyMediaFiles);
-                    } else {
-                        grid.innerHTML = '<div class="loading-placeholder"><i class="fas fa-exclamation-triangle"></i><p>Error loading media files: ' + data.error + '</p></div>';
-                    }
-                })
-                .catch(error => {
-                    grid.innerHTML = '<div class="loading-placeholder"><i class="fas fa-exclamation-triangle"></i><p>Error loading media files: ' + error.message + '</p></div>';
-                });
-        }
-
-        function displayShopifyMedia(mediaFiles) {
-            const grid = document.getElementById('shopifyMediaGrid');
-            
-            if (mediaFiles.length === 0) {
-                grid.innerHTML = '<div class="loading-placeholder"><i class="fas fa-folder-open"></i><p>No media files found in your Shopify store</p></div>';
-                return;
-            }
-            
-            grid.innerHTML = '';
-            mediaFiles.forEach(media => {
-                const mediaItem = document.createElement('div');
-                mediaItem.className = 'shopify-media-item';
-                mediaItem.onclick = () => toggleShopifyMediaSelection(media);
-                
-                const typeBadge = media.is_image ? 'IMG' : 'VID';
-                const mediaElement = media.is_image ? 
-                    `<img src="${media.url}" alt="${media.filename}" loading="lazy">` :
-                    `<video><source src="${media.url}" type="${media.content_type}"></video>`;
-                
-                mediaItem.innerHTML = `
-                    ${mediaElement}
-                    <div class="shopify-media-type">${typeBadge}</div>
-                    <div class="shopify-media-info">
-                        <div class="shopify-media-filename">${media.filename}</div>
-                        <div class="shopify-media-meta">${formatFileSize(media.size)} • ${new Date(media.created_at).toLocaleDateString()}</div>
-                    </div>
-                `;
-                
-                grid.appendChild(mediaItem);
-            });
-        }
-
-        function toggleShopifyMediaSelection(media) {
-            const index = selectedShopifyMedia.findIndex(m => m.id === media.id);
-            
-            if (index > -1) {
-                // Remove from selection
-                selectedShopifyMedia.splice(index, 1);
-            } else {
-                // Add to selection (check max files limit)
-                if (selectedMediaFiles.length + selectedShopifyMedia.length >= maxFiles) {
-                    alert(`Maximum ${maxFiles} files allowed. You can only add ${maxFiles - selectedMediaFiles.length - selectedShopifyMedia.length} more files.`);
-                    return;
-                }
-                selectedShopifyMedia.push(media);
-            }
-            
-            // Update UI
-            updateShopifyMediaSelection();
-            updateMediaPreview();
-        }
-
-        function updateShopifyMediaSelection() {
-            const items = document.querySelectorAll('.shopify-media-item');
-            items.forEach(item => {
-                const filename = item.querySelector('.shopify-media-filename').textContent;
-                const media = shopifyMediaFiles.find(m => m.filename === filename);
-                
-                if (selectedShopifyMedia.find(m => m.id === media.id)) {
-                    item.classList.add('selected');
-                } else {
-                    item.classList.remove('selected');
-                }
-            });
-        }
-
-        function filterShopifyMedia() {
-            const searchTerm = document.getElementById('mediaSearchInput').value.toLowerCase();
-            const filteredMedia = shopifyMediaFiles.filter(media => 
-                media.filename.toLowerCase().includes(searchTerm)
-            );
-            displayShopifyMedia(filteredMedia);
-            updateShopifyMediaSelection();
-        }
+        // Removed Shopify media selection functions - no longer using "Select from Shopify" tab
+        // These functions were: loadShopifyMedia, displayShopifyMedia, toggleShopifyMediaSelection, 
+        // updateShopifyMediaSelection, filterShopifyMedia
 
         function updateMediaPreview() {
+            if (!selectedMediaFiles) selectedMediaFiles = [];
+            if (!selectedShopifyMedia) selectedShopifyMedia = [];
+            
             const totalFiles = selectedMediaFiles.length + selectedShopifyMedia.length;
             const mediaPreviewContainer = document.getElementById('mediaPreviewContainer');
             const mediaCount = document.querySelector('.media-count');
             const mediaPreviewGrid = document.getElementById('mediaPreviewGrid');
+            
+            if (!mediaPreviewContainer || !mediaPreviewGrid) return;
             
             if (totalFiles === 0) {
                 mediaPreviewContainer.style.display = 'none';
@@ -5485,7 +5477,7 @@ Dietary</textarea>
             }
             
             mediaPreviewContainer.style.display = 'block';
-            mediaCount.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''} selected`;
+            if (mediaCount) mediaCount.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''} selected`;
             
             // Clear existing previews
             mediaPreviewGrid.innerHTML = '';
@@ -5501,6 +5493,8 @@ Dietary</textarea>
                 const preview = createShopifyMediaPreview(media, selectedMediaFiles.length + index);
                 mediaPreviewGrid.appendChild(preview);
             });
+            
+            // Drag handlers are already attached in createMediaPreview/createShopifyMediaPreview
         }
 
         function createShopifyMediaPreview(media, index) {
@@ -5513,8 +5507,8 @@ Dietary</textarea>
             
             const typeIcon = media.is_image ? 'fas fa-image' : 'fas fa-video';
             const mediaElement = media.is_image ? 
-                `<img src="${media.url}" alt="${media.filename}">` :
-                `<video><source src="${media.url}" type="${media.content_type}"></video>`;
+                `<img src="${media.url}" alt="${media.filename}" draggable="false" style="pointer-events: none;">` :
+                `<video draggable="false" style="pointer-events: none;"><source src="${media.url}" type="${media.content_type}"></video>`;
             
             preview.innerHTML = `
                 <div class="drag-handle">
@@ -5529,7 +5523,7 @@ Dietary</textarea>
                 <div class="media-type">
                     <i class="${typeIcon}"></i>
                 </div>
-                <button class="remove-media" title="Remove file">
+                <button class="remove-media" title="Remove file" draggable="false">
                     <i class="fas fa-times"></i>
                 </button>
             `;
@@ -5537,32 +5531,36 @@ Dietary</textarea>
             // Add remove button event listener
             const removeBtn = preview.querySelector('.remove-media');
             removeBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent event bubbling
-                // Find the media by ID instead of index (more reliable)
+                e.stopPropagation();
+                e.preventDefault();
                 const mediaIdToRemove = media.id;
                 const mediaIdToRemoveStr = String(mediaIdToRemove);
                 
-                console.log(`🗑️ Remove button clicked for Shopify media ID: ${mediaIdToRemoveStr}`);
-                console.log(`📋 Current selectedShopifyMedia before removal:`, selectedShopifyMedia.map(m => ({id: m.id, rest_id: m.rest_api_id})));
-                
-                // Find and remove by ID (check both id and rest_api_id)
                 const indexToRemove = selectedShopifyMedia.findIndex(m => {
                     return String(m.id) === mediaIdToRemoveStr || 
                            String(m.rest_api_id || m.id) === mediaIdToRemoveStr;
                 });
                 
                 if (indexToRemove !== -1) {
-                    const removedMedia = selectedShopifyMedia[indexToRemove];
                     selectedShopifyMedia.splice(indexToRemove, 1);
-                    console.log(`✅ Removed Shopify media: ID ${mediaIdToRemoveStr}, Index was ${indexToRemove}`);
-                    console.log(`📋 selectedShopifyMedia after removal (${selectedShopifyMedia.length} items):`, selectedShopifyMedia.map(m => ({id: m.id, rest_id: m.rest_api_id})));
-                } else {
-                    console.error(`❌ Could not find media ID ${mediaIdToRemoveStr} in selectedShopifyMedia array!`);
-                    console.log(`📋 Array contents:`, selectedShopifyMedia.map(m => ({id: m.id, rest_id: m.rest_api_id})));
                 }
                 
                 updateMediaPreview();
             });
+            
+            // Explicitly prevent image/video from starting drag
+            const mediaImg = preview.querySelector('img, video');
+            if (mediaImg) {
+                mediaImg.addEventListener('dragstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                });
+                mediaImg.addEventListener('mousedown', (e) => {
+                    // Allow the drag to start from the parent element
+                    e.stopPropagation();
+                });
+            }
             
             // Add drag and drop event listeners
             addDragAndDropListeners(preview);
@@ -5576,11 +5574,10 @@ Dietary</textarea>
         }
 
         function clearAllMedia() {
-            if (selectedMediaFiles.length + selectedShopifyMedia.length > 0 && confirm('Are you sure you want to remove all selected media files?')) {
+            if (selectedMediaFiles.length + (selectedShopifyMedia ? selectedShopifyMedia.length : 0) > 0 && confirm('Are you sure you want to remove all selected media files?')) {
                 selectedMediaFiles = [];
-                selectedShopifyMedia = [];
+                if (selectedShopifyMedia) selectedShopifyMedia = [];
                 updateMediaPreview();
-                updateShopifyMediaSelection();
             }
         }
 
@@ -5862,7 +5859,7 @@ Dietary</textarea>
             container.innerHTML = '';
             
             let colours = [];
-            if (coloursStr && coloursStr.trim() !== '') {
+            if (coloursStr && typeof coloursStr === 'string' && coloursStr.trim() !== '') {
                 colours = coloursStr.split(',').map(c => c.trim()).filter(c => c.length > 0);
             }
             
@@ -6005,10 +6002,10 @@ Dietary</textarea>
             
             // Check if product_colours metafield exists and load it
             const coloursMetafield = metafields.find(m => m.key === 'product_colours' && m.namespace === 'custom');
-            if (coloursMetafield && coloursMetafield.value) {
+            if (coloursMetafield && coloursMetafield.value && typeof coloursMetafield.value === 'string') {
                 loadColoursIntoInputs(coloursMetafield.value);
-            } else if (coloursMetafield) {
-                // Metafield exists but is empty, start with 2 empty inputs
+            } else {
+                // Metafield doesn't exist, is empty, or has invalid value - start with empty inputs
                 loadColoursIntoInputs('');
             }
         };

@@ -20,14 +20,50 @@ except ImportError:
     print("ERROR: Could not import config. Make sure config.py exists in the backend directory.")
     sys.exit(1)
 
+def make_graphql_request(query, variables=None, shopify_domain=None):
+    """
+    Make a GraphQL request to Shopify with redirect handling
+    
+    Args:
+        query (str): GraphQL query string
+        variables (dict): GraphQL variables
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
+    
+    Returns:
+        requests.Response: The response object
+    """
+    # Use provided domain or fall back to STORE_DOMAIN
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    
+    headers = {
+        'X-Shopify-Access-Token': ACCESS_TOKEN,
+        'Content-Type': 'application/json',
+    }
+    
+    payload = {'query': query}
+    if variables:
+        payload['variables'] = variables
+    
+    # Handle redirects for GraphQL requests
+    response = requests.post(url, json=payload, headers=headers, allow_redirects=False)
+    
+    # If redirected, follow it silently
+    if response.status_code in [301, 302, 303, 307, 308]:
+        redirect_url = response.headers.get('Location', url)
+        if redirect_url.startswith('/'):
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+        response = requests.post(redirect_url, json=payload, headers=headers, allow_redirects=True)
+    
+    return response
+
 def fetch_files_with_graphql():
     """
     Fetch all files from Shopify Admin > Content > Files using GraphQL Admin API
     """
     try:
-        # GraphQL endpoint
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-        
         # GraphQL query to get files from Admin > Content > Files
         # Using the correct query structure for Shopify files
         query = """
@@ -65,13 +101,9 @@ def fetch_files_with_graphql():
         variables = {
             "first": 250
         }
-
-        headers = {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json',
-        }
         
-        response = requests.post(url, json={'query': query, 'variables': variables}, headers=headers)
+        # Use the helper function to handle redirects
+        response = make_graphql_request(query, variables)
         
         if response.status_code == 200:
             data = response.json()
@@ -161,11 +193,16 @@ def fetch_files_with_graphql():
                 else:
                     return []
             else:
+                print(f"⚠️ GraphQL response missing 'data.files' field. Response: {response.text[:500]}", flush=True)
                 return []
         else:
+            print(f"❌ GraphQL request failed with status {response.status_code}. Response: {response.text[:500]}", flush=True)
             return []
             
     except Exception as e:
+        print(f"❌ Error fetching files from Shopify: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
         return []
 
 def upload_file_to_shopify(file_path, alt_text=""):
@@ -214,12 +251,8 @@ def upload_file_to_shopify(file_path, alt_text=""):
                 }]
             }
             
-            headers = {
-                'X-Shopify-Access-Token': ACCESS_TOKEN,
-                'Content-Type': 'application/json',
-            }
-            
-            response = requests.post(graphql_url, json={'query': mutation, 'variables': variables}, headers=headers)
+            # Use the helper function to handle redirects
+            response = make_graphql_request(mutation, variables)
             
             if response.status_code != 200:
                 print(f"❌ Step 1 failed: {response.status_code}")
@@ -337,7 +370,8 @@ def upload_file_to_shopify(file_path, alt_text=""):
             }
             
             
-            file_response = requests.post(graphql_url, json={'query': file_create_mutation, 'variables': file_variables}, headers=headers)
+            # Use the helper function to handle redirects
+            file_response = make_graphql_request(file_create_mutation, file_variables)
             
             if file_response.status_code != 200:
                 print(f"❌ Step 3 failed: {file_response.status_code}")
@@ -393,7 +427,8 @@ def upload_file_to_shopify(file_path, alt_text=""):
                     }
                     """
                     
-                    files_response = requests.post(graphql_url, json={'query': files_query}, headers=headers)
+                    # Use the helper function to handle redirects
+                    files_response = make_graphql_request(files_query)
                     
                     if files_response.status_code == 200:
                         files_data = files_response.json()
@@ -436,7 +471,8 @@ def upload_file_to_shopify(file_path, alt_text=""):
                         }]
                     }
                     
-                    update_response = requests.post(graphql_url, json={'query': update_mutation, 'variables': update_variables}, headers=headers)
+                    # Use the helper function to handle redirects
+                    update_response = make_graphql_request(update_mutation, update_variables)
                     
                     if update_response.status_code == 200:
                         update_data = update_response.json()
@@ -771,12 +807,8 @@ def fetch_all_products():
                 "after": cursor
             }
             
-            headers = {
-                'X-Shopify-Access-Token': ACCESS_TOKEN,
-                'Content-Type': 'application/json',
-            }
-            
-            response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=headers)
+            # Use the helper function to handle redirects
+            response = make_graphql_request(query, variables)
             
             if response.status_code == 200:
                 data = response.json()
@@ -856,8 +888,6 @@ def get_file_id_from_filename(filename):
 def update_product_metafield(product_id, metafield_id, new_value):
     """Update a product's metafield using GraphQL"""
     try:
-        graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-        
         mutation = """
         mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
             metafieldsSet(metafields: $metafields) {
@@ -884,12 +914,8 @@ def update_product_metafield(product_id, metafield_id, new_value):
             }]
         }
         
-        headers = {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json',
-        }
-        
-        response = requests.post(graphql_url, json={'query': mutation, 'variables': variables}, headers=headers)
+        # Use the helper function to handle redirects
+        response = make_graphql_request(mutation, variables)
         
         if response.status_code == 200:
             data = response.json()

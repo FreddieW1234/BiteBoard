@@ -25,7 +25,18 @@ HEADERS = {
 
 def graphql(query, variables=None):
     url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-    resp = requests.post(url, headers=HEADERS, json={'query': query, 'variables': variables or {}})
+    # Handle redirects for GraphQL requests
+    resp = requests.post(url, headers=HEADERS, json={'query': query, 'variables': variables or {}}, allow_redirects=False)
+    
+    # If redirected, follow it silently
+    if resp.status_code in [301, 302, 303, 307, 308]:
+        redirect_url = resp.headers.get('Location', url)
+        if redirect_url.startswith('/'):
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+        resp = requests.post(redirect_url, headers=HEADERS, json={'query': query, 'variables': variables or {}}, allow_redirects=True)
+    
     resp.raise_for_status()
     data = resp.json()
     if 'errors' in data:
@@ -34,12 +45,14 @@ def graphql(query, variables=None):
 
 def fetch_product_basic(product_id):
     url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+    # GET requests can use default redirect handling
     r = requests.get(url, headers={'X-Shopify-Access-Token': ACCESS_TOKEN})
     r.raise_for_status()
     return r.json().get('product', {})
 
 def fetch_metafield_artworktemplates(product_id):
     url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json?namespace=custom&key=artworktemplates"
+    # GET requests can use default redirect handling
     r = requests.get(url, headers={'X-Shopify-Access-Token': ACCESS_TOKEN})
     if r.status_code != 200:
         return None

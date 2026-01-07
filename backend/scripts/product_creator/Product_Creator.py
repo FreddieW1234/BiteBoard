@@ -142,7 +142,7 @@ def manage_product_media(product_id, shopify_media_ids_to_keep):
             "errors": [error_msg]
         }
 
-def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
+def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=None):
     """
     Reorder product media according to the media_order array from frontend
     This includes both newly uploaded files and existing Shopify media
@@ -151,6 +151,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
         product_id (int): The ID of the product
         media_order (list): List of media order items like [{'type': 'upload', 'index': 0}, {'type': 'shopify', 'id': '...', 'position': 1}]
         shopify_media_ids (list): List of Shopify media IDs that were kept (for reference)
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
     
     Returns:
         dict: Result with success status
@@ -161,8 +162,10 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
         
         print(f"🔄 Reordering media by order for product {product_id}...")
         
+        # Use the provided domain or fall back to STORE_DOMAIN
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
         # Get current product media
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
             'Content-Type': 'application/json'
@@ -220,6 +223,15 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
         shopify_positions_processed = 0
         upload_positions_processed = 0
         
+        # Debug: Print all available images
+        print(f"🔍 All available images on product:")
+        for img in existing_images:
+            img_id = str(img.get('id', ''))
+            img_pos = img.get('position', '?')
+            img_src = img.get('src', 'N/A')[:50] if img.get('src') else 'N/A'
+            is_in_keep = img_id in normalized_keep_ids
+            print(f"   ID: {img_id}, Position: {img_pos}, In keep list: {is_in_keep}, Src: {img_src}")
+        
         for order_item in media_order:
             item_type = order_item.get('type')
             # Use position from order_item if provided, otherwise use sequential position
@@ -230,14 +242,28 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
             if item_type == 'shopify':
                 # Match by Shopify ID
                 media_id = str(order_item.get('id', ''))
-                # Check in the all_image_map for quick lookup
+                # Try to find by exact match first
                 if media_id in all_image_map:
                     position_map[position] = media_id
                     shopify_positions_processed += 1
                     print(f"📍 Position {position}: Shopify media ID {media_id}")
                 else:
-                    print(f"⚠️ Could not find Shopify media ID {media_id} in product images")
-                    print(f"   Available image IDs: {list(all_image_map.keys())[:10]}...")  # Show first 10 for debugging
+                    # Try to find by extracting numeric ID from Global ID format
+                    numeric_id = media_id
+                    if 'gid://' in media_id:
+                        numeric_id = media_id.split('/')[-1]
+                    # Also try matching just the numeric part
+                    found = False
+                    for img_id, img_data in all_image_map.items():
+                        if img_id == numeric_id or str(img_data.get('id', '')) == numeric_id:
+                            position_map[position] = img_id
+                            shopify_positions_processed += 1
+                            print(f"📍 Position {position}: Shopify media ID {media_id} (matched to image ID {img_id})")
+                            found = True
+                            break
+                    if not found:
+                        print(f"⚠️ Could not find Shopify media ID {media_id} in product images")
+                        print(f"   Available image IDs: {list(all_image_map.keys())[:10]}...")  # Show first 10 for debugging
             elif item_type == 'upload':
                 # Match newly uploaded images by order
                 if upload_positions_processed < len(new_upload_ids):
@@ -247,6 +273,18 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
                     print(f"📍 Position {position}: New upload (image ID {image_id})")
                 else:
                     print(f"⚠️ Could not find upload at index {upload_positions_processed} (only {len(new_upload_ids)} new uploads found)")
+                    # Fallback: For new products, all images might be "new uploads" or newly attached
+                    # Try to use images not yet assigned, in the order they appear
+                    remaining_images = [img for img in existing_images if str(img.get('id')) not in position_map.values()]
+                    if remaining_images:
+                        # Sort by position to maintain order
+                        remaining_images.sort(key=lambda x: x.get('position', 999))
+                        fallback_id = str(remaining_images[0].get('id'))
+                        position_map[position] = fallback_id
+                        upload_positions_processed += 1
+                        print(f"📍 Position {position}: Using fallback image ID {fallback_id} (not yet assigned)")
+                    else:
+                        print(f"⚠️ No remaining images available for position {position}")
         
         # Verify we have all expected images before reordering
         missing_images = []
@@ -263,7 +301,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
         errors = []
         successful_updates = []
         for position, image_id in sorted(position_map.items()):
-            update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
+            update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
             payload = {
                 "image": {
                     "id": int(image_id),
@@ -271,7 +309,15 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
                 }
             }
             
-            update_response = requests.put(update_url, headers=headers, json=payload)
+            # Handle redirects for PUT requests
+            update_response = requests.put(update_url, headers=headers, json=payload, allow_redirects=False)
+            if update_response.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = update_response.headers.get('Location', update_url)
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(update_url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                update_response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
             if update_response.ok:
                 successful_updates.append((position, image_id))
                 print(f"✅ Set position {position} for image ID: {image_id}")
@@ -281,6 +327,38 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids):
                 print(f"❌ {error_msg}")
         
         print(f"📊 Reordering summary: {len(successful_updates)} successful, {len(errors)} errors")
+        
+        # After reordering, ensure the first image (position 1) is set as the main product image
+        if position_map:
+            first_position = min(position_map.keys())
+            first_image_id = position_map[first_position]
+            print(f"🖼️ Setting image at position {first_position} (ID: {first_image_id}) as main product image...")
+            try:
+                # Update the product to set the main image
+                product_update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
+                product_update_payload = {
+                    "product": {
+                        "id": product_id,
+                        "image": {
+                            "id": int(first_image_id)
+                        }
+                    }
+                }
+                product_update_response = requests.put(product_update_url, headers=headers, json=product_update_payload, allow_redirects=False)
+                if product_update_response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = product_update_response.headers.get('Location', product_update_url)
+                    if redirect_url.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(product_update_url)
+                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                    product_update_response = requests.put(redirect_url, headers=headers, json=product_update_payload, allow_redirects=True)
+                
+                if product_update_response.status_code == 200:
+                    print(f"✅ Main product image set to image ID: {first_image_id}")
+                else:
+                    print(f"⚠️ Failed to set main product image: {product_update_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ Error setting main product image: {e}")
         
         return {
             "success": len(errors) == 0,
@@ -368,7 +446,7 @@ def reorder_product_media(product_id, shopify_media_ids_in_order):
             "errors": [error_msg]
         }
 
-def upload_media_to_product(product_id, media_files, shopify_media_ids=None, product_name=None, product_sku=None):
+def upload_media_to_product(product_id, media_files, shopify_media_ids=None, product_name=None, product_sku=None, shopify_domain=None):
     """
     Upload media files (images/videos) to a Shopify product using the correct API
     
@@ -377,11 +455,16 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         media_files (list): List of media file dictionaries with filename, content, and content_type
         shopify_media_ids (list): List of existing Shopify media file IDs to attach to the product
         product_name (str): The product name for file naming (format: {product_name}_{x})
+        product_sku (str): The product SKU for file naming
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
     
     Returns:
         dict: Result with success status and any errors
     """
     try:
+        # Use provided domain or fall back to STORE_DOMAIN
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        
         total_media = len(media_files) + (len(shopify_media_ids) if shopify_media_ids else 0)
         
         if total_media == 0:
@@ -402,83 +485,17 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                 s = s.replace('__', '_')
             return s[:120] if s else ''
 
-        # Upload new media files
-        for i, media_file in enumerate(media_files):
-            try:
-                original_filename = media_file['filename']
-                content = media_file['content']
-                content_type = media_file['content_type']
-                
-                # Create new filename with SKU, product name and position: {SKU}_{product name}_{x}
-                clean_name = _sanitize(product_name or '')
-                clean_sku = _sanitize(product_sku or '') or 'NOSKU'
-                file_extension = original_filename.split('.')[-1] if '.' in original_filename else ''
-                base = f"{clean_sku}_{clean_name}_{i+1}" if clean_name else f"{clean_sku}_{i+1}"
-                filename = f"{base}.{file_extension}" if file_extension else base
-                
-                # Determine if it's an image or video
-                is_video = content_type.startswith('video/')
-                media_type = 'video' if is_video else 'image'
-                
-                # Use the correct Shopify API endpoint for product media
-                if is_video:
-                    # For videos, use the product media endpoint
-                    url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/media.json"
-                    
-                    # Create multipart form data for video upload
-                    files = {
-                        'media[attachment]': (filename, content, content_type)
-                    }
-                    data = {
-                        'media[alt]': ''
-                    }
-                    
-                    headers = {
-                        "X-Shopify-Access-Token": ACCESS_TOKEN
-                    }
-                    
-                    response = requests.post(url, headers=headers, files=files, data=data)
-                    
-                else:
-                    # For images, use the product images endpoint
-                    url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images.json"
-                    
-                    # Create multipart form data for image upload
-                    files = {
-                        'image[attachment]': (filename, content, content_type)
-                    }
-                    data = {
-                        'image[alt]': ''
-                    }
-                    
-                    headers = {
-                        "X-Shopify-Access-Token": ACCESS_TOKEN
-                    }
-                    
-                    response = requests.post(url, headers=headers, files=files, data=data)
-                
-                if response.status_code in [200, 201]:
-                    success_count += 1
-                    response_data = response.json()
-                    media_id = response_data.get('image', {}).get('id') or response_data.get('media', {}).get('id')
-                    print(f"✅ Uploaded {media_type}: {filename} (ID: {media_id})")
-                else:
-                    error_msg = f"Failed to upload {media_type} {filename}: {response.status_code} - {response.text}"
-                    errors.append(error_msg)
-                    print(f"❌ {error_msg}")
-                    
-            except Exception as e:
-                error_msg = f"Error uploading media file {filename}: {str(e)}"
-                errors.append(error_msg)
-                print(f"💥 {error_msg}")
-        
-        # Attach existing Shopify media files using GraphQL
+        # IMPORTANT: Attach existing Shopify media files FIRST to match frontend index order
+        # Frontend sends indices based on [shopifyMedia, newMediaFiles], so we need to attach
+        # existing files first, then upload new files to maintain the correct index mapping
+        attached_media_count = 0
         if shopify_media_ids:
-            print(f"🔄 Attaching {len(shopify_media_ids)} existing Shopify media files to product {product_id}")
+            print(f"🔄 Attaching {len(shopify_media_ids)} existing Shopify media files to product {product_id} (FIRST to match frontend order)")
             
             try:
-                # Use GraphQL to attach existing files to the product
-                graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
+                # Use the provided domain or fall back to STORE_DOMAIN
+                graphql_domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+                graphql_url = f"https://{graphql_domain}/admin/api/{API_VERSION}/graphql.json"
                 headers = {
                     'X-Shopify-Access-Token': ACCESS_TOKEN,
                     'Content-Type': 'application/json',
@@ -490,13 +507,22 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                 # Prepare file updates for each media ID
                 file_updates = []
                 for media_id in shopify_media_ids:
-                    # Use the Global ID directly (it should already be in the correct format)
-                    # If it's a numeric ID, convert it to Global ID format
-                    if media_id.isdigit():
-                        media_global_id = f"gid://shopify/GenericFile/{media_id}"
-                    else:
-                        media_global_id = media_id  # Already a Global ID
+                    # Convert to string first to handle both int and str types
+                    media_id_str = str(media_id)
                     
+                    # Determine the Global ID format
+                    if media_id_str.isdigit():
+                        # Numeric ID - could be GenericFile or MediaImage
+                        # Try MediaImage first (more common for product images)
+                        media_global_id = f"gid://shopify/MediaImage/{media_id_str}"
+                    elif media_id_str.startswith('gid://shopify/'):
+                        # Already a Global ID - use as is
+                        media_global_id = media_id_str
+                    else:
+                        # Assume it's a numeric ID that wasn't converted properly
+                        media_global_id = f"gid://shopify/MediaImage/{media_id_str}"
+                    
+                    print(f"🔍 Attaching media with Global ID: {media_global_id}", flush=True)
                     file_updates.append({
                         "id": media_global_id,
                         "referencesToAdd": [product_global_id]
@@ -522,7 +548,17 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                     "input": file_updates
                 }
                 
-                response = requests.post(graphql_url, json={'query': mutation, 'variables': variables}, headers=headers)
+                # Handle redirects for GraphQL requests
+                response = requests.post(graphql_url, json={'query': mutation, 'variables': variables}, headers=headers, allow_redirects=False)
+                
+                # If redirected, follow it
+                if response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = response.headers.get('Location', graphql_url)
+                    if redirect_url.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(graphql_url)
+                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                    response = requests.post(redirect_url, json={'query': mutation, 'variables': variables}, headers=headers, allow_redirects=True)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -531,36 +567,131 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                     if 'errors' in data:
                         error_msg = f"GraphQL errors: {data['errors']}"
                         errors.append(error_msg)
-                        print(f"❌ {error_msg}")
+                        print(f"❌ {error_msg}", flush=True)
+                        print(f"🔍 Full response: {json.dumps(data, indent=2)}", flush=True)
                     elif 'data' in data and 'fileUpdate' in data['data']:
                         result = data['data']['fileUpdate']
                         
                         if result.get('userErrors'):
                             for error in result['userErrors']:
-                                error_msg = f"User error: {error.get('message', 'Unknown error')}"
+                                error_msg = f"User error: {error.get('field', 'unknown')} - {error.get('message', 'Unknown error')}"
                                 errors.append(error_msg)
-                                print(f"❌ {error_msg}")
+                                print(f"❌ {error_msg}", flush=True)
                         
                         if result.get('files'):
-                            success_count += len(result['files'])
+                            attached_media_count = len(result['files'])
+                            success_count += attached_media_count
                             for file in result['files']:
-                                filename = file.get('alt', file.get('filename', 'Unknown'))
-                                print(f"✅ Attached existing media: {filename}")
+                                filename = file.get('alt', file.get('id', 'Unknown'))
+                                print(f"✅ Attached existing media: {filename}", flush=True)
+                            # Small delay to ensure attached files are indexed before uploading new files
+                            if media_files:
+                                print("⏳ Waiting 1 second for attached files to be indexed...", flush=True)
+                                import time
+                                time.sleep(1.0)
                         else:
                             error_msg = "No files were attached - check file IDs and permissions"
                             errors.append(error_msg)
-                            print(f"❌ {error_msg}")
+                            print(f"❌ {error_msg}", flush=True)
+                            print(f"🔍 Response data: {json.dumps(data, indent=2)}", flush=True)
                     else:
                         error_msg = "Invalid response format from Shopify GraphQL"
                         errors.append(error_msg)
-                        print(f"❌ {error_msg}")
+                        print(f"❌ {error_msg}", flush=True)
+                        print(f"🔍 Response: {json.dumps(data, indent=2) if isinstance(data, dict) else str(data)}", flush=True)
                 else:
-                    error_msg = f"HTTP error: {response.status_code} - {response.text}"
+                    error_msg = f"HTTP error: {response.status_code} - {response.text[:500]}"
+                    errors.append(error_msg)
+                    print(f"❌ {error_msg}", flush=True)
+                    
+            except Exception as e:
+                error_msg = f"Error attaching existing media files: {str(e)}"
+                errors.append(error_msg)
+                print(f"💥 {error_msg}", flush=True)
+        
+        # Upload new media files (AFTER attaching existing ones to maintain index order)
+        for i, media_file in enumerate(media_files):
+            try:
+                original_filename = media_file['filename']
+                content = media_file['content']
+                content_type = media_file['content_type']
+                
+                # Create new filename with SKU, product name and position: {SKU}_{product name}_{x}
+                clean_name = _sanitize(product_name or '')
+                clean_sku = _sanitize(product_sku or '') or 'NOSKU'
+                file_extension = original_filename.split('.')[-1] if '.' in original_filename else ''
+                base = f"{clean_sku}_{clean_name}_{i+1}" if clean_name else f"{clean_sku}_{i+1}"
+                filename = f"{base}.{file_extension}" if file_extension else base
+                
+                # Determine if it's an image or video
+                is_video = content_type.startswith('video/')
+                media_type = 'video' if is_video else 'image'
+                
+                # Use the correct Shopify API endpoint for product media
+                if is_video:
+                    # For videos, use the product media endpoint
+                    url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/media.json"
+                    
+                    # Create multipart form data for video upload
+                    files = {
+                        'media[attachment]': (filename, content, content_type)
+                    }
+                    data = {
+                        'media[alt]': ''
+                    }
+                    
+                    headers = {
+                        "X-Shopify-Access-Token": ACCESS_TOKEN
+                    }
+                    
+                    # Handle redirects for POST requests
+                    response = requests.post(url, headers=headers, files=files, data=data, allow_redirects=False)
+                    if response.status_code in [301, 302, 303, 307, 308]:
+                        redirect_url = response.headers.get('Location', url)
+                        if redirect_url.startswith('/'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(url)
+                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                        response = requests.post(redirect_url, headers=headers, files=files, data=data, allow_redirects=True)
+                    
+                else:
+                    # For images, use the product images endpoint
+                    url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images.json"
+                    
+                    # Create multipart form data for image upload
+                    files = {
+                        'image[attachment]': (filename, content, content_type)
+                    }
+                    data = {
+                        'image[alt]': ''
+                    }
+                    
+                    headers = {
+                        "X-Shopify-Access-Token": ACCESS_TOKEN
+                    }
+                    
+                    # Handle redirects for POST requests
+                    response = requests.post(url, headers=headers, files=files, data=data, allow_redirects=False)
+                    if response.status_code in [301, 302, 303, 307, 308]:
+                        redirect_url = response.headers.get('Location', url)
+                        if redirect_url.startswith('/'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(url)
+                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                        response = requests.post(redirect_url, headers=headers, files=files, data=data, allow_redirects=True)
+                
+                if response.status_code in [200, 201]:
+                    success_count += 1
+                    response_data = response.json()
+                    media_id = response_data.get('image', {}).get('id') or response_data.get('media', {}).get('id')
+                    print(f"✅ Uploaded {media_type}: {filename} (ID: {media_id})")
+                else:
+                    error_msg = f"Failed to upload {media_type} {filename}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
                     print(f"❌ {error_msg}")
                     
             except Exception as e:
-                error_msg = f"Error attaching existing media files: {str(e)}"
+                error_msg = f"Error uploading media file {filename}: {str(e)}"
                 errors.append(error_msg)
                 print(f"💥 {error_msg}")
         
@@ -646,19 +777,22 @@ def update_product_taxable(product_id, taxable):
         print(f"💥 Error updating taxable field: {str(e)}")
         return False
 
-def create_metafields(product_id, metafields_data):
+def create_metafields(product_id, metafields_data, shopify_domain=None):
     """
     Create metafields for a product
     
     Args:
         product_id (int): The ID of the product to add metafields to
         metafields_data (list): List of metafield data dictionaries
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
     
     Returns:
         dict: Result with success status and any errors
     """
     try:
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
+        # Use provided domain or fall back to STORE_DOMAIN
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
         headers = {
             "X-Shopify-Access-Token": ACCESS_TOKEN,
             "Content-Type": "application/json"
@@ -710,7 +844,17 @@ def create_metafields(product_id, metafields_data):
                     }
                 }
                 
-                response = requests.post(url, headers=headers, json=payload)
+                # Handle redirects for metafield creation
+                response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
+                
+                # If redirected, follow it with POST method preserved
+                if response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = response.headers.get('Location', url)
+                    if redirect_url.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(url)
+                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                    response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
                 
                 if response.status_code in [200, 201]:
                     success_count += 1
@@ -755,18 +899,24 @@ def create_product(product_data):
         existing_product_id = product_data.get("product_id")
         if existing_product_id:
             # Update existing product
-            url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{existing_product_id}.json"
+            # Ensure STORE_DOMAIN doesn't already include protocol
+            domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+            url = f"https://{domain}/admin/api/{API_VERSION}/products/{existing_product_id}.json"
             method = "PUT"
             print(f"🔄 Updating existing product {existing_product_id}")
         else:
             # Create new product
-            url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json"
+            # Ensure STORE_DOMAIN doesn't already include protocol and has no trailing slash
+            domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+            url = f"https://{domain}/admin/api/{API_VERSION}/products.json"
             method = "POST"
             print(f"➕ Creating new product")
+            print(f"🔍 Final URL: {url}", flush=True)
 
         headers = {
             "X-Shopify-Access-Token": ACCESS_TOKEN,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
         }
         
         # Determine if product should be taxable based on VAT setting
@@ -785,25 +935,54 @@ def create_product(product_data):
         print(f"💰 Taxable setting: {taxable}")
         
         # Check if colours are provided
-        product_colours = product_data.get("product_colours", "").strip()
+        product_colours_raw = product_data.get("product_colours") or ""
+        product_colours = str(product_colours_raw).strip() if product_colours_raw else ""
         has_colours = bool(product_colours)
         
+        # Store the expected title to match against response
+        expected_title = product_data.get("title", "").strip()
+        
+        # Validate that we have a title
+        if not expected_title:
+            error_msg = "Product title is required and cannot be empty"
+            print(f"❌ {error_msg}", flush=True)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+        
         # Prepare the product payload (without taxable field initially)
+        # Ensure variant has valid data - Shopify may reject empty/invalid variants
+        variant_price = format_price(product_data.get("price", "0.00"))
+        variant_sku = product_data.get("sku", "").strip()
+        variant_weight = product_data.get("weight", 0)
+        
+        # Build variant payload - only include fields that have values
+        variant_payload = {
+            "price": variant_price,
+            "requires_shipping": True
+        }
+        
+        # Only add SKU if it's not empty
+        if variant_sku:
+            variant_payload["sku"] = variant_sku
+        
+        # Only add weight if it's greater than 0
+        if variant_weight and float(variant_weight) > 0:
+            variant_payload["weight"] = float(variant_weight)
+        
+        # Only add inventory_quantity if it's provided
+        inventory_qty = product_data.get("inventory_quantity")
+        if inventory_qty is not None:
+            variant_payload["inventory_quantity"] = int(inventory_qty)
+        
         payload = {
             "product": {
-                "title": product_data.get("title", ""),
+                "title": expected_title,
                 "body_html": product_data.get("description", ""),
                 "status": product_data.get("status", "active"),
                 "tags": tags,
-                "variants": [
-                    {
-                        "price": format_price(product_data.get("price", "0.00")),
-                        "sku": product_data.get("sku", ""),
-                        "inventory_quantity": product_data.get("inventory_quantity", 0),
-                        "weight": product_data.get("weight", 0),
-                        "requires_shipping": True
-                    }
-                ]
+                "variants": [variant_payload]
             }
         }
         
@@ -829,23 +1008,286 @@ def create_product(product_data):
             # Don't send options field either
         
         print(f"🔄 Step 1: {'Updating' if existing_product_id else 'Creating'} product: {product_data.get('title', 'Untitled')}")
+        print(f"🔍 Payload being sent to Shopify:", flush=True)
+        import json
+        print(json.dumps(payload, indent=2), flush=True)
 
+        # Extract the actual Shopify domain from redirects (if any)
+        # This will be used for all subsequent API calls to avoid redirects
+        actual_shopify_domain = None
+        
+        # Ensure we're sending the request correctly
+        # For both PUT and POST requests, handle redirects manually to preserve method
         if method == "PUT":
-            response = requests.put(url, headers=headers, json=payload)
+            # For PUT, first try without following redirects
+            response = requests.put(url, headers=headers, json=payload, allow_redirects=False)
+            
+            # Check if we got a redirect status code
+            if response.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = response.headers.get('Location', url)
+                # Handle relative redirects
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                
+                # Extract the actual Shopify domain from the redirect URL
+                from urllib.parse import urlparse
+                parsed_redirect = urlparse(redirect_url)
+                actual_shopify_domain = parsed_redirect.netloc
+                
+                # Follow redirect with PUT method preserved
+                response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+            else:
+                # Extract domain from response URL in case of redirects
+                if hasattr(response, 'url') and response.url != url:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(response.url)
+                    actual_shopify_domain = parsed.netloc
         else:
-            response = requests.post(url, headers=headers, json=payload)
+            # For POST, first try without following redirects
+            response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
+            
+            # Check if we got a redirect status code
+            if response.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = response.headers.get('Location', url)
+                # Handle relative redirects
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                print(f"⚠️ POST request redirected {response.status_code} to: {redirect_url}", flush=True)
+                
+                # Extract the actual Shopify domain from the redirect URL
+                from urllib.parse import urlparse
+                parsed_redirect = urlparse(redirect_url)
+                actual_shopify_domain = parsed_redirect.netloc
+                print(f"🔍 Extracted Shopify domain: {actual_shopify_domain}", flush=True)
+                
+                # Follow redirect with POST method preserved
+                response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
+            
+            # Check if we were redirected (which would be unusual for a POST)
+            if hasattr(response, 'history') and response.history:
+                print(f"⚠️ Request was redirected {len(response.history)} time(s)", flush=True)
+                for hist in response.history:
+                    print(f"   Redirect: {hist.status_code} -> {hist.url}", flush=True)
+                # If POST was redirected, check if it was converted to GET
+                if response.url != url:
+                    print(f"⚠️ Final URL differs from original: {url} -> {response.url}", flush=True)
+                    # Extract domain from final URL if we didn't get it from redirect header
+                    if not actual_shopify_domain:
+                        from urllib.parse import urlparse
+                        parsed_final = urlparse(response.url)
+                        actual_shopify_domain = parsed_final.netloc
+                        print(f"🔍 Extracted Shopify domain from final URL: {actual_shopify_domain}", flush=True)
+        
+        # Log the full response for debugging
+        print(f"🔍 Shopify API Response Status: {response.status_code}", flush=True)
+        print(f"🔍 Shopify API Response Headers: {dict(response.headers)}", flush=True)
+        print(f"🔍 Shopify API Request URL: {url}", flush=True)
+        print(f"🔍 Shopify API Request Method: {method}", flush=True)
+        
+        # Log raw response text for debugging (first 2000 chars)
+        print(f"🔍 Raw Response Text (first 2000 chars): {response.text[:2000]}", flush=True)
+        
+        # Check for non-success status codes first
+        if response.status_code not in [200, 201]:
+            error_msg = f"Shopify API returned status {response.status_code}. Response: {response.text[:1000]}"
+            print(f"❌ {error_msg}", flush=True)
+            return {
+                "success": False,
+                "error": error_msg
+            }
         
         if response.status_code in [200, 201]:
-            result = response.json()
-            product = result.get("product", {})
+            try:
+                result = response.json()
+                print(f"🔍 Shopify API Response JSON keys: {list(result.keys())}", flush=True)
+                # Log a sample of the response for debugging (first 500 chars)
+                result_str = str(result)
+                if len(result_str) > 500:
+                    print(f"🔍 Shopify API Response (first 500 chars): {result_str[:500]}...", flush=True)
+                else:
+                    print(f"🔍 Shopify API Response: {result_str}", flush=True)
+            except Exception as e:
+                error_msg = f"Failed to parse Shopify API response: {str(e)}. Response text: {response.text[:500]}"
+                print(f"❌ {error_msg}", flush=True)
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
+            # Check for errors in the response body (Shopify sometimes returns 200 with errors)
+            if "errors" in result:
+                error_msg = f"Shopify API returned errors: {result.get('errors')}"
+                print(f"❌ {error_msg}", flush=True)
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
+            # Handle both 'product' (singular) and 'products' (plural) response formats
+            product = None
+            if "product" in result:
+                product = result.get("product", {})
+                print(f"✅ Response contains 'product' (singular)", flush=True)
+            elif "products" in result:
+                products_list = result.get("products", [])
+                print(f"🔍 Response contains 'products' array with {len(products_list)} product(s)", flush=True)
+                
+                # If we're creating a NEW product, getting a 'products' array is unexpected and likely an error
+                if not existing_product_id:
+                    # Log all products in the array for debugging
+                    print(f"🔍 Products in response:", flush=True)
+                    for idx, p in enumerate(products_list[:10]):  # Limit to first 10 for readability
+                        print(f"   {idx + 1}. ID: {p.get('id')}, Title: '{p.get('title')}', Created: {p.get('created_at')}", flush=True)
+                    if len(products_list) > 10:
+                        print(f"   ... and {len(products_list) - 10} more products", flush=True)
+                    
+                    # Try to find the product that matches the title we just created
+                    matching_product = None
+                    if expected_title:
+                        for p in products_list:
+                            if p.get("title") == expected_title:
+                                matching_product = p
+                                print(f"✅ Found matching product by title: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                break
+                    
+                    # If no match found, try to fetch the product by making a separate API call
+                    if not matching_product and expected_title:
+                        print(f"🔍 Product not found in response array. Attempting to fetch product by title...", flush=True)
+                        try:
+                            # Try to get the product by searching for it by title
+                            from urllib.parse import quote
+                            search_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json?title={quote(expected_title)}"
+                            search_response = requests.get(search_url, headers=headers)
+                            if search_response.status_code == 200:
+                                search_result = search_response.json()
+                                if "products" in search_result and search_result["products"]:
+                                    for p in search_result["products"]:
+                                        if p.get("title") == expected_title:
+                                            matching_product = p
+                                            print(f"✅ Found product via search: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                            break
+                        except Exception as e:
+                            print(f"⚠️ Error searching for product: {str(e)}", flush=True)
+                        
+                        # If still not found, try getting the most recently created product (within last minute)
+                        if not matching_product:
+                            print(f"🔍 Trying to find most recently created product...", flush=True)
+                            try:
+                                from datetime import datetime, timedelta
+                                now = datetime.utcnow()
+                                one_minute_ago = now - timedelta(minutes=1)
+                                
+                                # Get products sorted by created_at descending, limit to 5
+                                recent_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json?limit=5&order=created_at desc"
+                                recent_response = requests.get(recent_url, headers=headers)
+                                if recent_response.status_code == 200:
+                                    recent_result = recent_response.json()
+                                    if "products" in recent_result and recent_result["products"]:
+                                        for p in recent_result["products"]:
+                                            created_str = p.get("created_at", "")
+                                            if created_str:
+                                                try:
+                                                    created_at = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                                                    if created_at.replace(tzinfo=None) >= one_minute_ago:
+                                                        if p.get("title") == expected_title:
+                                                            matching_product = p
+                                                            print(f"✅ Found recently created product: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                                            break
+                                                except:
+                                                    pass
+                            except Exception as e:
+                                print(f"⚠️ Error finding recent product: {str(e)}", flush=True)
+                    
+                    # If still no match found, this is an error - Shopify didn't create our product
+                    if not matching_product:
+                        error_msg = f"Failed to create product: Shopify API returned a list of existing products instead of the newly created product. Expected title: '{expected_title}'. The product was not found in the response or via search. This suggests the product was not created. Please check Shopify API logs or try again."
+                        print(f"❌ {error_msg}", flush=True)
+                        print(f"🔍 Full response (first 1000 chars): {str(result)[:1000]}", flush=True)
+                        return {
+                            "success": False,
+                            "error": error_msg
+                        }
+                    
+                    product = matching_product
+                else:
+                    # For updates, we might get a products array - try to find the updated product
+                    if products_list and len(products_list) > 0:
+                        # Try to find the product that matches the title we just updated
+                        matching_product = None
+                        if expected_title:
+                            for p in products_list:
+                                if p.get("title") == expected_title and p.get("id") == existing_product_id:
+                                    matching_product = p
+                                    print(f"✅ Found matching updated product by title and ID: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                    break
+                        
+                        # If no match found, use the product with matching ID
+                        if not matching_product:
+                            for p in products_list:
+                                if p.get("id") == existing_product_id:
+                                    matching_product = p
+                                    print(f"✅ Found updated product by ID: {existing_product_id}", flush=True)
+                                    break
+                        
+                        if not matching_product:
+                            error_msg = f"Failed to update product: Could not find product {existing_product_id} in response. Response contains {len(products_list)} products."
+                            print(f"❌ {error_msg}", flush=True)
+                            return {
+                                "success": False,
+                                "error": error_msg
+                            }
+                        
+                        product = matching_product
+                    else:
+                        error_msg = f"Shopify API response contains 'products' but array is empty. Response: {result}"
+                        print(f"❌ {error_msg}", flush=True)
+                        return {
+                            "success": False,
+                            "error": error_msg
+                        }
+            
+            if not product:
+                error_msg = f"Shopify API response does not contain a product. Response keys: {list(result.keys()) if result else 'None'}. Response: {str(result)[:500]}"
+                print(f"❌ {error_msg}", flush=True)
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
             product_id = product.get("id")
+            if not product_id:
+                error_msg = f"Shopify API response does not contain a product ID. Product data: {product}"
+                print(f"❌ {error_msg}", flush=True)
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
+            
+            # Verify the product title matches what we sent (especially important for new products)
+            product_title = product.get("title", "")
+            if not existing_product_id and expected_title and product_title != expected_title:
+                error_msg = f"Product title mismatch! Expected '{expected_title}' but got '{product_title}'. This may indicate the wrong product was returned."
+                print(f"❌ {error_msg}", flush=True)
+                print(f"⚠️ Product ID returned: {product_id}", flush=True)
+                # Don't fail here - log the warning but continue, as this might be a Shopify API quirk
+                print(f"⚠️ Continuing with returned product, but this may not be the product you intended to create.", flush=True)
             
             action = "updated" if existing_product_id else "created"
-            print(f"✅ Step 1 Complete: Product {action} successfully!")
-            print(f"🆔 Product ID: {product_id}")
-            print(f"📝 Title: {product.get('title')}")
-            print(f"🔗 Handle: {product.get('handle')}")
-            print(f"🏷️ Tags: {tags}")
+            print(f"✅ Step 1 Complete: Product {action} successfully!", flush=True)
+            print(f"🆔 Product ID: {product_id}", flush=True)
+            print(f"📝 Title: {product.get('title')}", flush=True)
+            print(f"🔗 Handle: {product.get('handle')}", flush=True)
+            print(f"🏷️ Tags: {tags}", flush=True)
+            
+            # Log the domain we'll use for subsequent API calls
+            if actual_shopify_domain:
+                print(f"🌐 Using Shopify domain: {actual_shopify_domain} for subsequent API calls", flush=True)
+            else:
+                print(f"🌐 Using default domain: {STORE_DOMAIN} for subsequent API calls", flush=True)
             
             # Step 2: Upload media files (images/videos) to the product FIRST
             media_files = product_data.get("media_files", [])
@@ -888,7 +1330,9 @@ def create_product(product_data):
                 if not payload_custom_sku and not provided_sku:
                     try:
                         # Fetch metafield custom.sku from API for the newly created product
-                        url_mf = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
+                        # Use actual_shopify_domain if available to avoid redirects
+                        mf_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+                        url_mf = f"https://{mf_domain}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
                         headers_mf = {"X-Shopify-Access-Token": ACCESS_TOKEN}
                         r_mf = requests.get(url_mf, headers=headers_mf)
                         if r_mf.status_code == 200:
@@ -929,7 +1373,8 @@ def create_product(product_data):
                             media_files,
                             None,  # Don't try to re-attach existing media
                             product_title,
-                            product_sku=sku_for_filename
+                            product_sku=sku_for_filename,
+                            shopify_domain=actual_shopify_domain
                         )
                         if media_results["success"]:
                             print(f"✅ Step 2b Complete: New media files uploaded successfully!")
@@ -946,7 +1391,7 @@ def create_product(product_data):
                     media_order = product_data.get("media_order", [])
                     if media_order:
                         print(f"🔄 Step 2c: Reordering media according to media_order ({len(media_order)} items)...")
-                        reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids)
+                        reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
                         if reorder_results["success"]:
                             print(f"✅ Step 2c Complete: Media reordered successfully!")
                         else:
@@ -963,21 +1408,58 @@ def create_product(product_data):
                     print(f"✅ Step 2 Complete: Media management finished for existing product!")
                 
                 elif has_new_media or total_media > 0:
-                    # Creating new product - upload all media
+                    # Creating new product - upload all media (same flow as updating existing product)
                     print(f"🔄 Step 2: Uploading {len(media_files)} new files and attaching {len(shopify_media_ids)} existing files for new product...")
                     product_title = product_data.get("title", "")
                     
+                    # Step 2a: Upload/attach all media (both new and existing)
                     media_results = upload_media_to_product(
                         product_id,
                         media_files,
                         shopify_media_ids,
                         product_title,
-                        product_sku=sku_for_filename
+                        product_sku=sku_for_filename,
+                        shopify_domain=actual_shopify_domain
                     )
                     if media_results["success"]:
-                        print(f"✅ Step 2 Complete: All media files processed successfully!")
+                        print(f"✅ Step 2a Complete: All media files uploaded/attached successfully!")
                     else:
-                        print(f"⚠️ Step 2 Partial: Some media files failed to process: {media_results['errors']}")
+                        print(f"⚠️ Step 2a Partial: Some media files failed to process: {media_results['errors']}")
+                    
+                    # Step 2b: Reorder all media according to media_order (same as existing product flow)
+                    # Add a delay to ensure Shopify has processed the uploads
+                    import time
+                    if has_new_media:
+                        print("⏳ Waiting 2 seconds for Shopify to process new uploads...")
+                        time.sleep(2)
+                    
+                    media_order = product_data.get("media_order", [])
+                    print(f"🔍 DEBUG: media_order received for new product: {media_order}")
+                    print(f"🔍 DEBUG: media_order type: {type(media_order)}, length: {len(media_order) if isinstance(media_order, list) else 'N/A'}")
+                    if media_order:
+                        print(f"🔄 Step 2b: Reordering media according to media_order ({len(media_order)} items)...")
+                        debug_items = [f"{item.get('type', '?')} at pos {item.get('position', '?')}" for item in media_order]
+                        print(f"🔍 DEBUG: media_order items: {debug_items}")
+                        # For new products, pass shopify_media_ids to help identify existing vs new images
+                        # The reorder function will fetch ALL images from the product and match them to media_order
+                        reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
+                        if reorder_results["success"]:
+                            print(f"✅ Step 2b Complete: Media reordered successfully!")
+                        else:
+                            print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results['errors']}")
+                    else:
+                        print(f"⚠️ WARNING: No media_order provided for new product! Cannot set image order.")
+                        print(f"🔍 DEBUG: product_data keys: {list(product_data.keys())}")
+                        if shopify_media_ids:
+                            # Fallback to old method if no media_order provided
+                            print(f"🔄 Step 2b: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
+                            reorder_results = reorder_product_media(product_id, shopify_media_ids)
+                            if reorder_results["success"]:
+                                print(f"✅ Step 2b Complete: Media reordered successfully!")
+                            else:
+                                print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results['errors']}")
+                    
+                    print(f"✅ Step 2 Complete: All media files processed successfully!")
                 else:
                     print(f"⏭️ Step 2 Skipped: No media to manage")
             
@@ -1010,7 +1492,8 @@ def create_product(product_data):
                 })
             
             # Add colour options metafield if provided
-            product_colours = product_data.get("product_colours", "").strip()
+            product_colours_raw = product_data.get("product_colours") or ""
+            product_colours = str(product_colours_raw).strip() if product_colours_raw else ""
             if product_colours:
                 print(f"🎨 Colours provided: {product_colours}", flush=True)
                 metafields.append({
@@ -1045,7 +1528,8 @@ def create_product(product_data):
             
             if metafields and product_id:
                 print(f"🔄 Step 3: Creating {len(metafields)} metafields...")
-                metafield_results = create_metafields(product_id, metafields)
+                # Use the actual Shopify domain if we extracted it from redirects
+                metafield_results = create_metafields(product_id, metafields, shopify_domain=actual_shopify_domain)
                 if metafield_results["success"]:
                     print(f"✅ Step 3 Complete: All metafields created successfully!")
                     # Small delay to ensure metafields are fully saved before Price Bandit reads them
@@ -1057,9 +1541,15 @@ def create_product(product_data):
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
             
             # Step 4: Run Price Bandit script to create variants (after media and metafields are created)
+            # For new products, add extra delay to ensure images are fully indexed
+            if not existing_product_id:
+                print("⏳ Waiting 2 seconds before Price Bandit to ensure all images are indexed...", flush=True)
+                import time
+                time.sleep(2.0)
+            
             print(f"🔄 Step 4: Running Price Bandit script to create variants...")
             
-            # Import Price Bandit functions
+            # Import Price Bandit functions first
             try:
                 import sys
                 import os
@@ -1068,6 +1558,21 @@ def create_product(product_data):
                 if scripts_dir not in sys.path:
                     sys.path.append(scripts_dir)
                 from Price_Bandit import process_product
+                import Price_Bandit
+                
+                # Temporarily update STORE_DOMAIN in both config and Price_Bandit if we have the actual Shopify domain
+                # This ensures Price Bandit uses the correct domain to avoid redirects
+                original_store_domain = None
+                if actual_shopify_domain:
+                    try:
+                        import config
+                        original_store_domain = config.STORE_DOMAIN
+                        config.STORE_DOMAIN = actual_shopify_domain
+                        # Also update Price_Bandit's imported STORE_DOMAIN directly
+                        Price_Bandit.STORE_DOMAIN = actual_shopify_domain
+                    except Exception as e:
+                        print(f"⚠️ Could not update STORE_DOMAIN: {e}", flush=True)
+                        original_store_domain = None
                 
                 print(f"🔍 Price Bandit imported successfully")
                 
@@ -1112,6 +1617,17 @@ def create_product(product_data):
                 print(f"❌ Step 4 Failed: Price Bandit execution error: {str(e)}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                # Restore original STORE_DOMAIN if we changed it
+                if 'original_store_domain' in locals() and original_store_domain is not None:
+                    try:
+                        import config
+                        config.STORE_DOMAIN = original_store_domain
+                        # Also restore Price_Bandit's STORE_DOMAIN
+                        if 'Price_Bandit' in locals():
+                            Price_Bandit.STORE_DOMAIN = original_store_domain
+                    except Exception as e:
+                        print(f"⚠️ Could not restore STORE_DOMAIN: {e}", flush=True)
             
             # Step 5: Update taxable field on variants if needed (Price Bandit sets taxable=True by default)
             if not taxable:  # If user selected "No" for charge VAT
@@ -1124,8 +1640,24 @@ def create_product(product_data):
             else:
                 print(f"✅ Step 5 Complete: Variants created with taxable=True (Price Bandit default)")
             
+            # Verify the product actually exists by fetching it
+            # Use actual_shopify_domain if available to avoid redirects
+            verify_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+            verify_url = f"https://{verify_domain}/admin/api/{API_VERSION}/products/{product_id}.json"
+            verify_response = requests.get(verify_url, headers=headers)
+            if verify_response.status_code == 200:
+                verified_product = verify_response.json().get("product", {})
+                if verified_product.get("id") == product_id:
+                    print(f"✅ Verification: Product {product_id} confirmed to exist in Shopify", flush=True)
+                else:
+                    print(f"⚠️ Warning: Product verification returned different product", flush=True)
+            else:
+                print(f"⚠️ Warning: Could not verify product existence (status: {verify_response.status_code})", flush=True)
+            
             print(f"🎉 Product {action} process completed!")
-            print(f"🌐 URL: https://{STORE_DOMAIN}/admin/products/{product_id}")
+            # Use actual_shopify_domain for the final URL if available
+            final_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+            print(f"🌐 URL: https://{final_domain}/admin/products/{product_id}")
 
             return {
                 "success": True,

@@ -337,25 +337,116 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
         else:
             options_with_values.append(option)
     
-        print(f"🔧 Updating product with {len(options_with_values)} options and {len(variants)} variants", flush=True)
-        print(f"🔍 Options: {[opt.get('name') for opt in options_with_values]}", flush=True)
-        print(f"🔍 Options with values: {options_with_values}", flush=True)
-        
-        print(f"🔍 About to attempt variant creation...", flush=True)
+    print(f"🔧 Updating product with {len(options_with_values)} options and {len(variants)} variants", flush=True)
+    print(f"🔍 Options: {[opt.get('name') for opt in options_with_values]}", flush=True)
+    print(f"🔍 Options with values: {options_with_values}", flush=True)
+    print(f"🔍 About to attempt variant creation...", flush=True)
     
     # Simple approach: Update product with ALL variants at once
     print(f"🔄 Updating product with ALL {len(variants)} variants at once", flush=True)
     
+    # First, get the current product to preserve required fields like title and existing variants
+    existing_variants = []
+    try:
+        get_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        get_resp = requests.get(get_url, headers=HEADERS, allow_redirects=False)
+        
+        # Handle redirects for GET request too
+        if get_resp.status_code in [301, 302, 303, 307, 308]:
+            redirect_url = get_resp.headers.get('Location', get_url)
+            if redirect_url.startswith('/'):
+                from urllib.parse import urlparse
+                parsed = urlparse(get_url)
+                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+            get_resp = requests.get(redirect_url, headers=HEADERS)
+        
+        if get_resp.status_code == 200:
+            current_product = get_resp.json().get("product", {})
+            product_title = current_product.get("title", product_name)
+            existing_variants = current_product.get("variants", [])
+            print(f"🔍 Found {len(existing_variants)} existing variants on product", flush=True)
+        else:
+            product_title = product_name
+    except Exception as e:
+        print(f"⚠️ Could not fetch current product: {e}, using provided name", flush=True)
+        product_title = product_name
+    
+    # If we have existing variants and we're trying to add new ones with different options,
+    # we need to either update the existing ones or include them in the payload
+    # For now, if there's only one existing variant and we're creating multiple new ones,
+    # we'll update the first existing variant to match the first new variant, then add the rest
+    clean_variants = []
+    if len(existing_variants) == 1 and len(variants) > 1:
+        # Update the existing variant to match the first new variant
+        existing_variant = existing_variants[0]
+        first_new_variant = variants[0].copy()
+        # Keep the existing variant's ID but update its fields
+        updated_variant = {
+            "id": existing_variant.get("id"),
+            "price": str(first_new_variant.get("price", "0.00")),
+            "sku": first_new_variant.get("sku", ""),
+            "option1": first_new_variant.get("option1"),
+            "option2": first_new_variant.get("option2"),
+            "option3": first_new_variant.get("option3"),
+            "inventory_policy": first_new_variant.get("inventory_policy", "continue"),
+            "requires_shipping": first_new_variant.get("requires_shipping", True),
+            "weight": float(first_new_variant.get("weight", 0)),
+            "weight_unit": first_new_variant.get("weight_unit", "g"),
+            "taxable": first_new_variant.get("taxable", True),
+        }
+        clean_variants.append(updated_variant)
+        # Add the rest as new variants (without IDs)
+        for variant in variants[1:]:
+            clean_variant = {k: v for k, v in variant.items() if k != 'id'}
+            if 'price' in clean_variant:
+                clean_variant['price'] = str(clean_variant['price'])
+            if 'weight' in clean_variant:
+                try:
+                    clean_variant['weight'] = float(clean_variant['weight']) if clean_variant['weight'] else 0
+                except (ValueError, TypeError):
+                    clean_variant['weight'] = 0
+            clean_variants.append(clean_variant)
+    else:
+        # Normal case: all variants are new (or we deleted existing ones)
+        for variant in variants:
+            clean_variant = {k: v for k, v in variant.items() if k != 'id'}  # Remove any 'id' field
+            # Ensure price is a string
+            if 'price' in clean_variant:
+                clean_variant['price'] = str(clean_variant['price'])
+            # Ensure weight is a number, not string
+            if 'weight' in clean_variant:
+                try:
+                    clean_variant['weight'] = float(clean_variant['weight']) if clean_variant['weight'] else 0
+                except (ValueError, TypeError):
+                    clean_variant['weight'] = 0
+            clean_variants.append(clean_variant)
+    
     payload = {
         "product": {
             "id": product_id,
+            "title": product_title,  # Required field for PUT requests
             "options": options_with_values,
-            "variants": variants,
+            "variants": clean_variants,
         }
     }
     
+    # Log the payload for debugging
+    import json
+    print(f"🔍 Payload being sent to Shopify: {json.dumps(payload, indent=2)}", flush=True)
+    
     try:
-        resp = requests.put(url, headers=HEADERS, json=payload)
+        # Handle redirects for PUT requests
+        resp = requests.put(url, headers=HEADERS, json=payload, allow_redirects=False)
+        
+        # If redirected, follow it silently
+        if resp.status_code in [301, 302, 303, 307, 308]:
+            redirect_url = resp.headers.get('Location', url)
+            if redirect_url.startswith('/'):
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+            resp = requests.put(redirect_url, headers=HEADERS, json=payload, allow_redirects=True)
+        
         if resp.status_code == 200:
             result = resp.json().get("product", {})
             created_variants = result.get("variants", [])
@@ -380,6 +471,13 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
         else:
             print(f"❌ Failed to update product variants for {product_name} ({sku}): {resp.status_code}", flush=True)
             print(f"❌ Response text: {resp.text}", flush=True)
+            # Try to parse error details
+            try:
+                error_data = resp.json()
+                if 'errors' in error_data:
+                    print(f"❌ Error details: {json.dumps(error_data['errors'], indent=2)}", flush=True)
+            except:
+                pass
         return []
     except Exception as e:
         print(f"❌ Error updating product variants for {product_name} ({sku}): {str(e)}", flush=True)
@@ -705,7 +803,19 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                     time.sleep(2.0)
         
         # Now extract main image and variant IDs from the fresh data
-        main_image_id = (fresh_product_data.get("image") or {}).get("id")
+        # The main image should be the first image (position 1) after sorting
+        images = fresh_product_data.get("images", [])
+        if images:
+            # Sort by position to ensure correct order
+            images.sort(key=lambda x: x.get('position', 999))
+            # The first image (position 1) should be the main image
+            main_image_id = images[0].get("id")
+            print(f"🔍 Main image determined: ID {main_image_id} at position {images[0].get('position', '?')}", flush=True)
+        else:
+            # Fallback to product.image if images array is empty
+            main_image_id = (fresh_product_data.get("image") or {}).get("id")
+            print(f"🔍 Main image from product.image: ID {main_image_id}", flush=True)
+        
         all_variant_ids = [v.get("id") for v in fresh_product_data.get("variants", []) if v.get("id")]
         
         if not main_image_id or not all_variant_ids:
@@ -718,8 +828,20 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
         # If colours exist, try to map images to colours
         if colours and len(colours) > 0:
             print(f"🎨 Checking for colour-specific images for {len(colours)} colours...", flush=True)
+            print(f"🔍 Main image (position 1) ID: {main_image_id}", flush=True)
             
-            images = fresh_product_data.get("images", [])
+            # If no images found, wait and retry once (for new products where images might not be indexed yet)
+            if not images and colour_images:
+                print(f"⚠️ No images found in product data, waiting 2 seconds and retrying...", flush=True)
+                time.sleep(2.0)
+                # Fetch product data again
+                retry_resp = requests.get(fresh_product_url, headers=HEADERS)
+                if retry_resp.status_code == 200:
+                    retry_data = retry_resp.json().get("product", {})
+                    images = retry_data.get("images", [])
+                    if images:
+                        images.sort(key=lambda x: x.get('position', 999))
+                    print(f"🔍 Retry: Found {len(images)} images", flush=True)
             
             # Create a map of colour to variant IDs
             colour_to_variants = {}
@@ -743,9 +865,11 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             assigned_variants = set()
             print(f"🔍 Available images: {len(images)}", flush=True)
             if images:
-                print(f"🔍 Sample image structure: id={images[0].get('id')}, global_id={images[0].get('global_id')}", flush=True)
+                print(f"🔍 Image positions: {[(i, img.get('position', '?'), img.get('id')) for i, img in enumerate(images)]}", flush=True)
+                print(f"🔍 Sample image structure: id={images[0].get('id')}, position={images[0].get('position')}", flush=True)
             if colour_images:
                 print(f"🔍 colour_images mapping: {colour_images}", flush=True)
+                print(f"🔍 Expected image order based on media_order should match these indices", flush=True)
             for colour in colours:
                 print(f"🔍 Processing colour: {colour}", flush=True)
                 if colour not in colour_to_variants:
@@ -754,12 +878,17 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                 else:
                     print(f"✅ Found {len(colour_to_variants[colour])} variants for colour: {colour}", flush=True)
                 
+                # Extract colour name (before colon if present) for matching with colour_images
+                # Colours can be "Colour:Code" format, but colour_images uses just "Colour"
+                colour_name = colour.split(':')[0] if ':' in colour else colour
+                print(f"🔍 Using colour name '{colour_name}' for image mapping (from '{colour}')", flush=True)
+                
                 # First check if there's a specific image mapping from frontend
                 colour_image = None
-                if colour_images and colour in colour_images:
+                if colour_images and colour_name in colour_images:
                     # The mapping contains the image index (order in which images were attached)
-                    image_index = colour_images[colour]
-                    print(f"🔍 Looking for image at index: {image_index} (out of {len(images)} images)", flush=True)
+                    image_index = colour_images[colour_name]
+                    print(f"🔍 Looking for image at index: {image_index} (out of {len(images)} images) for colour '{colour_name}'", flush=True)
                     # Get image by index if it exists
                     if isinstance(image_index, int) and 0 <= image_index < len(images):
                         colour_image = images[image_index]
@@ -791,29 +920,65 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                     variant_ids = colour_to_variants[colour]
                     update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{img_id}.json"
                     update_data = {"image": {"id": img_id, "variant_ids": variant_ids}}
-                    update_response = requests.put(update_url, headers=HEADERS, json=update_data)
+                    # Handle redirects for PUT requests
+                    update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
+                    
+                    # If redirected, follow it silently
+                    if update_response.status_code in [301, 302, 303, 307, 308]:
+                        redirect_url = update_response.headers.get('Location', update_url)
+                        if redirect_url.startswith('/'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(update_url)
+                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                        update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
+                    
                     if update_response.status_code == 200:
                         print(f"✔️ Assigned image {img_id} to {colour} variants", flush=True)
                         for v_id in variant_ids:
                             assigned_variants.add(v_id)
             
-            # Assign main image to any variants not yet assigned
-            unassigned_variants = [v_id for v_id in all_variant_ids if v_id not in assigned_variants]
+            # First, assign main image to ALL variants (this ensures all variants have the main image by default)
+            print(f"🔍 Assigning main image to ALL {len(all_variant_ids)} variants first...", flush=True)
+            update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
+            update_data = {"image": {"id": main_image_id, "variant_ids": all_variant_ids}}
+            # Handle redirects for PUT requests
+            update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
+            
+            # If redirected, follow it silently
+            if update_response.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = update_response.headers.get('Location', update_url)
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(update_url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
+            
+            if update_response.status_code == 200:
+                print(f"✔️ Main image assigned to all variants", flush=True)
+            else:
+                print(f"⚠️ Failed to assign main image to all variants: {update_response.status_code}", flush=True)
+            
+            # Now assign specific colour images (these will override the main image for those variants)
+            # The colour-specific images are already assigned above, so we're done
             print(f"🔍 Total variant IDs: {len(all_variant_ids)}", flush=True)
-            print(f"🔍 Assigned variants: {len(assigned_variants)}", flush=True)
-            print(f"🔍 Unassigned variants: {len(unassigned_variants)}", flush=True)
-            if unassigned_variants:
-                print(f"🔍 Assigning main image to {len(unassigned_variants)} unassigned variants", flush=True)
-                update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
-                update_data = {"image": {"id": main_image_id, "variant_ids": unassigned_variants}}
-                update_response = requests.put(update_url, headers=HEADERS, json=update_data)
-                if update_response.status_code == 200:
-                    print(f"✔️ Assigned main image to remaining variants", flush=True)
+            print(f"🔍 Assigned variants (with specific images): {len(assigned_variants)}", flush=True)
+            print(f"🔍 Remaining variants (keeping main image): {len(all_variant_ids) - len(assigned_variants)}", flush=True)
         else:
             # No colours - assign main image to all variants
             update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
             update_data = {"image": {"id": main_image_id, "variant_ids": all_variant_ids}}
-            update_response = requests.put(update_url, headers=HEADERS, json=update_data)
+            # Handle redirects for PUT requests
+            update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
+            
+            # If redirected, follow it silently
+            if update_response.status_code in [301, 302, 303, 307, 308]:
+                redirect_url = update_response.headers.get('Location', update_url)
+                if redirect_url.startswith('/'):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(update_url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
+            
             if update_response.status_code == 200:
                 print(f"✔️ All variants of product '{product_name}' have matching image.", flush=True)
                 return True
@@ -1046,6 +1211,10 @@ def process_product(product):
         enriched_endc = enrich_bands_with_variant_ids(endc_raw, updated_variants, "End Customer", None)
         set_or_update_metafield(metafields, product_id, "pricejsontid", enriched_trade, product_name, sku)
         set_or_update_metafield(metafields, product_id, "pricejsoneid", enriched_endc, product_name, sku)
+
+        # Wait a moment for variants to be fully saved before attaching images
+        print(f"⏳ Waiting 2 seconds for variants to be fully saved...", flush=True)
+        time.sleep(2.0)
 
         # Sync main image across variants
         colour_images = product.get("_colour_images")  # Passed from Product_Creator
