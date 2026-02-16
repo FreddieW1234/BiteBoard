@@ -2284,7 +2284,7 @@ Dietary</textarea>
                         
                         // Handle custom dropdowns for category and subcategory
                         let value;
-                        if (key === 'custom_category' || key === 'subcategory') {
+                        if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
                             // Get all checked checkboxes from custom dropdown
                             const checkedBoxes = inputElement.querySelectorAll('input[type="checkbox"]:checked');
                             console.log(`🔍 Found ${checkedBoxes.length} checked checkboxes for ${key}`);
@@ -2318,7 +2318,7 @@ Dietary</textarea>
                         // Only include metafields that have values
                         if (value && (Array.isArray(value) ? value.length > 0 : value)) {
                             // Force list type for category and subcategory to mirror Field Finder
-                            const forcedType = (key === 'custom_category' || key === 'subcategory') ? 'list.single_line_text_field' : metafieldType;
+                            const forcedType = (key === 'custom_category' || (key && key.startsWith('subcategory'))) ? 'list.single_line_text_field' : metafieldType;
                             
                             // For list types with array values, stringify the array
                             let finalValue = value;
@@ -3292,11 +3292,34 @@ Dietary</textarea>
                     console.log('Template product data received:', productData);
                     
                     // Clear all values from metafields so they're empty for the new product
-                    const emptyMetafields = (productData.metafields || []).map(metafield => ({
+                    let emptyMetafields = (productData.metafields || []).map(metafield => ({
                         ...metafield,
                         value: '', // Clear the value so it's empty for the new product
                         id: null   // Clear the ID since this is for a new product
                     }));
+                    
+                    // Ensure custom_category and subcategory are always present (template product may not have them)
+                    const existingKeys = new Set(emptyMetafields.map(m => m.key));
+                    if (!existingKeys.has('custom_category')) {
+                        emptyMetafields.push({
+                            namespace: 'custom',
+                            key: 'custom_category',
+                            type: 'list.single_line_text_field',
+                            value: '',
+                            id: null
+                        });
+                        console.log('Added stub custom_category metafield (missing from template)');
+                    }
+                    if (!existingKeys.has('subcategory')) {
+                        emptyMetafields.push({
+                            namespace: 'custom',
+                            key: 'subcategory',
+                            type: 'list.single_line_text_field',
+                            value: '',
+                            id: null
+                        });
+                        console.log('Added stub subcategory metafield (missing from template)');
+                    }
                     
                     console.log('Displaying metafields with cleared values for new product');
                     displayMetafields(emptyMetafields);
@@ -3986,6 +4009,29 @@ Dietary</textarea>
             
             // Collect metafields data
             productData.metafields = collectMetafieldsData();
+            
+            // Explicitly set category and subcategory as top-level for backend (required for metafield creation)
+            const mfData = productData.metafields || [];
+            const catMf = mfData.find(m => m.namespace === 'custom' && m.key === 'custom_category');
+            const subMf = mfData.find(m => m.namespace === 'custom' && (m.key === 'subcategory' || (m.key || '').startsWith('subcategory_')));
+            if (catMf && catMf.value) {
+                try {
+                    const arr = typeof catMf.value === 'string' ? JSON.parse(catMf.value) : catMf.value;
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        productData.category = String(arr[0]).trim();
+                        console.log('Set productData.category:', productData.category);
+                    }
+                } catch (e) {}
+            }
+            if (subMf && subMf.value) {
+                try {
+                    const arr = typeof subMf.value === 'string' ? JSON.parse(subMf.value) : subMf.value;
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        productData.subcategory = String(arr[0]).trim();
+                        console.log('Set productData.subcategory:', productData.subcategory);
+                    }
+                } catch (e) {}
+            }
             
             // Add colour options to metafields
             if (productData.product_colours) {
