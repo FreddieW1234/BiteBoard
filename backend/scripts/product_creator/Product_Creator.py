@@ -1504,7 +1504,16 @@ def create_product(product_data):
             elif product_data.get("category"):
                 categories = [str(product_data["category"]).strip()]
             if product_data.get("subcategories"):
-                subcategories = list(product_data["subcategories"]) if isinstance(product_data["subcategories"], (list, tuple)) else [product_data["subcategories"]]
+                sc = product_data["subcategories"]
+                if isinstance(sc, (list, tuple)):
+                    subcategories = list(sc)
+                elif isinstance(sc, str) and sc.strip().startswith("["):
+                    try:
+                        subcategories = json.loads(sc)
+                    except json.JSONDecodeError:
+                        subcategories = [str(sc).strip()]
+                else:
+                    subcategories = [str(sc).strip()]
             elif product_data.get("subcategory"):
                 subcategories = [str(product_data["subcategory"]).strip()]
             
@@ -1544,17 +1553,12 @@ def create_product(product_data):
                 subcategories = list(dict.fromkeys(subcats_from_mf))
             
             # Remove category from metafields (we add it)
-            # Remove subcategory_* only when we're adding from extracted subcategories (avoid duplicates)
-            def _should_remove(mf):
-                if mf.get("namespace") != "custom":
-                    return False
-                k = mf.get("key") or ""
-                if k == "custom_category":
-                    return True
-                if k.startswith("subcategory"):
-                    return bool(subcategories)  # Remove only when we're adding our own
-                return False
-            metafields = [mf for mf in metafields if not _should_remove(mf)]
+            # KEEP subcategory metafields - frontend sends multiple selections per key (subcategory, subcategory_2, etc.)
+            # Each overflow has no duplicates, so pass them through as-is
+            metafields = [
+                mf for mf in metafields
+                if not (mf.get("namespace") == "custom" and mf.get("key") == "custom_category")
+            ]
             
             # Add category metafield if we have it
             if categories:
@@ -1564,33 +1568,6 @@ def create_product(product_data):
                     "value": json.dumps(categories),
                     "type": "list.single_line_text_field"
                 })
-            # Add subcategory metafields: take selected subcategories, find which metafield each belongs to
-            # (subcategory, subcategory_2, etc. based on SUBCATEGORIES index), group by key, create each
-            if subcategories:
-                try:
-                    from scripts.product_creator.categories import get_subcategory_metafield_key
-                    by_key = {}
-                    for subcat in subcategories:
-                        key = get_subcategory_metafield_key(subcat)
-                        by_key.setdefault(key, []).append(subcat)
-                    for metafield_key, vals in by_key.items():
-                        metafields.append({
-                            "namespace": "custom",
-                            "key": metafield_key,
-                            "value": json.dumps(vals),
-                            "type": "list.single_line_text_field"
-                        })
-                except (ImportError, AttributeError):
-                    metafields.append({
-                        "namespace": "custom",
-                        "key": "subcategory",
-                        "value": json.dumps(subcategories),
-                        "type": "list.single_line_text_field"
-                    })
-            else:
-                # No subcategories from extraction/top-level: ensure frontend's subcategory_* metafields pass through
-                # (already in metafields - we did NOT filter them)
-                pass
             
             # Add colour options metafield if provided
             product_colours_raw = product_data.get("product_colours") or ""
