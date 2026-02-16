@@ -1464,7 +1464,9 @@ def create_product(product_data):
                     print(f"⏭️ Step 2 Skipped: No media to manage")
             
             # Step 3: Create metafields if provided
-            metafields = product_data.get("metafields", [])
+            metafields = product_data.get("metafields") or []
+            if not isinstance(metafields, list):
+                metafields = []
             
             # Build categories and subcategories from top-level (form) or metafields
             categories = []
@@ -1513,14 +1515,18 @@ def create_product(product_data):
             if not subcategories and subcats_from_mf:
                 subcategories = list(dict.fromkeys(subcats_from_mf))
             
-            # Remove category/subcategory from metafields (we'll add with correct format)
-            # Only filter subcategory when we have subcategories to add (otherwise keep frontend's)
-            def _is_cat_or_sub(mf):
+            # Remove category from metafields (we add it)
+            # Remove subcategory_* only when we're adding from extracted subcategories (avoid duplicates)
+            def _should_remove(mf):
                 if mf.get("namespace") != "custom":
                     return False
                 k = mf.get("key") or ""
-                return k == "custom_category" or (k.startswith("subcategory") and subcategories)
-            metafields = [mf for mf in metafields if not _is_cat_or_sub(mf)]
+                if k == "custom_category":
+                    return True
+                if k.startswith("subcategory"):
+                    return bool(subcategories)  # Remove only when we're adding our own
+                return False
+            metafields = [mf for mf in metafields if not _should_remove(mf)]
             
             # Add category metafield if we have it
             if categories:
@@ -1530,7 +1536,8 @@ def create_product(product_data):
                     "value": json.dumps(categories),
                     "type": "list.single_line_text_field"
                 })
-            # Add subcategory metafields - from extracted/top-level; if empty, frontend's entries were kept above
+            # Add subcategory metafields: take selected subcategories, find which metafield each belongs to
+            # (subcategory, subcategory_2, etc. based on SUBCATEGORIES index), group by key, create each
             if subcategories:
                 try:
                     from scripts.product_creator.categories import get_subcategory_metafield_key
@@ -1552,6 +1559,10 @@ def create_product(product_data):
                         "value": json.dumps(subcategories),
                         "type": "list.single_line_text_field"
                     })
+            else:
+                # No subcategories from extraction/top-level: ensure frontend's subcategory_* metafields pass through
+                # (already in metafields - we did NOT filter them)
+                pass
             
             # Add colour options metafield if provided
             product_colours_raw = product_data.get("product_colours") or ""
