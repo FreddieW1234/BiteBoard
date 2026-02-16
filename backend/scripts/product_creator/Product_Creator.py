@@ -1466,6 +1466,45 @@ def create_product(product_data):
             # Step 3: Create metafields if provided
             metafields = product_data.get("metafields", [])
             
+            # Extract category and subcategory from metafields when not provided as top-level
+            # (frontend sends them in metafields via collectMetafieldsData, not as top-level)
+            if not product_data.get("category"):
+                for mf in metafields:
+                    if mf.get("namespace") == "custom" and mf.get("key") == "custom_category":
+                        val = mf.get("value", "[]")
+                        try:
+                            arr = json.loads(val) if isinstance(val, str) else val
+                            if arr and isinstance(arr, list) and len(arr) > 0:
+                                product_data["category"] = str(arr[0]).strip()
+                                break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            if not product_data.get("subcategory"):
+                for mf in metafields:
+                    if mf.get("namespace") == "custom" and (
+                        mf.get("key") == "subcategory" or (mf.get("key") or "").startswith("subcategory_")
+                    ):
+                        val = mf.get("value", "[]")
+                        try:
+                            arr = json.loads(val) if isinstance(val, str) else val
+                            if arr and isinstance(arr, list) and len(arr) > 0:
+                                product_data["subcategory"] = str(arr[0]).strip()
+                                break
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            
+            # Remove category/subcategory from metafields to avoid duplicates (we add them below with correct keys)
+            metafields = [
+                mf for mf in metafields
+                if not (
+                    mf.get("namespace") == "custom"
+                    and (
+                        mf.get("key") == "custom_category"
+                        or (mf.get("key") or "").startswith("subcategory")
+                    )
+                )
+            ]
+            
             # Add category and subcategory metafields if provided
             if product_data.get("category"):
                 metafields.append({
