@@ -1569,6 +1569,28 @@ def create_product(product_data):
                     "type": "list.single_line_text_field"
                 })
             
+            # Ensure subcategory metafields are saved: add from top-level subcategories if missing from metafields
+            # (Frontend sends subcategories; they may be in metafields from collectMetafieldsData or as top-level)
+            has_subcategory_mf = any(
+                mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")
+                for mf in metafields
+            )
+            if subcategories and not has_subcategory_mf:
+                metafields.append({
+                    "namespace": "custom",
+                    "key": "subcategory",
+                    "value": json.dumps(subcategories),
+                    "type": "list.single_line_text_field"
+                })
+                print(f"📂 Added subcategory metafield from top-level: {subcategories}", flush=True)
+            
+            # Debug: log subcategory metafields being sent
+            subcat_mfs = [mf for mf in metafields if mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")]
+            if subcat_mfs:
+                print(f"📂 Subcategory metafields to save: {[(m.get('key'), m.get('value')) for m in subcat_mfs]}", flush=True)
+            elif subcategories:
+                print(f"⚠️ Subcategories from form but no subcategory metafields in list: {subcategories}", flush=True)
+            
             # Add colour options metafield if provided
             product_colours_raw = product_data.get("product_colours") or ""
             product_colours = str(product_colours_raw).strip() if product_colours_raw else ""
