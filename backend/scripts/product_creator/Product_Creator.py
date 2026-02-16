@@ -847,9 +847,10 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                         if not stripped or stripped == '[]' or (not stripped.startswith('[') and not stripped):
                             formatted_value = json.dumps(["-"])
                     # For subcategory metafields, Shopify enforces choices - filter to allowed values only
+                    # (Don't skip overflow keys like subcategory_2 - let them through; 422 retry will fix if needed)
                     namespace = metafield_data.get("namespace", "custom")
                     key = metafield_data.get("key", "")
-                    if namespace == "custom" and key and key.startswith("subcategory"):
+                    if namespace == "custom" and key and (key == "subcategory" or key.startswith("subcategory_")):
                         try:
                             from .categories import get_metafield_choices
                             allowed = set(get_metafield_choices(key) or [])
@@ -905,21 +906,35 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     success_count += 1
                     action = "Updated" if existing_id else "Created"
                     print(f"✅ {action} metafield: {namespace}.{key}", flush=True)
-                elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and key.startswith("subcategory"):
+                elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (key == "subcategory" or key.startswith("subcategory_")):
                     # 422 "does not exist in provided choices" - extract Shopify's actual choices and retry with filtered value
+                    # Applies to subcategory, subcategory_2, subcategory_3, etc.
+                    import re
                     try:
                         err_data = response.json()
                         err_val = (err_data.get("errors") or {}).get("value") or []
                         err_str = err_val[0] if isinstance(err_val, list) else str(err_val)
                         if "does not exist in provided choices" in err_str and "[" in err_str:
-                            import re
-                            match = re.search(r'choices:\s*(\[.*\])', err_str)
+                            match = re.search(r'choices:\s*(\[.*\])', err_str, re.DOTALL)
                             if match:
-                                allowed_json = match.group(1).replace("\\\"", "\"").replace("\\/", "/")
+                                allowed_json = match.group(1).replace("\\\"", "\"").replace("\\/", "/").rstrip(".")
                                 allowed = set(json.loads(allowed_json))
                                 parsed = json.loads(formatted_value) if isinstance(formatted_value, str) else formatted_value
                                 if isinstance(parsed, list) and allowed:
-                                    filtered = [v for v in parsed if str(v).strip() in allowed]
+                                    # Match flexibly (strip, normalize) and use Shopify's exact choice string
+                                    def _match_choice(v):
+                                        s = str(v).strip()
+                                        if s in allowed:
+                                            return s
+                                        for a in allowed:
+                                            if a.strip() == s or a.strip().lower() == s.lower():
+                                                return a  # Use Shopify's exact string
+                                        return None
+                                    filtered = []
+                                    for v in parsed:
+                                        c = _match_choice(v)
+                                        if c:
+                                            filtered.append(c)
                                     if filtered:
                                         formatted_value = json.dumps(filtered)
                                         payload = {"metafield": {"value": formatted_value}} if existing_id else {"metafield": {"namespace": namespace, "key": key, "value": formatted_value, "type": mf_type}}
@@ -931,7 +946,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                             print(f"✅ {action} metafield (after 422 retry): {namespace}.{key}", flush=True)
                                             continue
                     except Exception as retry_e:
-                        pass
+                        print(f"⚠️ 422 retry failed for {namespace}.{key}: {retry_e}", flush=True)
                     error_msg = f"Failed to create metafield {metafield_data.get('namespace')}.{metafield_data.get('key')}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
                     print(f"❌ {error_msg}")
