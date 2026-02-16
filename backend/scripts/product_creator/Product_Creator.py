@@ -1632,21 +1632,20 @@ def create_product(product_data):
                     "type": "list.single_line_text_field"
                 })
             
-            # Ensure subcategory metafields are saved: add from top-level subcategories if missing from metafields
-            # (Frontend sends subcategories; they may be in metafields from collectMetafieldsData or as top-level)
-            # IMPORTANT: Shopify enforces choices per metafield - subcategory has first 128, subcategory_2 has next 128, etc.
-            # Each value must go to its correct metafield key or Shopify returns 422.
-            has_subcategory_mf = any(
-                mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")
-                for mf in metafields
-            )
-            if subcategories and not has_subcategory_mf:
+            # Ensure subcategory metafields are saved - ALWAYS merge from top-level subcategories
+            # (Frontend sends subcategories merged; we must route each to correct key: subcategory, subcategory_2, etc.)
+            # IMPORTANT: Shopify enforces choices per metafield - subcategory has first 128, subcategory_2 has next 128.
+            if subcategories:
                 try:
                     from .categories import get_subcategory_metafield_key
                     by_key = {}
                     for sc in subcategories:
-                        key = get_subcategory_metafield_key(str(sc).strip()) if str(sc).strip() else "subcategory"
-                        by_key.setdefault(key, []).append(str(sc).strip())
+                        s = str(sc).strip()
+                        if s:
+                            key = get_subcategory_metafield_key(s)
+                            by_key.setdefault(key, []).append(s)
+                    # Remove existing subcategory* metafields - we replace with routed values
+                    metafields = [mf for mf in metafields if not (mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory"))]
                     for mf_key, vals in by_key.items():
                         if vals:
                             metafields.append({
@@ -1655,15 +1654,9 @@ def create_product(product_data):
                                 "value": json.dumps(vals),
                                 "type": "list.single_line_text_field"
                             })
-                            print(f"📂 Added {mf_key} metafield from top-level: {vals}", flush=True)
+                            print(f"📂 Subcategory metafield {mf_key}: {vals}", flush=True)
                 except Exception as e:
-                    print(f"⚠️ Failed to route subcategories by key: {e}, falling back to subcategory", flush=True)
-                    metafields.append({
-                        "namespace": "custom",
-                        "key": "subcategory",
-                        "value": json.dumps(subcategories),
-                        "type": "list.single_line_text_field"
-                    })
+                    print(f"⚠️ Failed to route subcategories: {e}", flush=True)
             
             # Debug: log subcategory metafields being sent
             subcat_mfs = [mf for mf in metafields if mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")]
