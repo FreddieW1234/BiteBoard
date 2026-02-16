@@ -1466,66 +1466,57 @@ def create_product(product_data):
             # Step 3: Create metafields if provided
             metafields = product_data.get("metafields", [])
             
-            # Extract categories and subcategories from metafields when not provided as top-level
-            # (frontend sends them in metafields via collectMetafieldsData, not as top-level)
-            # Support both singular (category/subcategory) and plural (categories/subcategories) for backward compat
-            if not product_data.get("categories") and not product_data.get("category"):
-                for mf in metafields:
-                    if mf.get("namespace") == "custom" and mf.get("key") == "custom_category":
-                        val = mf.get("value", "[]")
-                        try:
-                            arr = json.loads(val) if isinstance(val, str) else val
-                            if arr and isinstance(arr, list) and len(arr) > 0:
-                                product_data["categories"] = [str(v).strip() for v in arr if v]
-                                break
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-            if not product_data.get("subcategories") and not product_data.get("subcategory"):
-                # Merge subcategories from all subcategory_* metafields (user may have multiple)
-                subcats = []
-                for mf in metafields:
-                    if mf.get("namespace") == "custom" and (
-                        mf.get("key") == "subcategory" or (mf.get("key") or "").startswith("subcategory_")
-                    ):
-                        val = mf.get("value", "[]")
-                        try:
-                            arr = json.loads(val) if isinstance(val, str) else val
-                            if arr and isinstance(arr, list):
-                                subcats.extend([str(v).strip() for v in arr if v])
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                if subcats:
-                    product_data["subcategories"] = subcats
+            # Build categories and subcategories from top-level (form) or metafields
+            categories = []
+            subcategories = []
+            if product_data.get("categories"):
+                categories = list(product_data["categories"]) if isinstance(product_data["categories"], (list, tuple)) else [product_data["categories"]]
+            elif product_data.get("category"):
+                categories = [str(product_data["category"]).strip()]
+            if product_data.get("subcategories"):
+                subcategories = list(product_data["subcategories"]) if isinstance(product_data["subcategories"], (list, tuple)) else [product_data["subcategories"]]
+            elif product_data.get("subcategory"):
+                subcategories = [str(product_data["subcategory"]).strip()]
             
-            # Remove category/subcategory from metafields to avoid duplicates (we add them below with correct keys)
+            # Extract from metafields if not from top-level (merge from ALL matching metafields)
+            cats_from_mf = []
+            subcats_from_mf = []
+            for mf in metafields:
+                if mf.get("namespace") != "custom":
+                    continue
+                val = mf.get("value", "[]")
+                try:
+                    arr = json.loads(val) if isinstance(val, str) else (val if isinstance(val, list) else [])
+                    arr = [str(v).strip() for v in arr if v] if isinstance(arr, list) else []
+                except (json.JSONDecodeError, TypeError):
+                    arr = []
+                if not arr:
+                    continue
+                if mf.get("key") == "custom_category":
+                    cats_from_mf.extend(arr)
+                elif (mf.get("key") or "").startswith("subcategory"):
+                    subcats_from_mf.extend(arr)
+            if not categories and cats_from_mf:
+                categories = list(dict.fromkeys(cats_from_mf))
+            if not subcategories and subcats_from_mf:
+                subcategories = list(dict.fromkeys(subcats_from_mf))
+            
+            # Remove category/subcategory from metafields (we'll add with correct format)
             metafields = [
                 mf for mf in metafields
-                if not (
-                    mf.get("namespace") == "custom"
-                    and (
-                        mf.get("key") == "custom_category"
-                        or (mf.get("key") or "").startswith("subcategory")
-                    )
-                )
+                if not (mf.get("namespace") == "custom" and (
+                    mf.get("key") == "custom_category" or (mf.get("key") or "").startswith("subcategory")))
             ]
             
-            # Add category and subcategory metafields if provided (support multiple selections)
-            categories = product_data.get("categories") or (
-                [product_data["category"]] if product_data.get("category") else []
-            )
+            # Add category and subcategory metafields with full arrays
             if categories:
                 metafields.append({
                     "namespace": "custom",
                     "key": "custom_category",
-                    "value": json.dumps(categories),  # Format as JSON array for list type
+                    "value": json.dumps(categories),
                     "type": "list.single_line_text_field"
                 })
-
-            subcategories = product_data.get("subcategories") or (
-                [product_data["subcategory"]] if product_data.get("subcategory") else []
-            )
             if subcategories:
-                # Group subcategories by their metafield key (subcategory vs subcategory_2, etc.)
                 try:
                     from scripts.product_creator.categories import get_subcategory_metafield_key
                     by_key = {}
@@ -1536,7 +1527,7 @@ def create_product(product_data):
                         metafields.append({
                             "namespace": "custom",
                             "key": metafield_key,
-                            "value": json.dumps(vals),  # Format as JSON array for list type
+                            "value": json.dumps(vals),
                             "type": "list.single_line_text_field"
                         })
                 except (ImportError, AttributeError):

@@ -4011,26 +4011,33 @@ Dietary</textarea>
             productData.metafields = collectMetafieldsData();
             
             // Explicitly set category and subcategory as top-level for backend (required for metafield creation)
+            // Merge from ALL matching metafields to capture every selected value
             const mfData = productData.metafields || [];
-            const catMf = mfData.find(m => m.namespace === 'custom' && m.key === 'custom_category');
-            const subMf = mfData.find(m => m.namespace === 'custom' && (m.key === 'subcategory' || (m.key || '').startsWith('subcategory_')));
-            if (catMf && catMf.value) {
+            const allCategories = [];
+            const allSubcategories = [];
+            mfData.forEach(m => {
+                if (m.namespace !== 'custom') return;
+                let arr = [];
                 try {
-                    const arr = typeof catMf.value === 'string' ? JSON.parse(catMf.value) : catMf.value;
-                    if (Array.isArray(arr) && arr.length > 0) {
-                        productData.categories = arr.map(v => String(v).trim()).filter(v => v);
-                        console.log('Set productData.categories:', productData.categories);
-                    }
-                } catch (e) {}
+                    const val = m.value;
+                    if (!val) return;
+                    arr = typeof val === 'string' ? JSON.parse(val) : (Array.isArray(val) ? val : [val]);
+                } catch (e) { return; }
+                if (!Array.isArray(arr) || arr.length === 0) return;
+                const trimmed = arr.map(v => String(v).trim()).filter(v => v);
+                if (m.key === 'custom_category') {
+                    allCategories.push(...trimmed);
+                } else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) {
+                    allSubcategories.push(...trimmed);
+                }
+            });
+            if (allCategories.length > 0) {
+                productData.categories = [...new Set(allCategories)]; // dedupe
+                console.log('Set productData.categories:', productData.categories);
             }
-            if (subMf && subMf.value) {
-                try {
-                    const arr = typeof subMf.value === 'string' ? JSON.parse(subMf.value) : subMf.value;
-                    if (Array.isArray(arr) && arr.length > 0) {
-                        productData.subcategories = arr.map(v => String(v).trim()).filter(v => v);
-                        console.log('Set productData.subcategories:', productData.subcategories);
-                    }
-                } catch (e) {}
+            if (allSubcategories.length > 0) {
+                productData.subcategories = [...new Set(allSubcategories)]; // dedupe
+                console.log('Set productData.subcategories:', productData.subcategories);
             }
             
             // Add colour options to metafields
