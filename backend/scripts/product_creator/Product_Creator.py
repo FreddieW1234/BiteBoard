@@ -1644,6 +1644,7 @@ def create_product(product_data):
                         if s:
                             key = get_subcategory_metafield_key(s)
                             by_key.setdefault(key, []).append(s)
+                            print(f"📂 Routed subcategory '{s}' -> {key}", flush=True)
                     # Remove existing subcategory* metafields - we replace with routed values
                     metafields = [mf for mf in metafields if not (mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory"))]
                     for mf_key, vals in by_key.items():

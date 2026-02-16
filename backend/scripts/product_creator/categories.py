@@ -427,10 +427,31 @@ def get_subcategory_metafield_key(subcategory):
     """
     MAX_CHOICES_PER_METAFIELD = 128
     
-    if subcategory not in SUBCATEGORIES:
-        return "subcategory"  # Default to first metafield if not found
+    s = str(subcategory).strip()
+    if not s:
+        return "subcategory"
     
-    index = SUBCATEGORIES.index(subcategory)
+    # Normalize: collapse spaces, replace non-breaking spaces
+    s_norm = " ".join(s.replace("\u00a0", " ").split())
+
+    # Exact match first
+    if s in SUBCATEGORIES:
+        index = SUBCATEGORIES.index(s)
+    elif s_norm in SUBCATEGORIES:
+        index = SUBCATEGORIES.index(s_norm)
+    else:
+        # Flexible match (whitespace/encoding/case differences from form/frontend)
+        s_lower = s_norm.lower()
+        found = None
+        for i, choice in enumerate(SUBCATEGORIES):
+            c_norm = " ".join(str(choice).replace("\u00a0", " ").split())
+            if c_norm == s_norm or c_norm.lower() == s_lower:
+                found = i
+                break
+        if found is None:
+            return "subcategory"  # Default if not found
+        index = found
+    
     chunk_index = index // MAX_CHOICES_PER_METAFIELD
     
     if chunk_index == 0:
