@@ -1514,13 +1514,15 @@ def create_product(product_data):
                 subcategories = list(dict.fromkeys(subcats_from_mf))
             
             # Remove category/subcategory from metafields (we'll add with correct format)
-            metafields = [
-                mf for mf in metafields
-                if not (mf.get("namespace") == "custom" and (
-                    mf.get("key") == "custom_category" or (mf.get("key") or "").startswith("subcategory")))
-            ]
+            # Only filter subcategory when we have subcategories to add (otherwise keep frontend's)
+            def _is_cat_or_sub(mf):
+                if mf.get("namespace") != "custom":
+                    return False
+                k = mf.get("key") or ""
+                return k == "custom_category" or (k.startswith("subcategory") and subcategories)
+            metafields = [mf for mf in metafields if not _is_cat_or_sub(mf)]
             
-            # Add category and subcategory metafields with full arrays
+            # Add category metafield if we have it
             if categories:
                 metafields.append({
                     "namespace": "custom",
@@ -1528,6 +1530,7 @@ def create_product(product_data):
                     "value": json.dumps(categories),
                     "type": "list.single_line_text_field"
                 })
+            # Add subcategory metafields - from extracted/top-level; if empty, frontend's entries were kept above
             if subcategories:
                 try:
                     from scripts.product_creator.categories import get_subcategory_metafield_key
