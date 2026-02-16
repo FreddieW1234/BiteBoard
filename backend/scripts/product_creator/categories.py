@@ -31,8 +31,7 @@ CATEGORIES = [
     "Honey",
     "Jams, Marmalades & Spreads",
     "Lollipops",
-    "Popcorn - Popped",
-    "Popcorn - Microwave",
+    "Popcorn",
     "Pretzels",
     "Protein",
     "Savoury Snacks",
@@ -108,7 +107,7 @@ SUBCATEGORIES = [
     "Haribo",
     "Heinz",
     "Jordans",
-    "Kellom",
+    "Kelloggs",
     "Mars",
     "McVities",
     "Nature Valley",
@@ -140,13 +139,6 @@ SUBCATEGORIES = [
     "Neapolitans",
     "Single Shapes",
     "Truffles",
-    # Crisps
-    "BBQ",
-    "Beef",
-    "Cheese & Onion",
-    "Plain/Original",
-    "Salt & Vinegar",
-    "Sour Cream",
     # Dried Fruits
     "Apricots",
     "Bananas",
@@ -162,41 +154,24 @@ SUBCATEGORIES = [
     "Marmalade",
     "Marmite",
     "Nutella",
-    "Raspberry Jam",
-    "Strawberry Jam",
+    "Jams",
     # Lollipops
     "Chocolate",
     "Sugar",
-    # Popcorn - Popped
-    "Salted",
-    "Sweet",
-    "Sweet & Salty",
-    "Toffee",
-    # Popcorn - Microwave
-    "Butter",
-    # Pretzels
-    "Original",
-    "Sour Cream & Onion",
+    # Popcorn
+    "Microwave",
+    "Popped",
     # Protein
     "Nuts",
     # Savoury Snacks
     "Bags",
     "Packs",
-    # Soup
-    "Chicken",
-    "Leek & Potato",
-    "Minestrone",
-    "Tomato",
     # Sprinkles
     "Shapes",
     "Vermicelli",
     # Sweets
     "Boiled/Compressed",
     "Jellies",
-    # Mints
-    "Boiled Sweets",
-    "Chewing Gum",
-    "Compressed Mints",
     # Vegan
     "Sweets",
     "Treats",

@@ -24,4 +24,5 @@ backend/venv/
 
 # Local secrets
 admin api access token.txt
+Github update commands.txt
 
