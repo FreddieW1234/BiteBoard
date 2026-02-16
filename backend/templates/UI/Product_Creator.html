@@ -4018,8 +4018,8 @@ Dietary</textarea>
                 try {
                     const arr = typeof catMf.value === 'string' ? JSON.parse(catMf.value) : catMf.value;
                     if (Array.isArray(arr) && arr.length > 0) {
-                        productData.category = String(arr[0]).trim();
-                        console.log('Set productData.category:', productData.category);
+                        productData.categories = arr.map(v => String(v).trim()).filter(v => v);
+                        console.log('Set productData.categories:', productData.categories);
                     }
                 } catch (e) {}
             }
@@ -4027,8 +4027,8 @@ Dietary</textarea>
                 try {
                     const arr = typeof subMf.value === 'string' ? JSON.parse(subMf.value) : subMf.value;
                     if (Array.isArray(arr) && arr.length > 0) {
-                        productData.subcategory = String(arr[0]).trim();
-                        console.log('Set productData.subcategory:', productData.subcategory);
+                        productData.subcategories = arr.map(v => String(v).trim()).filter(v => v);
+                        console.log('Set productData.subcategories:', productData.subcategories);
                     }
                 } catch (e) {}
             }
@@ -4103,6 +4103,8 @@ Dietary</textarea>
                             if (key === 'metafields' && Array.isArray(productData[key])) {
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else if (key === 'colour_images' && typeof productData[key] === 'object') {
+                                formData.append(key, JSON.stringify(productData[key]));
+                            } else if ((key === 'categories' || key === 'subcategories') && Array.isArray(productData[key])) {
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else {
                                 formData.append(key, productData[key]);
