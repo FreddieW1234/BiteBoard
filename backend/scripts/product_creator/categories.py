@@ -263,7 +263,7 @@ CATEGORY_MAPPING = {
         "Haribo",
         "Heinz",
         "Jordans",
-        "Kellom",
+        "Kelloggs",
         "Mars",
         "McVities",
         "Nature Valley",
@@ -300,14 +300,6 @@ CATEGORY_MAPPING = {
         "Single Shapes",
         "Truffles",
     ],
-    "Crisps": [
-        "BBQ",
-        "Beef",
-        "Cheese & Onion",
-        "Plain/Original",
-        "Salt & Vinegar",
-        "Sour Cream",
-    ],
     "Dried Fruits": [
         "Apricots",
         "Bananas",
@@ -325,27 +317,15 @@ CATEGORY_MAPPING = {
         "Marmalade",
         "Marmite",
         "Nutella",
-        "Raspberry Jam",
-        "Strawberry Jam",
+        "Jams",
     ],
     "Lollipops": [
         "Chocolate",
         "Sugar",
     ],
-    "Popcorn - Popped": [
-        "Salted",
-        "Sweet",
-        "Sweet & Salty",
-        "Toffee",
-    ],
-    "Popcorn - Microwave": [
-        "Butter",
-        "Salted",
-        "Sweet",
-    ],
-    "Pretzels": [
-        "Original",
-        "Sour Cream & Onion",
+    "Popcorn": [
+        "Microwave",
+        "Popped",
     ],
     "Protein": [
         "Bars",
@@ -356,12 +336,6 @@ CATEGORY_MAPPING = {
         "Bars",
         "Packs",
     ],
-    "Soup": [
-        "Chicken",
-        "Leek & Potato",
-        "Minestrone",
-        "Tomato",
-    ],
     "Sprinkles": [
         "Shapes",
         "Vermicelli",
@@ -369,11 +343,6 @@ CATEGORY_MAPPING = {
     "Sweets": [
         "Boiled/Compressed",
         "Jellies",
-    ],
-    "Mints": [
-        "Boiled Sweets",
-        "Chewing Gum",
-        "Compressed Mints",
     ],
     "Vegan": [
         "Sweets",
