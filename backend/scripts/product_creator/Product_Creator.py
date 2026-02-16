@@ -1484,12 +1484,24 @@ def create_product(product_data):
             for mf in metafields:
                 if mf.get("namespace") != "custom":
                     continue
-                val = mf.get("value", "[]")
+                val = mf.get("value")
+                if val is None:
+                    continue
                 try:
-                    arr = json.loads(val) if isinstance(val, str) else (val if isinstance(val, list) else [])
-                    arr = [str(v).strip() for v in arr if v] if isinstance(arr, list) else []
+                    if isinstance(val, list):
+                        arr = [str(v).strip() for v in val if v]
+                    elif isinstance(val, str):
+                        s = val.strip()
+                        if s.startswith("["):
+                            arr = [str(v).strip() for v in json.loads(s) if v]
+                        elif s:
+                            arr = [s]
+                        else:
+                            continue
+                    else:
+                        arr = [str(val).strip()]
                 except (json.JSONDecodeError, TypeError):
-                    arr = []
+                    arr = [str(val).strip()] if val else []
                 if not arr:
                     continue
                 if mf.get("key") == "custom_category":

@@ -3320,6 +3320,16 @@ Dietary</textarea>
                         });
                         console.log('Added stub subcategory metafield (missing from template)');
                     }
+                    if (!existingKeys.has('subcategory_2')) {
+                        emptyMetafields.push({
+                            namespace: 'custom',
+                            key: 'subcategory_2',
+                            type: 'list.single_line_text_field',
+                            value: '',
+                            id: null
+                        });
+                        console.log('Added stub subcategory_2 metafield (overflow, missing from template)');
+                    }
                     
                     console.log('Displaying metafields with cleared values for new product');
                     displayMetafields(emptyMetafields);
@@ -3373,6 +3383,7 @@ Dietary</textarea>
                 'product_size': 'Product Size in mm (l*w*h)',
                 'custom_category': 'Category',
                 'subcategory': 'Subcategory',
+                'subcategory_2': 'Subcategory (2)',
                 
                 // Default fallback - capitalize and replace underscores
                 'default': key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -3405,6 +3416,7 @@ Dietary</textarea>
                 "sku",
                 "custom_category", 
                 "subcategory",
+                "subcategory_2",
                 "description",
                 "moq",
                 "origination",
@@ -3532,11 +3544,11 @@ Dietary</textarea>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for ${metafield.key}:`, inputElement);
-                } else if (metafield.key === 'subcategory') {
-                    // Special handling for subcategory field - create custom dropdown menu
+                } else if (metafield.key === 'subcategory' || (metafield.key && metafield.key.startsWith('subcategory_'))) {
+                    // Special handling for ALL subcategory fields (subcategory, subcategory_2, etc.) - create custom dropdown for multi-select
                     console.log(`🔧 Creating custom dropdown for ${metafield.key}`);
                     inputElement = `
-                        <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="list.single_line_text_field">
+                        <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || 'subcategory'}" data-type="list.single_line_text_field">
                             <div class="dropdown-button" onclick="toggleDropdown(this)">
                                 <span class="dropdown-text">Select subcategories...</span>
                                 <span class="dropdown-arrow">▼</span>
@@ -3641,11 +3653,11 @@ Dietary</textarea>
                 }
 
                 // For custom dropdowns, load options immediately and set initial values
-                if (metafield.key === 'custom_category' || metafield.key === 'subcategory') {
+                if (metafield.key === 'custom_category' || (metafield.key && metafield.key.startsWith('subcategory'))) {
                     const dropdown = metafieldDiv.querySelector('.custom-dropdown');
                     if (dropdown) {
-                        // Load options immediately
-                        const loadFunc = metafield.key === 'custom_category' ? loadCategoryDropdownOptions : loadSubcategoryDropdownOptions;
+                        // Load options (subcategory dropdowns use metafield key for correct API: custom.subcategory, custom.subcategory_2, etc.)
+                        const loadFunc = metafield.key === 'custom_category' ? loadCategoryDropdownOptions : (d) => loadSubcategoryDropdownOptions(d, metafield.key);
                         loadFunc(dropdown).then(() => {
                             // After options are loaded, set the initial values
                             if (metafield.value) {
@@ -4020,8 +4032,11 @@ Dietary</textarea>
                 let arr = [];
                 try {
                     const val = m.value;
-                    if (!val) return;
-                    arr = typeof val === 'string' ? JSON.parse(val) : (Array.isArray(val) ? val : [val]);
+                    if (val == null || val === '') return;
+                    if (Array.isArray(val)) arr = val;
+                    else if (typeof val === 'string') {
+                        arr = val.trim().startsWith('[') ? JSON.parse(val) : [val];
+                    } else arr = [String(val)];
                 } catch (e) { return; }
                 if (!Array.isArray(arr) || arr.length === 0) return;
                 const trimmed = arr.map(v => String(v).trim()).filter(v => v);
@@ -4387,10 +4402,11 @@ Dietary</textarea>
             }
         }
 
-        async function loadSubcategoryDropdownOptions(dropdown) {
+        async function loadSubcategoryDropdownOptions(dropdown, metafieldKey) {
+            const key = metafieldKey || dropdown?.dataset?.key || 'subcategory';
             try {
-                console.log('🔍 Loading subcategory options from API...');
-                const response = await fetch('/api/metafield-choices/custom.subcategory');
+                console.log(`🔍 Loading subcategory options from API for ${key}...`);
+                const response = await fetch(`/api/metafield-choices/custom.${key}`);
                 console.log('📡 Subcategory API response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Subcategory API response data:', data);
@@ -4908,7 +4924,7 @@ Dietary</textarea>
                         }
                     } else if (input.classList.contains('custom-dropdown')) {
                         // For custom dropdowns, set checkbox selections
-                        if (key === 'custom_category' || key === 'subcategory') {
+                        if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
                             // Clear all checkboxes first
                             const checkboxes = input.querySelectorAll('input[type="checkbox"]');
                             checkboxes.forEach(checkbox => checkbox.checked = false);
