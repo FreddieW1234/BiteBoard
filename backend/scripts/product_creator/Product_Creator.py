@@ -779,7 +779,7 @@ def update_product_taxable(product_id, taxable):
 
 def create_metafields(product_id, metafields_data, shopify_domain=None):
     """
-    Create metafields for a product
+    Create or update metafields for a product (upsert - update if exists, create if not)
     
     Args:
         product_id (int): The ID of the product to add metafields to
@@ -792,11 +792,23 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
     try:
         # Use provided domain or fall back to STORE_DOMAIN
         domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
-        url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
+        base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}"
         headers = {
             "X-Shopify-Access-Token": ACCESS_TOKEN,
             "Content-Type": "application/json"
         }
+        
+        # Fetch existing metafields to support upsert (POST fails with 422 if namespace+key already exists)
+        existing_by_ns_key = {}
+        try:
+            resp = requests.get(f"{base_url}/metafields.json?limit=250", headers=headers)
+            if resp.status_code == 200:
+                for mf in resp.json().get("metafields", []):
+                    ns, k = mf.get("namespace", ""), mf.get("key", "")
+                    if ns and k:
+                        existing_by_ns_key[(ns, k)] = mf.get("id")
+        except Exception as e:
+            print(f"⚠️ Could not fetch existing metafields for upsert: {e}", flush=True)
         
         success_count = 0
         errors = []
@@ -835,30 +847,46 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                         if not stripped or stripped == '[]' or (not stripped.startswith('[') and not stripped):
                             formatted_value = json.dumps(["-"])
 
-                payload = {
-                    "metafield": {
-                        "namespace": metafield_data.get("namespace", "custom"),
-                        "key": metafield_data.get("key", ""),
-                        "value": formatted_value,
-                        "type": mf_type
+                namespace = metafield_data.get("namespace", "custom")
+                key = metafield_data.get("key", "")
+                existing_id = existing_by_ns_key.get((namespace, key))
+                
+                if existing_id:
+                    # Update existing metafield (PUT) - only send value (type is immutable on update)
+                    payload = {"metafield": {"value": formatted_value}}
+                    url = f"{base_url}/metafields/{existing_id}.json"
+                    response = requests.put(url, headers=headers, json=payload, allow_redirects=False)
+                    if response.status_code in [301, 302, 303, 307, 308]:
+                        redirect_url = response.headers.get('Location', url)
+                        if redirect_url.startswith('/'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(url)
+                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                        response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                else:
+                    # Create new metafield (POST)
+                    payload = {
+                        "metafield": {
+                            "namespace": namespace,
+                            "key": key,
+                            "value": formatted_value,
+                            "type": mf_type
+                        }
                     }
-                }
-                
-                # Handle redirects for metafield creation
-                response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
-                
-                # If redirected, follow it with POST method preserved
-                if response.status_code in [301, 302, 303, 307, 308]:
-                    redirect_url = response.headers.get('Location', url)
-                    if redirect_url.startswith('/'):
-                        from urllib.parse import urlparse
-                        parsed = urlparse(url)
-                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                    response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                    url = f"{base_url}/metafields.json"
+                    response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
+                    if response.status_code in [301, 302, 303, 307, 308]:
+                        redirect_url = response.headers.get('Location', url)
+                        if redirect_url.startswith('/'):
+                            from urllib.parse import urlparse
+                            parsed = urlparse(url)
+                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                        response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
                 
                 if response.status_code in [200, 201]:
                     success_count += 1
-                    print(f"✅ Created metafield: {metafield_data.get('namespace')}.{metafield_data.get('key')}")
+                    action = "Updated" if existing_id else "Created"
+                    print(f"✅ {action} metafield: {namespace}.{key}", flush=True)
                 else:
                     error_msg = f"Failed to create metafield {metafield_data.get('namespace')}.{metafield_data.get('key')}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
