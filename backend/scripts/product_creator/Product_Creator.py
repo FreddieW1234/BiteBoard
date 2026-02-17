@@ -1818,19 +1818,21 @@ def create_product(product_data):
             else:
                 print(f"✅ Step 5 Complete: Variants created with taxable=True (Price Bandit default)")
             
-            # Verify the product actually exists by fetching it
-            # Use actual_shopify_domain if available to avoid redirects
+            # Verify the product actually exists by fetching it (with timeout to avoid worker hang)
             verify_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
             verify_url = f"https://{verify_domain}/admin/api/{API_VERSION}/products/{product_id}.json"
-            verify_response = requests.get(verify_url, headers=headers)
-            if verify_response.status_code == 200:
-                verified_product = verify_response.json().get("product", {})
-                if verified_product.get("id") == product_id:
-                    print(f"✅ Verification: Product {product_id} confirmed to exist in Shopify", flush=True)
+            try:
+                verify_response = requests.get(verify_url, headers=headers, timeout=25)
+                if verify_response.status_code == 200:
+                    verified_product = verify_response.json().get("product", {})
+                    if verified_product.get("id") == product_id:
+                        print(f"✅ Verification: Product {product_id} confirmed to exist in Shopify", flush=True)
+                    else:
+                        print(f"⚠️ Warning: Product verification returned different product", flush=True)
                 else:
-                    print(f"⚠️ Warning: Product verification returned different product", flush=True)
-            else:
-                print(f"⚠️ Warning: Could not verify product existence (status: {verify_response.status_code})", flush=True)
+                    print(f"⚠️ Warning: Could not verify product existence (status: {verify_response.status_code})", flush=True)
+            except (requests.Timeout, requests.ConnectionError) as e:
+                print(f"⚠️ Warning: Verification request skipped ({type(e).__name__}) - product was still created", flush=True)
             
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available
