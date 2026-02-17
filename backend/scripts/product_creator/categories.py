@@ -195,6 +195,9 @@ SUBCATEGORIES = [
     "Wrap",
 ]
 
+# Overflow boundary: subcategory_2 contains this item and everything after it in SUBCATEGORIES
+SUBCATEGORY_2_FIRST_ITEM = "Sweets"
+
 # Category to subcategory mapping
 # This dictionary stores which subcategories belong to which categories
 # Format: {"Category Name": ["Subcategory1", "Subcategory2", ...]}
@@ -388,6 +391,14 @@ def get_subcategory_choices():
     """
     return SUBCATEGORIES.copy()
 
+def _subcategory_2_start_index():
+    """Index in SUBCATEGORIES where subcategory_2 starts (Sweets and everything after)."""
+    try:
+        return SUBCATEGORIES.index(SUBCATEGORY_2_FIRST_ITEM)
+    except ValueError:
+        return len(SUBCATEGORIES)  # no overflow if sentinel missing
+
+
 def get_metafield_choices(metafield_key):
     """
     Get choices for a specific metafield
@@ -401,12 +412,17 @@ def get_metafield_choices(metafield_key):
     if metafield_key == "custom_category":
         return get_category_choices()
     elif metafield_key == "subcategory":
-        # Return first 128 subcategories
-        return SUBCATEGORIES[:128]
+        # Everything before "Sweets"
+        idx = _subcategory_2_start_index()
+        return SUBCATEGORIES[:idx]
+    elif metafield_key == "subcategory_2":
+        # "Sweets" and everything after
+        idx = _subcategory_2_start_index()
+        return SUBCATEGORIES[idx:]
     elif metafield_key.startswith("subcategory_"):
-        # Handle overflow metafields (subcategory_2, subcategory_3, etc.)
+        # subcategory_3, etc. - not used currently; keep slice by 128 for future
         try:
-            chunk_index = int(metafield_key.split("_")[-1]) - 1  # subcategory_2 -> index 1
+            chunk_index = int(metafield_key.split("_")[-1]) - 1
             start_idx = chunk_index * 128
             end_idx = start_idx + 128
             return SUBCATEGORIES[start_idx:end_idx]
@@ -417,30 +433,20 @@ def get_metafield_choices(metafield_key):
 
 def get_subcategory_metafield_key(subcategory):
     """
-    Determine which metafield key should be used for a given subcategory
-    
-    Args:
-        subcategory (str): The subcategory name
-    
-    Returns:
-        str: The metafield key (e.g., "subcategory", "subcategory_2", etc.)
+    Determine which metafield key should be used for a given subcategory.
+    subcategory = everything before "Sweets"; subcategory_2 = "Sweets" and everything after.
     """
-    MAX_CHOICES_PER_METAFIELD = 128
-    
     s = str(subcategory).strip()
     if not s:
         return "subcategory"
     
-    # Normalize: collapse spaces, replace non-breaking spaces
     s_norm = " ".join(s.replace("\u00a0", " ").split())
 
-    # Exact match first
     if s in SUBCATEGORIES:
         index = SUBCATEGORIES.index(s)
     elif s_norm in SUBCATEGORIES:
         index = SUBCATEGORIES.index(s_norm)
     else:
-        # Flexible match (whitespace/encoding/case differences from form/frontend)
         s_lower = s_norm.lower()
         found = None
         for i, choice in enumerate(SUBCATEGORIES):
@@ -449,12 +455,10 @@ def get_subcategory_metafield_key(subcategory):
                 found = i
                 break
         if found is None:
-            return "subcategory"  # Default if not found
+            return "subcategory"
         index = found
-    
-    chunk_index = index // MAX_CHOICES_PER_METAFIELD
-    
-    if chunk_index == 0:
+
+    boundary = _subcategory_2_start_index()
+    if index < boundary:
         return "subcategory"
-    else:
-        return f"subcategory_{chunk_index + 1}"
+    return "subcategory_2"

@@ -2045,17 +2045,17 @@ def sync_metafield_definitions(categories, subcategories):
             results['errors'].append(f"Error syncing category definition: {str(e)}")
         
         # Sync subcategory metafield definitions (product type)
-        # Split into chunks of 128 to handle overflow
+        # Use same boundary as categories.py: subcategory = before "Sweets", subcategory_2 = "Sweets" and after
+        from scripts.product_creator.categories import get_metafield_choices as get_subcategory_choices_by_key
         MAX_CHOICES_PER_METAFIELD = 128
-        subcategory_chunks = [subcategories[i:i + MAX_CHOICES_PER_METAFIELD] 
-                             for i in range(0, len(subcategories), MAX_CHOICES_PER_METAFIELD)]
+        subcategory_chunk_list = [
+            ("subcategory", get_subcategory_choices_by_key("subcategory") or []),
+            ("subcategory_2", get_subcategory_choices_by_key("subcategory_2") or []),
+        ]
+        # Drop subcategory_2 if empty (e.g. if boundary not in list)
+        subcategory_chunk_list = [(k, c) for k, c in subcategory_chunk_list if c]
         
-        print(f"📊 Splitting {len(subcategories)} subcategories into {len(subcategory_chunks)} metafield(s)")
-        for idx, chunk in enumerate(subcategory_chunks):
-            metafield_key = "subcategory" if idx == 0 else f"subcategory_{idx + 1}"
-            print(f"   Chunk {idx + 1}: {len(chunk)} subcategories → {metafield_key}")
-            if len(chunk) > MAX_CHOICES_PER_METAFIELD:
-                print(f"   ⚠️ WARNING: Chunk {idx + 1} has {len(chunk)} items (exceeds {MAX_CHOICES_PER_METAFIELD} limit!)")
+        print(f"📊 Subcategory definitions: subcategory ({len(subcategory_chunk_list[0][1])} choices), subcategory_2 ({len(subcategory_chunk_list[1][1]) if len(subcategory_chunk_list) > 1 else 0} choices)")
         
         update_mutation = """
         mutation updateMetafieldDefinition($definition: MetafieldDefinitionUpdateInput!) {
@@ -2068,12 +2068,9 @@ def sync_metafield_definitions(categories, subcategories):
         }
         """
         
-        for chunk_index, chunk in enumerate(subcategory_chunks):
-            metafield_key = "subcategory" if chunk_index == 0 else f"subcategory_{chunk_index + 1}"
-            
-            # Safety check: ensure chunk doesn't exceed limit
+        for metafield_key, chunk in subcategory_chunk_list:
             if len(chunk) > MAX_CHOICES_PER_METAFIELD:
-                error_msg = f"{metafield_key} chunk has {len(chunk)} items, exceeds {MAX_CHOICES_PER_METAFIELD} limit"
+                error_msg = f"{metafield_key} has {len(chunk)} items, exceeds {MAX_CHOICES_PER_METAFIELD} limit"
                 print(f"❌ {error_msg}")
                 results['errors'].append(error_msg)
                 continue

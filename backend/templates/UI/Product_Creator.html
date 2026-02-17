@@ -534,6 +534,20 @@
             font-size: 1rem;
         }
 
+        .card-quickfill-btn {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #6c757d;
+            background: #f8f9fa;
+            color: #495057;
+            cursor: pointer;
+        }
+        .card-quickfill-btn:hover {
+            background: #e9ecef;
+            border-color: #495057;
+        }
+
         .metafield-footer {
             display: flex;
             justify-content: space-between;
@@ -3628,10 +3642,12 @@ Dietary</textarea>
                 
                 console.log(`🎯 Final inputElement for ${metafield.key}:`, inputElement);
                 
+                const isPrintInfo = metafield.key === 'print_info';
+                const headerExtra = isPrintInfo ? `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>` : '';
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
-                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>
-                </div>
+                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>${headerExtra}
+                    </div>
                     <div class="metafield-input-row">
                         ${inputElement}
                     </div>
@@ -3653,6 +3669,35 @@ Dietary</textarea>
                 }
                 
                 container.appendChild(metafieldDiv);
+
+                // Card quick-fill button: fill Print Info + Recycle Info
+                if (isPrintInfo) {
+                    const cardBtn = metafieldDiv.querySelector('.card-quickfill-btn');
+                    if (cardBtn) {
+                        cardBtn.addEventListener('click', function fillCardPrintAndRecycle() {
+                            const printEl = document.querySelector('textarea[data-key="print_info"], select[data-key="print_info"]');
+                            const recycleEl = document.querySelector('textarea[data-key="recycle_info"], select[data-key="recycle_info"]');
+                            if (printEl) {
+                                if (printEl.tagName === 'TEXTAREA') {
+                                    printEl.value = 'Digitally printed card';
+                                    printEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                } else {
+                                    const opt = Array.from(printEl.options).find(o => (o.value || '').trim() === 'Digitally printed card');
+                                    if (opt) { printEl.value = opt.value; printEl.dispatchEvent(new Event('change', { bubbles: true })); }
+                                }
+                            }
+                            if (recycleEl) {
+                                if (recycleEl.tagName === 'TEXTAREA') {
+                                    recycleEl.value = 'Card recyclable';
+                                    recycleEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                } else {
+                                    const opt = Array.from(recycleEl.options).find(o => (o.value || '').trim() === 'Card recyclable');
+                                    if (opt) { recycleEl.value = opt.value; recycleEl.dispatchEvent(new Event('change', { bubbles: true })); }
+                                }
+                            }
+                        });
+                    }
+                }
 
                 // Add event listeners for emoji buttons
                 if (hasEmojiButtons) {
@@ -3702,8 +3747,6 @@ Dietary</textarea>
             
             // Set default origination if empty
             setDefaultOrigination();
-            // Set default print info if empty
-            setDefaultPrintInfo();
         }
 
         // Auto-calculation function for case weight
@@ -3821,27 +3864,6 @@ Dietary</textarea>
             }
         }
 
-        // Autofill print info if empty
-        function setDefaultPrintInfo() {
-            try {
-                const defaultPrintInfo = 'Digitally printed card';
-                const printInfoTextarea = document.querySelector('textarea[data-key="print_info"]');
-                const printInfoSelect = document.querySelector('select[data-key="print_info"]');
-                if (printInfoTextarea && (!printInfoTextarea.value || printInfoTextarea.value.trim() === '')) {
-                    printInfoTextarea.value = defaultPrintInfo;
-                    printInfoTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-                } else if (printInfoSelect) {
-                    const opt = Array.from(printInfoSelect.options).find(o => o.value.trim() === defaultPrintInfo);
-                    if (opt) {
-                        printInfoSelect.value = defaultPrintInfo;
-                        printInfoSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }
-            } catch (e) {
-                console.log('Print Info default not applied:', e.message);
-            }
-        }
-        
         // Handle emoji button selection (new button-only approach)
         function selectEmoji(button) {
             const emojiFieldContainer = button.closest('.emoji-field-container');
