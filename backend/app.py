@@ -1376,12 +1376,17 @@ def api_get_shopify_media():
 def api_metafield_choices(namespace_key):
     """Get preset choices for a specific metafield"""
     try:
-        from scripts.product_creator.Product_Creator import get_metafield_choices
-        choices = get_metafield_choices(namespace_key)
+        # Single subcategory dropdown: return all subcategories when ?all=1
+        if namespace_key == 'custom.subcategory' and request.args.get('all') == '1':
+            from scripts.product_creator.categories import get_subcategory_choices
+            choices = get_subcategory_choices()
+        else:
+            from scripts.product_creator.Product_Creator import get_metafield_choices
+            choices = get_metafield_choices(namespace_key)
         
         return jsonify({
             'success': True,
-            'choices': choices
+            'choices': choices or []
         })
         
     except Exception as e:
