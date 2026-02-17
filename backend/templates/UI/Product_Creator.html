@@ -3702,6 +3702,8 @@ Dietary</textarea>
             
             // Set default origination if empty
             setDefaultOrigination();
+            // Set default print info if empty
+            setDefaultPrintInfo();
         }
 
         // Auto-calculation function for case weight
@@ -3816,6 +3818,27 @@ Dietary</textarea>
                 }
             } catch (e) {
                 console.log('Origination default not applied:', e.message);
+            }
+        }
+
+        // Autofill print info if empty
+        function setDefaultPrintInfo() {
+            try {
+                const defaultPrintInfo = 'Digitally printed card';
+                const printInfoTextarea = document.querySelector('textarea[data-key="print_info"]');
+                const printInfoSelect = document.querySelector('select[data-key="print_info"]');
+                if (printInfoTextarea && (!printInfoTextarea.value || printInfoTextarea.value.trim() === '')) {
+                    printInfoTextarea.value = defaultPrintInfo;
+                    printInfoTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (printInfoSelect) {
+                    const opt = Array.from(printInfoSelect.options).find(o => o.value.trim() === defaultPrintInfo);
+                    if (opt) {
+                        printInfoSelect.value = defaultPrintInfo;
+                        printInfoSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            } catch (e) {
+                console.log('Print Info default not applied:', e.message);
             }
         }
         
@@ -4025,11 +4048,10 @@ Dietary</textarea>
             // Collect metafields data
             productData.metafields = collectMetafieldsData();
             
-            // Explicitly set category and subcategory as top-level for backend (required for metafield creation)
-            // Merge from ALL matching metafields to capture every selected value
+            // Explicitly set category and subcategory as top-level for backend (required for metafield creation + overflow routing)
             const mfData = productData.metafields || [];
             const allCategories = [];
-            const allSubcategories = [];
+            let allSubcategories = [];
             mfData.forEach(m => {
                 if (m.namespace !== 'custom') return;
                 let arr = [];
@@ -4049,12 +4071,21 @@ Dietary</textarea>
                     allSubcategories.push(...trimmed);
                 }
             });
+            // Fallback: read subcategories directly from the single subcategory dropdown (ensures overflow routing gets data)
+            const subcatDropdown = document.querySelector('.custom-dropdown[data-key="subcategory"]');
+            if (subcatDropdown) {
+                const checked = subcatDropdown.querySelectorAll('input[type="checkbox"]:checked');
+                const fromDom = Array.from(checked).map(cb => cb.value.trim()).filter(v => v);
+                if (fromDom.length > 0) {
+                    allSubcategories = [...new Set([...allSubcategories, ...fromDom])];
+                }
+            }
             if (allCategories.length > 0) {
-                productData.categories = [...new Set(allCategories)]; // dedupe
+                productData.categories = [...new Set(allCategories)];
                 console.log('Set productData.categories:', productData.categories);
             }
             if (allSubcategories.length > 0) {
-                productData.subcategories = [...new Set(allSubcategories)]; // dedupe
+                productData.subcategories = [...new Set(allSubcategories)];
                 console.log('Set productData.subcategories:', productData.subcategories);
             }
             

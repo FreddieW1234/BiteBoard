@@ -1614,6 +1614,9 @@ def create_product(product_data):
                 categories = list(dict.fromkeys(cats_from_mf))
             if not subcategories and subcats_from_mf:
                 subcategories = list(dict.fromkeys(subcats_from_mf))
+            # Merge metafield subcategories into top-level so overflow routing always has full list
+            if subcats_from_mf and subcategories is not None:
+                subcategories = list(dict.fromkeys(list(subcategories) + list(subcats_from_mf)))
             
             # Remove category from metafields (we add it)
             # KEEP subcategory metafields - frontend sends multiple selections per key (subcategory, subcategory_2, etc.)
