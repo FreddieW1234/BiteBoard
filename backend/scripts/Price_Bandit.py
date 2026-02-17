@@ -20,6 +20,9 @@ HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
 }
 
+# Timeout for HTTP requests (seconds) - keep under gunicorn worker timeout to avoid WORKER TIMEOUT
+REQUEST_TIMEOUT = 25
+
 # Force UTF-8 stdout/stderr to safely print emojis on Windows consoles
 try:
     if hasattr(sys.stdout, "reconfigure"):
@@ -349,7 +352,7 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
     existing_variants = []
     try:
         get_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
-        get_resp = requests.get(get_url, headers=HEADERS, allow_redirects=False)
+        get_resp = requests.get(get_url, headers=HEADERS, allow_redirects=False, timeout=REQUEST_TIMEOUT)
         
         # Handle redirects for GET request too
         if get_resp.status_code in [301, 302, 303, 307, 308]:
@@ -358,7 +361,7 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
                 from urllib.parse import urlparse
                 parsed = urlparse(get_url)
                 redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-            get_resp = requests.get(redirect_url, headers=HEADERS)
+            get_resp = requests.get(redirect_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         
         if get_resp.status_code == 200:
             current_product = get_resp.json().get("product", {})
@@ -738,7 +741,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             try:
                 # First get the product basic info
                 fresh_product_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
-                fresh_resp = requests.get(fresh_product_url, headers=HEADERS)
+                fresh_resp = requests.get(fresh_product_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 
                 if fresh_resp.status_code == 200:
                     fresh_product_data = fresh_resp.json().get("product", {})
@@ -755,7 +758,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                             variants_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/variants.json?limit=250"
                         
                         print(f"🔄 Fetching variants page {page_num}...", flush=True)
-                        variants_resp = requests.get(variants_url, headers=HEADERS)
+                        variants_resp = requests.get(variants_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                         
                         if variants_resp.status_code == 200:
                             variants_data = variants_resp.json()
@@ -835,7 +838,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                 print(f"⚠️ No images found in product data, waiting 2 seconds and retrying...", flush=True)
                 time.sleep(2.0)
                 # Fetch product data again
-                retry_resp = requests.get(fresh_product_url, headers=HEADERS)
+                retry_resp = requests.get(fresh_product_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                 if retry_resp.status_code == 200:
                     retry_data = retry_resp.json().get("product", {})
                     images = retry_data.get("images", [])
@@ -921,7 +924,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                     update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{img_id}.json"
                     update_data = {"image": {"id": img_id, "variant_ids": variant_ids}}
                     # Handle redirects for PUT requests
-                    update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
+                    update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False, timeout=REQUEST_TIMEOUT)
                     
                     # If redirected, follow it silently
                     if update_response.status_code in [301, 302, 303, 307, 308]:
@@ -930,7 +933,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                             from urllib.parse import urlparse
                             parsed = urlparse(update_url)
                             redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                        update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
+                        update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
                     
                     if update_response.status_code == 200:
                         print(f"✔️ Assigned image {img_id} to {colour} variants", flush=True)
@@ -941,22 +944,21 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             print(f"🔍 Assigning main image to ALL {len(all_variant_ids)} variants first...", flush=True)
             update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
             update_data = {"image": {"id": main_image_id, "variant_ids": all_variant_ids}}
-            # Handle redirects for PUT requests
-            update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
-            
-            # If redirected, follow it silently
-            if update_response.status_code in [301, 302, 303, 307, 308]:
-                redirect_url = update_response.headers.get('Location', update_url)
-                if redirect_url.startswith('/'):
-                    from urllib.parse import urlparse
-                    parsed = urlparse(update_url)
-                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
-            
-            if update_response.status_code == 200:
-                print(f"✔️ Main image assigned to all variants", flush=True)
-            else:
-                print(f"⚠️ Failed to assign main image to all variants: {update_response.status_code}", flush=True)
+            try:
+                update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False, timeout=REQUEST_TIMEOUT)
+                if update_response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = update_response.headers.get('Location', update_url)
+                    if redirect_url.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(update_url)
+                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                    update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
+                if update_response.status_code == 200:
+                    print(f"✔️ Main image assigned to all variants", flush=True)
+                else:
+                    print(f"⚠️ Failed to assign main image to all variants: {update_response.status_code}", flush=True)
+            except (requests.Timeout, requests.ConnectionError) as e:
+                print(f"⚠️ Assigning main image to all variants timed out or failed ({type(e).__name__}) - product created, image assignment skipped", flush=True)
             
             # Now assign specific colour images (these will override the main image for those variants)
             # The colour-specific images are already assigned above, so we're done
@@ -967,21 +969,20 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             # No colours - assign main image to all variants
             update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
             update_data = {"image": {"id": main_image_id, "variant_ids": all_variant_ids}}
-            # Handle redirects for PUT requests
-            update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False)
-            
-            # If redirected, follow it silently
-            if update_response.status_code in [301, 302, 303, 307, 308]:
-                redirect_url = update_response.headers.get('Location', update_url)
-                if redirect_url.startswith('/'):
-                    from urllib.parse import urlparse
-                    parsed = urlparse(update_url)
-                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True)
-            
-            if update_response.status_code == 200:
-                print(f"✔️ All variants of product '{product_name}' have matching image.", flush=True)
-                return True
+            try:
+                update_response = requests.put(update_url, headers=HEADERS, json=update_data, allow_redirects=False, timeout=REQUEST_TIMEOUT)
+                if update_response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = update_response.headers.get('Location', update_url)
+                    if redirect_url.startswith('/'):
+                        from urllib.parse import urlparse
+                        parsed = urlparse(update_url)
+                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                    update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
+                if update_response.status_code == 200:
+                    print(f"✔️ All variants of product '{product_name}' have matching image.", flush=True)
+                    return True
+            except (requests.Timeout, requests.ConnectionError) as e:
+                print(f"⚠️ Assign main image (no colours) timed out or failed ({type(e).__name__}) - product created", flush=True)
         
         print(f"✔️ Image assignment complete for product '{product_name}'", flush=True)
         return True
@@ -1032,7 +1033,7 @@ def process_product(product):
                 from config import STORE_DOMAIN, ACCESS_TOKEN, API_VERSION
                 headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
                 url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
-                resp = requests.get(url, headers=headers)
+                resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 200:
                     all_mfs = resp.json().get("metafields", [])
                     print(f"🔍 Total metafields on product: {len(all_mfs)}", flush=True)
@@ -1127,7 +1128,7 @@ def process_product(product):
             }
             
             graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-            get_response = requests.post(graphql_url, json={'query': get_variants_query, 'variables': get_variants_variables}, headers=HEADERS)
+            get_response = requests.post(graphql_url, json={'query': get_variants_query, 'variables': get_variants_variables}, headers=HEADERS, timeout=REQUEST_TIMEOUT)
             
             if get_response.status_code == 200:
                 get_data = get_response.json()
@@ -1160,7 +1161,7 @@ def process_product(product):
                             "variantsIds": variant_ids
                         }
                         
-                        delete_response = requests.post(graphql_url, json={'query': delete_variants_query, 'variables': delete_variants_variables}, headers=HEADERS)
+                        delete_response = requests.post(graphql_url, json={'query': delete_variants_query, 'variables': delete_variants_variables}, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                         
                         if delete_response.status_code == 200:
                             delete_data = delete_response.json()
