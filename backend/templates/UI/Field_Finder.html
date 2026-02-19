@@ -473,6 +473,20 @@
             font-size: 1rem;
         }
 
+        .card-quickfill-btn {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #6c757d;
+            background: #f8f9fa;
+            color: #495057;
+            cursor: pointer;
+        }
+        .card-quickfill-btn:hover {
+            background: #e9ecef;
+            border-color: #495057;
+        }
+
         .metafield-footer {
             display: flex;
             justify-content: space-between;
@@ -1335,13 +1349,14 @@
                 // AND only show dropdowns if there are actually multiple real options (not just the current value)
                 // Note: Category fields are now displayed but may have special handling
                 const isCategoryField = metafield.key === 'custom_category' || metafield.key === 'subcategory';
+                const isLongTextField = ['ingredients', 'nutritional_info'].includes(metafield.key);
                 if (isCategoryField) {
                     console.log(`🔍 Processing category field: ${metafield.key}`);
                 }
                 
                 const hasOptions = (metafield.key === 'custom_category' || metafield.key === 'subcategory')
                                   ? true
-                                  : (!hasEmojiButtons && (metafield.available_options && metafield.available_options.length > 1));
+                                  : (!hasEmojiButtons && !isLongTextField && (metafield.available_options && metafield.available_options.length > 1));
                 const currentValue = metafield.value || '';
                 
                 // Debug: Log the metafield details for category and subcategory fields
@@ -1410,9 +1425,11 @@
                     inputElement = `<textarea class="metafield-value ${hasEmojiButtons ? 'compact' : ''}" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}">${currentValue}</textarea>`;
                 }
                 
+                const isIngredients = metafield.key === 'ingredients';
+                const headerExtra = isIngredients ? `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>` : '';
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
-                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>
+                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>${headerExtra}
                     </div>
                     <div class="metafield-input-row">
                         ${inputElement}
@@ -1433,6 +1450,29 @@
                     </div>
                 `;
                 metafieldsContainer.appendChild(metafieldDiv);
+
+                // Chocolate quick-fill: fill Ingredients + Nutritional Info (same as Product Creator)
+                if (isIngredients) {
+                    const chocolateBtn = metafieldDiv.querySelector('.card-quickfill-btn');
+                    if (chocolateBtn) {
+                        chocolateBtn.addEventListener('click', function fillChocolateIngredientsAndNutritional() {
+                            const ingredientsText = 'Ingredients: Sugar, Cocoa Butter, Whole MILK Powder, Cocoa Mass, Emulsifier: SOYA Lecithin, Flavouring: Vanilla Extract. Milk Chocolate Contains: Cocoa Solids 32% Minimum, Milk Solids 21% Minimum.\nAllergen Information: For allergens see CAPITALISED ingredients';
+                            const nutritionalText = 'Nutritional Information (per 100g)\nEnergy\t2308kJ/556kcal\nFat\t34.4g\nOf which saturates\t21.1g\nCarbohydrates\t53.1g\nOf which sugars\t52.4g\nProtein\t6.7g\nSalt\t0.206g';
+                            const ingredientsEl = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
+                            const nutritionalEl = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
+                            if (ingredientsEl) {
+                                ingredientsEl.value = ingredientsText;
+                                ingredientsEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                ingredientsEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            if (nutritionalEl) {
+                                nutritionalEl.value = nutritionalText;
+                                nutritionalEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                nutritionalEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        });
+                    }
+                }
             }
             
             // After all metafields are displayed, set up auto-calculation for case weight
