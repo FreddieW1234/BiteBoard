@@ -1136,8 +1136,7 @@
             "cereals",
             "soya",
             "product_size",
-            "commodity_code",
-            "packing_info"
+            "commodity_code"
         ];
 
         // Apply saved metafield order to metafields array
@@ -1307,7 +1306,7 @@
                 if (namespace === 'global') return false;
                 if (key.startsWith('pricejson') && !key.includes('.')) return false;
                 if (namespace === 'shopify' && key.includes('chocolate')) return false;
-                if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours'].includes(key)) return false;
+                if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packing_info'].includes(key)) return false;
                 return true;
             });
             

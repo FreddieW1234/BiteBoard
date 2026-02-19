@@ -33,8 +33,7 @@ DEFAULT_METAFIELD_ORDER = [
     "cereals",
     "soya",
     "product_size",
-    "commodity_code",
-    "packing_info"
+    "commodity_code"
 ]
 
 # Alternative ordering options (can be used for different views)
@@ -52,7 +51,7 @@ ALTERNATIVE_ORDERS = {
         # Dietary Info
         "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame", "milk", "egg", "cereals", "soya",
         # Additional Fields
-        "product_size", "commodity_code", "packing_info"
+        "product_size", "commodity_code"
     ],
     "priority": [
         # High Priority
@@ -62,7 +61,7 @@ ALTERNATIVE_ORDERS = {
         # Lower Priority
         "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame", "milk", "egg", "cereals", "soya",
         "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info", "leadtime1", "leadtime2",
-        "product_size", "commodity_code", "packing_info"
+        "product_size", "commodity_code"
     ]
 }
 
