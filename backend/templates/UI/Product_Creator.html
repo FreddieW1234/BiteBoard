@@ -3708,15 +3708,17 @@ Dietary</textarea>
                         chocolateBtn.addEventListener('click', function fillChocolateIngredientsAndNutritional() {
                             const ingredientsText = 'Sugar, Cocoa Butter, Whole Milk Powder, Cocoa Mass, Emulsifier: Soya Lecithin, Flavouring: Vanilla Extract. Milk Chocolate Contains: Cocoa Solids 32% Minimum, Milk Solids 21% Minimum.';
                             const nutritionalText = 'Nutritional Information (per 100g)\nEnergy\t2308kJ/556kcal\nFat\t34.4g\nOf which saturates\t21.1g\nCarbohydrates\t53.1g\nOf which sugars\t52.4g\nProtein\t6.7g\nSalt\t0.206g';
-                            const ingredientsEl = document.querySelector('textarea[data-key="ingredients"], select[data-key="ingredients"]');
-                            const nutritionalEl = document.querySelector('textarea[data-key="nutritional_info"], select[data-key="nutritional_info"]');
-                            if (ingredientsEl && ingredientsEl.tagName === 'TEXTAREA') {
+                            const ingredientsEl = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
+                            const nutritionalEl = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
+                            if (ingredientsEl) {
                                 ingredientsEl.value = ingredientsText;
                                 ingredientsEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                ingredientsEl.dispatchEvent(new Event('change', { bubbles: true }));
                             }
-                            if (nutritionalEl && nutritionalEl.tagName === 'TEXTAREA') {
+                            if (nutritionalEl) {
                                 nutritionalEl.value = nutritionalText;
                                 nutritionalEl.dispatchEvent(new Event('input', { bubbles: true }));
+                                nutritionalEl.dispatchEvent(new Event('change', { bubbles: true }));
                             }
                         });
                     }
@@ -4092,6 +4094,21 @@ Dietary</textarea>
             
             // Collect metafields data
             productData.metafields = collectMetafieldsData();
+            
+            // Ensure ingredients and nutritional_info are always taken from the DOM (fixes Chocolate autofill not saving nutritional_info)
+            const ingredientsInput = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
+            const nutritionalInput = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
+            const customNamespace = 'custom';
+            if (ingredientsInput && ingredientsInput.value.trim()) {
+                const type = ingredientsInput.dataset.type || 'single_line_text_field';
+                productData.metafields = productData.metafields.filter(m => m.key !== 'ingredients');
+                productData.metafields.push({ namespace: customNamespace, key: 'ingredients', type: type, value: ingredientsInput.value.trim() });
+            }
+            if (nutritionalInput && nutritionalInput.value.trim()) {
+                const type = nutritionalInput.dataset.type || 'single_line_text_field';
+                productData.metafields = productData.metafields.filter(m => m.key !== 'nutritional_info');
+                productData.metafields.push({ namespace: customNamespace, key: 'nutritional_info', type: type, value: nutritionalInput.value.trim() });
+            }
             
             // Explicitly set category and subcategory as top-level for backend (required for metafield creation + overflow routing)
             const mfData = productData.metafields || [];
