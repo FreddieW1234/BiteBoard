@@ -3521,14 +3521,14 @@ Dietary</textarea>
                 const isProductSize = metafield.key === 'product_size';
                 
                 // Check if this metafield has predefined options (list types OR single_line_text_field with choices)
-                // BUT emoji fields should always use textareas, not dropdowns
-                // AND only show dropdowns if there are actually multiple real options (not just the current value)
+                // BUT emoji fields and long-text fields (ingredients, nutritional_info) always use textareas so autofill and multi-line save correctly
                 const isCategoryField = metafield.key === 'custom_category' || metafield.key === 'subcategory';
+                const isLongTextField = ['ingredients', 'nutritional_info'].includes(metafield.key);
                 if (isCategoryField) {
                     console.log(`🔍 Processing category field: ${metafield.key}`);
                 }
                 
-                const hasOptions = (!hasEmojiButtons && (metafield.available_options && metafield.available_options.length > 1));
+                const hasOptions = (!hasEmojiButtons && !isLongTextField && (metafield.available_options && metafield.available_options.length > 1));
                 const currentValue = metafield.value || '';
                 
                 // For fields with multiple real options (but NOT emoji fields), create a dropdown; otherwise use textarea
