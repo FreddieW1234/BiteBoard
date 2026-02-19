@@ -3643,7 +3643,10 @@ Dietary</textarea>
                 console.log(`🎯 Final inputElement for ${metafield.key}:`, inputElement);
                 
                 const isPrintInfo = metafield.key === 'print_info';
-                const headerExtra = isPrintInfo ? `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>` : '';
+                const isIngredients = metafield.key === 'ingredients';
+                let headerExtra = '';
+                if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
+                else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
                         <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>${headerExtra}
@@ -3694,6 +3697,27 @@ Dietary</textarea>
                                     const opt = Array.from(recycleEl.options).find(o => (o.value || '').trim() === 'Card recyclable');
                                     if (opt) { recycleEl.value = opt.value; recycleEl.dispatchEvent(new Event('change', { bubbles: true })); }
                                 }
+                            }
+                        });
+                    }
+                }
+
+                // Chocolate quick-fill button: fill Ingredients + Nutritional Info
+                if (isIngredients) {
+                    const chocolateBtn = metafieldDiv.querySelector('.card-quickfill-btn');
+                    if (chocolateBtn) {
+                        chocolateBtn.addEventListener('click', function fillChocolateIngredientsAndNutritional() {
+                            const ingredientsText = 'Sugar, Cocoa Butter, Whole Milk Powder, Cocoa Mass, Emulsifier: Soya Lecithin, Flavouring: Vanilla Extract. Milk Chocolate Contains: Cocoa Solids 32% Minimum, Milk Solids 21% Minimum.';
+                            const nutritionalText = 'Nutritional Information (per 100g)\nEnergy\t2308kJ/556kcal\nFat\t34.4g\nOf which saturates\t21.1g\nCarbohydrates\t53.1g\nOf which sugars\t52.4g\nProtein\t6.7g\nSalt\t0.206g';
+                            const ingredientsEl = document.querySelector('textarea[data-key="ingredients"], select[data-key="ingredients"]');
+                            const nutritionalEl = document.querySelector('textarea[data-key="nutritional_info"], select[data-key="nutritional_info"]');
+                            if (ingredientsEl && ingredientsEl.tagName === 'TEXTAREA') {
+                                ingredientsEl.value = ingredientsText;
+                                ingredientsEl.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            if (nutritionalEl && nutritionalEl.tagName === 'TEXTAREA') {
+                                nutritionalEl.value = nutritionalText;
+                                nutritionalEl.dispatchEvent(new Event('input', { bubbles: true }));
                             }
                         });
                     }
