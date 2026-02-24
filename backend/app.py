@@ -582,60 +582,141 @@ def api_metafield_create():
 
 @app.route('/api/update_metafield', methods=['POST'])
 def api_update_metafield():
+    """Update a product metafield using Product Creator's create_metafields (same code path as product editor)."""
     try:
         data = request.get_json()
-        
         product_id = data.get('product_id')
         metafield_key = data.get('metafield_key')
         metafield_value = data.get('metafield_value')
-        
+
         if not all([product_id, metafield_key, metafield_value is not None]):
-            return jsonify({"error": "Missing required fields"}), 400
-        
-        # Create or update the metafield
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
-        headers = {
-            "X-Shopify-Access-Token": ACCESS_TOKEN,
-            "Content-Type": "application/json"
-        }
-        
-        # Convert the value to string format for single_line_text_field type
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # REST uses numeric product ID (not GID)
+        if isinstance(product_id, str) and product_id.startswith("gid://"):
+            try:
+                product_id = product_id.split("/")[-1]
+            except Exception:
+                pass
+        product_id = str(product_id).strip()
+        try:
+            product_id_int = int(product_id)
+        except ValueError:
+            product_id_int = product_id
+
         if isinstance(metafield_value, (list, dict)):
-            # Format JSON as single line with spaces after colons for Liquid parsing compatibility
-            # single_line_text_field doesn't support line breaks
             value_to_save = json.dumps(metafield_value, separators=(',', ': '))
         else:
             value_to_save = str(metafield_value)
-        
-        # Get the metafield type from the request, or default to single_line_text_field
-        metafield_type = data.get('metafield_type', 'single_line_text_field')
-        
-        metafield_data = {
-            "metafield": {
+
+        metafield_type = data.get('metafield_type') or "single_line_text_field"
+        if metafield_key in ("pricejsontr", "pricejsoner"):
+            metafield_type = "single_line_text_field"
+
+        from scripts.product_creator.Product_Creator import create_metafields
+
+        metafields_data = [
+            {
                 "namespace": "custom",
                 "key": metafield_key,
                 "value": value_to_save,
-                "type": metafield_type
+                "type": metafield_type,
             }
-        }
-        
-        response = requests.post(url, headers=headers, json=metafield_data)
-        
-        if response.status_code in [200, 201]:
-            # After successful save, run Price Bandit for this product
-            try:
-                run_price_bandit_for_product(product_id)
-            except Exception as e:
-                print(f"⚠️ Price Bandit run failed: {str(e)}")
-                # Don't fail the save operation if Price Bandit fails
-            
-            return jsonify({"success": True, "message": "Metafield updated successfully and Price Bandit triggered"})
-        else:
-            return jsonify({"error": f"Failed to update metafield: {response.text}"}), 400
-            
+        ]
+        print(f"[update_metafield] product_id={product_id} key={metafield_key} type={metafield_type} value_len={len(value_to_save)} (using Product Creator create_metafields)", flush=True)
+
+        result = create_metafields(product_id_int, metafields_data, shopify_domain=None)
+
+        if not result.get("success") or result.get("success_count", 0) < 1:
+            errors = result.get("errors", [])
+            msg = "; ".join(errors) if errors else "Metafield save failed"
+            print(f"[update_metafield] create_metafields failed: {errors}", flush=True)
+            return jsonify({"error": msg}), 400
+
+        print(f"[update_metafield] Success for {metafield_key}", flush=True)
+        try:
+            run_price_bandit_for_product(product_id)
+        except Exception as e:
+            print(f"⚠️ Price Bandit run failed: {str(e)}")
+        return jsonify({"success": True, "message": "Metafield updated successfully and Price Bandit triggered"})
+
     except Exception as e:
         print(f"💥 Metafield update error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+
+@app.route('/api/update_price_metafields', methods=['POST'])
+def api_update_price_metafields():
+    """Save both price metafields (trade + end customer) in one call, then run Price Bandit once. Faster than two separate update_metafield calls."""
+    try:
+        data = request.get_json()
+        product_id = data.get('product_id')
+        trade = data.get('trade')  # array for pricejsontr
+        end_customer = data.get('end_customer')  # array for pricejsoner
+
+        if not product_id:
+            return jsonify({'error': 'Missing product_id'}), 400
+        if (not trade or not isinstance(trade, list)) and (not end_customer or not isinstance(end_customer, list)):
+            return jsonify({'error': 'Provide at least one of trade or end_customer (arrays)'}), 400
+
+        if isinstance(product_id, str) and product_id.startswith("gid://"):
+            try:
+                product_id = product_id.split("/")[-1]
+            except Exception:
+                pass
+        product_id = str(product_id).strip()
+        try:
+            product_id_int = int(product_id)
+        except ValueError:
+            product_id_int = product_id
+
+        from scripts.product_creator.Product_Creator import create_metafields
+
+        metafields_data = []
+        if trade and isinstance(trade, list):
+            metafields_data.append({
+                "namespace": "custom",
+                "key": "pricejsontr",
+                "value": json.dumps(trade, separators=(',', ': ')),
+                "type": "single_line_text_field",
+            })
+        if end_customer and isinstance(end_customer, list):
+            metafields_data.append({
+                "namespace": "custom",
+                "key": "pricejsoner",
+                "value": json.dumps(end_customer, separators=(',', ': ')),
+                "type": "single_line_text_field",
+            })
+
+        if not metafields_data:
+            return jsonify({"error": "No valid price data to save"}), 400
+
+        print(f"[update_price_metafields] product_id={product_id} saving {len(metafields_data)} metafields (batch)", flush=True)
+        result = create_metafields(product_id_int, metafields_data, shopify_domain=None)
+
+        expected = len(metafields_data)
+        success_count = result.get("success_count", 0)
+        if not result.get("success") or success_count < expected:
+            errors = result.get("errors", [])
+            msg = "; ".join(errors) if errors else f"Saved {success_count}/{expected} metafields"
+            print(f"[update_price_metafields] partial/fail: {errors}", flush=True)
+            return jsonify({"error": msg, "saved": success_count, "total": expected}), 400
+
+        print(f"[update_price_metafields] Success for product {product_id}", flush=True)
+        try:
+            run_price_bandit_for_product(product_id)
+        except Exception as e:
+            print(f"⚠️ Price Bandit run failed: {str(e)}")
+        return jsonify({"success": True, "message": "Price metafields saved and Price Bandit triggered"})
+
+    except Exception as e:
+        print(f"💥 update_price_metafields error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
 
 def run_price_bandit_for_product(product_id):
     """Run Price Bandit for a specific product to update pricing"""
@@ -1289,6 +1370,20 @@ def api_create_product():
             except (json.JSONDecodeError, ValueError) as e:
                 print(f"⚠️ Failed to parse media_order: {e}")
                 data['media_order'] = []
+
+            # When duplicating, frontend sends image URLs to create media on new product (can't attach from other product)
+            media_urls_str = request.form.get('media_urls', '')
+            if media_urls_str and media_urls_str.strip():
+                try:
+                    data['media_urls'] = json.loads(media_urls_str)
+                    if isinstance(data['media_urls'], list):
+                        print(f"[API] Media URLs for copy (new product): {len(data['media_urls'])} URLs")
+                    else:
+                        data['media_urls'] = []
+                except (json.JSONDecodeError, ValueError):
+                    data['media_urls'] = []
+            else:
+                data['media_urls'] = []
             
         elif request.is_json:
             # Handle JSON data (backward compatibility)

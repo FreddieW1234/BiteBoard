@@ -446,6 +446,66 @@ def reorder_product_media(product_id, shopify_media_ids_in_order):
             "errors": [error_msg]
         }
 
+
+def create_media_from_urls(product_id, media_urls, shopify_domain=None):
+    """
+    Create product media from a list of image URLs (e.g. when duplicating a product).
+    Uses GraphQL productCreateMedia with originalSource since media from another product cannot be attached by ID.
+    """
+    if not media_urls or not isinstance(media_urls, list):
+        return {"success": True, "message": "No media URLs to add", "created": 0}
+    try:
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+        headers = {
+            "X-Shopify-Access-Token": ACCESS_TOKEN,
+            "Content-Type": "application/json",
+        }
+        product_global_id = f"gid://shopify/Product/{product_id}"
+        created = 0
+        for url in media_urls:
+            if not url or not isinstance(url, str) or not url.startswith("http"):
+                continue
+            mutation = """
+            mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+                productCreateMedia(productId: $productId, media: $media) {
+                    media { id }
+                    mediaUserErrors { field message }
+                }
+            }
+            """
+            variables = {
+                "productId": product_global_id,
+                "media": [{"mediaContentType": "IMAGE", "originalSource": url}],
+            }
+            resp = requests.post(graphql_url, json={"query": mutation, "variables": variables}, headers=headers, timeout=30, allow_redirects=False)
+            if resp.status_code in (301, 302, 303, 307, 308):
+                redirect_url = resp.headers.get("Location", "")
+                if redirect_url.startswith("/"):
+                    from urllib.parse import urlparse
+                    parsed = urlparse(graphql_url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                resp = requests.post(redirect_url, json={"query": mutation, "variables": variables}, headers=headers, timeout=30)
+            if resp.status_code != 200:
+                print(f"❌ create_media_from_urls HTTP {resp.status_code} for URL", flush=True)
+                continue
+            data = resp.json()
+            if data.get("errors"):
+                print(f"❌ create_media_from_urls GraphQL errors: {data['errors']}", flush=True)
+                continue
+            payload = data.get("data", {}).get("productCreateMedia") or {}
+            if payload.get("mediaUserErrors"):
+                print(f"❌ create_media_from_urls userErrors: {payload['mediaUserErrors']}", flush=True)
+                continue
+            if payload.get("media"):
+                created += len(payload["media"])
+                print(f"✅ Created media from URL ({created}/{len(media_urls)})", flush=True)
+        return {"success": True, "message": f"Created {created} media from URLs", "created": created}
+    except Exception as e:
+        print(f"💥 create_media_from_urls error: {e}", flush=True)
+        return {"success": False, "errors": [str(e)], "created": 0}
+
+
 def upload_media_to_product(product_id, media_files, shopify_media_ids=None, product_name=None, product_sku=None, shopify_domain=None):
     """
     Upload media files (images/videos) to a Shopify product using the correct API
@@ -1383,7 +1443,10 @@ def create_product(product_data):
             # Step 2: Upload media files (images/videos) to the product FIRST
             media_files = product_data.get("media_files", [])
             shopify_media_ids = product_data.get("shopify_media_ids", [])
-            total_media = len(media_files) + len(shopify_media_ids)
+            media_urls = product_data.get("media_urls", [])  # When duplicating, frontend sends URLs to copy
+            if not isinstance(media_urls, list):
+                media_urls = []
+            total_media = len(media_files) + len(shopify_media_ids) + len(media_urls)
             
             
             
@@ -1499,15 +1562,26 @@ def create_product(product_data):
                     print(f"✅ Step 2 Complete: Media management finished for existing product!")
                 
                 elif has_new_media or total_media > 0:
-                    # Creating new product - upload all media (same flow as updating existing product)
-                    print(f"🔄 Step 2: Uploading {len(media_files)} new files and attaching {len(shopify_media_ids)} existing files for new product...")
+                    # Creating new product - handle media_urls first (duplicate flow), then upload/attach
                     product_title = product_data.get("title", "")
+                    ids_to_attach = shopify_media_ids
+                    if media_urls:
+                        # Duplicate: create media from URLs (can't attach media from another product by ID)
+                        print(f"🔄 Step 2: Creating {len(media_urls)} media from URLs (duplicate), then {len(media_files)} new files for new product...")
+                        url_results = create_media_from_urls(product_id, media_urls, shopify_domain=actual_shopify_domain)
+                        if url_results.get("created", 0) > 0:
+                            print(f"✅ Created {url_results['created']} media from URLs")
+                            import time
+                            time.sleep(1)
+                        ids_to_attach = []  # Don't try to attach by ID when we used URLs
+                    else:
+                        print(f"🔄 Step 2: Uploading {len(media_files)} new files and attaching {len(shopify_media_ids)} existing files for new product...")
                     
-                    # Step 2a: Upload/attach all media (both new and existing)
+                    # Step 2a: Upload new files and attach existing (only when not using media_urls)
                     media_results = upload_media_to_product(
                         product_id,
                         media_files,
-                        shopify_media_ids,
+                        ids_to_attach,
                         product_title,
                         product_sku=sku_for_filename,
                         shopify_domain=actual_shopify_domain

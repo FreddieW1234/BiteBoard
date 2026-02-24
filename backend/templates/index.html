@@ -458,19 +458,21 @@
                 
                 // Combine dynamic Python tools with static HTML tools
                 const allTools = [...dynamicTools, ...staticTools];
-                console.log('🔧 Combined tools:', allTools);
+                // Field Finder and Price Manager are only used inside Product Editor/Creator, not as standalone tools
+                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager');
+                console.log('🔧 Combined tools:', visibleTools);
                 
                 // Update tools count
-                document.getElementById('tools-count').textContent = allTools.length;
+                document.getElementById('tools-count').textContent = visibleTools.length;
                 
                 // Generate tool cards (group some tools into a folder)
                 const toolsGrid = document.getElementById('tools-grid');
                 toolsGrid.innerHTML = '';
                 console.log('🧹 Cleared tools grid');
 
-                const groupedToolNames = ['Artwork_Updater', 'Field_Finder', 'Price_Bandit', 'Price_Manager', 'Templates_Uploader'];
-                const groupedTools = allTools.filter(t => groupedToolNames.includes(t));
-                const otherTools = allTools.filter(t => !groupedToolNames.includes(t));
+                const groupedToolNames = ['Artwork_Updater', 'Price_Bandit', 'Templates_Uploader'];
+                const groupedTools = visibleTools.filter(t => groupedToolNames.includes(t));
+                const otherTools = visibleTools.filter(t => !groupedToolNames.includes(t));
 
                 if (groupedTools.length > 0) {
                     const folderCard = createFolderCard('Individual Shop Tools', groupedTools);

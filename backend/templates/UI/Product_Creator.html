@@ -833,6 +833,28 @@
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
         }
+        .duplicate-trigger-btn {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .duplicate-trigger-btn:focus {
+            outline: none;
+        }
+        .duplicate-trigger-btn:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+        .edit-trigger-btn {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .edit-trigger-btn:focus {
+            outline: none;
+        }
+        .edit-trigger-btn:focus-visible {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
 
         .btn-secondary {
             background: #e2e8f0;
@@ -1641,17 +1663,9 @@
                         <i class="fas fa-palette"></i>
                         <span>Artwork Updater</span>
                     </a>
-                    <a href="/app/Field_Finder" class="app-tab">
-                        <i class="fas fa-search"></i>
-                        <span>Field Finder</span>
-                    </a>
                     <a href="/app/price_bandit" class="app-tab">
                         <i class="fas fa-robot"></i>
                         <span>Price Bandit</span>
-                    </a>
-                    <a href="/app/Price_Manager" class="app-tab">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Price Manager</span>
                     </a>
                     <a href="/app/Product_Creator" class="app-tab active">
                         <i class="fas fa-plus-circle"></i>
@@ -1672,16 +1686,56 @@
         <div class="main-content">
             <form id="productForm">
 
-                <!-- Import From Existing Product (Copied from Price Manager) -->
+                <!-- Product actions: Create, Duplicate, Edit (hidden when form is active) -->
                 <div class="tool-section" style="margin-bottom: 12px;">
-                    <div class="search-container" style="display: flex; align-items: center; gap: 20px;">
-                        <div class="autocomplete-container" style="width: 400px;">
+                    <div class="search-container" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                        <!-- Hidden search input (kept for edit flow; populated by Edit modal selection) -->
+                        <div class="autocomplete-container" style="width: 400px; display: none;">
                             <input type="text" id="pc-product-input" class="product-input" placeholder="Enter existing product name or SKU" style="width: 400px;">
                             <div id="pc-autocomplete-dropdown" class="autocomplete-dropdown" style="display: none;"></div>
                         </div>
-                        <button type="button" class="btn btn-primary" onclick="showCreateForm()">
-                            <i class="fas fa-plus-circle"></i> Create New Product
+                        <div id="product-action-buttons" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary edit-trigger-btn" onclick="openEditModal(); return false;">
+                                <i class="fas fa-edit"></i> Edit Existing Product
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="showCreateForm()">
+                                <i class="fas fa-plus-circle"></i> Create New Product
+                            </button>
+                            <button type="button" class="btn btn-primary duplicate-trigger-btn" onclick="openDuplicateModal(); return false;">
+                                <i class="fas fa-copy"></i> Duplicate Existing Product
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-secondary" id="product-back-button" onclick="backToProductCreatorHome()" style="display: none;" title="Back to start">
+                            <i class="fas fa-arrow-left"></i> Back
                         </button>
+                    </div>
+                </div>
+
+                <!-- Edit Existing Product Modal -->
+                <div id="editProductModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 10000; align-items: center; justify-content: center;" class="edit-modal-overlay">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 480px; width: 90%;">
+                        <h3 style="margin: 0 0 16px 0; font-size: 1.25rem;">Select product to edit</h3>
+                        <div class="autocomplete-container" style="width: 100%; position: relative;">
+                            <input type="text" id="edit-product-input" class="form-input" placeholder="Search product name or SKU..." style="width: 100%; padding: 10px 12px;">
+                            <div id="edit-autocomplete-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 280px; overflow-y: auto; z-index: 10001;"></div>
+                        </div>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Duplicate Product Modal -->
+                <div id="duplicateProductModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 10000; align-items: center; justify-content: center;" class="duplicate-modal-overlay">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 480px; width: 90%;">
+                        <h3 style="margin: 0 0 16px 0; font-size: 1.25rem;">Select product to duplicate</h3>
+                        <div class="autocomplete-container" style="width: 100%; position: relative;">
+                            <input type="text" id="dup-product-input" class="form-input" placeholder="Search product name or SKU..." style="width: 100%; padding: 10px 12px;">
+                            <div id="dup-autocomplete-dropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 280px; overflow-y: auto; z-index: 10001;"></div>
+                        </div>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeDuplicateModal()">Cancel</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2026,12 +2080,34 @@ Dietary</textarea>
             sections.forEach(section => {
                 section.style.display = 'block';
             });
+            // Hide the three action buttons and show the back button
+            showBackButtonAndHideActions();
+        }
 
-            // Hide only the Create New Product button, keep search bar visible
-            const createBtn = document.querySelector('button[onclick="showCreateForm()"]');
-            if (createBtn) {
-                createBtn.style.display = 'none';
-            }
+        function showBackButtonAndHideActions() {
+            const actionBtns = document.getElementById('product-action-buttons');
+            const backBtn = document.getElementById('product-back-button');
+            if (actionBtns) actionBtns.style.display = 'none';
+            if (backBtn) backBtn.style.display = 'inline-flex';
+        }
+
+        function backToProductCreatorHome() {
+            // Hide all form sections and action buttons (same as initial load)
+            document.querySelectorAll('.collapsible-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            const actionButtonsDiv = document.querySelector('.action-buttons');
+            if (actionButtonsDiv) actionButtonsDiv.style.display = 'none';
+            // Reset edit state
+            selectedProduct = null;
+            isEditingProduct = false;
+            const submitBtn = document.querySelector('#productForm button[type="submit"]');
+            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
+            // Show the three buttons again, hide the back button
+            const actionBtns = document.getElementById('product-action-buttons');
+            const backBtn = document.getElementById('product-back-button');
+            if (actionBtns) actionBtns.style.display = 'flex';
+            if (backBtn) backBtn.style.display = 'none';
         }
 
         // Artwork: load guidelines and enable templates staging
@@ -4658,30 +4734,30 @@ Dietary</textarea>
             pcDrop.style.display = 'none';
         }
 
-        async function pcPopulateFromProduct(productId, title) {
+        async function pcPopulateFromProduct(productId, title, opts) {
             const pcInput = document.getElementById('pc-product-input');
             const pcDrop = document.getElementById('pc-autocomplete-dropdown');
+            const isDuplicate = opts && opts.duplicate === true;
 
-            // Set editing mode
-            isEditingProduct = true;
-            selectedProduct = { id: productId, title: title };
-
-            // Change button text to "Save Product"
-            const submitBtn = document.querySelector('#productForm button[type="submit"]');
-            if (submitBtn) {
-                submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Product';
+            if (!isDuplicate) {
+                isEditingProduct = true;
+                selectedProduct = { id: productId, title: title };
+                const submitBtn = document.querySelector('#productForm button[type="submit"]');
+                if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Product';
             }
 
-            // Show form sections when a product is selected
             showCreateForm();
             try {
                 const resp = await fetch(`/api/product/${productId}/prices`);
                 const data = await resp.json();
                 if (!data || !data.id) throw new Error('Failed to load product');
 
-                // Title
+                // Title (add " (Copy)" when duplicating)
                 const titleEl = document.getElementById('title');
-                if (titleEl) titleEl.value = data.title || title || '';
+                if (titleEl) {
+                    const baseTitle = data.title || title || '';
+                    titleEl.value = isDuplicate ? (baseTitle + ' (Copy)') : baseTitle;
+                }
 
                 // Status (default to active if unknown)
                 const statusEl = document.getElementById('status');
@@ -4786,8 +4862,8 @@ Dietary</textarea>
                     }
                 }
 
-                // Close dropdown and set input to selected title
-                if (pcInput) pcInput.value = data.title || title || '';
+                // Close dropdown and set main search input (leave empty when duplicating)
+                if (pcInput) pcInput.value = isDuplicate ? '' : (data.title || title || '');
                 if (pcDrop) pcDrop.style.display = 'none';
 
                 // Don't call displayMetafields again - it will overwrite our category/subcategory selections
@@ -4950,9 +5026,143 @@ Dietary</textarea>
                     }
                     stageArtworkTemplates([]);
                 } catch (e) { console.log('Templates prefill failed', e); }
+
+                if (isDuplicate) {
+                    isEditingProduct = false;
+                    selectedProduct = null;
+                    const submitBtn = document.querySelector('#productForm button[type="submit"]');
+                    if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
+                    closeDuplicateModal();
+                }
             } catch (e) {
                 console.log('Populate failed:', e);
+                if (isDuplicate) closeDuplicateModal();
             }
+        }
+
+        function openDuplicateModal() {
+            const modal = document.getElementById('duplicateProductModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const dupInput = document.getElementById('dup-product-input');
+            const dupDrop = document.getElementById('dup-autocomplete-dropdown');
+            if (dupInput) {
+                dupInput.value = '';
+                dupInput.focus();
+            }
+            if (dupDrop) dupDrop.style.display = 'none';
+            const escHandler = function(e) {
+                if (e.key === 'Escape') {
+                    closeDuplicateModal();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+
+            if (typeof window.dupWireOnce === 'undefined' || !window.dupWireOnce) {
+                window.dupWireOnce = true;
+                let dupTimer;
+                if (dupInput) dupInput.addEventListener('input', function() {
+                    const q = (this.value || '').trim().toLowerCase();
+                    clearTimeout(dupTimer);
+                    if (q.length < 2) { dupDrop.style.display = 'none'; return; }
+                    dupTimer = setTimeout(() => {
+                        const matches = (pcAllProducts || []).filter(p => {
+                            const name = (p.title || '').toLowerCase();
+                            const id = String(p.id || '');
+                            const sku = ((p.variants && p.variants[0] && p.variants[0].sku) || '').toLowerCase();
+                            return name.includes(q) || id.includes(q) || sku.includes(q);
+                        }).slice(0, 20);
+                        dupDrop.innerHTML = '';
+                        if (!matches.length) { dupDrop.style.display = 'none'; return; }
+                        matches.forEach(p => {
+                            const item = document.createElement('div');
+                            item.className = 'autocomplete-item';
+                            const sku = (p.variants && p.variants[0] && p.variants[0].sku) || '';
+                            item.innerHTML = `<div class="product-name">${p.title}</div><div class="product-id">${sku}</div>`;
+                            item.onclick = () => pcPopulateFromProduct(p.id, p.title, { duplicate: true });
+                            dupDrop.appendChild(item);
+                        });
+                        dupDrop.style.display = 'block';
+                    }, 300);
+                });
+                document.getElementById('duplicateProductModal').addEventListener('click', function(e) {
+                    if (e.target === this) closeDuplicateModal();
+                });
+            }
+        }
+
+        function closeDuplicateModal() {
+            const modal = document.getElementById('duplicateProductModal');
+            if (modal) modal.style.display = 'none';
+            const dupInput = document.getElementById('dup-product-input');
+            const dupDrop = document.getElementById('dup-autocomplete-dropdown');
+            if (dupInput) dupInput.value = '';
+            if (dupDrop) dupDrop.style.display = 'none';
+        }
+
+        function openEditModal() {
+            const modal = document.getElementById('editProductModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const editInput = document.getElementById('edit-product-input');
+            const editDrop = document.getElementById('edit-autocomplete-dropdown');
+            if (editInput) {
+                editInput.value = '';
+                editInput.focus();
+            }
+            if (editDrop) editDrop.style.display = 'none';
+            const escHandler = function(e) {
+                if (e.key === 'Escape') {
+                    closeEditModal();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+
+            if (typeof window.editWireOnce === 'undefined' || !window.editWireOnce) {
+                window.editWireOnce = true;
+                let editTimer;
+                if (editInput) editInput.addEventListener('input', function() {
+                    const q = (this.value || '').trim().toLowerCase();
+                    clearTimeout(editTimer);
+                    if (q.length < 2) { editDrop.style.display = 'none'; return; }
+                    editTimer = setTimeout(() => {
+                        const matches = (pcAllProducts || []).filter(p => {
+                            const name = (p.title || '').toLowerCase();
+                            const id = String(p.id || '');
+                            const sku = ((p.variants && p.variants[0] && p.variants[0].sku) || '').toLowerCase();
+                            return name.includes(q) || id.includes(q) || sku.includes(q);
+                        }).slice(0, 20);
+                        editDrop.innerHTML = '';
+                        if (!matches.length) { editDrop.style.display = 'none'; return; }
+                        matches.forEach(p => {
+                            const item = document.createElement('div');
+                            item.className = 'autocomplete-item';
+                            const sku = (p.variants && p.variants[0] && p.variants[0].sku) || '';
+                            item.innerHTML = `<div class="product-name">${p.title}</div><div class="product-id">${sku}</div>`;
+                            item.onclick = () => {
+                                pcPopulateFromProduct(p.id, p.title);
+                                closeEditModal();
+                            };
+                            editDrop.appendChild(item);
+                        });
+                        editDrop.style.display = 'block';
+                    }, 300);
+                });
+                document.getElementById('editProductModal').addEventListener('click', function(e) {
+                    if (e.target === this) closeEditModal();
+                });
+            }
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('editProductModal');
+            if (modal) modal.style.display = 'none';
+            const editInput = document.getElementById('edit-product-input');
+            const editDrop = document.getElementById('edit-autocomplete-dropdown');
+            if (editInput) editInput.value = '';
+            if (editDrop) editDrop.style.display = 'none';
         }
 
         function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
@@ -5763,8 +5973,16 @@ Dietary</textarea>
                 currentPosition++;
             });
             
+            // When creating a new product (e.g. duplicate), send image URLs so backend can create media from URL
+            const isNewProductWithCopyMedia = !isEditingProduct && selectedShopifyMedia.length > 0;
+            if (isNewProductWithCopyMedia) {
+                const urls = selectedShopifyMedia.map(m => m.url).filter(u => u && typeof u === 'string');
+                if (urls.length > 0) {
+                    formData.append('media_urls', JSON.stringify(urls));
+                    console.log(`📦 Sending ${urls.length} media URLs for new product (duplicate/copy)`);
+                }
+            }
             // Then, add selected Shopify media IDs with their positions
-            // Use REST API numeric ID for backend comparison (the ID that matches Shopify's REST API)
             console.log(`📦 About to send ${selectedShopifyMedia.length} Shopify media items:`, selectedShopifyMedia);
             selectedShopifyMedia.forEach((media, index) => {
                 // Use rest_api_id if available, otherwise fall back to id (REST API numeric ID)

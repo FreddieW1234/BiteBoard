@@ -751,10 +751,6 @@
                         <i class="fas fa-palette"></i>
                         <span>Artwork Updater</span>
                     </a>
-                    <a href="/app/Field_Finder" class="app-tab">
-                        <i class="fas fa-search"></i>
-                        <span>Field Finder</span>
-                    </a>
                     <a href="/app/price_bandit" class="app-tab">
                         <i class="fas fa-robot"></i>
                         <span>Price Bandit</span>
@@ -792,7 +788,7 @@
                         <span class="label-text">Match quantities and increase price by 30%</span>
                     </label>
                     <button id="save-all-button" class="save-all-button" disabled>
-                        <i class="fas fa-save"></i> Save All
+                        <i class="fas fa-save"></i> Save
                     </button>
                 </div>
             </div>
@@ -804,7 +800,6 @@
                         <div class="metafield-buttons">
                             <button class="metafield-button active">Table</button>
                             <button class="metafield-button">JSON</button>
-                            <button class="save-button" data-metafield="pricejsontr">Save</button>
                         </div>
                     </div>
                     <div class="metafield-content" id="trade-content">
@@ -818,7 +813,6 @@
                         <div class="metafield-buttons">
                             <button class="metafield-button active">Table</button>
                             <button class="metafield-button">JSON</button>
-                            <button class="save-button" data-metafield="pricejsoner">Save</button>
                         </div>
                     </div>
                     <div class="metafield-content" id="end-customer-content">
@@ -932,32 +926,6 @@
             });
 
             // Handle Save button clicks
-            document.addEventListener('click', function(event) {
-                if (event.target.classList.contains('save-button')) {
-                    const saveButton = event.target;
-                    const metafieldBox = saveButton.closest('.metafield-box');
-                    const contentId = metafieldBox.querySelector('.metafield-content').id;
-                    const metafieldKey = saveButton.dataset.metafield;
-                    
-                    // Get current synchronized data based on content ID
-                    let currentData = [];
-                    if (contentId === 'trade-content') {
-                        currentData = currentPriceData.trade || [];
-                    } else if (contentId === 'end-customer-content') {
-                        currentData = currentPriceData.endCustomer || [];
-                    }
-                    
-                    // Ensure we have valid data
-                    if (!Array.isArray(currentData) || currentData.length === 0) {
-                        alert('No valid data to save. Please add some price data first.');
-                        return;
-                    }
-                    
-                    // Save the data
-                    saveMetafieldData(metafieldKey, currentData, saveButton);
-                }
-            });
-
             // Handle Save All button click
             document.getElementById('save-all-button').addEventListener('click', function() {
                 saveAllMetafields();
@@ -1093,88 +1061,34 @@
                     saveAllButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
                     
                     updateModalStatus('Saving all price data to Shopify...', 25);
-                    updateTerminalOutput('🔄 Starting to save all price data...\n');
+                    updateTerminalOutput('🔄 Saving Trade and End Customer price data (batch)...\n');
                     
-                    let successCount = 0;
-                    let totalToSave = 0;
+                    const totalToSave = (Array.isArray(tradeData) && tradeData.length > 0 ? 1 : 0) +
+                        (Array.isArray(endCustomerData) && endCustomerData.length > 0 ? 1 : 0);
                     
-                    // Count how many metafields we need to save
-                    if (Array.isArray(tradeData) && tradeData.length > 0) totalToSave++;
-                    if (Array.isArray(endCustomerData) && endCustomerData.length > 0) totalToSave++;
+                    const response = await fetch('/api/update_price_metafields', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            product_id: currentProductData.id,
+                            trade: Array.isArray(tradeData) && tradeData.length > 0 ? tradeData : null,
+                            end_customer: Array.isArray(endCustomerData) && endCustomerData.length > 0 ? endCustomerData : null
+                        })
+                    });
+                    const body = await response.json().catch(() => ({}));
                     
-                    // Save Trade data if it exists
-                    if (Array.isArray(tradeData) && tradeData.length > 0) {
-                        updateTerminalOutput('📊 Saving Trade price data...\n');
-                        const tradeResponse = await fetch('/api/update_metafield', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                product_id: currentProductData.id,
-                                metafield_key: 'pricejsontr',
-                                metafield_value: tradeData
-                            })
-                        });
-                        
-                        if (tradeResponse.ok) {
-                            successCount++;
-                            updateTerminalOutput('✅ Trade price data saved successfully!\n');
-                        } else {
-                            updateTerminalOutput('❌ Failed to save Trade price data\n');
-                        }
-                    }
-                    
-                    // Save End Customer data if it exists
-                    if (Array.isArray(endCustomerData) && endCustomerData.length > 0) {
-                        updateTerminalOutput('📊 Saving End Customer price data...\n');
-                        const endCustomerResponse = await fetch('/api/update_metafield', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                product_id: currentProductData.id,
-                                metafield_key: 'pricejsoner',
-                                metafield_value: endCustomerData
-                            })
-                        });
-                        
-                        if (endCustomerResponse.ok) {
-                            successCount++;
-                            updateTerminalOutput('✅ End Customer price data saved successfully!\n');
-                        } else {
-                            updateTerminalOutput('❌ Failed to save End Customer price data\n');
-                        }
-                    }
-                    
-                    if (successCount === totalToSave) {
-                        updateModalStatus('All price data saved successfully!', 75);
-                        updateTerminalOutput('🎉 All price data saved successfully!\n');
-                        
-                        // Now run Price Bandit
-                        updateModalStatus('Running Price Bandit to update pricing...', 90);
-                        updateTerminalOutput('🔄 Triggering Price Bandit for product updates...\n');
-                        
-                        // Wait for Price Bandit to complete (it runs automatically after save)
-                        updateTerminalOutput('⏳ Price Bandit is now running in the background...\n');
-                        updateTerminalOutput('📊 This may take a few moments depending on the product complexity...\n');
-                        
-                        // Give some time for Price Bandit to process
-                        await new Promise(resolve => setTimeout(resolve, 3000));
-                        
+                    if (response.ok) {
+                        updateModalStatus('All price data saved successfully!', 90);
+                        updateTerminalOutput('✅ Trade and End Customer price data saved!\n');
+                        updateTerminalOutput('🔄 Price Bandit triggered (single run).\n');
                         updateModalStatus('All tasks completed successfully!', 100);
-                        updateTerminalOutput('✅ Price Bandit execution completed!\n');
                         updateTerminalOutput('🎉 All operations completed successfully!\n');
                         updateTerminalOutput('💡 Your product pricing has been updated in Shopify!\n');
-                        
-                        // Auto-close after 2 seconds
-                        setTimeout(() => {
-                            closeSaveModal();
-                        }, 2000);
-                        
+                        setTimeout(() => closeSaveModal(), 1500);
                     } else {
-                        throw new Error(`Only ${successCount} out of ${totalToSave} metafields were saved successfully`);
+                        const errMsg = body.error || response.statusText || 'Unknown error';
+                        updateTerminalOutput(`❌ Save failed: ${errMsg}\n`);
+                        throw new Error(errMsg);
                     }
                     
                 } catch (error) {
