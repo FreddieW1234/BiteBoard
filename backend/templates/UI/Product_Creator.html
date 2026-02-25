@@ -646,8 +646,33 @@
             border-radius: 0 0 6px 6px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             z-index: 1000;
-            max-height: 200px;
+            max-height: 360px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .dropdown-search-wrap {
+            flex-shrink: 0;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .dropdown-search {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        .dropdown-search:focus {
+            outline: none;
+            border-color: #17a2b8;
+        }
+        .dropdown-options-list {
+            max-height: 300px;
             overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         }
         
         .dropdown-option {
@@ -4526,6 +4551,17 @@ Dietary</textarea>
             }
         }
         
+        function filterDropdownOptions(optionsList, searchValue) {
+            const q = (searchValue || '').trim().toLowerCase();
+            const options = optionsList.querySelectorAll('.dropdown-option');
+            options.forEach(opt => {
+                const label = opt.querySelector('label');
+                const text = (label && label.textContent) ? label.textContent : '';
+                const show = !q || text.toLowerCase().includes(q);
+                opt.style.display = show ? '' : 'none';
+            });
+        }
+
         // Category and Subcategory Functions - Updated to work with custom dropdowns
         async function loadCategoryDropdownOptions(dropdown) {
             try {
@@ -4538,33 +4574,48 @@ Dietary</textarea>
                 if (data.success && data.choices) {
                     const content = dropdown.querySelector('.dropdown-content');
                     content.innerHTML = '';
-                    
+                    const searchWrap = document.createElement('div');
+                    searchWrap.className = 'dropdown-search-wrap';
+                    const searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.className = 'dropdown-search';
+                    searchInput.placeholder = 'Search categories...';
+                    searchInput.setAttribute('aria-label', 'Search categories');
+                    searchWrap.appendChild(searchInput);
+                    const optionsList = document.createElement('div');
+                    optionsList.className = 'dropdown-options-list';
+                    content.appendChild(searchWrap);
+                    content.appendChild(optionsList);
                     // Add category options with checkboxes
                     data.choices.forEach((category, index) => {
                         const optionDiv = document.createElement('div');
                         optionDiv.className = 'dropdown-option';
                         const safeId = `cat_${index}_${category.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                        
-                        // Create checkbox and label using DOM methods for proper escaping
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
                         checkbox.id = safeId;
-                        checkbox.value = category;  // DOM methods handle escaping automatically
-                        
+                        checkbox.value = category;
                         const label = document.createElement('label');
                         label.htmlFor = safeId;
                         label.textContent = category;
-                        
                         optionDiv.appendChild(checkbox);
                         optionDiv.appendChild(label);
-                        content.appendChild(optionDiv);
-                        
-                        // Add event listener to checkbox (use the variable we already created)
+                        optionsList.appendChild(optionDiv);
                         checkbox.addEventListener('change', function() {
                             updateDropdownText(dropdown);
                             console.log(`Category checkbox changed: ${category}, checked: ${this.checked}`);
                         });
                     });
+                    searchInput.addEventListener('input', function() {
+                        filterDropdownOptions(optionsList, this.value);
+                    });
+                    searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
+                    // Select "All" by default if no value is set (initial state)
+                    const allCheckbox = dropdown.querySelector('input[type="checkbox"][value="All"]');
+                    if (allCheckbox) {
+                        allCheckbox.checked = true;
+                        updateDropdownText(dropdown);
+                    }
                     console.log(`✅ Successfully loaded ${data.choices.length} category options`);
                 } else {
                     console.log('❌ Category API returned no data or failed');
@@ -4587,33 +4638,42 @@ Dietary</textarea>
                 if (data.success && data.choices) {
                     const content = dropdown.querySelector('.dropdown-content');
                     content.innerHTML = '';
-                    
+                    const searchWrap = document.createElement('div');
+                    searchWrap.className = 'dropdown-search-wrap';
+                    const searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.className = 'dropdown-search';
+                    searchInput.placeholder = 'Search subcategories...';
+                    searchInput.setAttribute('aria-label', 'Search subcategories');
+                    searchWrap.appendChild(searchInput);
+                    const optionsList = document.createElement('div');
+                    optionsList.className = 'dropdown-options-list';
+                    content.appendChild(searchWrap);
+                    content.appendChild(optionsList);
                     // Add subcategory options with checkboxes
                     data.choices.forEach((subcategory, index) => {
                         const optionDiv = document.createElement('div');
                         optionDiv.className = 'dropdown-option';
                         const safeId = `sub_${index}_${subcategory.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                        
-                        // Create checkbox and label using DOM methods for proper escaping
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
                         checkbox.id = safeId;
-                        checkbox.value = subcategory;  // DOM methods handle escaping automatically
-                        
+                        checkbox.value = subcategory;
                         const label = document.createElement('label');
                         label.htmlFor = safeId;
                         label.textContent = subcategory;
-                        
                         optionDiv.appendChild(checkbox);
                         optionDiv.appendChild(label);
-                        content.appendChild(optionDiv);
-                        
-                        // Add event listener to checkbox (use the variable we already created)
+                        optionsList.appendChild(optionDiv);
                         checkbox.addEventListener('change', function() {
                             updateDropdownText(dropdown);
                             console.log(`Subcategory checkbox changed: ${subcategory}, checked: ${this.checked}`);
                         });
                     });
+                    searchInput.addEventListener('input', function() {
+                        filterDropdownOptions(optionsList, this.value);
+                    });
+                    searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
                     console.log(`✅ Successfully loaded ${data.choices.length} subcategory options`);
                 } else {
                     console.log('❌ Subcategory API returned no data or failed');
