@@ -308,8 +308,8 @@ CATEGORY_MAPPING = {
     ],
     "Drinks": [
         "Coffee",
-        "Soft Drinks",
         "Hot Chocolate",
+        "Soft Drinks",
         "Tea",
         "Water",
     ],
