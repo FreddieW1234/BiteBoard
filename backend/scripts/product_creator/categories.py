@@ -137,7 +137,6 @@ SUBCATEGORIES = [
     "Coins",
     "Hearts",
     "Neapolitans",
-    "Shapes",
     "Truffles",
     # Dried Fruits
     "Apricots",
