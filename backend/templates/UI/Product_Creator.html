@@ -2193,6 +2193,22 @@ Dietary</textarea>
             const rightEl = document.getElementById('artworkGuidelinesRight');
             leftEl.innerHTML = buildGuidelinesListHtml(artworkGuidelinesLeft, 'left');
             rightEl.innerHTML = buildGuidelinesListHtml(artworkGuidelinesRight, 'right');
+            // Select first general (left-column) guideline by default when none selected
+            if (selectedGuideline == null && artworkGuidelinesLeft.length > 0) {
+                const firstRow = leftEl.querySelector('.guideline-row');
+                if (firstRow) {
+                    const gid = decodeURIComponent(firstRow.getAttribute('data-gid') || '');
+                    const nameEl = firstRow.querySelector('.guideline-name');
+                    const name = nameEl ? nameEl.textContent : '';
+                    const btn = firstRow.querySelector('.use-btn');
+                    selectedGuideline = { id: gid, name, column: 'left' };
+                    if (btn) {
+                        btn.classList.remove('btn-secondary');
+                        btn.classList.add('btn-success');
+                        btn.textContent = 'Selected';
+                    }
+                }
+            }
         }
 
         function buildGuidelinesListHtml(arr, col) {
