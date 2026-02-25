@@ -137,7 +137,7 @@ SUBCATEGORIES = [
     "Coins",
     "Hearts",
     "Neapolitans",
-    "Single Shapes",
+    "Shapes",
     "Truffles",
     # Dried Fruits
     "Apricots",
@@ -145,9 +145,8 @@ SUBCATEGORIES = [
     "Dates",
     # Drinks
     "Coffee",
-    "Fizzy",
+    "Soft Drinks",
     "Hot Chocolate",
-    "Still",
     "Tea",
     "Water",
     # Jams, Marmalades & Spreads
@@ -300,7 +299,7 @@ CATEGORY_MAPPING = {
         "Coins",
         "Hearts",
         "Neapolitans",
-        "Single Shapes",
+        "Shapes",
         "Truffles",
     ],
     "Dried Fruits": [
@@ -310,9 +309,8 @@ CATEGORY_MAPPING = {
     ],
     "Drinks": [
         "Coffee",
-        "Fizzy",
+        "Soft Drinks",
         "Hot Chocolate",
-        "Still",
         "Tea",
         "Water",
     ],
