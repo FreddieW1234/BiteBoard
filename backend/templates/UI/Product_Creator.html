@@ -735,9 +735,11 @@
         
         /* Custom dropdown styling */
         .custom-dropdown {
-            position: relative;
             width: 100%;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .dropdown-trigger-wrap {
+            position: relative;
         }
         
         .dropdown-button {
@@ -780,11 +782,24 @@
             transform: rotate(180deg);
         }
         
+        .dropdown-selected-list {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+            list-style-type: disc;
+            color: #333;
+            font-size: 0.9rem;
+            min-height: 0;
+        }
+        .dropdown-selected-list:empty {
+            display: none;
+        }
+        
         .dropdown-content {
             position: absolute;
             top: 100%;
             left: 0;
             right: 0;
+            z-index: 10;
             background-color: #fff;
             border: 1px solid #ced4da;
             border-top: none;
@@ -2091,10 +2106,6 @@ Dietary</textarea>
                                 <div class="metafield-box">
                                     <div class="metafield-header">
                                         <span class="metafield-title">Trade</span>
-                                        <div class="metafield-buttons">
-                                            <button class="metafield-button active" type="button">Table</button>
-                                            <button class="metafield-button" type="button">JSON</button>
-                                        </div>
                                     </div>
                                     <div class="metafield-content" id="trade-content">
                                         <table class="metafield-table">
@@ -2124,10 +2135,6 @@ Dietary</textarea>
                                 <div class="metafield-box">
                                     <div class="metafield-header">
                                         <span class="metafield-title">End Customer</span>
-                                        <div class="metafield-buttons">
-                                            <button class="metafield-button active" type="button">Table</button>
-                                            <button class="metafield-button" type="button">JSON</button>
-                                        </div>
                                     </div>
                                     <div class="metafield-content" id="end-customer-content">
                                         <table class="metafield-table">
@@ -2731,23 +2738,6 @@ Dietary</textarea>
 
         // Initialize price manager
         function initializePriceManager() {
-            // Set up event listeners for price manager buttons
-            document.querySelectorAll('.metafield-button').forEach(button => {
-                button.addEventListener('click', function() {
-                    const metafieldBox = this.closest('.metafield-box');
-                    const contentId = metafieldBox.querySelector('.metafield-content').id;
-                    const tableBodyId = contentId === 'trade-content' ? 'trade-table-body' : 'end-customer-table-body';
-                    
-                    if (this.textContent.trim() === 'Table') {
-                        // Rebuild table view reliably
-                        rebuildTable(contentId, tableBodyId);
-                        showEditableTable(contentId);
-                    } else if (this.textContent.trim() === 'JSON') {
-                        showRawJSON(contentId);
-                    }
-                });
-            });
-
             // Set up event listeners for add row buttons using event delegation
             document.addEventListener('click', function(e) {
                 if (e.target.classList.contains('add-row-button')) {
@@ -3828,13 +3818,16 @@ Dietary</textarea>
                     console.log(`🔧 Creating custom dropdown for ${metafield.key}`);
                         inputElement = `
                         <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="list.single_line_text_field">
-                            <div class="dropdown-button" onclick="toggleDropdown(this)">
-                                <span class="dropdown-text">Select categories...</span>
-                                <span class="dropdown-arrow">▼</span>
+                            <div class="dropdown-trigger-wrap">
+                                <div class="dropdown-button" onclick="toggleDropdown(this)">
+                                    <span class="dropdown-text">Select categories...</span>
+                                    <span class="dropdown-arrow">▼</span>
+                                </div>
+                                <div class="dropdown-content" style="display: none;">
+                                    <div class="dropdown-loading">Loading options...</div>
+                                </div>
                             </div>
-                            <div class="dropdown-content" style="display: none;">
-                                <div class="dropdown-loading">Loading options...</div>
-                            </div>
+                            <ul class="dropdown-selected-list" aria-label="Selected categories"></ul>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for ${metafield.key}:`, inputElement);
@@ -3843,13 +3836,16 @@ Dietary</textarea>
                     console.log(`🔧 Creating single subcategory dropdown`);
                     inputElement = `
                         <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="subcategory" data-type="list.single_line_text_field">
-                            <div class="dropdown-button" onclick="toggleDropdown(this)">
-                                <span class="dropdown-text">Select subcategories...</span>
-                                <span class="dropdown-arrow">▼</span>
+                            <div class="dropdown-trigger-wrap">
+                                <div class="dropdown-button" onclick="toggleDropdown(this)">
+                                    <span class="dropdown-text">Select subcategories...</span>
+                                    <span class="dropdown-arrow">▼</span>
+                                </div>
+                                <div class="dropdown-content" style="display: none;">
+                                    <div class="dropdown-loading">Loading options...</div>
+                                </div>
                             </div>
-                            <div class="dropdown-content" style="display: none;">
-                                <div class="dropdown-loading">Loading options...</div>
-                            </div>
+                            <ul class="dropdown-selected-list" aria-label="Selected subcategories"></ul>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for subcategory`);
@@ -4705,14 +4701,21 @@ Dietary</textarea>
         function updateDropdownText(dropdown) {
             const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
             const textElement = dropdown.querySelector('.dropdown-text');
-            
-            if (checkboxes.length === 0) {
-                const key = dropdown.dataset.key;
-                textElement.textContent = key === 'custom_category' ? 'Select categories...' : 'Select subcategories...';
-            } else if (checkboxes.length === 1) {
-                textElement.textContent = checkboxes[0].nextElementSibling.textContent;
-            } else {
-                textElement.textContent = `${checkboxes.length} selected`;
+            const key = dropdown.dataset.key;
+            textElement.textContent = key === 'custom_category' ? 'Select categories...' : 'Select subcategories...';
+            // Update bullet list of selected options below the dropdown
+            const listEl = dropdown.querySelector('.dropdown-selected-list');
+            if (listEl) {
+                listEl.innerHTML = '';
+                checkboxes.forEach(cb => {
+                    const label = cb.nextElementSibling;
+                    const text = (label && label.textContent) ? label.textContent.trim() : (cb.value || '').trim();
+                    if (text) {
+                        const li = document.createElement('li');
+                        li.textContent = text;
+                        listEl.appendChild(li);
+                    }
+                });
             }
         }
         
