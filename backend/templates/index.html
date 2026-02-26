@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bite Promo Dashboard</title>
+    <title>BiteBoard</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -21,142 +21,129 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f6f8fa;
             min-height: 100vh;
-            color: #333;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* Header */
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 20px 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .header h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #1f2937;
             margin: 0;
+            padding: 0;
         }
 
-        .header p {
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 230px;
+            flex-shrink: 0;
+            max-height: 100vh;
+            background: #fff;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 0;
+            overflow: hidden;
+            transition: width 0.2s ease;
+        }
+
+        .sidebar-brand {
+            padding: 0 16px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand a {
             font-size: 1.1rem;
-            color: #666;
-            font-weight: 400;
-            margin: 0;
+            font-weight: 600;
+            color: #111827;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        /* Stats Cards in Header */
-        .header-stats {
+        .sidebar-brand a i { color: #4f46e5; }
+
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+
+        .app-tabs {
             display: flex;
-            gap: 15px;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .app-tab {
+            display: flex;
             align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: transparent;
+            color: #374151;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            transition: background-color 0.15s, color 0.15s;
+            width: 100%;
+            text-align: left;
+        }
+
+        .app-tab:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .app-tab i {
+            font-size: 1rem;
+            color: #6b7280;
+            width: 20px;
+            text-align: center;
+        }
+
+        .app-tab:hover i { color: #4f46e5; }
+
+        .app-tab span { white-space: nowrap; }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 12px 8px 0;
+            border-top: 1px solid #e5e7eb;
+            margin-top: auto;
         }
 
         .header-stat {
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 15px 20px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px 16px;
             text-align: center;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            min-width: 120px;
         }
 
-        .header-stat:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
-        }
+        .header-stat i { font-size: 1rem; margin-bottom: 4px; color: #6b7280; display: block; }
+        .header-stat h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 2px; color: #111827; }
+        .header-stat p { color: #6b7280; font-weight: 400; font-size: 0.75rem; margin: 0; }
 
-        .header-stat i {
-            font-size: 1.5rem;
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+        .main { flex: 1; min-width: 0; padding: 24px; }
 
-        .header-stat h3 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: #333;
-        }
+        .stat-card i { color: #6b7280; }
+        .stat-card h3 { color: #111827; }
+        .stat-card p { color: #6b7280; }
 
-        .header-stat p {
-            color: #666;
-            font-weight: 400;
-            font-size: 0.8rem;
-            margin: 0;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-
-        .stat-card i {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .stat-card h3 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #333;
-        }
-
-        .stat-card p {
-            color: #666;
-            font-weight: 400;
-        }
-
-        /* Tools Grid */
         .tools-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
         .tools-section h2 {
-            font-size: 2rem;
+            font-size: 1.25rem;
             font-weight: 600;
-            margin-bottom: 25px;
-            text-align: center;
-            color: #333;
+            margin-bottom: 20px;
+            color: #111827;
         }
 
         .tools-grid {
@@ -201,61 +188,35 @@
         }
 
         .tool-card {
-            background: white;
-            border-radius: 16px;
-            padding: 25px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
             display: flex;
             flex-direction: column;
             height: 100%;
         }
 
-        .tool-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-
         .tool-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            border-color: #667eea;
-        }
-
-        .tool-card:hover::before {
-            transform: scaleX(1);
+            border-color: #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
 
         .tool-card h3 {
-            font-size: 1.4rem;
+            font-size: 1rem;
             font-weight: 600;
-            margin-bottom: 12px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            margin-bottom: 8px;
+            color: #111827;
         }
 
-        .tool-card h3 i {
-            font-size: 1.2rem;
-            color: #667eea;
-        }
+        .tool-card h3 i { color: #4f46e5; }
 
         .tool-card p {
-            color: #666;
-            margin-bottom: 20px;
-            line-height: 1.6;
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-bottom: 16px;
+            line-height: 1.5;
             flex-grow: 1;
         }
 
@@ -266,73 +227,51 @@
         }
 
         .btn {
-            padding: 12px 24px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-weight: 500;
+            font-size: 0.875rem;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: background-color 0.15s, border-color 0.15s;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            font-size: 1rem;
-            min-width: 140px;
-            justify-content: center;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
+            background: #4f46e5;
+            color: #fff;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            background: #4338ca;
         }
 
         .btn-secondary {
-            background: #f8f9fa;
-            color: #666;
-            border: 1px solid #e9ecef;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
         }
 
         .btn-secondary:hover {
-            background: #e9ecef;
-            color: #333;
+            background: #f9fafb;
+            border-color: #9ca3af;
         }
 
 
 
-        /* Responsive */
         @media (max-width: 768px) {
-            .container {
-                padding: 15px;
+            .app-layout { flex-direction: column; }
+            .sidebar {
+                width: 100% !important;
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+                padding: 16px;
             }
-            
-            .header {
-                flex-direction: column;
-                text-align: center;
-                gap: 15px;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-            
-            .header-stats {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            
-            .header-stat {
-                min-width: 100px;
-                padding: 12px 15px;
-            }
-            
-            .tools-grid {
-                grid-template-columns: 1fr;
-            }
+            .sidebar-brand { margin-bottom: 12px; }
+            .main { padding: 16px; }
         }
 
         /* Loading animation */
@@ -359,43 +298,25 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <div class="header-left">
-                <h1><i class="fas fa-store"></i> Bite Promo Dashboard</h1>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a>
             </div>
-            <div class="header-stats">
-                <div class="header-stat">
-                    <i class="fas fa-tools"></i>
-                    <h3 id="tools-count">-</h3>
-                    <p>Available Tools</p>
+            <nav class="sidebar-nav">
+                <div class="app-tabs" id="app-tabs">
+                    <div class="loading" style="padding: 10px 12px; color: #6b7280; font-size: 0.875rem;">Loading…</div>
                 </div>
+            </nav>
+            <div class="sidebar-footer">
                 <div class="header-stat">
-                    <i class="fas fa-chart-line"></i>
-                    <h3>Active</h3>
-                    <p>Dashboard Status</p>
-                </div>
-                <div class="header-stat">
-                    <i class="fas fa-rocket"></i>
-                    <h3>Ready</h3>
-                    <p>System Status</p>
+                    <i class="fas fa-box-open"></i>
+                    <h3 id="live-products-count">–</h3>
+                    <p>Live Products</p>
                 </div>
             </div>
-        </div>
-
-        <!-- Tools Section -->
-        <div class="tools-section">
-            <h2>Available Tools</h2>
-            <div class="tools-grid" id="tools-grid">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading tools...</p>
-                </div>
-            </div>
-        </div>
-
-
+        </aside>
+        <main class="main"></main>
     </div>
 
     <script>
@@ -404,7 +325,7 @@
             'Price_Bandit': {
                 name: 'Price Bandit',
                 description: 'Sync prices, weights, and SKUs to variants for price bands (automatically done when in Price Manager and Field Finder)',
-                icon: 'fas fa-dollar-sign',
+                icon: 'fas fa-robot',
                 color: '#28a745'
             },
             'Field_Finder': {
@@ -428,7 +349,7 @@
             'Product_Creator': {
                 name: 'Product Editor/Creator',
                 description: 'Create a new product from scratch and publish to the Bite website',
-                icon: 'fas fa-box-open',
+                icon: 'fas fa-plus-circle',
                 color: '#ff9800'
             },
             'Templates_Uploader': {
@@ -448,63 +369,54 @@
         // Static tools that don't require Python scripts
         const staticTools = ['Product_Creator', 'Category_Editor'];
 
-        // Load tools from the API
-        async function loadTools() {
+        // Load live products count for header tile
+        async function loadLiveProductsCount() {
+            const el = document.getElementById('live-products-count');
+            if (!el) return;
             try {
-                console.log('🔍 Loading tools...');
-                const response = await fetch('/api/tools');
-                const dynamicTools = await response.json();
-                console.log('📡 API returned:', dynamicTools);
-                
-                // Combine dynamic Python tools with static HTML tools
-                const allTools = [...dynamicTools, ...staticTools];
-                // Field Finder and Price Manager are only used inside Product Editor/Creator, not as standalone tools
-                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager');
-                console.log('🔧 Combined tools:', visibleTools);
-                
-                // Update tools count
-                document.getElementById('tools-count').textContent = visibleTools.length;
-                
-                // Generate tool cards (group some tools into a folder)
-                const toolsGrid = document.getElementById('tools-grid');
-                toolsGrid.innerHTML = '';
-                console.log('🧹 Cleared tools grid');
-
-                const groupedToolNames = ['Artwork_Updater', 'Price_Bandit', 'Templates_Uploader'];
-                const groupedTools = visibleTools.filter(t => groupedToolNames.includes(t));
-                const otherTools = visibleTools.filter(t => !groupedToolNames.includes(t));
-
-                if (groupedTools.length > 0) {
-                    const folderCard = createFolderCard('Individual Shop Tools', groupedTools);
-                    toolsGrid.appendChild(folderCard);
-                }
-
-                otherTools.forEach(tool => {
-                    console.log(`🎯 Creating tool card for: ${tool}`);
-                    const toolData = toolInfo[tool] || {
-                        name: tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                        description: `Run the ${tool.replace(/_/g, ' ')} script`,
-                        icon: 'fas fa-cog',
-                        color: '#6c757d'
-                    };
-                    const toolCard = createToolCard(tool, toolData);
-                    toolsGrid.appendChild(toolCard);
-                    console.log(`✅ Added tool card for: ${tool}`);
-                });
-                
-                console.log('🎉 Tools loading complete');
-            } catch (error) {
-                console.error('❌ Error loading tools:', error);
-                document.getElementById('tools-grid').innerHTML = `
-                    <div style="text-align: center; color: #dc3545; padding: 20px;">
-                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
-                        <p>Error loading tools. Please refresh the page.</p>
-                    </div>
-                `;
+                const response = await fetch('/api/live-products-count');
+                const data = await response.json();
+                el.textContent = data.success ? Math.max(0, (data.count || 0) - 5) : '–';
+            } catch (e) {
+                el.textContent = '–';
             }
         }
 
-        // Create tool card element
+        // Tool key -> URL path (when different from key, e.g. Price_Bandit -> price_bandit)
+        const toolUrlPath = { 'Price_Bandit': 'price_bandit' };
+
+        // Load tools from the API and render app tabs in header
+        async function loadTools() {
+            const appTabsEl = document.getElementById('app-tabs');
+            if (!appTabsEl) return;
+            try {
+                const response = await fetch('/api/tools');
+                const dynamicTools = await response.json();
+                const allTools = [...dynamicTools, ...staticTools];
+                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor');
+                const tabOrder = ['Artwork_Updater', 'Price_Bandit', 'Product_Creator', 'Templates_Uploader'];
+                const ordered = tabOrder.filter(t => visibleTools.includes(t));
+
+                appTabsEl.innerHTML = '';
+                ordered.forEach(tool => {
+                    const path = toolUrlPath[tool] || tool;
+                    const data = toolInfo[tool] || {
+                        name: tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                        icon: 'fas fa-cog'
+                    };
+                    const a = document.createElement('a');
+                    a.href = `/app/${path}`;
+                    a.className = 'app-tab';
+                    a.innerHTML = `<i class="${data.icon}"></i><span>${data.name}</span>`;
+                    appTabsEl.appendChild(a);
+                });
+            } catch (error) {
+                console.error('❌ Error loading tools:', error);
+                appTabsEl.innerHTML = '<span style="color: #dc3545;">Failed to load apps</span>';
+            }
+        }
+
+        // Create tool card element (kept for any legacy use; not used on home)
         function createToolCard(toolName, toolData) {
             const card = document.createElement('div');
             card.className = 'tool-card';
@@ -574,7 +486,7 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             loadTools();
-            
+            loadLiveProductsCount();
             // Add some interactive effects
             const cards = document.querySelectorAll('.tool-card, .header-stat');
             cards.forEach(card => {

@@ -16,113 +16,39 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f6f8fa;
             min-height: 100vh;
-            color: #333;
-            padding: 10px;
+            color: #1f2937;
             margin: 0;
+            padding: 0;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 18px 25px;
-            margin-bottom: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-        }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .app-tabs {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-            gap: 8px;
-            width: 100%;
-            max-width: 700px;
-        }
-
-        .app-tabs-row {
-            display: contents;
-        }
-
-        .app-tab {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            background: rgba(102, 126, 234, 0.1);
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-        }
-
-        .app-tab:hover {
-            background: rgba(102, 126, 234, 0.2);
-            transform: translateY(-1px);
-        }
-
-        .app-tab.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .app-tab i {
-            font-size: 0.9rem;
-        }
-
-        .app-tab span {
-            white-space: nowrap;
-        }
-
-        .dashboard-tab {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 10px 16px;
-            background: rgba(102, 126, 234, 0.15);
-            color: #667eea;
-            text-decoration: none;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: 2px solid rgba(102, 126, 234, 0.3);
-        }
-
-        .dashboard-tab:hover {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-            transform: translateY(-2px);
-        }
-
-        .dashboard-tab i {
-            font-size: 1rem;
-        }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 4px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+        .main-wrap { flex: 1; min-width: 0; padding: 24px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
         
         .header-controls {
             display: flex;
@@ -278,34 +204,13 @@
             gap: 20px;
         }
 
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            white-space: nowrap;
-        }
-
-        .header p {
-            font-size: 1rem;
-            color: #666;
-            font-weight: 400;
-            margin: 0;
-        }
-
         .tool-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            margin-bottom: 10px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
         }
 
         .tool-section h2 {
@@ -665,14 +570,12 @@
 
 
         @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-            
+            .container { padding: 10px; }
+            .sidebar, .sidebar.collapsed { width: 100% !important; border-right: none; border-bottom: 1px solid #e5e7eb; padding: 16px; }
+            .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: inline; }
+            .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: flex-start; }
+            .sidebar.collapsed .sidebar-toggle i { transform: none; }
+            .main-wrap { padding: 16px; }
             .tool-section {
                 padding: 20px;
             }
@@ -689,45 +592,24 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="header-left">
-                <h1>
-                    <i class="fas fa-search" style="color: #17a2b8;"></i>
-                    Field Finder
-                </h1>
-            </div>
-            <div class="header-right">
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
                 <div class="app-tabs">
-                    <a href="/app/Artwork_Updater" class="app-tab">
-                        <i class="fas fa-palette"></i>
-                        <span>Artwork Updater</span>
-                    </a>
-                    <a href="/app/Field_Finder" class="app-tab active">
-                        <i class="fas fa-search"></i>
-                        <span>Field Finder</span>
-                    </a>
-                    <a href="/app/price_bandit" class="app-tab">
-                        <i class="fas fa-robot"></i>
-                        <span>Price Bandit</span>
-                    </a>
-                    <a href="/app/Product_Creator" class="app-tab">
-                        <i class="fas fa-plus-circle"></i>
-                        <span>Product Editor/Creator</span>
-                    </a>
-                    <a href="/app/Templates_Uploader" class="app-tab">
-                        <i class="fas fa-file-archive"></i>
-                        <span>Templates Uploader</span>
-                    </a>
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/price_bandit" class="app-tab"><i class="fas fa-robot"></i><span>Price Bandit</span></a>
+                    <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Editor/Creator</span></a>
+                    <a href="/app/Templates_Uploader" class="app-tab"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
+                    <a href="/app/Field_Finder" class="app-tab active"><i class="fas fa-search"></i><span>Field Finder</span></a>
                 </div>
-                <a href="/" class="dashboard-tab">
-                    <i class="fas fa-home"></i>
-                    <span>Dashboard</span>
-                </a>
-            </div>
-        </div>
-
-        <div class="tool-section">
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-search"></i> Field Finder</h1>
+            <div class="tool-section">
             <div class="search-container">
                 <div class="autocomplete-container">
                     <input type="text" id="product-input" class="product-input" placeholder="Enter product name or SKU">
@@ -755,6 +637,8 @@
             </div>
             
 
+        </div>
+            </div>
         </div>
     </div>
 

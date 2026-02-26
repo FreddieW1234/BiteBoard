@@ -18,128 +18,216 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f6f8fa;
             min-height: 100vh;
-            color: #333;
-            padding: 10px;
+            color: #1f2937;
             margin: 0;
+            padding: 0;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
         }
 
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 18px 25px;
-            margin-bottom: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        .sidebar {
+            width: 230px;
+            flex-shrink: 0;
+            max-height: 100vh;
+            background: #fff;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 0;
+            overflow: hidden;
+            overflow-x: hidden;
+            transition: width 0.2s ease;
+        }
+
+        .sidebar.collapsed {
+            width: 64px;
+        }
+
+        .sidebar.collapsed .brand-text,
+        .sidebar.collapsed .app-tab span,
+        .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a,
+        .sidebar.collapsed .app-tab,
+        .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed .sidebar-footer .header-stat p,
+        .sidebar.collapsed .sidebar-footer .header-stat h3 { display: none; }
+        .sidebar.collapsed .sidebar-footer .header-stat { padding: 10px; text-align: center; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text,
+        .sidebar.collapsed:hover .app-tab span,
+        .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a,
+        .sidebar.collapsed:hover .app-tab,
+        .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar.collapsed:hover .sidebar-footer .header-stat p,
+        .sidebar.collapsed:hover .sidebar-footer .header-stat h3 { display: block; }
+        .sidebar.collapsed:hover .sidebar-footer .header-stat { padding: 12px 16px; text-align: center; }
+
+        .sidebar-brand {
+            padding: 0 16px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-brand a {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #111827;
+            text-decoration: none;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 8px;
         }
 
-        .header-left {
-            display: flex;
-            align-items: center;
-        }
+        .sidebar-brand a i { color: #4f46e5; }
 
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
 
         .app-tabs {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-            gap: 8px;
-            width: 100%;
-            max-width: 700px;
-        }
-
-        .app-tabs-row {
-            display: contents;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
         .app-tab {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            background: rgba(102, 126, 234, 0.1);
-            color: #667eea;
+            gap: 10px;
+            padding: 10px 12px;
+            background: transparent;
+            color: #374151;
             text-decoration: none;
-            border-radius: 8px;
-            font-size: 0.85rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
             font-weight: 500;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
+            border: none;
+            transition: background-color 0.15s, color 0.15s;
+            width: 100%;
+            text-align: left;
         }
 
         .app-tab:hover {
-            background: rgba(102, 126, 234, 0.2);
-            transform: translateY(-1px);
+            background: #f3f4f6;
+            color: #111827;
         }
 
         .app-tab.active {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
+            background: #4f46e5;
+            color: #fff;
         }
 
         .app-tab i {
-            font-size: 0.9rem;
+            font-size: 1rem;
+            color: #6b7280;
+            width: 20px;
+            text-align: center;
         }
 
-        .app-tab span {
-            white-space: nowrap;
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+
+        .app-tab span { white-space: nowrap; }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 12px 8px 0;
+            border-top: 1px solid #e5e7eb;
+            margin-top: auto;
         }
 
         .dashboard-tab {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #4f46e5;
+            color: #fff;
             text-decoration: none;
-            border-radius: 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: background-color 0.15s;
+            width: 100%;
+            justify-content: center;
         }
 
         .dashboard-tab:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            background: #4338ca;
         }
 
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin: 0;
+        .main-wrap {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+        }
+
+        .page-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #111827;
+            margin: 0 0 20px 0;
             display: flex;
             align-items: center;
-            gap: 15px;
-            white-space: nowrap;
+            gap: 10px;
         }
 
+        .page-title i { color: #4f46e5; }
 
         .main-content {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
+        }
+        #product-loading-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 10001;
+            align-items: center;
+            justify-content: center;
+        }
+        #product-loading-overlay.visible {
+            display: flex;
+        }
+        #product-loading-overlay .product-loading-popup {
+            background: #fff;
+            padding: 28px 36px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            min-width: 200px;
+        }
+        #product-loading-overlay .product-loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: product-load-spin 0.8s linear infinite;
+        }
+        @keyframes product-load-spin {
+            to { transform: rotate(360deg); }
+        }
+        #product-loading-overlay .product-loading-text {
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #374151;
         }
 
         .form-section {
@@ -160,11 +248,11 @@
         }
 
         .section-title:hover {
-            color: #667eea;
+            color: #4f46e5;
         }
 
         .section-title i {
-            color: #667eea;
+            color: #4f46e5;
         }
 
         .dropdown-arrow {
@@ -214,6 +302,58 @@
         .form-group.full-width {
             grid-column: 1 / -1;
         }
+        .form-row-product-code-title {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 25% 1fr;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .form-row-status-vat-colour {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .form-row-status-vat-colour .form-group-status,
+        .form-row-status-vat-colour .form-group-charge-vat {
+            flex-shrink: 0;
+        }
+        .form-row-status-vat-colour #status {
+            width: auto;
+            min-width: 90px;
+            max-width: 110px;
+        }
+        .form-row-status-vat-colour .form-group-colour-options {
+            flex: 1;
+            min-width: 280px;
+        }
+
+        .colour-cell {
+            width: fit-content !important;
+            display: flex;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .colour-cell .colour-name-input {
+            width: 100px !important;
+            min-width: 100px;
+            flex-shrink: 0;
+        }
+        .colour-cell .colour-code-input {
+            width: 65px !important;
+            min-width: 65px;
+            flex-shrink: 0;
+        }
+        .colour-cell-divider {
+            width: 1px;
+            background: #ddd;
+            flex-shrink: 0;
+            align-self: stretch;
+        }
 
         .form-label {
             font-weight: 500;
@@ -233,8 +373,8 @@
 
         .form-input:focus, .form-textarea:focus, .form-select:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
         }
 
         .form-textarea {
@@ -266,7 +406,7 @@
         .currency-input input[type="number"] { text-align: center; }
 
         .convert-btn {
-            background: #667eea;
+            background: #4f46e5;
             color: white;
             border: none;
             padding: 8px 12px;
@@ -320,8 +460,8 @@
         }
 
         .radio-input:checked + .radio-custom {
-            background: #667eea;
-            border-color: #667eea;
+            background: #4f46e5;
+            border-color: #4f46e5;
         }
 
         .radio-input:checked + .radio-custom::after {
@@ -365,7 +505,7 @@
 
         .product-input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #4f46e5;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
@@ -500,11 +640,12 @@
 
         .metafields-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
         }
 
         .metafield-item {
+            grid-column: span 1;
             background: white;
             border: 1px solid #e9ecef;
             border-radius: 8px;
@@ -515,9 +656,13 @@
             gap: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
+        /* Category, Subcategory, Description, Print Info, Recycle Info, Ingredients, Nutritional Info, Whats Inside, Product Size: keep original size (2× half-width) */
+        .metafield-item.metafield-item-full-width {
+            grid-column: span 2;
+        }
 
         .metafield-item:hover {
-            border-color: #17a2b8;
+            border-color: #4f46e5;
             box-shadow: 0 4px 8px rgba(23, 162, 184, 0.1);
         }
 
@@ -584,7 +729,7 @@
 
         .metafield-value:focus {
             outline: none;
-            border-color: #17a2b8;
+            border-color: #4f46e5;
             box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.1);
         }
         
@@ -609,12 +754,12 @@
         }
         
         .dropdown-button:hover {
-            border-color: #17a2b8;
+            border-color: #4f46e5;
         }
         
         .dropdown-button:focus {
             outline: none;
-            border-color: #17a2b8;
+            border-color: #4f46e5;
             box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.1);
         }
         
@@ -666,7 +811,7 @@
         }
         .dropdown-search:focus {
             outline: none;
-            border-color: #17a2b8;
+            border-color: #4f46e5;
         }
         .dropdown-options-list {
             max-height: 300px;
@@ -782,7 +927,7 @@
 
         .list-dropdown:focus {
             outline: none;
-            border-color: #17a2b8;
+            border-color: #4f46e5;
             box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.1);
         }
 
@@ -798,7 +943,7 @@
 
         .loading-metafields i {
             font-size: 16px;
-            color: #667eea;
+            color: #4f46e5;
         }
 
         .no-metafields, .metafields-error {
@@ -820,7 +965,7 @@
         }
 
         .no-metafields i {
-            color: #667eea;
+            color: #4f46e5;
         }
 
         .metafields-error i {
@@ -837,12 +982,13 @@
         }
 
         .btn {
-            padding: 12px 30px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 12px;
-            font-weight: 600;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.875rem;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: background-color 0.15s, border-color 0.15s;
             display: inline-flex;
             align-items: center;
             gap: 8px;
@@ -850,13 +996,12 @@
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #4f46e5;
+            color: #fff;
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            background: #4338ca;
         }
         .duplicate-trigger-btn {
             user-select: none;
@@ -866,7 +1011,7 @@
             outline: none;
         }
         .duplicate-trigger-btn:focus-visible {
-            outline: 2px solid #667eea;
+            outline: 2px solid #4f46e5;
             outline-offset: 2px;
         }
         .edit-trigger-btn {
@@ -877,17 +1022,19 @@
             outline: none;
         }
         .edit-trigger-btn:focus-visible {
-            outline: 2px solid #667eea;
+            outline: 2px solid #4f46e5;
             outline-offset: 2px;
         }
 
         .btn-secondary {
-            background: #e2e8f0;
-            color: #4a5568;
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
         }
 
         .btn-secondary:hover {
-            background: #cbd5e0;
+            background: #f9fafb;
+            border-color: #9ca3af;
         }
 
         .btn-success {
@@ -907,7 +1054,7 @@
 
         .loading i {
             font-size: 24px;
-            color: #667eea;
+            color: #4f46e5;
             animation: spin 1s linear infinite;
         }
 
@@ -955,18 +1102,29 @@
 
 
         @media (max-width: 768px) {
+            .app-layout { flex-direction: column; }
+            .sidebar, .sidebar.collapsed {
+                width: 100% !important;
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+                padding: 16px;
+            }
+            .sidebar.collapsed .brand-text,
+            .sidebar.collapsed .app-tab span,
+            .sidebar.collapsed .dashboard-tab span { display: inline; }
+            .sidebar.collapsed .sidebar-brand a,
+            .sidebar.collapsed .app-tab,
+            .sidebar.collapsed .dashboard-tab { justify-content: flex-start; }
+            .sidebar-brand { margin-bottom: 12px; }
+            .main-wrap { padding: 16px; }
             .form-grid {
                 grid-template-columns: 1fr;
             }
-            
+            .form-row-product-code-title {
+                grid-template-columns: 1fr;
+            }
             .action-buttons {
                 flex-direction: column;
-            }
-            
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
             }
         }
 
@@ -987,7 +1145,7 @@
         }
 
         .qty-autofill-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #4f46e5;
             color: white;
             border: none;
             padding: 10px 20px;
@@ -1033,7 +1191,7 @@
         .checkmark {
             width: 20px;
             height: 20px;
-            border: 2px solid #667eea;
+            border: 2px solid #4f46e5;
             border-radius: 4px;
             background: white;
             position: relative;
@@ -1041,8 +1199,8 @@
         }
 
         .qty-match-checkbox input[type="checkbox"]:checked + .checkmark {
-            background: #667eea;
-            border-color: #667eea;
+            background: #4f46e5;
+            border-color: #4f46e5;
         }
 
         .qty-match-checkbox input[type="checkbox"]:checked + .checkmark::after {
@@ -1084,7 +1242,7 @@
         .metafield-title {
             font-size: 1.2rem;
             font-weight: 600;
-            color: #667eea;
+            color: #4f46e5;
         }
 
         .metafield-buttons {
@@ -1094,10 +1252,10 @@
 
         .metafield-button {
             padding: 6px 12px;
-            border: 2px solid #667eea;
+            border: 2px solid #4f46e5;
             border-radius: 6px;
             background: white;
-            color: #667eea;
+            color: #4f46e5;
             font-size: 0.8rem;
             font-weight: 500;
             cursor: pointer;
@@ -1105,12 +1263,12 @@
         }
 
         .metafield-button.active {
-            background: #667eea;
+            background: #4f46e5;
             color: white;
         }
 
         .metafield-button:hover {
-            background: #667eea;
+            background: #4f46e5;
             color: white;
         }
 
@@ -1166,7 +1324,7 @@
         .add-row-button {
             margin-top: 10px;
             padding: 8px 16px;
-            background: #667eea;
+            background: #4f46e5;
             color: white;
             border: none;
             border-radius: 4px;
@@ -1185,7 +1343,7 @@
         }
 
         .media-upload-area {
-            border: 2px dashed #667eea;
+            border: 2px dashed #4f46e5;
             border-radius: 12px;
             padding: 40px 20px;
             text-align: center;
@@ -1208,7 +1366,7 @@
 
         .upload-icon {
             font-size: 48px;
-            color: #667eea;
+            color: #4f46e5;
             margin-bottom: 16px;
         }
 
@@ -1227,6 +1385,9 @@
             font-size: 14px;
             color: #888;
         }
+
+        /* Tabs field hidden from user (data still saved to Shopify) */
+        .tabs-field-hidden { display: none !important; }
 
         /* Media Source Tabs */
         .media-source-tabs {
@@ -1251,13 +1412,13 @@
         }
 
         .media-tab:hover {
-            color: #667eea;
+            color: #4f46e5;
             background: rgba(102, 126, 234, 0.05);
         }
 
         .media-tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
             background: rgba(102, 126, 234, 0.1);
         }
 
@@ -1336,7 +1497,7 @@
         }
 
         .shopify-media-item:hover {
-            border-color: #667eea;
+            border-color: #4f46e5;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
@@ -1544,7 +1705,7 @@
         }
 
         .media-preview-item.drag-over {
-            border: 2px dashed #667eea;
+            border: 2px dashed #4f46e5;
             background: rgba(102, 126, 234, 0.1);
         }
 
@@ -1591,20 +1752,20 @@
         }
 
         .reorder-instructions i {
-            color: #667eea;
+            color: #4f46e5;
         }
 
         /* Enhanced Drop Zone Styles */
         .drop-zone {
             width: 120px;
             height: 120px;
-            border: 2px dashed #667eea;
+            border: 2px dashed #4f46e5;
             border-radius: 8px;
             background: rgba(102, 126, 234, 0.1);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #667eea;
+            color: #4f46e5;
             font-size: 12px;
             font-weight: 500;
             text-align: center;
@@ -1674,15 +1835,12 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="header-left">
-                <h1>
-                    <i class="fas fa-plus-circle" style="color: #e91e63;"></i>
-                    Product Editor/Creator
-                </h1>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a>
             </div>
-            <div class="header-right">
+            <nav class="sidebar-nav">
                 <div class="app-tabs">
                     <a href="/app/Artwork_Updater" class="app-tab">
                         <i class="fas fa-palette"></i>
@@ -1701,14 +1859,27 @@
                         <span>Templates Uploader</span>
                     </a>
                 </div>
+            </nav>
+            <div class="sidebar-footer">
                 <a href="/" class="dashboard-tab">
                     <i class="fas fa-home"></i>
                     <span>Dashboard</span>
                 </a>
             </div>
-        </div>
-
-        <div class="main-content">
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+        <div class="main-wrap">
+            <h1 class="page-title">
+                <i class="fas fa-plus-circle"></i>
+                Product Editor/Creator
+            </h1>
+            <div class="main-content">
+            <div id="product-loading-overlay" aria-live="polite">
+                <div class="product-loading-popup">
+                    <div class="product-loading-spinner" aria-hidden="true"></div>
+                    <span class="product-loading-text">Loading product…</span>
+                </div>
+            </div>
             <form id="productForm">
 
                 <!-- Product actions: Create, Duplicate, Edit (hidden when form is active) -->
@@ -1766,20 +1937,19 @@
 
                 <!-- Basic Information Section -->
                 <div class="collapsible-section" style="display: none;">
-                    <div class="section-header" onclick="toggleSection('basicInfo')">
-                    <h3 class="section-title">
-                            <i class="fas fa-chevron-down dropdown-arrow" id="basicInfo-arrow"></i>
-                        <i class="fas fa-info-circle"></i>
-                        Basic Information
-                    </h3>
-                    </div>
                     <div class="section-content" id="basicInfo-content">
                     <div class="form-grid">
-                        <div class="form-group full-width">
-                            <label class="form-label">Product Title *</label>
-                            <input type="text" id="title" name="title" class="form-input" placeholder="Enter product title" required>
+                        <div class="form-row-product-code-title">
+                            <div class="form-group">
+                                <label class="form-label">Product Code *</label>
+                                <input type="text" id="product-code" name="product-code" class="form-input" placeholder="Enter product code">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Product Title *</label>
+                                <input type="text" id="title" name="title" class="form-input" placeholder="Enter product title" required>
+                            </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group tabs-field-hidden" aria-hidden="true">
                                 <div class="description-header">
                                     <label class="form-label">Tabs</label>
                                     <button type="button" id="convertBtn" class="convert-btn" onclick="toggleConverter()">
@@ -1793,15 +1963,16 @@ Ingredients
 
 Dietary</textarea>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Status</label>
-                            <select id="status" name="status" class="form-select">
+                        <div class="form-group full-width form-row-status-vat-colour">
+                            <div class="form-group form-group-status">
+                                <label class="form-label">Status</label>
+                                <select id="status" name="status" class="form-select">
                                     <option value="active" selected>Active</option>
-                                <option value="draft">Draft</option>
-                                <option value="archived">Archived</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
+                                    <option value="draft">Draft</option>
+                                    <option value="archived">Archived</option>
+                                </select>
+                            </div>
+                            <div class="form-group form-group-charge-vat">
                                 <label class="form-label">Charge VAT</label>
                                 <div class="radio-group">
                                     <label class="radio-label">
@@ -1815,27 +1986,27 @@ Dietary</textarea>
                                         <span class="radio-text">No</span>
                                     </label>
                                 </div>
-                        </div>
-                        <div class="form-group full-width">
+                            </div>
+                            <div class="form-group form-group-colour-options">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                 <label class="form-label" style="margin: 0;">Colour Options</label>
                                 <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All foil colours</button>
                                 <button type="button" id="reset-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
                             </div>
                             <div id="colour-inputs-container" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                                <div class="colour-cell" style="display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
-                                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="0" data-part="name" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="0" data-part="code" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                                    <button type="button" class="colour-image-btn" data-index="0" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                                <div class="colour-cell">
+                                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="0" data-part="name" style="border: none;">
+                                    <span class="colour-cell-divider"></span>
+                                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="0" data-part="code" style="border: none;">
                                 </div>
-                                <div class="colour-cell" style="display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
-                                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="1" data-part="name" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="1" data-part="code" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                                    <button type="button" class="colour-image-btn" data-index="1" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                                <div class="colour-cell">
+                                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="1" data-part="name" style="border: none;">
+                                    <span class="colour-cell-divider"></span>
+                                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="1" data-part="code" style="border: none;">
                                 </div>
                                 <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
                             </div>
-                            <small style="color: #666; display: block; margin-top: 4px;">Enter colour name in left side, code in right side, the code will be added to the SKU. Click 🖼️ to select an image for that colour, if no image is selected, the first image will be used.</small>
+                            </div>
                         </div>
                         
                         </div>
@@ -1881,21 +2052,9 @@ Dietary</textarea>
 
                 <!-- Field Editor Section -->
                 <div class="collapsible-section" style="display: none;">
-                    <div class="section-header" onclick="toggleSection('fieldEditor')">
-                    <h3 class="section-title">
-                            <i class="fas fa-chevron-down dropdown-arrow" id="fieldEditor-arrow"></i>
-                            <i class="fas fa-edit"></i>
-                            Field Editor
-                    </h3>
-                                </div>
                     <div class="section-content" id="fieldEditor-content">
                         <div class="field-finder-container">
                             <div class="metafields-section">
-                                <div class="section-header">
-                                    <div class="section-title">Metafields</div>
-                                    <div class="section-controls"></div>
-                                </div>
-                                
                                 <div class="metafields-grid" id="metafields-container">
                                     <div class="loading-metafields">
                                         <i class="fas fa-spinner fa-spin"></i>
@@ -1909,18 +2068,11 @@ Dietary</textarea>
 
                 <!-- Pricing Section -->
                 <div class="collapsible-section" style="display: none;">
-                    <div class="section-header" onclick="toggleSection('pricing')">
-                        <h3 class="section-title">
-                            <i class="fas fa-chevron-down dropdown-arrow" id="pricing-arrow"></i>
-                            <i class="fas fa-dollar-sign"></i>
-                            Pricing
-                        </h3>
-                    </div>
                     <div class="section-content" id="pricing-content">
                         
                         <!-- Price Manager Integration -->
                         <div class="price-manager-section">
-                            <h4 style="margin: 20px 0 15px 0; color: #667eea; font-size: 1.2rem;">Price Tiers</h4>
+                            <h4 style="margin: 20px 0 15px 0; color: #4f46e5; font-size: 1.2rem;">Price Tiers</h4>
                             <div class="price-controls">
                                 <button class="qty-autofill-button" type="button" onclick="autofillQuantities()">
                                     <i class="fas fa-magic"></i> Qty Autofill
@@ -2008,13 +2160,6 @@ Dietary</textarea>
 
                 <!-- Artwork Section -->
                 <div class="collapsible-section" style="display: none;">
-                    <div class="section-header" onclick="toggleSection('artwork')">
-                        <h3 class="section-title">
-                            <i class="fas fa-chevron-down dropdown-arrow" id="artwork-arrow"></i>
-                            <i class="fas fa-palette"></i>
-                            Artwork
-                        </h3>
-                    </div>
                     <div class="section-content" id="artwork-content">
                         <div class="form-grid">
                             <div class="form-group full-width">
@@ -2080,6 +2225,7 @@ Dietary</textarea>
 
             <!-- Result Message -->
             <div class="result-message" id="resultMessage"></div>
+            </div>
         </div>
     </div>
 
@@ -2271,7 +2417,7 @@ Dietary</textarea>
                 const removeBtn = it._type === 'remote'
                     ? `<button type=\"button\" title=\"Remove\" onclick=\"removePcTemplate('${it.name.replace(/'/g, "\\'")}', 'remote')\" style=\"border:none;background:none;color:#e53935;cursor:pointer;\"><i class=\"fas fa-times\"></i></button>`
                     : `<button type=\"button\" title=\"Remove\" onclick=\"removePcTemplate(${it._index}, 'local')\" style=\"border:none;background:none;color:#e53935;cursor:pointer;\"><i class=\"fas fa-times\"></i></button>`;
-                return `<div style=\"display:flex;align-items:center;gap:10px;margin:4px 0;\">\n                    <div style=\"width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;\"><i class=\"fas fa-file\"></i></div>\n                    <div style=\"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;\">${it.name}</div>\n                    <a href=\"${viewUrl}\" target=\"_blank\" rel=\"noopener\" title=\"Open\" style=\"color:#667eea;\"><i class=\"fas fa-eye\"></i></a>\n                    ${removeBtn}\n                </div>`;
+                return `<div style=\"display:flex;align-items:center;gap:10px;margin:4px 0;\">\n                    <div style=\"width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;\"><i class=\"fas fa-file\"></i></div>\n                    <div style=\"flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;\">${it.name}</div>\n                    <a href=\"${viewUrl}\" target=\"_blank\" rel=\"noopener\" title=\"Open\" style=\"color:#4f46e5;\"><i class=\"fas fa-eye\"></i></a>\n                    ${removeBtn}\n                </div>`;
             }).join('');
             // Render versions panel header like Templates Uploader
             renderPcVersionsHeader();
@@ -2356,6 +2502,12 @@ Dietary</textarea>
         // Collect all metafield data from the form
         function collectMetafieldsData() {
             const metafieldsData = [];
+            // Product Code lives in Basic Info; include it as custom.sku metafield
+            const productCodeEl = document.getElementById('product-code');
+            const productCodeValue = (productCodeEl && productCodeEl.value) ? String(productCodeEl.value).trim() : '';
+            if (productCodeValue) {
+                metafieldsData.push({ namespace: 'custom', key: 'sku', type: 'single_line_text_field', value: productCodeValue });
+            }
             const metafieldItems = document.querySelectorAll('.metafield-item');
             
             metafieldItems.forEach(item => {
@@ -3497,7 +3649,7 @@ Dietary</textarea>
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
                 'description': 'Description',
-                'leadtime1': 'Lead Time <5000 units (Days)',
+                'leadtime1': 'Lead Time (Days)',
                 'leadtime2': 'Lead Time 5000-10000 units (Days)',
                 'sku': 'Product Code',
                 'recycle_info': 'Recycle Info',
@@ -3534,23 +3686,25 @@ Dietary</textarea>
 
             // Default metafield order (hardcoded fallback)
             const DEFAULT_METAFIELD_ORDER = [
-                "sku",
-                "custom_category", 
+                "custom_category",
                 "subcategory",
                 "description",
+                "ingredients",
+                "nutritional_info",
+                "print_info",
+                "recycle_info",
+                "whats_inside",
+                "product_size",
+                "sku",
                 "moq",
                 "origination",
                 "shelf_life",
                 "unit_weight",
                 "case_quantity",
                 "case_weight",
-                "print_info",
-                "recycle_info",
-                "ingredients",
-                "nutritional_info",
                 "leadtime1",
                 "leadtime2",
-                "whats_inside",
+                "commodity_code",
                 "vegan",
                 "vegetarian",
                 "halal",
@@ -3561,9 +3715,7 @@ Dietary</textarea>
                 "milk",
                 "egg",
                 "cereals",
-                "soya",
-                "product_size",
-                "commodity_code"
+                "soya"
             ];
 
             // Mirror Field Finder: apply saved box order from localStorage (metafieldOrder)
@@ -3606,7 +3758,7 @@ Dietary</textarea>
                         metafields = ordered.concat(Array.from(byKey.values()));
             } catch (e) { /* ignore ordering errors */ }
 
-            // Mirror Field Finder hidden logic
+            // Mirror Field Finder hidden logic; also hide sku (Product Code is in Basic Info)
             try {
                 metafields = (metafields || []).filter(m => {
                     const namespace = (m.namespace || '').toLowerCase();
@@ -3615,6 +3767,8 @@ Dietary</textarea>
                     if (namespace === 'global') return false;
                     if (key.startsWith('pricejson') && !key.includes('.')) return false;
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
+                    if (namespace === 'custom' && key === 'sku') return false;
+                    if (namespace === 'custom' && key === 'leadtime2') return false;
                     if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packing_info'].includes(key)) return false;
                     return true;
                 });
@@ -3763,16 +3917,14 @@ Dietary</textarea>
                 let headerExtra = '';
                 if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
                 else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
+                const fullWidthKeys = ['custom_category', 'subcategory', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
+                if (fullWidthKeys.includes(metafield.key)) metafieldDiv.classList.add('metafield-item-full-width');
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
                         <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>${headerExtra}
                     </div>
                     <div class="metafield-input-row">
                         ${inputElement}
-                    </div>
-                    <div class="metafield-footer">
-                        <span class="metafield-type">${metafield.type}</span>
-                        <span class="metafield-key">${metafield.namespace}:${metafield.key}</span>
                     </div>
                 `;
                 
@@ -3884,11 +4036,14 @@ Dietary</textarea>
             // After all metafields are displayed, set up auto-calculation for case weight
             setupCaseWeightCalculation();
 
-            // Set default lead times if empty
+            // Set default lead times if empty (no values)
             setDefaultLeadTimes();
-            
+
             // Set default origination if empty
             setDefaultOrigination();
+
+            // Set default MOQ if empty
+            setDefaultMoq();
         }
 
         // Auto-calculation function for case weight
@@ -3949,40 +4104,9 @@ Dietary</textarea>
             }
         }
 
-        // Autofill lead times if empty
+        // Autofill lead times if empty (no default values – leave empty)
         function setDefaultLeadTimes() {
-            try {
-                // leadtime1 -> 5
-                const lt1Textarea = document.querySelector('textarea[data-key="leadtime1"]');
-                const lt1Select = document.querySelector('select[data-key="leadtime1"]');
-                if (lt1Textarea && (!lt1Textarea.value || lt1Textarea.value.trim() === '')) {
-                    lt1Textarea.value = '5';
-                    lt1Textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                } else if (lt1Select) {
-                    // If it's a select, try to select option '5'
-                    const opt = Array.from(lt1Select.options).find(o => o.value.trim() === '5');
-                    if (opt) {
-                        lt1Select.value = '5';
-                        lt1Select.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }
-
-                // leadtime2 -> 10
-                const lt2Textarea = document.querySelector('textarea[data-key="leadtime2"]');
-                const lt2Select = document.querySelector('select[data-key="leadtime2"]');
-                if (lt2Textarea && (!lt2Textarea.value || lt2Textarea.value.trim() === '')) {
-                    lt2Textarea.value = '10';
-                    lt2Textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                } else if (lt2Select) {
-                    const opt2 = Array.from(lt2Select.options).find(o => o.value.trim() === '10');
-                    if (opt2) {
-                        lt2Select.value = '10';
-                        lt2Select.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }
-            } catch (e) {
-                console.log('Leadtime defaults not applied:', e.message);
-            }
+            // Lead time fields are no longer autofilled with 5 or 10
         }
 
         // Autofill origination if empty
@@ -4003,6 +4127,30 @@ Dietary</textarea>
                 }
             } catch (e) {
                 console.log('Origination default not applied:', e.message);
+            }
+        }
+
+        // Autofill MOQ if empty
+        function setDefaultMoq() {
+            try {
+                const moqTextarea = document.querySelector('textarea[data-key="moq"]');
+                const moqSelect = document.querySelector('select[data-key="moq"]');
+                const moqInput = document.querySelector('input[data-key="moq"]');
+                if (moqTextarea && (!moqTextarea.value || moqTextarea.value.trim() === '')) {
+                    moqTextarea.value = '100';
+                    moqTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (moqSelect) {
+                    const opt = Array.from(moqSelect.options).find(o => o.value.trim() === '100');
+                    if (opt) {
+                        moqSelect.value = '100';
+                        moqSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                } else if (moqInput && (!moqInput.value || moqInput.value.trim() === '')) {
+                    moqInput.value = '100';
+                    moqInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } catch (e) {
+                console.log('MOQ default not applied:', e.message);
             }
         }
 
@@ -4053,10 +4201,11 @@ Dietary</textarea>
         });
 
         // Load metafields when the page loads
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             loadMetafields();
             initializePriceManager();
-            fetchPricingQtyBands();
+            await fetchPricingQtyBands();
+            autofillQuantities();
         });
 
         function toggleConverter() {
@@ -4193,12 +4342,12 @@ Dietary</textarea>
             console.log('🔍 Product colours string:', productData.product_colours);
             console.log('🔍 Colour images mapping:', colourImages);
             
-            // Require SKU metafield before creating product
+            // Require Product Code (Basic Info) before creating product
             try {
-                const mfSkuInput = document.querySelector('.metafield-value[data-namespace="custom"][data-key="sku"]');
-                const skuValue = mfSkuInput ? (mfSkuInput.value || '').trim() : '';
+                const productCodeEl = document.getElementById('product-code');
+                const skuValue = (productCodeEl && productCodeEl.value) ? (productCodeEl.value || '').trim() : '';
                 if (!skuValue) {
-                    alert('Please enter a SKU in the SKU metafield before creating the product.');
+                    alert('Please enter a Product Code in Basic Information before creating the product.');
                     return;
                 }
             } catch (e) {}
@@ -4814,6 +4963,7 @@ Dietary</textarea>
             const pcInput = document.getElementById('pc-product-input');
             const pcDrop = document.getElementById('pc-autocomplete-dropdown');
             const isDuplicate = opts && opts.duplicate === true;
+            const loadingEl = document.getElementById('product-loading-overlay');
 
             if (!isDuplicate) {
                 isEditingProduct = true;
@@ -4823,6 +4973,7 @@ Dietary</textarea>
             }
 
             showCreateForm();
+            if (loadingEl) loadingEl.classList.add('visible');
             try {
                 const resp = await fetch(`/api/product/${productId}/prices`);
                 const data = await resp.json();
@@ -5113,6 +5264,8 @@ Dietary</textarea>
             } catch (e) {
                 console.log('Populate failed:', e);
                 if (isDuplicate) closeDuplicateModal();
+            } finally {
+                if (loadingEl) loadingEl.classList.remove('visible');
             }
         }
 
@@ -5264,6 +5417,15 @@ Dietary</textarea>
                     } catch (e) {
                         console.log(`⚠️ Failed to parse JSON array for ${key}: ${value}`);
                     }
+                }
+                
+                // Product Code (sku) is in Basic Info, not in metafields UI
+                if (key === 'sku' && namespace === 'custom') {
+                    const productCodeEl = document.getElementById('product-code');
+                    if (productCodeEl) {
+                        productCodeEl.value = typeof value === 'string' ? value : (value != null ? String(value) : '');
+                    }
+                    return;
                 }
                 
                 // Find the corresponding input element (including custom dropdowns)
@@ -5446,9 +5608,9 @@ Dietary</textarea>
             try {
                 const panel = document.getElementById('pcVersionsPanel');
                 if (!panel) return;
-                const skuInput = document.querySelector('.metafield-value[data-namespace="custom"][data-key="sku"]');
+                const productCodeEl = document.getElementById('product-code');
                 const titleInput = document.getElementById('title');
-                const skuVal = sanitizeBase((skuInput && skuInput.value) ? skuInput.value : 'NOSKU');
+                const skuVal = sanitizeBase((productCodeEl && productCodeEl.value) ? productCodeEl.value : 'NOSKU');
                 const titleVal = sanitizeBase((titleInput && titleInput.value) ? titleInput.value : 'product');
                 // Only render if we have at least a title
                 const baseName = `${skuVal}_${titleVal}_artwork_templates`;
@@ -5487,7 +5649,7 @@ Dietary</textarea>
                     const isCurrent = currentId && v.global_id && String(v.global_id) === String(currentId);
                     const badge = isCurrent ? '<span style="margin-left:8px;padding:2px 6px;border-radius:6px;background:#e6f4ea;color:#1f7a1f;font-size:12px;">In use</span>' : '';
                     const saveBtn = isCurrent ? '' : `<a href=\"#\" title=\"Save to product\" onclick=\"pcUseVersion('${v.global_id}')\" style=\"color:#28a745;margin-left:10px;\"><i class=\"fas fa-save\"></i></a>`;
-                    const download = `<a href=\"${v.url || '#'}\" download title=\"Download\" style=\"color:#667eea;margin-left:auto;\"><i class=\"fas fa-download\"></i></a>`;
+                    const download = `<a href=\"${v.url || '#'}\" download title=\"Download\" style=\"color:#4f46e5;margin-left:auto;\"><i class=\"fas fa-download\"></i></a>`;
                     const cid = `pc_ver_contents_${v.version}`;
                     const toggle = `<button type=\"button\" title=\"Toggle contents\" onclick=\"pcToggleVersionContents('${cid}','${v.global_id}', this)\" style=\"background:none;border:none;cursor:pointer;color:#555;\"><i class=\"fas fa-chevron-right\"></i></button>`;
                     return `<div style=\"margin:4px 0;\">\n                        <div style=\"display:flex;align-items:center;gap:10px;\">\n                            ${toggle}\n                            <div class=\"muted\">v${v.version}</div>\n                            <div style=\"flex:1;\">${v.name}${badge}</div>\n                            ${saveBtn}${download}\n                        </div>\n                        <div id=\"${cid}\" class=\"mf\" style=\"margin-top:6px; display:none;\"></div>\n                    </div>`;
@@ -5536,7 +5698,7 @@ Dietary</textarea>
                     const isCurrent = currentId && v.global_id && String(v.global_id) === String(currentId);
                     const badge = isCurrent ? '<span style="margin-left:8px;padding:2px 6px;border-radius:6px;background:#e6f4ea;color:#1f7a1f;font-size:12px;">In use</span>' : '';
                     const saveBtn = isCurrent ? '' : `<a href=\"#\" title=\"Save to product\" onclick=\"pcUseVersion('${v.global_id}')\" style=\"color:#28a745;margin-left:10px;\"><i class=\"fas fa-save\"></i></a>`;
-                    const download = `<a href=\"${v.url || '#'}\" download title=\"Download\" style=\"color:#667eea;margin-left:auto;\"><i class=\"fas fa-download\"></i></a>`;
+                    const download = `<a href=\"${v.url || '#'}\" download title=\"Download\" style=\"color:#4f46e5;margin-left:auto;\"><i class=\"fas fa-download\"></i></a>`;
                     const cid = `pc_ver_contents_${v.version}`;
                     const toggle = `<button type=\"button\" title=\"Toggle contents\" onclick=\"pcToggleVersionContents('${cid}','${v.global_id}', this)\" style=\"background:none;border:none;cursor:pointer;color:#555;\"><i class=\"fas fa-chevron-right\"></i></button>`;
                     return `<div style=\"margin:4px 0;\">\n                        <div style=\"display:flex;align-items:center;gap:10px;\">\n                            ${toggle}\n                            <div class=\"muted\">v${v.version}</div>\n                            <div style=\"flex:1;\">${v.name}${badge}</div>\n                            ${saveBtn}${download}\n                        </div>\n                        <div id=\"${cid}\" class=\"mf\" style=\"margin-top:6px; display:none;\"></div>\n                    </div>`;
@@ -5614,7 +5776,7 @@ Dietary</textarea>
                             const size = (it.size||0);
                             const sz = bytesToSize(size);
                             const viewUrl = `/api/templates-uploader/zip-file?file_global_id=${encodeURIComponent(globalId)}&name=${encodeURIComponent(name)}`;
-                            const eye = `<a href=\"${viewUrl}\" target=\"_blank\" rel=\"noopener\" title=\"Open in new tab\" style=\"color:#667eea;\"><i class=\"fas fa-eye\"></i></a>`;
+                            const eye = `<a href=\"${viewUrl}\" target=\"_blank\" rel=\"noopener\" title=\"Open in new tab\" style=\"color:#4f46e5;\"><i class=\"fas fa-eye\"></i></a>`;
                             if (it.is_image && it.preview) {
                                 return `<div style=\"display:flex;align-items:center;gap:10px;margin:4px 0;\"><img src=\"${it.preview}\" alt=\"${name}\" style=\"width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid #eee;\"/><div style=\"flex:1;\"><div>${name}</div><div class=\"muted\">${sz}</div></div>${eye}</div>`;
                             }
@@ -6101,12 +6263,11 @@ Dietary</textarea>
                 // Create new colour cell
                 const newCell = document.createElement('div');
                 newCell.className = 'colour-cell';
-                newCell.style.cssText = 'display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;';
                 
                 newCell.innerHTML = `
-                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                    <button type="button" class="colour-image-btn" data-index="${index}" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none;">
+                    <span class="colour-cell-divider"></span>
+                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none;">
                 `;
                 
                 // Insert before the + button
@@ -6143,14 +6304,13 @@ Dietary</textarea>
             for (let index = 0; index < 2; index++) {
                 const cell = document.createElement('div');
                 cell.className = 'colour-cell';
-                cell.style.cssText = 'display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;';
                 
                 cell.innerHTML = `
-                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                    <button type="button" class="colour-image-btn" data-index="${index}" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none;">
+                    <span class="colour-cell-divider"></span>
+                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none;">
                 `;
-                
+
                 container.appendChild(cell);
             }
             
@@ -6289,14 +6449,13 @@ Dietary</textarea>
                     
                     const cell = document.createElement('div');
                     cell.className = 'colour-cell';
-                    cell.style.cssText = 'display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;';
                     
                     cell.innerHTML = `
-                        <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                        <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                        <button type="button" class="colour-image-btn" data-index="${index}" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                        <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none;">
+                        <span class="colour-cell-divider"></span>
+                        <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none;">
                     `;
-                    
+
                     container.appendChild(cell);
                 });
                 
@@ -6343,14 +6502,13 @@ Dietary</textarea>
                 
                 const cell = document.createElement('div');
                 cell.className = 'colour-cell';
-                cell.style.cssText = 'display: flex; width: calc(25% - 6px); border: 1px solid #ddd; border-radius: 4px; overflow: hidden;';
                 
                 cell.innerHTML = `
-                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none; border-right: 1px solid #ddd; width: 55%; flex-shrink: 0;">
-                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none; border-right: 1px solid #ddd; width: 25%; flex-shrink: 0;">
-                    <button type="button" class="colour-image-btn" data-index="${index}" style="background: none; border: none; width: 20%; height: 100%; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-height: 30px;" title="Select image for this colour">🖼️</button>
+                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none;">
+                    <span class="colour-cell-divider"></span>
+                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none;">
                 `;
-                
+
                 container.appendChild(cell);
             });
             
@@ -6363,7 +6521,7 @@ Dietary</textarea>
             container.appendChild(plusButton);
         }
 
-        // Handle colour image selection
+        // Handle colour image selection (kept for save/load compatibility; image button removed from UI)
         let colourImageMap = {}; // Store mapping of colour index to media index in selectedShopifyMedia
         let colourImagePreview = {}; // Store mapping of colour index to image URL for preview
         document.addEventListener('click', function(e) {

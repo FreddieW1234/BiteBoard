@@ -79,6 +79,23 @@ def api_products():
             pass
         return jsonify([])
 
+
+@app.route('/api/live-products-count')
+def api_live_products_count():
+    """Return the number of active (live) products on the store."""
+    try:
+        import sys
+        sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
+        from Price_Bandit import get_all_products  # type: ignore
+        products = get_all_products()
+        return jsonify({'success': True, 'count': len(products)})
+    except Exception as e:
+        try:
+            print(f"💥 Live products count error: {str(e)}")
+        except (OSError, ValueError):
+            pass
+        return jsonify({'success': False, 'count': 0})
+
 @app.route('/api/shopify/files')
 def api_shopify_files():
     try:
