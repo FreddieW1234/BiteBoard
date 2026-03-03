@@ -57,11 +57,11 @@ PARENT_CHILD_CHOICES = [
 # Title is used for display and as fallback when id is missing. Restart the app after editing.
 # Add "id": <number> from each product's Shopify admin URL (e.g. .../products/15740667199866). Use None until you have the ID.
 PARENT_PRODUCTS = [
-    {"title": "Chocolate Bar Mini", "parent_child_value": "Parent - Chocolate Bar Mini", "id": 15234705916282},
-    {"title": "Chocolate Bar Midi", "parent_child_value": "Parent - Chocolate Bar Midi", "id": 15740569059706},
-    {"title": "Chocolate Bar Maxi", "parent_child_value": "Parent - Chocolate Bar Maxi", "id": 15740667199866},
+    {"title": "Chocolate Bar Mini", "parent_child_value": "Parent - Chocolate Bar Mini", "id": None},
+    {"title": "Chocolate Bar Midi", "parent_child_value": "Parent - Chocolate Bar Midi", "id": None},
+    {"title": "Chocolate Bar Maxi", "parent_child_value": "Parent - Chocolate Bar Maxi", "id": None},
     {"title": "Neo", "parent_child_value": "Parent - Neo", "id": None},
-    {"title": "Chunky Milk Chocolate Bar Wrap", "parent_child_value": "Parent - Chunky Milk Chocolate Bar Wrap", "id": 15739539718522},
+    {"title": "Chunky Milk Chocolate Bar Wrap", "parent_child_value": "Parent - Chunky Milk Chocolate Bar Wrap", "id": None},
     {"title": "Organza Bag - Mini Chocolate Hearts", "parent_child_value": "Parent - Organza Bag - Mini Chocolate Hearts", "id": None},
     {"title": "Moustache Chocolate Header Bag", "parent_child_value": "Parent - Moustache Chocolate Header Bag", "id": None},
     {"title": "Moustache Chocolate Lollipop", "parent_child_value": "Parent - Moustache Chocolate Lollipop", "id": None},
@@ -207,6 +207,7 @@ SUBCATEGORIES = [
     "Coins",
     "Hearts",
     "Neapolitans",
+    "Stars",
     "Truffles",
     # Dried Fruits
     "Apricots",
@@ -343,6 +344,7 @@ CATEGORY_MAPPING = {
         "Walkers",
     ],
     "Biscuits, Cakes & Pies": [
+        "Biscuits - Bags"
         "Biscuits - Box",
         "Biscuits - Single",
         "Cake - Box",
@@ -369,6 +371,7 @@ CATEGORY_MAPPING = {
         "Hearts",
         "Neapolitans",
         "Shapes",
+        "Stars",
         "Truffles",
     ],
     "Dried Fruits": [

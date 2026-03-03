@@ -2644,7 +2644,7 @@ Dietary</textarea>
                     if (!diagramEl) return;
                     const tree = (treeData && treeData.tree) ? treeData.tree : [];
                     if (tree.length === 0) {
-                        diagramEl.innerHTML = '<span class="muted">No parent products defined. Add parents in PARENT_PRODUCTS (categories.py) and assign products a Parent type.</span>';
+                        diagramEl.innerHTML = '<span class="muted">No parent products found. Assign a product a "Parent" type to see it here.</span>';
                         return;
                     }
                     const hasChildren = tree.some(item => (item.children || []).length > 0);

@@ -1307,58 +1307,67 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
 
 def get_parent_child_tree(parents_only=False):
     """
-    Return a tree of all parent products (from PARENT_PRODUCTS) with their
-    corresponding child products. When parents_only=True, returns immediately with
-    empty children (hardcoded parents only). Otherwise: scan all products once for
-    parent_child metafield; any value "Child - X" is grouped under family X; each
-    parent "Parent - X" gets children from that family.
-    Parent IDs are resolved by:
-      1. Trying the hardcoded ID from PARENT_PRODUCTS
-      2. Verifying it matches a real product with the correct Parent metafield
-      3. Falling back to the product found by scanning if the ID is missing or wrong
+    Return a tree of all parent products with their child products.
+    Scan-first approach: the store is scanned for all products with a Parent/Child
+    metafield. Any product with "Parent - X" becomes a parent entry. The hardcoded
+    PARENT_PRODUCTS list supplements with parent types not yet assigned to a product.
+    When parents_only=True, returns only the hardcoded list (instant, no scan).
     Returns: { "tree": [ { "parent": {id, title}, "parent_value": "Parent - X", "children": [...] }, ... ] }
     """
     try:
         from .categories import PARENT_PRODUCTS
         if parents_only:
-            family_to_children = {}
-            parent_family_to_product = {}
-        else:
-            family_to_children, parent_family_to_product = get_all_children_by_family()
+            tree = []
+            for p in PARENT_PRODUCTS or []:
+                val = (p.get("parent_child_value") or "").strip()
+                if not val.startswith("Parent - "):
+                    continue
+                pid = p.get("id")
+                try:
+                    pid = int(pid) if pid is not None else None
+                except (TypeError, ValueError):
+                    pid = None
+                tree.append({
+                    "parent": {"id": pid, "title": (p.get("title") or "").strip() or "Untitled"},
+                    "parent_value": val,
+                    "children": [],
+                })
+            return {"tree": tree}
+
+        family_to_children, parent_family_to_product = get_all_children_by_family()
         tree = []
-        for p in PARENT_PRODUCTS or []:
-            val = (p.get("parent_child_value") or "").strip()
-            if not val.startswith("Parent - "):
-                continue
-            family_key = val[9:].strip()
-            hardcoded_title = (p.get("title") or "").strip() or "Untitled"
-            hardcoded_id = p.get("id")
-            try:
-                hardcoded_id = int(hardcoded_id) if hardcoded_id is not None else None
-            except (TypeError, ValueError):
-                hardcoded_id = None
+        seen_families = set()
 
-            scanned = parent_family_to_product.get(family_key)
-            if hardcoded_id and scanned and scanned["id"] == hardcoded_id:
-                pid = hardcoded_id
-                title = scanned["title"]
-            elif scanned:
-                pid = scanned["id"]
-                title = scanned["title"]
-                if hardcoded_id and hardcoded_id != scanned["id"]:
-                    print(f"⚠️ Parent '{val}': hardcoded ID {hardcoded_id} doesn't match "
-                          f"store product {scanned['id']} ('{scanned['title']}') — using store product", flush=True)
-            else:
-                pid = hardcoded_id
-                title = hardcoded_title
-
-            parent_entry = {"id": pid, "title": title}
+        for family_key, scanned in parent_family_to_product.items():
+            val = "Parent - " + family_key
+            seen_families.add(family_key)
+            parent_entry = {"id": scanned["id"], "title": scanned["title"]}
             children = family_to_children.get(family_key, [])
             tree.append({
                 "parent": parent_entry,
                 "parent_value": val,
                 "children": children,
             })
+
+        for p in PARENT_PRODUCTS or []:
+            val = (p.get("parent_child_value") or "").strip()
+            if not val.startswith("Parent - "):
+                continue
+            family_key = val[9:].strip()
+            if family_key in seen_families:
+                continue
+            pid = p.get("id")
+            try:
+                pid = int(pid) if pid is not None else None
+            except (TypeError, ValueError):
+                pid = None
+            tree.append({
+                "parent": {"id": pid, "title": (p.get("title") or "").strip() or "Untitled"},
+                "parent_value": val,
+                "children": family_to_children.get(family_key, []),
+            })
+
+        tree.sort(key=lambda t: t.get("parent_value", ""))
         return {"tree": tree}
     except Exception as e:
         print(f"Error get_parent_child_tree: {e}", flush=True)
@@ -3015,9 +3024,9 @@ def get_existing_metafield_values(namespace, key):
 
 def get_products_parent_child():
     """
-    Return the list of parent products for "Create from Parent". Starts from the
-    PARENT_PRODUCTS list in categories.py, then verifies/resolves IDs by scanning
-    the store for products with the correct Parent metafield.
+    Return the list of parent products for "Create from Parent". Scan-first: finds
+    all products with a Parent metafield, supplements with PARENT_PRODUCTS for types
+    not yet assigned.
     Returns: {
         "parentProducts": [ { "id", "title", "parent_child_value" } ],
         "takenParentValues": [ ... ],
@@ -3030,33 +3039,39 @@ def get_products_parent_child():
         parent_products = []
         taken_list = set()
         taken_map = {}
+        seen_families = set()
+
+        for family_key, scanned in parent_family_to_product.items():
+            val = "Parent - " + family_key
+            seen_families.add(family_key)
+            taken_list.add(val)
+            taken_map[val] = scanned["id"]
+            parent_products.append({
+                "id": scanned["id"],
+                "title": scanned["title"],
+                "parent_child_value": val,
+            })
+
         for p in PARENT_PRODUCTS or []:
             val = (p.get("parent_child_value") or "").strip()
-            if not val.startswith("Parent"):
+            if not val.startswith("Parent - "):
                 continue
-            family_key = val[9:].strip() if val.startswith("Parent - ") else ""
-            hardcoded_title = (p.get("title") or "").strip()
-            hardcoded_id = p.get("id")
+            family_key = val[9:].strip()
+            if family_key in seen_families:
+                continue
+            pid = p.get("id")
             try:
-                hardcoded_id = int(hardcoded_id) if hardcoded_id is not None else None
+                pid = int(pid) if pid is not None else None
             except (TypeError, ValueError):
-                hardcoded_id = None
-
-            scanned = parent_family_to_product.get(family_key) if family_key else None
-            if scanned:
-                pid = scanned["id"]
-                title = scanned["title"]
-                taken_map[val] = pid
-            else:
-                pid = hardcoded_id or 0
-                title = hardcoded_title or "Untitled"
-
+                pid = None
             taken_list.add(val)
             parent_products.append({
                 "id": pid or 0,
-                "title": title or "Untitled",
+                "title": (p.get("title") or "").strip() or "Untitled",
                 "parent_child_value": val,
             })
+
+        parent_products.sort(key=lambda x: x.get("parent_child_value", ""))
         return {
             "parentProducts": parent_products,
             "takenParentValues": sorted(taken_list),
