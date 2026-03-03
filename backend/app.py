@@ -1614,23 +1614,25 @@ def api_pricing_qty_bands():
             'error': f'Error fetching pricing quantity bands: {str(e)}'
         }), 500
 
+@app.route('/api/bag-colours', methods=['GET'])
+def api_bag_colours():
+    """Get the bag colours for autofill"""
+    try:
+        from scripts.product_creator.metafield_order import get_bag_colours
+        colours = get_bag_colours()
+        return jsonify({'success': True, 'colours': colours})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Error fetching bag colours: {str(e)}'}), 500
+
 @app.route('/api/foil-colours', methods=['GET'])
 def api_foil_colours():
-    """Get the foil colours for autofill"""
+    """Get the foil stamp colours for autofill"""
     try:
         from scripts.product_creator.metafield_order import get_foil_colours
         colours = get_foil_colours()
-        
-        return jsonify({
-            'success': True,
-            'colours': colours
-        })
-        
+        return jsonify({'success': True, 'colours': colours})
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Error fetching foil colours: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'error': f'Error fetching foil colours: {str(e)}'}), 500
 
 def map_subcategories_to_categories(categories, subcategories):
     """

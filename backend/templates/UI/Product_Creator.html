@@ -2156,7 +2156,8 @@ Dietary</textarea>
                             <div class="form-group form-group-colour-options">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                 <label class="form-label" style="margin: 0;">Colour Options</label>
-                                <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All foil colours</button>
+                                <button type="button" id="fill-bag-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Bag Colours</button>
+                                <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Foil Colours</button>
                                 <button type="button" id="reset-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
                             </div>
                             <div id="colour-inputs-container" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
@@ -6896,9 +6897,12 @@ Dietary</textarea>
                 // Insert before the + button
                 const plusButton = container.querySelector('.add-colour-btn');
                 container.insertBefore(newCell, plusButton);
+            } else if (e.target.id === 'fill-bag-colours-btn' || e.target.closest('#fill-bag-colours-btn')) {
+                e.preventDefault();
+                fillColourPreset('/api/bag-colours');
             } else if (e.target.id === 'fill-foil-colours-btn' || e.target.closest('#fill-foil-colours-btn')) {
                 e.preventDefault();
-                fillAllFoilColours();
+                fillColourPreset('/api/foil-colours');
             } else if (e.target.id === 'reset-colours-btn' || e.target.closest('#reset-colours-btn')) {
                 e.preventDefault();
                 resetColourOptions();
@@ -7038,21 +7042,16 @@ Dietary</textarea>
             }
         });
         
-        // Function to fill all foil colours
-        async function fillAllFoilColours() {
+        async function fillColourPreset(apiUrl) {
             try {
-                console.log('🔄 Fetching foil colours from API...');
-                const response = await fetch('/api/foil-colours');
+                const response = await fetch(apiUrl);
                 if (!response.ok) {
-                    throw new Error(`Failed to fetch foil colours: ${response.status}`);
+                    throw new Error(`Failed to fetch colours: ${response.status}`);
                 }
                 const data = await response.json();
-                
                 if (!data.success || !data.colours) {
-                    throw new Error('Invalid response from foil colours API');
+                    throw new Error('Invalid response from colours API');
                 }
-                
-                console.log(`✅ Received ${data.colours.length} foil colours:`, data.colours);
                 
                 const container = document.getElementById('colour-inputs-container');
                 
@@ -7090,10 +7089,10 @@ Dietary</textarea>
                 newPlusButton.style.cssText = 'padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;';
                 container.appendChild(newPlusButton);
                 
-                console.log(`✅ Filled ${data.colours.length} foil colours into colour inputs`);
+                console.log(`✅ Filled ${data.colours.length} colours into colour inputs`);
             } catch (error) {
-                console.error('❌ Error filling foil colours:', error);
-                alert(`Failed to load foil colours: ${error.message}`);
+                console.error('❌ Error filling colours:', error);
+                alert(`Failed to load colours: ${error.message}`);
             }
         }
 

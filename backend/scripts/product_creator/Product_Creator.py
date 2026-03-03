@@ -672,7 +672,6 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                             # Small delay to ensure attached files are indexed before uploading new files
                             if media_files:
                                 print("⏳ Waiting 1 second for attached files to be indexed...", flush=True)
-                                import time
                                 time.sleep(1.0)
                         else:
                             error_msg = "No files were attached - check file IDs and permissions"
@@ -2075,8 +2074,7 @@ def create_product(product_data):
         # Throttle: REST Admin API is limited to 2 req/sec (leaky bucket 40/40).
         # The frontend may have just loaded the product, burning through budget.
         # Wait enough to let the bucket recover before our first real request.
-        import time as _time_module
-        _time_module.sleep(2.0)
+        time.sleep(2.0)
         if did_parent_fetch:
             _time_module.sleep(2.0)  # extra gap after parent product + metafields (2+ API calls)
         # Extract the actual Shopify domain from redirects (if any)
@@ -2404,8 +2402,7 @@ def create_product(product_data):
                 
                 # Now handle media based on whether we're updating or creating
                 if is_updating:
-                    # Let rate-limit bucket recover after Step 1.
-                    import time as _t2; _t2.sleep(5.0)
+                    time.sleep(5.0)
                     print(f"🔄 Step 2: Managing media for existing product - {len(media_files)} new files, {len(shopify_media_ids)} existing files to keep...")
                     
                     # Step 2a: Remove media not in the keep list
@@ -2437,8 +2434,6 @@ def create_product(product_data):
                             print(f"⚠️ Step 2b Partial: Some media files failed to upload: {media_results.get('errors', [])}")
                     
                     # Step 2c: Reorder all media according to media_order
-                    # Let rate-limit bucket recover between steps, and wait for Shopify to index uploads
-                    import time
                     if has_new_media:
                         print("⏳ Waiting for Shopify to process new uploads...")
                         time.sleep(2)
@@ -2474,7 +2469,6 @@ def create_product(product_data):
                         url_results = create_media_from_urls(product_id, media_urls, shopify_domain=actual_shopify_domain)
                         if url_results.get("created", 0) > 0:
                             print(f"✅ Created {url_results['created']} media from URLs")
-                            import time
                             time.sleep(1)
                         ids_to_attach = []  # Don't try to attach by ID when we used URLs
                     else:
@@ -2495,8 +2489,6 @@ def create_product(product_data):
                         print(f"⚠️ Step 2a Partial: Some media files failed to process: {media_results.get('errors', [])}")
                     
                     # Step 2b: Reorder all media according to media_order (same as existing product flow)
-                    # Add a delay to ensure Shopify has processed the uploads
-                    import time
                     if has_new_media:
                         print("⏳ Waiting for Shopify to process new uploads...")
                         time.sleep(1)
@@ -2751,7 +2743,6 @@ def create_product(product_data):
                 metafield_results = create_metafields(product_id, metafields, shopify_domain=actual_shopify_domain)
                 if metafield_results.get("success"):
                     print(f"✅ Step 3 Complete: All metafields created successfully!")
-                    import time
                     time.sleep(0.2)
                 else:
                     print(f"⚠️ Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
@@ -2762,7 +2753,6 @@ def create_product(product_data):
             time.sleep(0.5)
             if not existing_product_id:
                 print("⏳ Waiting for images to be indexed before Price Bandit...", flush=True)
-                import time
                 time.sleep(1.0)
             
             print(f"🔄 Step 4: Running Price Bandit script to create variants...")

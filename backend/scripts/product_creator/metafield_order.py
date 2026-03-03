@@ -93,10 +93,9 @@ def get_pricing_qty_bands():
     """Returns the pricing quantity bands for autofill"""
     return PRICING_QTY_BANDS.copy()
 
-# Foil Colours Configuration
+# Bag Colours Configuration
 # Format: Each tuple is (colour_name, colour_code)
-# Used for the "All foil colours" button in the colour options
-FOIL_COLOURS = [
+BAG_COLOURS = [
     ("Black", "b"),
     ("Cerise", "c"),
     ("Gold", "g"),
@@ -109,6 +108,34 @@ FOIL_COLOURS = [
     ("Turquoise", "tq")
 ]
 
+# Foil Stamp Colours Configuration
+FOIL_COLOURS = [
+    ("Black", "B"),
+    ("Brown", "Br"),
+    ("Burgundy", "Bu"),
+    ("Cerise", "c"),
+    ("Copper", "Cp"),
+    ("Gold", "Og"),
+    ("Green", "Gr"),
+    ("Hydrangea", "Hg"),
+    ("Ivory", "I"),
+    ("Light Blue", "Lb"),
+    ("Midnight Blue", "Mb"),
+    ("Navy Blue", "Nb"),
+    ("Orange", "O"),
+    ("Pink", "P"),
+    ("Powder Blue", "Pb"),
+    ("Purple", "Pu"),
+    ("Red", "R"),
+    ("Silver", "S"),
+    ("Turquoise", "Tq"),
+    ("Violet", "V"),
+]
+
+def get_bag_colours():
+    """Returns the bag colours for autofill"""
+    return BAG_COLOURS.copy()
+
 def get_foil_colours():
-    """Returns the foil colours for autofill"""
+    """Returns the foil stamp colours for autofill"""
     return FOIL_COLOURS.copy()
