@@ -983,18 +983,44 @@ def _parse_child_family(metafield_value):
     return None
 
 
+def _parse_parent_family(metafield_value):
+    """
+    If metafield value indicates a Parent (e.g. "Parent - Chocolate Bar Maxi" or
+    ["Parent - Chocolate Bar Maxi"]), return the family key. Otherwise return None.
+    """
+    if not metafield_value:
+        return None
+    val = (metafield_value if isinstance(metafield_value, str) else str(metafield_value)).strip()
+    if not val:
+        return None
+    if val.startswith("Parent - "):
+        return val[9:].strip()
+    try:
+        if val.startswith("["):
+            arr = json.loads(val)
+            if isinstance(arr, list) and arr:
+                first = str(arr[0]).strip()
+                if first.startswith("Parent - "):
+                    return first[9:].strip()
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
 def get_all_children_by_family(shopify_domain=None):
     """
     Scan all products for custom.parent_child metafield. Find every product whose value
-    is the 'Child' option (e.g. "Child - Chocolate Bar Maxi"). Return a dict mapping
-    family key (what comes after "Child - ") to list of {id, title}.
-    E.g. {"Chocolate Bar Maxi": [{"id": 123, "title": "..."}, ...], ...}
+    is a 'Child' or 'Parent' option. Returns a tuple:
+      (family_to_children, parent_family_to_product)
+    - family_to_children: dict mapping family key to list of {id, title} for children
+    - parent_family_to_product: dict mapping family key to {id, title} for parents
     Uses GraphQL first; on 404 falls back to REST. Single pass over all products.
     """
     domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
     if not domain:
         return {}
     family_to_children = {}
+    parent_family_to_product = {}
     graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
     headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
     cursor = None
@@ -1035,17 +1061,22 @@ def get_all_children_by_family(shopify_domain=None):
                 mf = node.get("metafield")
                 if not mf or not mf.get("value"):
                     continue
-                family = _parse_child_family(mf.get("value"))
-                if family is None:
-                    continue
+                mf_val = mf.get("value")
                 leg_id = node.get("legacyResourceId")
                 title = (node.get("title") or "").strip() or f"Product {leg_id}"
-                if leg_id:
+                child_family = _parse_child_family(mf_val)
+                if child_family is not None and leg_id:
                     try:
-                        entry = {"id": int(leg_id), "title": title}
-                        family_to_children.setdefault(family, []).append(entry)
+                        family_to_children.setdefault(child_family, []).append({"id": int(leg_id), "title": title})
                     except (TypeError, ValueError):
                         pass
+                else:
+                    parent_family = _parse_parent_family(mf_val)
+                    if parent_family is not None and leg_id:
+                        try:
+                            parent_family_to_product[parent_family] = {"id": int(leg_id), "title": title}
+                        except (TypeError, ValueError):
+                            pass
             if not page_info.get("hasNextPage"):
                 break
             cursor = page_info.get("endCursor")
@@ -1083,9 +1114,13 @@ def get_all_children_by_family(shopify_domain=None):
                         if not metafields:
                             continue
                         val = (metafields[0].get("value") or "").strip()
-                        family = _parse_child_family(val)
-                        if family is not None and pid:
-                            family_to_children.setdefault(family, []).append({"id": int(pid), "title": title})
+                        child_family = _parse_child_family(val)
+                        if child_family is not None and pid:
+                            family_to_children.setdefault(child_family, []).append({"id": int(pid), "title": title})
+                        else:
+                            parent_family = _parse_parent_family(val)
+                            if parent_family is not None and pid:
+                                parent_family_to_product[parent_family] = {"id": int(pid), "title": title}
                     except Exception:
                         continue
                 link = r.headers.get("Link") or ""
@@ -1096,7 +1131,7 @@ def get_all_children_by_family(shopify_domain=None):
                         break
             except Exception:
                 break
-    return family_to_children
+    return family_to_children, parent_family_to_product
 
 
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
@@ -1277,24 +1312,46 @@ def get_parent_child_tree(parents_only=False):
     empty children (hardcoded parents only). Otherwise: scan all products once for
     parent_child metafield; any value "Child - X" is grouped under family X; each
     parent "Parent - X" gets children from that family.
+    Parent IDs are resolved by:
+      1. Trying the hardcoded ID from PARENT_PRODUCTS
+      2. Verifying it matches a real product with the correct Parent metafield
+      3. Falling back to the product found by scanning if the ID is missing or wrong
     Returns: { "tree": [ { "parent": {id, title}, "parent_value": "Parent - X", "children": [...] }, ... ] }
     """
     try:
         from .categories import PARENT_PRODUCTS
-        family_to_children = {} if parents_only else get_all_children_by_family()
+        if parents_only:
+            family_to_children = {}
+            parent_family_to_product = {}
+        else:
+            family_to_children, parent_family_to_product = get_all_children_by_family()
         tree = []
         for p in PARENT_PRODUCTS or []:
             val = (p.get("parent_child_value") or "").strip()
             if not val.startswith("Parent - "):
                 continue
-            # Family key is whatever comes after "Parent - " (e.g. "Chocolate Bar Maxi")
-            family_key = val[9:].strip()  # len("Parent - ") == 9
-            title = (p.get("title") or "").strip() or "Untitled"
-            pid = p.get("id")
+            family_key = val[9:].strip()
+            hardcoded_title = (p.get("title") or "").strip() or "Untitled"
+            hardcoded_id = p.get("id")
             try:
-                pid = int(pid) if pid is not None else None
+                hardcoded_id = int(hardcoded_id) if hardcoded_id is not None else None
             except (TypeError, ValueError):
-                pid = None
+                hardcoded_id = None
+
+            scanned = parent_family_to_product.get(family_key)
+            if hardcoded_id and scanned and scanned["id"] == hardcoded_id:
+                pid = hardcoded_id
+                title = scanned["title"]
+            elif scanned:
+                pid = scanned["id"]
+                title = scanned["title"]
+                if hardcoded_id and hardcoded_id != scanned["id"]:
+                    print(f"⚠️ Parent '{val}': hardcoded ID {hardcoded_id} doesn't match "
+                          f"store product {scanned['id']} ('{scanned['title']}') — using store product", flush=True)
+            else:
+                pid = hardcoded_id
+                title = hardcoded_title
+
             parent_entry = {"id": pid, "title": title}
             children = family_to_children.get(family_key, [])
             tree.append({
@@ -2958,28 +3015,39 @@ def get_existing_metafield_values(namespace, key):
 
 def get_products_parent_child():
     """
-    Return the list of parent products for "Create from Parent". Uses the hardcoded
-    PARENT_PRODUCTS list from categories.py so the modal loads instantly. When you
-    save a product with Parent? = Yes, add it to PARENT_PRODUCTS in categories.py.
+    Return the list of parent products for "Create from Parent". Starts from the
+    PARENT_PRODUCTS list in categories.py, then verifies/resolves IDs by scanning
+    the store for products with the correct Parent metafield.
     Returns: { "parentProducts": [ { "id", "title", "parent_child_value" } ], "takenParentValues": [...] }
     """
     try:
         from .categories import PARENT_PRODUCTS
+        _unused, parent_family_to_product = get_all_children_by_family()
         parent_products = []
         taken = set()
         for p in PARENT_PRODUCTS or []:
             val = (p.get("parent_child_value") or "").strip()
             if not val.startswith("Parent"):
                 continue
-            title = (p.get("title") or "").strip()
-            pid = p.get("id")
+            family_key = val[9:].strip() if val.startswith("Parent - ") else ""
+            hardcoded_title = (p.get("title") or "").strip()
+            hardcoded_id = p.get("id")
             try:
-                pid = int(pid) if pid is not None else 0
+                hardcoded_id = int(hardcoded_id) if hardcoded_id is not None else None
             except (TypeError, ValueError):
-                pid = 0
+                hardcoded_id = None
+
+            scanned = parent_family_to_product.get(family_key) if family_key else None
+            if scanned:
+                pid = scanned["id"]
+                title = scanned["title"]
+            else:
+                pid = hardcoded_id or 0
+                title = hardcoded_title or "Untitled"
+
             taken.add(val)
             parent_products.append({
-                "id": pid,
+                "id": pid or 0,
                 "title": title or "Untitled",
                 "parent_child_value": val,
             })
