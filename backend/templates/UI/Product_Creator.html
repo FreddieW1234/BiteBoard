@@ -2467,15 +2467,29 @@ Dietary</textarea>
         async function refreshParentChildDropdown(currentParentValue) {
             const selectEl = document.getElementById('parent-child-select');
             if (!selectEl) return;
-            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child');
+            const [choicesResp, takenResp] = await Promise.all([
+                fetch('/api/metafield-choices/custom.parent_child'),
+                fetch('/api/products-parent-child')
+            ]);
             const choicesData = await choicesResp.json();
+            const takenData = await takenResp.json();
             const choices = (choicesData.choices || []).map(c => String(c || '').trim()).filter(c => c.startsWith('Parent - '));
+            const takenParents = takenData.takenParents || {};
+            const editingId = (isEditingProduct && selectedProduct) ? selectedProduct.id : null;
             const prevVal = selectEl.value;
             selectEl.innerHTML = '<option value="">— Select —</option>';
             choices.forEach(opt => {
                 const o = document.createElement('option');
                 o.value = opt;
-                o.textContent = opt;
+                const ownerId = takenParents[opt];
+                const isTaken = ownerId && ownerId !== editingId;
+                if (isTaken) {
+                    o.disabled = true;
+                    o.textContent = opt + ' (in use)';
+                    o.style.color = '#999';
+                } else {
+                    o.textContent = opt;
+                }
                 selectEl.appendChild(o);
             });
             if (prevVal && prevVal.startsWith('Parent - ') && choices.includes(prevVal)) selectEl.value = prevVal;

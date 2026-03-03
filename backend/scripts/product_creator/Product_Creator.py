@@ -3018,13 +3018,18 @@ def get_products_parent_child():
     Return the list of parent products for "Create from Parent". Starts from the
     PARENT_PRODUCTS list in categories.py, then verifies/resolves IDs by scanning
     the store for products with the correct Parent metafield.
-    Returns: { "parentProducts": [ { "id", "title", "parent_child_value" } ], "takenParentValues": [...] }
+    Returns: {
+        "parentProducts": [ { "id", "title", "parent_child_value" } ],
+        "takenParentValues": [ ... ],
+        "takenParents": { "Parent - X": product_id, ... }  (only values assigned to real products)
+    }
     """
     try:
         from .categories import PARENT_PRODUCTS
         _unused, parent_family_to_product = get_all_children_by_family()
         parent_products = []
-        taken = set()
+        taken_list = set()
+        taken_map = {}
         for p in PARENT_PRODUCTS or []:
             val = (p.get("parent_child_value") or "").strip()
             if not val.startswith("Parent"):
@@ -3041,11 +3046,12 @@ def get_products_parent_child():
             if scanned:
                 pid = scanned["id"]
                 title = scanned["title"]
+                taken_map[val] = pid
             else:
                 pid = hardcoded_id or 0
                 title = hardcoded_title or "Untitled"
 
-            taken.add(val)
+            taken_list.add(val)
             parent_products.append({
                 "id": pid or 0,
                 "title": title or "Untitled",
@@ -3053,11 +3059,12 @@ def get_products_parent_child():
             })
         return {
             "parentProducts": parent_products,
-            "takenParentValues": sorted(taken),
+            "takenParentValues": sorted(taken_list),
+            "takenParents": taken_map,
         }
     except Exception as e:
         print(f"Error get_products_parent_child: {e}", flush=True)
-        return {"parentProducts": [], "takenParentValues": []}
+        return {"parentProducts": [], "takenParentValues": [], "takenParents": {}}
 
 
 def get_product_templates():
