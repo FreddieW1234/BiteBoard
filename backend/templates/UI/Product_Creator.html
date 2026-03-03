@@ -5401,15 +5401,22 @@ Dietary</textarea>
             if (loadingEl) loadingEl.classList.add('visible');
             try {
                 const _fetchCtrl = new AbortController();
-                const _fetchTimeout = setTimeout(() => _fetchCtrl.abort(), 30000);
+                const _fetchTimeout = setTimeout(() => _fetchCtrl.abort(), 60000);
+                const _loadingTextEl = loadingEl ? loadingEl.querySelector('.product-loading-text') : null;
+                const _slowTimer = setTimeout(() => {
+                    if (_loadingTextEl) _loadingTextEl.textContent = 'Still loading — server may be waking up…';
+                }, 8000);
                 let resp;
                 try {
                     resp = await fetch(`/api/product/${productId}/prices`, { signal: _fetchCtrl.signal });
                 } catch (fetchErr) {
                     clearTimeout(_fetchTimeout);
+                    clearTimeout(_slowTimer);
                     throw new Error(fetchErr.name === 'AbortError' ? 'Request timed out — the server took too long to respond. Try again.' : (fetchErr.message || 'Network error'));
                 }
                 clearTimeout(_fetchTimeout);
+                clearTimeout(_slowTimer);
+                if (_loadingTextEl) _loadingTextEl.textContent = 'Loading product…';
                 const data = await resp.json().catch(function() { return {}; });
                 if (!resp.ok) {
                     var msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);

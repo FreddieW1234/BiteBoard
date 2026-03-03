@@ -8,6 +8,9 @@ import json
 
 from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN  # type: ignore
 
+print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
+      f"ACCESS_TOKEN={'✅ set' if ACCESS_TOKEN else '❌ EMPTY'}, API_VERSION={API_VERSION}", flush=True)
+
 app = Flask(
     __name__,
     template_folder=os.path.join(os.path.dirname(__file__), "templates"),
@@ -31,6 +34,30 @@ def get_tools():
     files = [f[:-3] for f in os.listdir(scripts_dir)
              if f.endswith('.py') and f not in ('app.py', '__init__.py')]
     return files
+
+@app.route('/api/health')
+def api_health():
+    """Quick diagnostic: checks config and Shopify connectivity."""
+    info = {
+        "store_domain": STORE_DOMAIN[:25] + "..." if len(STORE_DOMAIN) > 25 else STORE_DOMAIN or "(empty)",
+        "api_version": API_VERSION,
+        "access_token_set": bool(ACCESS_TOKEN),
+    }
+    if STORE_DOMAIN and ACCESS_TOKEN:
+        try:
+            url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/shop.json"
+            r = requests.get(url, headers={"X-Shopify-Access-Token": ACCESS_TOKEN}, timeout=10)
+            info["shopify_status"] = r.status_code
+            if r.status_code == 200:
+                shop = r.json().get("shop", {})
+                info["shop_name"] = shop.get("name", "?")
+            else:
+                info["shopify_body"] = r.text[:200]
+        except Exception as e:
+            info["shopify_error"] = f"{type(e).__name__}: {e}"
+    else:
+        info["shopify_status"] = "skipped — missing config"
+    return jsonify(info)
 
 @app.route('/')
 def index():
@@ -495,9 +522,13 @@ def _shopify_get_with_retry(url, headers, max_retries=2):
         try:
             resp = requests.get(url, headers=headers, timeout=15)
         except requests.exceptions.Timeout:
+            print(f"⚠️ Shopify GET timeout (attempt {attempt+1}/{max_retries+1}): {url[:80]}", flush=True)
             if attempt < max_retries:
                 continue
             return None, {"error": "Request timed out", "detail": f"Shopify API did not respond after {max_retries + 1} attempts"}
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Shopify GET error (attempt {attempt+1}/{max_retries+1}): {type(e).__name__}: {e}", flush=True)
+            return None, {"error": f"Connection failed: {type(e).__name__}", "detail": str(e)[:300]}
         if resp.status_code == 429:
             if attempt < max_retries:
                 time.sleep(2)
