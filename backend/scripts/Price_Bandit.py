@@ -438,17 +438,24 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
     print(f"🔍 Payload being sent to Shopify: {json.dumps(payload, indent=2)}", flush=True)
     
     try:
-        # Handle redirects for PUT requests
-        resp = requests.put(url, headers=HEADERS, json=payload, allow_redirects=False)
-        
-        # If redirected, follow it silently
-        if resp.status_code in [301, 302, 303, 307, 308]:
-            redirect_url = resp.headers.get('Location', url)
-            if redirect_url.startswith('/'):
+        # Handle redirects and rate limit (429) with retry
+        for attempt in range(3):
+            resp = requests.put(url, headers=HEADERS, json=payload, allow_redirects=False)
+            if resp.status_code in [301, 302, 303, 307, 308]:
                 from urllib.parse import urlparse
-                parsed = urlparse(url)
-                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-            resp = requests.put(redirect_url, headers=HEADERS, json=payload, allow_redirects=True)
+                redirect_url = resp.headers.get('Location', url)
+                if redirect_url.startswith('/'):
+                    parsed = urlparse(url)
+                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                resp = requests.put(redirect_url, headers=HEADERS, json=payload, allow_redirects=True)
+            if resp.status_code == 429:
+                if attempt < 2:
+                    print("Rate limit exceeded (429) on variant update, waiting 2 seconds then retry...", flush=True)
+                    time.sleep(2)
+                else:
+                    break
+            else:
+                break
         
         if resp.status_code == 200:
             result = resp.json().get("product", {})

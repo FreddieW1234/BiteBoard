@@ -1,5 +1,5 @@
 """
-Product Editor/Creator Package
+Product Manager Package
 
-This package contains the Product Editor/Creator functionality and category definitions.
+This package contains the Product Manager functionality and category definitions.
 """

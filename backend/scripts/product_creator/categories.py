@@ -4,9 +4,79 @@ Category and Subcategory definitions for product metafields
 This file contains the preset choices for the custom metafields:
 - custom.custom_category
 - custom.subcategory
+- custom.parent_child (Parent/Child product types; only one product per Parent - X)
 
 You can easily update these lists by editing this file.
 """
+
+# Parent/Child choices for custom.parent_child metafield (single line text with preset list).
+# Only one product can have each "Parent - X" value. "Child - X" can be used by many.
+PARENT_CHILD_CHOICES = [
+    "Parent - Chocolate Bar Mini",
+    "Child - Chocolate Bar Mini",
+    "Parent - Chocolate Bar Midi",
+    "Child - Chocolate Bar Midi",
+    "Parent - Chocolate Bar Maxi",
+    "Child - Chocolate Bar Maxi",
+    "Parent - Neo",
+    "Child - Neo",
+    "Parent - Chunky Milk Chocolate Bar Wrap",
+    "Child - Chunky Milk Chocolate Bar Wrap",
+    "Parent - Organza Bag - Mini Chocolate Hearts",
+    "Child - Organza Bag - Mini Chocolate Hearts",
+    "Parent - Moustache Chocolate Header Bag",
+    "Child - Moustache Chocolate Header Bag",
+    "Parent - Moustache Chocolate Lollipop",
+    "Child - Moustache Chocolate Lollipop",
+    "Parent - Shirt Box - Chocolate Bar",
+    "Child - Shirt Box - Chocolate Bar",
+    "Parent - Mini Cuboid - Two Roses",
+    "Child - Mini Cuboid - Two Roses",
+    "Parent - Mini Cuboid - Two Heroes",
+    "Child - Mini Cuboid - Two Heroes",
+    "Parent - Mini Cuboid - Two Celebrations",
+    "Child - Mini Cuboid - Two Celebrations",
+    "Parent - Mini Cuboid - Two Quality Street",
+    "Child - Mini Cuboid - Two Quality Street",
+    "Parent - Midi Quad - Roses",
+    "Child - Midi Quad - Roses",
+    "Parent - Midi Quad - Quality Street",
+    "Child - Midi Quad - Quality Street",
+    "Parent - Organza Bag - Celebrations",
+    "Child - Organza Bag - Celebrations",
+    "Parent - Organza Bag - Quality Street",
+    "Child - Organza Bag - Quality Street",
+    "Parent - Organza Bag - Roses",
+    "Child - Organza Bag - Roses",
+    "Parent - Organza Bag - Heroes",
+    "Child - Organza Bag - Heroes",
+]
+
+# Create from Parent: list of products that have a Parent type set.
+# Use "id" (Shopify product ID from admin URL) when possible so lookup is by ID not name.
+# Title is used for display and as fallback when id is missing. Restart the app after editing.
+# Add "id": <number> from each product's Shopify admin URL (e.g. .../products/15740667199866). Use None until you have the ID.
+PARENT_PRODUCTS = [
+    {"title": "Chocolate Bar Mini", "parent_child_value": "Parent - Chocolate Bar Mini", "id": 15234705916282},
+    {"title": "Chocolate Bar Midi", "parent_child_value": "Parent - Chocolate Bar Midi", "id": 15740569059706},
+    {"title": "Chocolate Bar Maxi", "parent_child_value": "Parent - Chocolate Bar Maxi", "id": 15740667199866},
+    {"title": "Neo", "parent_child_value": "Parent - Neo", "id": None},
+    {"title": "Chunky Milk Chocolate Bar Wrap", "parent_child_value": "Parent - Chunky Milk Chocolate Bar Wrap", "id": 15739539718522},
+    {"title": "Organza Bag - Mini Chocolate Hearts", "parent_child_value": "Parent - Organza Bag - Mini Chocolate Hearts", "id": None},
+    {"title": "Moustache Chocolate Header Bag", "parent_child_value": "Parent - Moustache Chocolate Header Bag", "id": None},
+    {"title": "Moustache Chocolate Lollipop", "parent_child_value": "Parent - Moustache Chocolate Lollipop", "id": None},
+    {"title": "Shirt Box - Chocolate Bar", "parent_child_value": "Parent - Shirt Box - Chocolate Bar", "id": None},
+    {"title": "Mini Cuboid - Two Roses", "parent_child_value": "Parent - Mini Cuboid - Two Roses", "id": None},
+    {"title": "Mini Cuboid - Two Heroes", "parent_child_value": "Parent - Mini Cuboid - Two Heroes", "id": None},
+    {"title": "Mini Cuboid - Two Celebrations", "parent_child_value": "Parent - Mini Cuboid - Two Celebrations", "id": None},
+    {"title": "Mini Cuboid - Two Quality Street", "parent_child_value": "Parent - Mini Cuboid - Two Quality Street", "id": None},
+    {"title": "Midi Quad - Roses", "parent_child_value": "Parent - Midi Quad - Roses", "id": None},
+    {"title": "Midi Quad - Quality Street", "parent_child_value": "Parent - Midi Quad - Quality Street", "id": None},
+    {"title": "Organza Bag - Celebrations", "parent_child_value": "Parent - Organza Bag - Celebrations", "id": None},
+    {"title": "Organza Bag - Quality Street", "parent_child_value": "Parent - Organza Bag - Quality Street", "id": None},
+    {"title": "Organza Bag - Roses", "parent_child_value": "Parent - Organza Bag - Roses", "id": None},
+    {"title": "Organza Bag - Heroes", "parent_child_value": "Parent - Organza Bag - Heroes", "id": None},
+]
 
 # Category choices for custom.custom_category metafield
 CATEGORIES = [
@@ -425,6 +495,8 @@ def get_metafield_choices(metafield_key):
             return SUBCATEGORIES[start_idx:end_idx]
         except (ValueError, IndexError):
             return []
+    elif metafield_key == "parent_child":
+        return list(PARENT_CHILD_CHOICES)
     else:
         return []
 

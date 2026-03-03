@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Product Editor/Creator - Tool for creating and editing products in Shopify
+Product Manager - Tool for creating and editing products in Shopify
 """
 
 import os
 import sys
+import time
 import requests
 import json
 import base64
@@ -31,13 +32,14 @@ def format_price(price):
     except (ValueError, TypeError):
         return str(price)
 
-def manage_product_media(product_id, shopify_media_ids_to_keep):
+def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=None):
     """
     Remove media from a product that are not in the keep list
     
     Args:
         product_id (int): The ID of the product
         shopify_media_ids_to_keep (list): List of media IDs (global IDs) to keep
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
     
     Returns:
         dict: Result with success status and any errors
@@ -47,46 +49,47 @@ def manage_product_media(product_id, shopify_media_ids_to_keep):
         print(f"📋 Media IDs to keep: {shopify_media_ids_to_keep}")
         
         # Get existing product media
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
             'Content-Type': 'application/json'
         }
         
-        response = requests.get(url, headers=headers)
-        if not response.ok:
-            return {"success": False, "error": f"Failed to get product: {response.status_code}"}
+        response = None
+        for _get_attempt in range(3):
+            time.sleep(1.0 if _get_attempt == 0 else 3.0 * _get_attempt)
+            response = requests.get(url, headers=headers, allow_redirects=True)
+            if response.status_code == 200:
+                break
+            elif response.status_code == 429 and _get_attempt < 2:
+                print(f"⚠️ Rate limit (429) on product GET for media, retrying ({_get_attempt+1}/3)...", flush=True)
+                continue
+            else:
+                break
+        if not response or not response.ok:
+            return {"success": False, "removed_count": 0, "errors": [f"Failed to get product: {response.status_code if response else 'no response'}"]}
         
         product_data = response.json().get('product', {})
         existing_media = product_data.get('images', [])
         
         print(f"📷 Found {len(existing_media)} existing media items")
         
-        # Convert keep list to comparable format
-        # We expect REST API numeric IDs (not global IDs) for comparison
         keep_ids = set()
         for media_id in shopify_media_ids_to_keep:
             if isinstance(media_id, str):
                 if media_id.startswith('gid://'):
-                    # Extract numeric ID from global ID
-                    # NOTE: Global ID numeric part is DIFFERENT from REST API ID!
-                    # For REST API comparison, we need the REST API numeric ID, not the global ID numeric
-                    # But if only global ID is provided, try to extract it anyway
                     keep_ids.add(media_id.split('/')[-1])
                 else:
-                    # Direct REST API numeric ID (what we want)
                     keep_ids.add(media_id)
             else:
-                # Numeric ID converted to string
                 keep_ids.add(str(media_id))
         
         print(f"🔑 Keep IDs (normalized): {keep_ids}")
         
-        # Debug: Show all existing media IDs
         existing_ids = [str(img.get('id')) for img in existing_media]
         print(f"📋 Existing media IDs on product: {existing_ids}")
         
-        # Find media to remove
         media_to_remove = []
         for media in existing_media:
             media_id = str(media.get('id'))
@@ -101,15 +104,35 @@ def manage_product_media(product_id, shopify_media_ids_to_keep):
         else:
             print(f"🗑️ Found {len(media_to_remove)} media items to remove: {media_to_remove}")
         
-        # Remove unwanted media
         removed_count = 0
         errors = []
         
+        def _delete_with_retry(del_url, max_attempts=4):
+            r = None
+            for attempt in range(max_attempts):
+                time.sleep(1.0)
+                r = requests.delete(del_url, headers=headers, allow_redirects=False)
+                if r.status_code in (301, 302, 303, 307, 308):
+                    from urllib.parse import urlparse
+                    loc = r.headers.get('Location', del_url)
+                    if loc.startswith('/'):
+                        p = urlparse(del_url)
+                        loc = f"{p.scheme}://{p.netloc}{loc}"
+                    time.sleep(1.0)
+                    r = requests.delete(loc, headers=headers)
+                if r.status_code == 429 and attempt < max_attempts - 1:
+                    backoff = 3.0 * (attempt + 1)
+                    print(f"⚠️ Rate limit (429) on image delete, waiting {backoff}s (attempt {attempt+1}/{max_attempts})...", flush=True)
+                    time.sleep(backoff)
+                    continue
+                return r
+            return r
+        
         for media_id in media_to_remove:
             try:
-                delete_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{media_id}.json"
+                delete_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{media_id}.json"
                 print(f"🗑️ Attempting to delete image {media_id} from product {product_id}...")
-                delete_response = requests.delete(delete_url, headers=headers)
+                delete_response = _delete_with_retry(delete_url)
                 
                 if delete_response.ok or delete_response.status_code == 204:
                     removed_count += 1
@@ -124,8 +147,6 @@ def manage_product_media(product_id, shopify_media_ids_to_keep):
                 error_msg = f"Error removing media {media_id}: {str(e)}"
                 errors.append(error_msg)
                 print(f"💥 {error_msg}")
-                import traceback
-                print(traceback.format_exc())
         
         return {
             "success": len(errors) == 0,
@@ -158,7 +179,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
     """
     try:
         if not media_order:
-            return {"success": True, "message": "No media order specified"}
+            return {"success": True, "message": "No media order specified", "errors": []}
         
         print(f"🔄 Reordering media by order for product {product_id}...")
         
@@ -171,9 +192,13 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
             'Content-Type': 'application/json'
         }
         
+        time.sleep(1.5)
         response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            time.sleep(3.0)
+            response = requests.get(url, headers=headers)
         if not response.ok:
-            return {"success": False, "error": f"Failed to get product: {response.status_code}"}
+            return {"success": False, "errors": [f"Failed to get product: {response.status_code}"]}
         
         product_data = response.json().get('product', {})
         existing_images = product_data.get('images', [])
@@ -297,27 +322,38 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         if missing_images:
             print(f"⚠️ Warning: {len(missing_images)} expected images not found. Attempting to continue with available images.")
         
-        # Update positions for all images
         errors = []
         successful_updates = []
-        for position, image_id in sorted(position_map.items()):
-            update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
-            payload = {
-                "image": {
-                    "id": int(image_id),
-                    "position": position
-                }
-            }
-            
-            # Handle redirects for PUT requests
-            update_response = requests.put(update_url, headers=headers, json=payload, allow_redirects=False)
-            if update_response.status_code in [301, 302, 303, 307, 308]:
-                redirect_url = update_response.headers.get('Location', update_url)
-                if redirect_url.startswith('/'):
+
+        def _put_with_retry(put_url, put_payload, label=""):
+            """PUT with redirect-follow and 429 retry (up to 3 attempts)."""
+            for attempt in range(3):
+                time.sleep(1.0)
+                r = requests.put(put_url, headers=headers, json=put_payload, allow_redirects=False)
+                if r.status_code in [301, 302, 303, 307, 308]:
                     from urllib.parse import urlparse
-                    parsed = urlparse(update_url)
-                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                update_response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                    loc = r.headers.get('Location', put_url)
+                    if loc.startswith('/'):
+                        p = urlparse(put_url)
+                        loc = f"{p.scheme}://{p.netloc}{loc}"
+                    time.sleep(1.0)
+                    r = requests.put(loc, headers=headers, json=put_payload, allow_redirects=True)
+                if r.status_code == 429 and attempt < 2:
+                    wait = 3.0
+                    try:
+                        wait = max(3.0, float(r.headers.get("retry-after", 3)))
+                    except (ValueError, TypeError):
+                        pass
+                    print(f"⚠️ Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
+                    time.sleep(wait)
+                    continue
+                return r
+            return r
+
+        for idx, (position, image_id) in enumerate(sorted(position_map.items())):
+            put_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
+            payload = {"image": {"id": int(image_id), "position": position}}
+            update_response = _put_with_retry(put_url, payload, f"image position {position}")
             if update_response.ok:
                 successful_updates.append((position, image_id))
                 print(f"✅ Set position {position} for image ID: {image_id}")
@@ -328,35 +364,20 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         
         print(f"📊 Reordering summary: {len(successful_updates)} successful, {len(errors)} errors")
         
-        # After reordering, ensure the first image (position 1) is set as the main product image
         if position_map:
             first_position = min(position_map.keys())
             first_image_id = position_map[first_position]
             print(f"🖼️ Setting image at position {first_position} (ID: {first_image_id}) as main product image...")
             try:
-                # Update the product to set the main image
                 product_update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
                 product_update_payload = {
-                    "product": {
-                        "id": product_id,
-                        "image": {
-                            "id": int(first_image_id)
-                        }
-                    }
+                    "product": {"id": product_id, "image": {"id": int(first_image_id)}}
                 }
-                product_update_response = requests.put(product_update_url, headers=headers, json=product_update_payload, allow_redirects=False)
-                if product_update_response.status_code in [301, 302, 303, 307, 308]:
-                    redirect_url = product_update_response.headers.get('Location', product_update_url)
-                    if redirect_url.startswith('/'):
-                        from urllib.parse import urlparse
-                        parsed = urlparse(product_update_url)
-                        redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                    product_update_response = requests.put(redirect_url, headers=headers, json=product_update_payload, allow_redirects=True)
-                
-                if product_update_response.status_code == 200:
+                r = _put_with_retry(product_update_url, product_update_payload, "set main image")
+                if r.status_code == 200:
                     print(f"✅ Main product image set to image ID: {first_image_id}")
                 else:
-                    print(f"⚠️ Failed to set main product image: {product_update_response.status_code}")
+                    print(f"⚠️ Failed to set main product image: {r.status_code}")
             except Exception as e:
                 print(f"⚠️ Error setting main product image: {e}")
         
@@ -373,33 +394,35 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
             "errors": [error_msg]
         }
 
-def reorder_product_media(product_id, shopify_media_ids_in_order):
+def reorder_product_media(product_id, shopify_media_ids_in_order, shopify_domain=None):
     """
     Reorder product media according to the specified order
     
     Args:
         product_id (int): The ID of the product
         shopify_media_ids_in_order (list): List of media IDs in desired order
+        shopify_domain (str, optional): The actual Shopify domain to use (to avoid redirects)
     
     Returns:
         dict: Result with success status
     """
     try:
         if not shopify_media_ids_in_order:
-            return {"success": True, "message": "No media to reorder"}
+            return {"success": True, "message": "No media to reorder", "errors": []}
         
         print(f"🔄 Reordering {len(shopify_media_ids_in_order)} media items for product {product_id}...")
         
-        # Get existing product media
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
         headers = {
             'X-Shopify-Access-Token': ACCESS_TOKEN,
             'Content-Type': 'application/json'
         }
         
+        time.sleep(0.6)
         response = requests.get(url, headers=headers)
         if not response.ok:
-            return {"success": False, "error": f"Failed to get product: {response.status_code}"}
+            return {"success": False, "errors": [f"Failed to get product: {response.status_code}"]}
         
         product_data = response.json().get('product', {})
         existing_images = product_data.get('images', [])
@@ -417,7 +440,7 @@ def reorder_product_media(product_id, shopify_media_ids_in_order):
             
             if media_id in image_map:
                 image_id = image_map[media_id]['id']
-                update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
+                update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
                 payload = {
                     "image": {
                         "id": image_id,
@@ -528,7 +551,7 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         total_media = len(media_files) + (len(shopify_media_ids) if shopify_media_ids else 0)
         
         if total_media == 0:
-            return {"success": True, "message": "No media files to upload"}
+            return {"success": True, "message": "No media files to upload", "errors": []}
         
         print(f"🔄 Uploading {len(media_files)} new files and attaching {len(shopify_media_ids) if shopify_media_ids else 0} existing files to product {product_id}")
         
@@ -837,6 +860,738 @@ def update_product_taxable(product_id, taxable):
         print(f"💥 Error updating taxable field: {str(e)}")
         return False
 
+
+def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_domain=None):
+    """
+    Find all product IDs that have the corresponding Child - X metafield
+    (e.g. parent_child_value "Parent - Chocolate Bar Maxi" -> find products with "Child - Chocolate Bar Maxi").
+    Uses GraphQL to paginate products and filter by custom.parent_child metafield.
+    """
+    if not parent_child_value or not str(parent_child_value).strip().startswith("Parent - "):
+        return []
+    child_value = "Child - " + str(parent_child_value).strip()[9:]
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    headers = {
+        "X-Shopify-Access-Token": ACCESS_TOKEN,
+        "Content-Type": "application/json",
+    }
+    ids = []
+    cursor = None
+    while True:
+        query = """
+        query GetProductsWithParentChild($cursor: String) {
+          products(first: 250, after: $cursor) {
+            edges {
+              node {
+                id
+                legacyResourceId
+                metafield(namespace: "custom", key: "parent_child") {
+                  value
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+        """
+        variables = {"cursor": cursor} if cursor else {}
+        try:
+            resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
+            if resp.status_code != 200:
+                print(f"⚠️ get_child_product_ids GraphQL HTTP {resp.status_code}", flush=True)
+                break
+            data = resp.json()
+            if data.get("errors"):
+                print(f"⚠️ get_child_product_ids GraphQL errors: {data.get('errors')}", flush=True)
+                break
+            products_data = (data.get("data") or {}).get("products") or {}
+            edges = products_data.get("edges") or []
+            page_info = products_data.get("pageInfo") or {}
+            for edge in edges:
+                node = edge.get("node") or {}
+                mf = node.get("metafield")
+                if not mf or not mf.get("value"):
+                    continue
+                val = mf.get("value", "").strip()
+                try:
+                    if val.startswith("["):
+                        arr = json.loads(val)
+                        if isinstance(arr, list) and arr and str(arr[0]).strip() == child_value:
+                            leg_id = node.get("legacyResourceId")
+                            if leg_id:
+                                try:
+                                    ids.append(int(leg_id))
+                                except (TypeError, ValueError):
+                                    pass
+                    elif val == child_value:
+                        leg_id = node.get("legacyResourceId")
+                        if leg_id:
+                            try:
+                                ids.append(int(leg_id))
+                            except (TypeError, ValueError):
+                                pass
+                except (json.JSONDecodeError, TypeError):
+                    if val == child_value:
+                        leg_id = node.get("legacyResourceId")
+                        if leg_id:
+                            try:
+                                ids.append(int(leg_id))
+                            except (TypeError, ValueError):
+                                pass
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+        except Exception as e:
+            print(f"⚠️ get_child_product_ids error: {e}", flush=True)
+            break
+    return ids
+
+
+def _parse_child_family(metafield_value):
+    """
+    If metafield value indicates a Child (e.g. "Child - Chocolate Bar Maxi" or ["Child - Chocolate Bar Maxi"]),
+    return the family key (what comes after "Child - "), e.g. "Chocolate Bar Maxi". Otherwise return None.
+    """
+    if not metafield_value:
+        return None
+    val = (metafield_value if isinstance(metafield_value, str) else str(metafield_value)).strip()
+    if not val:
+        return None
+    # Plain string: "Child - Chocolate Bar Maxi"
+    if val.startswith("Child - "):
+        return val[8:].strip()  # len("Child - ") == 8
+    # JSON array: ["Child - Chocolate Bar Maxi"] or ["Child - X"]
+    try:
+        if val.startswith("["):
+            arr = json.loads(val)
+            if isinstance(arr, list) and arr:
+                first = str(arr[0]).strip()
+                if first.startswith("Child - "):
+                    return first[8:].strip()
+                if len(arr) >= 2 and str(arr[0]).strip().lower() == "child":
+                    return str(arr[1]).strip()
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+def get_all_children_by_family(shopify_domain=None):
+    """
+    Scan all products for custom.parent_child metafield. Find every product whose value
+    is the 'Child' option (e.g. "Child - Chocolate Bar Maxi"). Return a dict mapping
+    family key (what comes after "Child - ") to list of {id, title}.
+    E.g. {"Chocolate Bar Maxi": [{"id": 123, "title": "..."}, ...], ...}
+    Uses GraphQL first; on 404 falls back to REST. Single pass over all products.
+    """
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return {}
+    family_to_children = {}
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    cursor = None
+    use_rest_fallback = False
+    while True:
+        query = """
+        query GetProductsWithParentChild($cursor: String) {
+          products(first: 250, after: $cursor) {
+            edges {
+              node {
+                id
+                legacyResourceId
+                title
+                metafield(namespace: "custom", key: "parent_child") {
+                  value
+                }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+        """
+        try:
+            resp = requests.post(graphql_url, json={"query": query, "variables": {"cursor": cursor} if cursor else {}}, headers=headers, timeout=30)
+            if resp.status_code == 404:
+                use_rest_fallback = True
+                break
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            if data.get("errors"):
+                break
+            products_data = (data.get("data") or {}).get("products") or {}
+            edges = products_data.get("edges") or []
+            page_info = products_data.get("pageInfo") or {}
+            for edge in edges:
+                node = edge.get("node") or {}
+                mf = node.get("metafield")
+                if not mf or not mf.get("value"):
+                    continue
+                family = _parse_child_family(mf.get("value"))
+                if family is None:
+                    continue
+                leg_id = node.get("legacyResourceId")
+                title = (node.get("title") or "").strip() or f"Product {leg_id}"
+                if leg_id:
+                    try:
+                        entry = {"id": int(leg_id), "title": title}
+                        family_to_children.setdefault(family, []).append(entry)
+                    except (TypeError, ValueError):
+                        pass
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+        except Exception:
+            break
+    if use_rest_fallback:
+        base_url = f"https://{domain}/admin/api/{API_VERSION}"
+        url = f"{base_url}/products.json?limit=250"
+        seen = 0
+        max_products = 2000
+        while url and seen < max_products:
+            try:
+                r = requests.get(url, headers=headers, timeout=30)
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                products = data.get("products") or []
+                if not products:
+                    break
+                for p in products:
+                    seen += 1
+                    if seen > max_products:
+                        break
+                    pid = p.get("id")
+                    title = (p.get("title") or "").strip() or f"Product {pid}"
+                    mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1"
+                    try:
+                        mf_r = requests.get(mf_url, headers=headers, timeout=15)
+                        if mf_r.status_code != 200:
+                            continue
+                        mf_data = mf_r.json()
+                        metafields = mf_data.get("metafields") or []
+                        if not metafields:
+                            continue
+                        val = (metafields[0].get("value") or "").strip()
+                        family = _parse_child_family(val)
+                        if family is not None and pid:
+                            family_to_children.setdefault(family, []).append({"id": int(pid), "title": title})
+                    except Exception:
+                        continue
+                link = r.headers.get("Link") or ""
+                url = None
+                for part in link.split(","):
+                    if 'rel="next"' in part:
+                        url = part[part.find("<") + 1:part.find(">")].strip()
+                        break
+            except Exception:
+                break
+    return family_to_children
+
+
+def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
+    """
+    Fallback: find child products via REST (list products + metafields per product).
+    Used when GraphQL returns 404 (e.g. same domain works for REST but not GraphQL).
+    """
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    result = []
+    url = f"{base_url}/products.json?limit=250"
+    seen = 0
+    while url and seen < max_products:
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code != 200:
+                break
+            data = r.json()
+            products = data.get("products") or []
+            if not products:
+                break
+            for p in products:
+                seen += 1
+                if seen > max_products:
+                    break
+                pid = p.get("id")
+                title = (p.get("title") or "").strip() or f"Product {pid}"
+                mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1"
+                try:
+                    mf_r = requests.get(mf_url, headers=headers, timeout=15)
+                    if mf_r.status_code != 200:
+                        continue
+                    mf_data = mf_r.json()
+                    metafields = mf_data.get("metafields") or []
+                    if not metafields:
+                        continue
+                    val = (metafields[0].get("value") or "").strip()
+                    match = False
+                    try:
+                        if val.startswith("["):
+                            arr = json.loads(val)
+                            if isinstance(arr, list):
+                                for item in arr:
+                                    if str(item).strip() == child_value_stripped:
+                                        match = True
+                                        break
+                        elif val == child_value_stripped:
+                            match = True
+                    except (json.JSONDecodeError, TypeError):
+                        if val == child_value_stripped:
+                            match = True
+                    if match and pid:
+                        result.append({"id": int(pid), "title": title})
+                except Exception:
+                    continue
+            link = r.headers.get("Link") or ""
+            url = None
+            for part in link.split(","):
+                if 'rel="next"' in part:
+                    url = part[part.find("<") + 1:part.find(">")].strip()
+                    break
+        except Exception as e:
+            print(f"⚠️ REST fallback error for {parent_child_value!r}: {e}", flush=True)
+            break
+    return result
+
+
+def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=None):
+    """
+    Load children by searching through all products for the applicable metafield.
+    Tries GraphQL first; if it returns 404 (e.g. GraphQL not available on same host), falls back to REST.
+    Returns list of {id, title}.
+    """
+    if not parent_child_value or not str(parent_child_value).strip().startswith("Parent - "):
+        return []
+    child_value = "Child - " + str(parent_child_value).strip()[9:]
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        print("⚠️ get_child_products_by_parent_child_value: SHOPIFY_STORE_DOMAIN is not set; cannot fetch children.", flush=True)
+        return []
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    headers = {
+        "X-Shopify-Access-Token": ACCESS_TOKEN,
+        "Content-Type": "application/json",
+    }
+    result = []
+    cursor = None
+    child_value_stripped = child_value.strip()
+    use_rest_fallback = False
+    while True:
+        query = """
+        query GetProductsWithParentChild($cursor: String) {
+          products(first: 250, after: $cursor) {
+            edges {
+              node {
+                id
+                legacyResourceId
+                title
+                metafield(namespace: "custom", key: "parent_child") {
+                  value
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+        """
+        variables = {"cursor": cursor} if cursor else {}
+        try:
+            resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
+            if resp.status_code == 404:
+                print(f"⚠️ get_child_products_by_parent_child_value GraphQL 404; using REST fallback (same domain as rest of app).", flush=True)
+                use_rest_fallback = True
+                break
+            if resp.status_code != 200:
+                print(f"⚠️ get_child_products_by_parent_child_value HTTP {resp.status_code} for {parent_child_value!r}", flush=True)
+                try:
+                    print(f"   Response: {resp.text[:500]}", flush=True)
+                except Exception:
+                    pass
+                break
+            data = resp.json()
+            if data.get("errors"):
+                print(f"⚠️ get_child_products_by_parent_child_value GraphQL errors for {parent_child_value!r}: {data.get('errors')}", flush=True)
+                break
+            products_data = (data.get("data") or {}).get("products") or {}
+            edges = products_data.get("edges") or []
+            page_info = products_data.get("pageInfo") or {}
+            for edge in edges:
+                node = edge.get("node") or {}
+                mf = node.get("metafield")
+                if not mf or not mf.get("value"):
+                    continue
+                val = (mf.get("value") or "").strip()
+                match = False
+                try:
+                    if val.startswith("["):
+                        arr = json.loads(val)
+                        if isinstance(arr, list):
+                            for item in arr:
+                                if str(item).strip() == child_value_stripped:
+                                    match = True
+                                    break
+                    else:
+                        if val == child_value_stripped:
+                            match = True
+                except (json.JSONDecodeError, TypeError):
+                    if val == child_value_stripped:
+                        match = True
+                if match:
+                    leg_id = node.get("legacyResourceId")
+                    title = (node.get("title") or "").strip() or f"Product {leg_id}"
+                    if leg_id:
+                        try:
+                            result.append({"id": int(leg_id), "title": title})
+                        except (TypeError, ValueError):
+                            pass
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+        except Exception as e:
+            print(f"⚠️ get_child_products_by_parent_child_value error for {parent_child_value!r}: {e}", flush=True)
+            break
+    if use_rest_fallback:
+        result = _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value)
+    return result
+
+
+def get_parent_child_tree(parents_only=False):
+    """
+    Return a tree of all parent products (from PARENT_PRODUCTS) with their
+    corresponding child products. When parents_only=True, returns immediately with
+    empty children (hardcoded parents only). Otherwise: scan all products once for
+    parent_child metafield; any value "Child - X" is grouped under family X; each
+    parent "Parent - X" gets children from that family.
+    Returns: { "tree": [ { "parent": {id, title}, "parent_value": "Parent - X", "children": [...] }, ... ] }
+    """
+    try:
+        from .categories import PARENT_PRODUCTS
+        family_to_children = {} if parents_only else get_all_children_by_family()
+        tree = []
+        for p in PARENT_PRODUCTS or []:
+            val = (p.get("parent_child_value") or "").strip()
+            if not val.startswith("Parent - "):
+                continue
+            # Family key is whatever comes after "Parent - " (e.g. "Chocolate Bar Maxi")
+            family_key = val[9:].strip()  # len("Parent - ") == 9
+            title = (p.get("title") or "").strip() or "Untitled"
+            pid = p.get("id")
+            try:
+                pid = int(pid) if pid is not None else None
+            except (TypeError, ValueError):
+                pid = None
+            parent_entry = {"id": pid, "title": title}
+            children = family_to_children.get(family_key, [])
+            tree.append({
+                "parent": parent_entry,
+                "parent_value": val,
+                "children": children,
+            })
+        return {"tree": tree}
+    except Exception as e:
+        print(f"Error get_parent_child_tree: {e}", flush=True)
+        return {"tree": []}
+
+
+# Metafield keys that are "inherited" from parent to children (same as hidden on child form).
+PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
+    "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside",
+    "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
+    "case_weight", "leadtime1", "leadtime2", "commodity_code",
+    "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame",
+    "egg", "cereals", "soya", "milk",
+    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "product_colours",
+})
+
+
+def _get_parent_product_id_for_child(child_parent_child_value, shopify_domain=None):
+    """
+    Given a child's parent_child value (e.g. "Child - Chocolate Bar Mini"), return the
+    Shopify ID of the product that has parent_child metafield = "Parent - Chocolate Bar Mini".
+    Always resolves from the store (product that actually has the Parent metafield); falls back
+    to PARENT_PRODUCTS id only if API lookup returns None.
+    """
+    v = (child_parent_child_value or "").strip()
+    if not v.startswith("Child - "):
+        return None
+    family = v[8:].strip()  # len("Child - ") == 8
+    if not family:
+        return None
+    parent_value = "Parent - " + family
+    # Prefer store: the product that has parent_child = "Parent - X" in Shopify
+    pid = _find_parent_product_id_by_parent_value(parent_value, shopify_domain)
+    if pid is not None:
+        return pid
+    # Fallback: PARENT_PRODUCTS id (e.g. if API failed or product not yet in store)
+    try:
+        from .categories import PARENT_PRODUCTS
+        for p in (PARENT_PRODUCTS or []):
+            if (p.get("parent_child_value") or "").strip() == parent_value:
+                pid = p.get("id")
+                if pid is not None:
+                    try:
+                        return int(pid)
+                    except (TypeError, ValueError):
+                        pass
+                break
+    except Exception:
+        pass
+    return None
+
+
+def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
+    """
+    Find one product in Shopify that has metafield custom.parent_child = parent_value
+    (e.g. "Parent - Chocolate Bar Mini"). Returns product ID (int) or None.
+    Uses GraphQL then REST fallback; respects rate limits with a short delay.
+    """
+    pv = (parent_value or "").strip()
+    if not pv.startswith("Parent - "):
+        return None
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return None
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    cursor = None
+    for _ in range(50):  # cap pages
+        query = """
+        query GetProductsWithParentChild($cursor: String) {
+          products(first: 250, after: $cursor) {
+            edges {
+              node {
+                id
+                legacyResourceId
+                metafield(namespace: "custom", key: "parent_child") {
+                  value
+                }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+        """
+        try:
+            resp = requests.post(
+                graphql_url,
+                json={"query": query, "variables": {"cursor": cursor} if cursor else {}},
+                headers=headers,
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            if data.get("errors"):
+                break
+            products_data = (data.get("data") or {}).get("products") or {}
+            edges = products_data.get("edges") or []
+            page_info = products_data.get("pageInfo") or {}
+            for edge in edges:
+                node = edge.get("node") or {}
+                mf = node.get("metafield")
+                if not mf or not mf.get("value"):
+                    continue
+                val = (mf.get("value") or "").strip()
+                match = False
+                try:
+                    if val.startswith("["):
+                        arr = json.loads(val)
+                        if isinstance(arr, list):
+                            for item in arr:
+                                if str(item).strip() == pv:
+                                    match = True
+                                    break
+                    else:
+                        if val == pv:
+                            match = True
+                except (json.JSONDecodeError, TypeError):
+                    if val == pv:
+                        match = True
+                if match:
+                    leg_id = node.get("legacyResourceId")
+                    if leg_id:
+                        try:
+                            pid_found = int(leg_id)
+                            print(f"📋 Resolved parent product ID {pid_found} for {pv!r} via API (GraphQL)", flush=True)
+                            return pid_found
+                        except (TypeError, ValueError):
+                            pass
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+            time.sleep(0.55)
+        except Exception as e:
+            print(f"⚠️ _find_parent_product_id_by_parent_value: {e}", flush=True)
+            break
+    # REST fallback: list products and check metafields
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    url = f"{base_url}/products.json?limit=250"
+    while url:
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code != 200:
+                break
+            data = r.json()
+            products = data.get("products") or []
+            for p in products:
+                pid = p.get("id")
+                if not pid:
+                    continue
+                mf_r = requests.get(f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1", headers=headers, timeout=15)
+                time.sleep(0.55)
+                if mf_r.status_code != 200:
+                    continue
+                mf_list = mf_r.json().get("metafields") or []
+                if not mf_list:
+                    continue
+                val = (mf_list[0].get("value") or "").strip()
+                try:
+                    if val.startswith("["):
+                        arr = json.loads(val)
+                        if isinstance(arr, list) and pv in [str(x).strip() for x in arr]:
+                            print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
+                            return int(pid)
+                    elif val == pv:
+                        print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
+                        return int(pid)
+                except (json.JSONDecodeError, TypeError):
+                    if val == pv:
+                        print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
+                        return int(pid)
+            link = r.headers.get("Link") or ""
+            url = None
+            for part in link.split(","):
+                if 'rel="next"' in part:
+                    url = part[part.find("<") + 1:part.find(">")].strip()
+                    break
+        except Exception as e:
+            print(f"⚠️ _find_parent_product_id_by_parent_value REST: {e}", flush=True)
+            break
+    return None
+
+
+def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
+    """
+    For a child product (parent_child e.g. "Child - Chocolate Bar Maxi"), fetch the parent
+    product's tags, taxable (charge_vat), and metafields for PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS.
+    Used when saving a child so inherited fields are overwritten by the parent's values.
+    Returns None if parent product ID is not found or fetch fails; otherwise
+    {"tags": str, "charge_vat": bool, "metafields": [{"namespace","key","value","type"}, ...]}.
+    """
+    parent_id = _get_parent_product_id_for_child(child_parent_child_value, shopify_domain)
+    if not parent_id:
+        print(f"⚠️ Parent product not found for child type {child_parent_child_value!r} (add parent id to PARENT_PRODUCTS or ensure parent exists in store)", flush=True)
+        return None
+    time.sleep(0.5)  # Avoid rate limit when we just did a lookup
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    try:
+        # Fetch parent product for tags and taxable
+        r = requests.get(f"{base_url}/products/{parent_id}.json", headers=headers, timeout=15)
+        if r.status_code != 200:
+            return None
+        prod = r.json().get("product", {})
+        tags = prod.get("tags") or ""
+        if isinstance(tags, list):
+            tags = ", ".join(str(t) for t in tags)
+        variants = prod.get("variants") or []
+        taxable = True
+        if variants:
+            taxable = variants[0].get("taxable", True)
+        # Fetch parent metafields
+        mf_r = requests.get(f"{base_url}/products/{parent_id}/metafields.json?limit=250", headers=headers, timeout=15)
+        metafields = []
+        if mf_r.status_code == 200:
+            for m in mf_r.json().get("metafields", []):
+                key = (m.get("key") or "").strip()
+                if key in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
+                    metafields.append({
+                        "namespace": m.get("namespace") or "custom",
+                        "key": key,
+                        "value": m.get("value") or "",
+                        "type": m.get("type") or "single_line_text_field",
+                    })
+        return {
+            "tags": tags,
+            "charge_vat": taxable,
+            "metafields": metafields,
+        }
+    except Exception as e:
+        print(f"⚠️ get_parent_inherited_data: {e}", flush=True)
+        return None
+
+
+def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
+    """
+    After saving a parent product, push the same inherited fields to all products
+    that have the corresponding Child - X parent_child metafield.
+    Returns a list of saved items for UI: [{"id": ..., "title": ..., "is_parent": False}, ...] (children only).
+    """
+    parent_child_value = (product_data.get("parent_child") or "").strip()
+    if not parent_child_value.startswith("Parent - "):
+        return []
+    child_ids = get_child_product_ids_by_parent_child_value(parent_child_value, shopify_domain)
+    if not child_ids:
+        print(f"📋 No child products found for {parent_child_value}", flush=True)
+        return []
+    print(f"📋 Propagating parent fields to {len(child_ids)} child product(s) for {parent_child_value}", flush=True)
+    mfs_to_propagate = [
+        m for m in (metafields_saved or [])
+        if m.get("namespace") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
+    ]
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    headers = {
+        "X-Shopify-Access-Token": ACCESS_TOKEN,
+        "Content-Type": "application/json",
+    }
+    saved_list = []
+    for cid in child_ids:
+        try:
+            if mfs_to_propagate:
+                create_metafields(cid, mfs_to_propagate, shopify_domain=shopify_domain)
+            # Update child product tags and taxable to match parent
+            prod_url = f"{base_url}/products/{cid}.json"
+            get_resp = requests.get(prod_url, headers=headers, timeout=15)
+            if get_resp.status_code == 200:
+                prod = get_resp.json().get("product", {})
+                child_title = (prod.get("title") or "").strip() or f"Product {cid}"
+                payload = {
+                    "product": {
+                        "id": cid,
+                        "tags": tags,
+                        "variants": [{"id": v.get("id"), "taxable": taxable} for v in prod.get("variants", [])],
+                    }
+                }
+                put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
+                if put_resp.status_code == 200:
+                    print(f"✅ Updated tags and taxable for child product {cid}", flush=True)
+                    saved_list.append({"id": cid, "title": child_title, "is_parent": False})
+                else:
+                    print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
+            else:
+                print(f"⚠️ Could not fetch child product {cid} for tags update", flush=True)
+        except Exception as e:
+            print(f"⚠️ Error propagating to child {cid}: {e}", flush=True)
+    return saved_list
+
+
 def create_metafields(product_id, metafields_data, shopify_domain=None):
     """
     Create or update metafields for a product (upsert - update if exists, create if not)
@@ -861,23 +1616,78 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         # Fetch existing metafields to support upsert (POST fails with 422 if namespace+key already exists)
         existing_by_ns_key = {}
         try:
-            resp = requests.get(f"{base_url}/metafields.json?limit=250", headers=headers)
-            if resp.status_code == 200:
-                for mf in resp.json().get("metafields", []):
-                    ns, k = mf.get("namespace", ""), mf.get("key", "")
-                    if ns and k:
-                        existing_by_ns_key[(ns, k)] = mf.get("id")
+            mf_fetch_url = f"{base_url}/metafields.json?limit=250"
+            for _mf_attempt in range(3):
+                time.sleep(1.5 if _mf_attempt == 0 else 4.0 * _mf_attempt)
+                resp = requests.get(mf_fetch_url, headers=headers, allow_redirects=True)
+                if resp.status_code == 200:
+                    for mf in resp.json().get("metafields", []):
+                        ns, k = mf.get("namespace", ""), mf.get("key", "")
+                        if ns and k:
+                            existing_by_ns_key[(ns, k)] = mf.get("id")
+                    print(f"📋 Fetched {len(existing_by_ns_key)} existing metafields for upsert", flush=True)
+                    break
+                elif resp.status_code == 429 and _mf_attempt < 2:
+                    print(f"⚠️ Metafield fetch got 429, retrying (attempt {_mf_attempt+1}/3)...", flush=True)
+                else:
+                    print(f"⚠️ Metafield fetch returned {resp.status_code} - deletions may not work", flush=True)
+                    break
         except Exception as e:
             print(f"⚠️ Could not fetch existing metafields for upsert: {e}", flush=True)
+        
+        # Throttle after fetch
+        if metafields_data:
+            time.sleep(0.5)
         
         success_count = 0
         errors = []
         
-        for metafield_data in metafields_data:
+        for idx, metafield_data in enumerate(metafields_data):
             try:
-                # Normalize value formatting based on metafield type
+                namespace = metafield_data.get("namespace", "custom")
+                key = metafield_data.get("key", "")
                 raw_value = metafield_data.get("value", "")
                 mf_type = metafield_data.get("type", "single_line_text_field") or "single_line_text_field"
+
+                # When guidelines/templates are cleared (empty value), delete the metafield if it exists
+                if namespace == "custom" and key in ("artworkguidelines", "artworktemplates"):
+                    if not (raw_value and str(raw_value).strip()):
+                        existing_id_for_del = existing_by_ns_key.get((namespace, key))
+                        if existing_id_for_del:
+                            del_url = f"{base_url}/metafields/{existing_id_for_del}.json"
+                            try:
+                                del_ok = False
+                                for del_attempt in range(4):
+                                    time.sleep(1.0)
+                                    del_r = requests.delete(del_url, headers=headers, allow_redirects=False)
+                                    if del_r.status_code in (301, 302, 303, 307, 308):
+                                        from urllib.parse import urlparse
+                                        loc = del_r.headers.get("Location", del_url)
+                                        if loc.startswith("/"):
+                                            parsed = urlparse(del_url)
+                                            loc = f"{parsed.scheme}://{parsed.netloc}{loc}"
+                                        time.sleep(1.0)
+                                        del_r = requests.delete(loc, headers=headers, timeout=15)
+                                    if del_r.status_code == 429 and del_attempt < 3:
+                                        backoff = 3.0 * (del_attempt + 1)
+                                        print(f"⚠️ Rate limit (429) deleting {namespace}.{key}, waiting {backoff}s (attempt {del_attempt+1}/4)...", flush=True)
+                                        time.sleep(backoff)
+                                        continue
+                                    if del_r.status_code in (200, 204):
+                                        success_count += 1
+                                        del_ok = True
+                                        print(f"✅ Deleted metafield (cleared): {namespace}.{key}", flush=True)
+                                    else:
+                                        errors.append(f"Failed to delete {namespace}.{key}: {del_r.status_code}")
+                                    break
+                                if not del_ok and not errors:
+                                    errors.append(f"Failed to delete {namespace}.{key} after retries")
+                            except Exception as e:
+                                errors.append(f"Error deleting {namespace}.{key}: {e}")
+                        else:
+                            print(f"ℹ️ No existing metafield found for {namespace}.{key} - nothing to delete", flush=True)
+                        continue
+                    # Has value: fall through to create/update
 
                 # For list types, Shopify expects a JSON array string
                 formatted_value = raw_value
@@ -930,37 +1740,52 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 key = metafield_data.get("key", "")
                 existing_id = existing_by_ns_key.get((namespace, key))
                 
-                if existing_id:
-                    # Update existing metafield (PUT) - only send value (type is immutable on update)
-                    payload = {"metafield": {"value": formatted_value}}
-                    url = f"{base_url}/metafields/{existing_id}.json"
-                    response = requests.put(url, headers=headers, json=payload, allow_redirects=False)
-                    if response.status_code in [301, 302, 303, 307, 308]:
-                        redirect_url = response.headers.get('Location', url)
-                        if redirect_url.startswith('/'):
+                # Rate limit: Shopify allows 2 calls/sec (bucket of 40). Throttle between calls.
+                if idx > 0:
+                    time.sleep(0.55)
+                
+                def _do_request():
+                    if existing_id:
+                        payload = {"metafield": {"value": formatted_value}}
+                        url = f"{base_url}/metafields/{existing_id}.json"
+                        r = requests.put(url, headers=headers, json=payload, allow_redirects=False)
+                        if r.status_code in [301, 302, 303, 307, 308]:
                             from urllib.parse import urlparse
-                            parsed = urlparse(url)
-                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                        response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
-                else:
-                    # Create new metafield (POST)
-                    payload = {
-                        "metafield": {
-                            "namespace": namespace,
-                            "key": key,
-                            "value": formatted_value,
-                            "type": mf_type
+                            redirect_url = r.headers.get('Location', url)
+                            if redirect_url.startswith('/'):
+                                parsed = urlparse(url)
+                                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                            r = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                        return r
+                    else:
+                        payload = {
+                            "metafield": {
+                                "namespace": namespace,
+                                "key": key,
+                                "value": formatted_value,
+                                "type": mf_type
+                            }
                         }
-                    }
-                    url = f"{base_url}/metafields.json"
-                    response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
-                    if response.status_code in [301, 302, 303, 307, 308]:
-                        redirect_url = response.headers.get('Location', url)
-                        if redirect_url.startswith('/'):
+                        url = f"{base_url}/metafields.json"
+                        r = requests.post(url, headers=headers, json=payload, allow_redirects=False)
+                        if r.status_code in [301, 302, 303, 307, 308]:
                             from urllib.parse import urlparse
-                            parsed = urlparse(url)
-                            redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                        response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                            redirect_url = r.headers.get('Location', url)
+                            if redirect_url.startswith('/'):
+                                parsed = urlparse(url)
+                                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+                            r = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                        return r
+                
+                response = _do_request()
+                for _retry in range(3):
+                    if response.status_code == 429:
+                        wait = 3.0 * (_retry + 1)
+                        print(f"⚠️ Rate limit (429) on metafield {namespace}.{key}, waiting {wait}s (retry {_retry+1}/3)...", flush=True)
+                        time.sleep(wait)
+                        response = _do_request()
+                    else:
+                        break
                 
                 if response.status_code in [200, 201]:
                     success_count += 1
@@ -1070,6 +1895,21 @@ def create_product(product_data):
             "Cache-Control": "no-cache"
         }
         
+        # When saving a child product, overwrite tags and charge_vat (and later metafields) from parent
+        did_parent_fetch = False
+        try:
+            parent_child_value = (product_data.get("parent_child") or "").strip()
+            if parent_child_value.startswith("Child - "):
+                parent_inherited = get_parent_inherited_data(parent_child_value, shopify_domain=None)
+                if parent_inherited:
+                    product_data["tags"] = parent_inherited.get("tags") or product_data.get("tags", "")
+                    product_data["charge_vat"] = parent_inherited.get("charge_vat", True)
+                    product_data["_parent_metafields"] = parent_inherited.get("metafields") or []
+                    did_parent_fetch = True  # we did 2 API calls (product + metafields)
+                    print(f"📋 Child product: using parent's tags, VAT, and inherited metafields", flush=True)
+        except Exception as e:
+            print(f"⚠️ Skipping parent inherited data (non-fatal): {e}", flush=True)
+        
         # Determine if product should be taxable based on VAT setting
         tags = product_data.get("tags", "")
         charge_vat_raw = product_data.get("charge_vat", True)  # Default to True if not provided
@@ -1163,75 +2003,65 @@ def create_product(product_data):
         import json
         print(json.dumps(payload, indent=2), flush=True)
 
+        # Throttle: REST Admin API is limited to 2 req/sec (leaky bucket 40/40).
+        # The frontend may have just loaded the product, burning through budget.
+        # Wait enough to let the bucket recover before our first real request.
+        import time as _time_module
+        _time_module.sleep(2.0)
+        if did_parent_fetch:
+            _time_module.sleep(2.0)  # extra gap after parent product + metafields (2+ API calls)
         # Extract the actual Shopify domain from redirects (if any)
-        # This will be used for all subsequent API calls to avoid redirects
         actual_shopify_domain = None
-        
-        # Ensure we're sending the request correctly
-        # For both PUT and POST requests, handle redirects manually to preserve method
-        if method == "PUT":
-            # For PUT, first try without following redirects
-            response = requests.put(url, headers=headers, json=payload, allow_redirects=False)
-            
-            # Check if we got a redirect status code
-            if response.status_code in [301, 302, 303, 307, 308]:
-                redirect_url = response.headers.get('Location', url)
-                # Handle relative redirects
-                if redirect_url.startswith('/'):
-                    from urllib.parse import urlparse
-                    parsed = urlparse(url)
-                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                
-                # Extract the actual Shopify domain from the redirect URL
-                from urllib.parse import urlparse
-                parsed_redirect = urlparse(redirect_url)
-                actual_shopify_domain = parsed_redirect.netloc
-                
-                # Follow redirect with PUT method preserved
-                response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+        response = None
+        for step1_attempt in range(4):
+            if method == "PUT":
+                response = requests.put(url, headers=headers, json=payload, allow_redirects=False)
             else:
-                # Extract domain from response URL in case of redirects
-                if hasattr(response, 'url') and response.url != url:
-                    from urllib.parse import urlparse
-                    parsed = urlparse(response.url)
-                    actual_shopify_domain = parsed.netloc
-        else:
-            # For POST, first try without following redirects
-            response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
-            
-            # Check if we got a redirect status code
-            if response.status_code in [301, 302, 303, 307, 308]:
-                redirect_url = response.headers.get('Location', url)
-                # Handle relative redirects
-                if redirect_url.startswith('/'):
-                    from urllib.parse import urlparse
-                    parsed = urlparse(url)
-                    redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
-                print(f"⚠️ POST request redirected {response.status_code} to: {redirect_url}", flush=True)
-                
-                # Extract the actual Shopify domain from the redirect URL
+                response = requests.post(url, headers=headers, json=payload, allow_redirects=False)
+            if response.status_code == 429:
+                if step1_attempt < 3:
+                    wait_sec = 3.0
+                    try:
+                        wait_sec = max(3.0, float(response.headers.get("retry-after", 3)))
+                    except (ValueError, TypeError):
+                        pass
+                    print(f"⚠️ Step 1 rate limit (429), waiting {wait_sec}s then retry ({step1_attempt + 1}/3)...", flush=True)
+                    _time_module.sleep(wait_sec)
+                    continue
+                print(f"❌ Shopify API returned 429 after retries. Response: {response.text[:500]}", flush=True)
+                return {"success": False, "error": f"Rate limit exceeded. {response.text[:300]}"}
+            break
+        # Handle redirects (301/302) and follow with same method (space out to avoid 429)
+        if response.status_code in [301, 302, 303, 307, 308]:
+            redirect_url = response.headers.get('Location', url)
+            if redirect_url.startswith('/'):
                 from urllib.parse import urlparse
-                parsed_redirect = urlparse(redirect_url)
-                actual_shopify_domain = parsed_redirect.netloc
-                print(f"🔍 Extracted Shopify domain: {actual_shopify_domain}", flush=True)
-                
-                # Follow redirect with POST method preserved
-                response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
-            
-            # Check if we were redirected (which would be unusual for a POST)
-            if hasattr(response, 'history') and response.history:
-                print(f"⚠️ Request was redirected {len(response.history)} time(s)", flush=True)
-                for hist in response.history:
-                    print(f"   Redirect: {hist.status_code} -> {hist.url}", flush=True)
-                # If POST was redirected, check if it was converted to GET
-                if response.url != url:
-                    print(f"⚠️ Final URL differs from original: {url} -> {response.url}", flush=True)
-                    # Extract domain from final URL if we didn't get it from redirect header
-                    if not actual_shopify_domain:
-                        from urllib.parse import urlparse
-                        parsed_final = urlparse(response.url)
-                        actual_shopify_domain = parsed_final.netloc
-                        print(f"🔍 Extracted Shopify domain from final URL: {actual_shopify_domain}", flush=True)
+                parsed = urlparse(url)
+                redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
+            from urllib.parse import urlparse
+            parsed_redirect = urlparse(redirect_url)
+            actual_shopify_domain = parsed_redirect.netloc
+            _time_module.sleep(2.0)  # let bucket recover before following redirect
+            for redirect_attempt in range(4):
+                if method == "PUT":
+                    response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                else:
+                    print(f"⚠️ POST request redirected to: {redirect_url}", flush=True)
+                    response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
+                if response.status_code == 429 and redirect_attempt < 3:
+                    wait_sec = 3.0
+                    try:
+                        wait_sec = max(3.0, float(response.headers.get("retry-after", 3)))
+                    except (ValueError, TypeError):
+                        pass
+                    print(f"⚠️ Step 1 (after redirect) rate limit (429), waiting {wait_sec}s then retry ({redirect_attempt + 1}/3)...", flush=True)
+                    _time_module.sleep(wait_sec)
+                    continue
+                break
+        if hasattr(response, 'url') and response.url != url and not actual_shopify_domain:
+            from urllib.parse import urlparse
+            parsed = urlparse(response.url)
+            actual_shopify_domain = parsed.netloc
         
         # Log the full response for debugging
         print(f"🔍 Shopify API Response Status: {response.status_code}", flush=True)
@@ -1505,16 +2335,18 @@ def create_product(product_data):
                 
                 # Now handle media based on whether we're updating or creating
                 if is_updating:
+                    # Let rate-limit bucket recover after Step 1.
+                    import time as _t2; _t2.sleep(5.0)
                     print(f"🔄 Step 2: Managing media for existing product - {len(media_files)} new files, {len(shopify_media_ids)} existing files to keep...")
                     
                     # Step 2a: Remove media not in the keep list
                     # Always call this - empty list means remove all images
                     print(f"🗑️ Step 2a: Removing unwanted media from product (keeping {len(shopify_media_ids) if shopify_media_ids else 0} images)...")
-                    manage_results = manage_product_media(product_id, shopify_media_ids or [])
-                    if manage_results["success"]:
-                        print(f"✅ Step 2a Complete: Removed {manage_results['removed_count']} unwanted media items")
+                    manage_results = manage_product_media(product_id, shopify_media_ids or [], shopify_domain=actual_shopify_domain)
+                    if manage_results.get("success"):
+                        print(f"✅ Step 2a Complete: Removed {manage_results.get('removed_count', 0)} unwanted media items")
                     else:
-                        print(f"⚠️ Step 2a Partial: Some media removal failed: {manage_results['errors']}")
+                        print(f"⚠️ Step 2a Partial: Some media removal failed: {manage_results.get('errors', [])}")
                     
                     # Step 2b: Upload ONLY new media files (don't try to re-attach existing ones)
                     if has_new_media:
@@ -1533,31 +2365,33 @@ def create_product(product_data):
                         if media_results["success"]:
                             print(f"✅ Step 2b Complete: New media files uploaded successfully!")
                         else:
-                            print(f"⚠️ Step 2b Partial: Some media files failed to upload: {media_results['errors']}")
+                            print(f"⚠️ Step 2b Partial: Some media files failed to upload: {media_results.get('errors', [])}")
                     
                     # Step 2c: Reorder all media according to media_order
-                    # Add a small delay to ensure Shopify has processed the uploads
+                    # Let rate-limit bucket recover between steps, and wait for Shopify to index uploads
                     import time
                     if has_new_media:
-                        print("⏳ Waiting 2 seconds for Shopify to process new uploads...")
+                        print("⏳ Waiting for Shopify to process new uploads and rate limit to recover...")
+                        time.sleep(4)
+                    else:
                         time.sleep(2)
                     
                     media_order = product_data.get("media_order", [])
                     if media_order:
                         print(f"🔄 Step 2c: Reordering media according to media_order ({len(media_order)} items)...")
                         reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
-                        if reorder_results["success"]:
+                        if reorder_results.get("success"):
                             print(f"✅ Step 2c Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results['errors']}")
+                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     elif shopify_media_ids:
                         # Fallback to old method if no media_order provided
                         print(f"🔄 Step 2c: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
-                        reorder_results = reorder_product_media(product_id, shopify_media_ids)
-                        if reorder_results["success"]:
+                        reorder_results = reorder_product_media(product_id, shopify_media_ids, shopify_domain=actual_shopify_domain)
+                        if reorder_results.get("success"):
                             print(f"✅ Step 2c Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results['errors']}")
+                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     
                     print(f"✅ Step 2 Complete: Media management finished for existing product!")
                 
@@ -1586,10 +2420,10 @@ def create_product(product_data):
                         product_sku=sku_for_filename,
                         shopify_domain=actual_shopify_domain
                     )
-                    if media_results["success"]:
+                    if media_results.get("success"):
                         print(f"✅ Step 2a Complete: All media files uploaded/attached successfully!")
                     else:
-                        print(f"⚠️ Step 2a Partial: Some media files failed to process: {media_results['errors']}")
+                        print(f"⚠️ Step 2a Partial: Some media files failed to process: {media_results.get('errors', [])}")
                     
                     # Step 2b: Reorder all media according to media_order (same as existing product flow)
                     # Add a delay to ensure Shopify has processed the uploads
@@ -1608,21 +2442,21 @@ def create_product(product_data):
                         # For new products, pass shopify_media_ids to help identify existing vs new images
                         # The reorder function will fetch ALL images from the product and match them to media_order
                         reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
-                        if reorder_results["success"]:
+                        if reorder_results.get("success"):
                             print(f"✅ Step 2b Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results['errors']}")
+                            print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     else:
                         print(f"⚠️ WARNING: No media_order provided for new product! Cannot set image order.")
                         print(f"🔍 DEBUG: product_data keys: {list(product_data.keys())}")
                         if shopify_media_ids:
                             # Fallback to old method if no media_order provided
                             print(f"🔄 Step 2b: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
-                            reorder_results = reorder_product_media(product_id, shopify_media_ids)
-                            if reorder_results["success"]:
+                            reorder_results = reorder_product_media(product_id, shopify_media_ids, shopify_domain=actual_shopify_domain)
+                            if reorder_results.get("success"):
                                 print(f"✅ Step 2b Complete: Media reordered successfully!")
                             else:
-                                print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results['errors']}")
+                                print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     
                     print(f"✅ Step 2 Complete: All media files processed successfully!")
                 else:
@@ -1699,6 +2533,19 @@ def create_product(product_data):
                 mf for mf in metafields
                 if not (mf.get("namespace") == "custom" and mf.get("key") == "custom_category")
             ]
+            # Remove parent_child from metafields (we add it from top-level, same as category)
+            metafields = [
+                mf for mf in metafields
+                if not (mf.get("namespace") == "custom" and mf.get("key") == "parent_child")
+            ]
+            parent_child_value = (product_data.get("parent_child") or "").strip()
+            if parent_child_value:
+                metafields.append({
+                    "namespace": "custom",
+                    "key": "parent_child",
+                    "value": json.dumps([parent_child_value]),
+                    "type": "list.single_line_text_field",
+                })
             
             # Add category metafield if we have it
             if categories:
@@ -1778,21 +2625,73 @@ def create_product(product_data):
                         "type": "single_line_text_field"
                     })
             
+            # When user cleared Parent/Child (neither Yes), remove the parent_child metafield if it exists
+            if not parent_child_value and product_id:
+                domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+                base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}"
+                headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+                try:
+                    r = None
+                    for _pc_attempt in range(3):
+                        time.sleep(2.0 if _pc_attempt == 0 else 4.0)
+                        r = requests.get(f"{base_url}/metafields.json?limit=250", headers=headers, timeout=15, allow_redirects=True)
+                        if r.status_code == 200:
+                            break
+                        elif r.status_code == 429 and _pc_attempt < 2:
+                            print(f"⚠️ Rate limit on parent_child fetch, retrying ({_pc_attempt+1}/3)...", flush=True)
+                        else:
+                            break
+                    if r and r.status_code == 200:
+                        for mf in r.json().get("metafields", []):
+                            if mf.get("namespace") == "custom" and mf.get("key") == "parent_child":
+                                mf_id = mf.get("id")
+                                if mf_id:
+                                    time.sleep(0.6)
+                                    del_r = requests.delete(f"{base_url}/metafields/{mf_id}.json", headers=headers, timeout=15)
+                                    if del_r.status_code in (200, 204):
+                                        print("✅ Removed parent_child metafield (cleared Parent/Child).", flush=True)
+                                    else:
+                                        print(f"⚠️ Failed to delete parent_child metafield: {del_r.status_code}", flush=True)
+                                    break
+                    else:
+                        print(f"⚠️ Could not fetch metafields for parent_child deletion: {r.status_code}", flush=True)
+                except Exception as e:
+                    print(f"⚠️ Could not delete parent_child metafield: {e}", flush=True)
+            
+            # For child products, overwrite inherited metafields with parent's values
+            parent_mfs = product_data.get("_parent_metafields")
+            if isinstance(parent_mfs, list) and parent_mfs and parent_child_value and parent_child_value.startswith("Child - "):
+                metafields = [mf for mf in metafields if mf.get("key") not in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS]
+                for m in parent_mfs:
+                    key = m.get("key") if isinstance(m, dict) else None
+                    if not key or key not in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
+                        continue
+                    metafields.append({
+                        "namespace": m.get("namespace") or "custom",
+                        "key": key,
+                        "value": m.get("value", ""),
+                        "type": m.get("type") or "single_line_text_field",
+                    })
+                print(f"📋 Overwrote inherited metafields from parent", flush=True)
+            
             if metafields and product_id:
+                # Let rate limit recover after media management + parent_child operations
+                time.sleep(4.0)
                 print(f"🔄 Step 3: Creating {len(metafields)} metafields...")
                 # Use the actual Shopify domain if we extracted it from redirects
                 metafield_results = create_metafields(product_id, metafields, shopify_domain=actual_shopify_domain)
-                if metafield_results["success"]:
+                if metafield_results.get("success"):
                     print(f"✅ Step 3 Complete: All metafields created successfully!")
                     # Small delay to ensure metafields are fully saved before Price Bandit reads them
                     import time
                     time.sleep(0.5)
                 else:
-                    print(f"⚠️ Step 3 Partial: Some metafields failed to create: {metafield_results['errors']}")
+                    print(f"⚠️ Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
             else:
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
             
             # Step 4: Run Price Bandit script to create variants (after media and metafields are created)
+            time.sleep(1.5)
             # For new products, add extra delay to ensure images are fully indexed
             if not existing_product_id:
                 print("⏳ Waiting 2 seconds before Price Bandit to ensure all images are indexed...", flush=True)
@@ -1908,16 +2807,36 @@ def create_product(product_data):
             except (requests.Timeout, requests.ConnectionError) as e:
                 print(f"⚠️ Warning: Verification request skipped ({type(e).__name__}) - product was still created", flush=True)
             
+            # When saving a parent product, propagate inherited fields to all corresponding child products
+            propagated_list = []
+            if method == "PUT":
+                parent_child_value = (product_data.get("parent_child") or "").strip()
+                if parent_child_value.startswith("Parent - "):
+                    parent_title = (product.get("title") or "").strip() or "Product"
+                    propagated_list.append({"id": product_id, "title": parent_title, "is_parent": True})
+                    child_saved = propagate_parent_to_children(
+                        product_id,
+                        product_data,
+                        metafields,
+                        tags,
+                        taxable,
+                        actual_shopify_domain,
+                    )
+                    propagated_list.extend(child_saved or [])
+
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available
             final_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
             print(f"🌐 URL: https://{final_domain}/admin/products/{product_id}")
 
-            return {
+            result = {
                 "success": True,
                 "product": product,
                 "message": f"Product '{product.get('title')}' {action} successfully"
             }
+            if propagated_list:
+                result["propagated_list"] = propagated_list
+            return result
         else:
             error_msg = f"Failed to {method.lower()} product: {response.status_code} - {response.text}"
             print(f"❌ {error_msg}")
@@ -2035,6 +2954,43 @@ def get_existing_metafield_values(namespace, key):
         print(f"Error in fallback function: {str(e)}")
         return []
 
+
+def get_products_parent_child():
+    """
+    Return the list of parent products for "Create from Parent". Uses the hardcoded
+    PARENT_PRODUCTS list from categories.py so the modal loads instantly. When you
+    save a product with Parent? = Yes, add it to PARENT_PRODUCTS in categories.py.
+    Returns: { "parentProducts": [ { "id", "title", "parent_child_value" } ], "takenParentValues": [...] }
+    """
+    try:
+        from .categories import PARENT_PRODUCTS
+        parent_products = []
+        taken = set()
+        for p in PARENT_PRODUCTS or []:
+            val = (p.get("parent_child_value") or "").strip()
+            if not val.startswith("Parent"):
+                continue
+            title = (p.get("title") or "").strip()
+            pid = p.get("id")
+            try:
+                pid = int(pid) if pid is not None else 0
+            except (TypeError, ValueError):
+                pid = 0
+            taken.add(val)
+            parent_products.append({
+                "id": pid,
+                "title": title or "Untitled",
+                "parent_child_value": val,
+            })
+        return {
+            "parentProducts": parent_products,
+            "takenParentValues": sorted(taken),
+        }
+    except Exception as e:
+        print(f"Error get_products_parent_child: {e}", flush=True)
+        return {"parentProducts": [], "takenParentValues": []}
+
+
 def get_product_templates():
     """
     Get predefined product templates for common product types
@@ -2146,7 +3102,7 @@ def main():
     """
     Main function for command line usage
     """
-    print("🛍️  Product Editor/Creator - Shopify Product Tool")
+    print("🛍️  Product Manager - Shopify Product Tool")
     print("=" * 50)
     
     # Example usage

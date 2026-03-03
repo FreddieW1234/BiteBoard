@@ -1,5 +1,5 @@
 # Metafield Order Configuration
-# This file defines the default order for metafields in Field Finder and Product Creator
+# This file defines the default order for metafields in Field Finder and Product Manager
 
 # Default metafield order based on user preference
 # This order will be applied when no custom order is saved in localStorage

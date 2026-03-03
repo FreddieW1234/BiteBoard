@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Editor/Creator - Shopify Tools</title>
+    <title>Product Manager - Shopify Tools</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -318,7 +318,8 @@
             flex-wrap: wrap;
         }
         .form-row-status-vat-colour .form-group-status,
-        .form-row-status-vat-colour .form-group-charge-vat {
+        .form-row-status-vat-colour .form-group-charge-vat,
+        .form-row-status-vat-colour .form-group-parent {
             flex-shrink: 0;
         }
         .form-row-status-vat-colour #status {
@@ -1229,6 +1230,116 @@
             font-weight: bold;
         }
 
+        /* Create-from-parent / child product: hide Parent? only so Child? stays visible to change or remove child status */
+        .pc-create-from-parent .parent-option-only { display: none !important; }
+        /* Create-from-parent mode: hide other duplicated-from-parent fields (values still saved) */
+        .pc-create-from-parent .form-group-charge-vat,
+        .pc-create-from-parent #pricing-section,
+        .pc-create-from-parent #artwork-section { display: none !important; }
+        .pc-create-from-parent .metafield-item[data-metafield-key="ingredients"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="nutritional_info"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="whats_inside"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="print_info"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="recycle_info"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="product_size"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="moq"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="origination"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="shelf_life"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="unit_weight"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="case_quantity"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="case_weight"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="leadtime1"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="leadtime2"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="commodity_code"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="vegan"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="vegetarian"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="halal"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="coeliac"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="peanuts"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="tree_nuts"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="sesame"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="egg"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="cereals"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="soya"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="milk"] { display: none !important; }
+
+        .parent-child-diagram-section { max-width: 100%; }
+        .parent-child-diagram {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .parent-child-diagram .diagram-parent-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 18px;
+            min-width: 220px;
+            max-width: 320px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .parent-child-diagram .diagram-parent-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .parent-child-diagram .diagram-parent-card-header-left {
+            flex: 1;
+            min-width: 0;
+        }
+        .parent-child-diagram .diagram-parent-card .parent-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+        .parent-child-diagram .diagram-parent-card .parent-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0;
+        }
+        .parent-child-diagram .diagram-parent-edit-btn {
+            flex-shrink: 0;
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            color: #475569;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .parent-child-diagram .diagram-parent-edit-btn:hover {
+            color: #4f46e5;
+            background: #eef2ff;
+            border-color: #c7d2fe;
+        }
+        .parent-child-diagram .diagram-parent-card .children-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .parent-child-diagram .diagram-parent-card .children-list li {
+            padding: 4px 0 4px 16px;
+            position: relative;
+            font-size: 0.9rem;
+            color: #475569;
+        }
+        .parent-child-diagram .diagram-parent-card .children-list li::before {
+            content: '└';
+            position: absolute;
+            left: 0;
+            color: #94a3b8;
+        }
+        .parent-child-diagram .diagram-parent-card .children-list li:last-child::before { content: '└'; }
+        .parent-child-diagram .no-children { font-size: 0.85rem; color: #94a3b8; font-style: italic; }
+
         .metafield-container {
             display: flex;
             gap: 20px;
@@ -1605,20 +1716,23 @@
         .media-preview-grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
-            padding: 20px;
+            row-gap: 8px;
+            padding: 16px;
             max-height: 400px;
             overflow-y: auto;
             position: relative;
+            align-items: stretch;
         }
 
         .media-preview-item {
             position: relative;
+            width: 182px;
             border-radius: 8px;
             overflow: hidden;
             background: #f8f9fa;
             border: 1px solid #e0e0e0;
-            transition: all 0.3s ease;
+            transition: transform 0.15s, box-shadow 0.15s;
+            flex-shrink: 0;
         }
 
         .media-preview-item:hover {
@@ -1699,153 +1813,114 @@
 
         /* Drag and Drop Reordering Styles */
         .media-preview-item {
-            cursor: move;
+            cursor: grab;
             user-select: none;
         }
-        
+        .media-preview-item:active { cursor: grabbing; }
+
         .media-preview-item img,
-        .media-preview-item video {
-            pointer-events: none;
-        }
-        
+        .media-preview-item video { pointer-events: none; }
+
         .media-preview-item .remove-media,
-        .media-preview-item .drag-handle {
-            pointer-events: auto;
-        }
-
-        .media-preview-item.dragging {
-            opacity: 0.5;
-            transform: rotate(5deg);
-            z-index: 1000;
-        }
-
-        .media-preview-item.drag-over {
-            border: 2px dashed #4f46e5;
-            background: rgba(102, 126, 234, 0.1);
-        }
+        .media-preview-item .drag-handle,
+        .media-preview-item .move-btn { pointer-events: auto; }
 
         .media-preview-item .drag-handle {
             position: absolute;
             top: 4px;
             left: 4px;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.65);
             color: white;
-            padding: 4px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            cursor: move;
+            padding: 3px 7px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: grab;
             display: flex;
             align-items: center;
-            gap: 2px;
+            gap: 4px;
             z-index: 10;
+            transition: background 0.2s;
+        }
+        .media-preview-item .drag-handle:active { cursor: grabbing; }
+        .media-preview-item .drag-handle:hover { background: rgba(79, 70, 229, 0.85); }
+        .media-preview-item .drag-handle span { font-weight: 700; min-width: 14px; text-align: center; }
+
+        .media-preview-item .remove-media { top: 4px; right: 4px; }
+        .media-preview-item .media-type  { top: 30px; }
+
+        /* Main-image badge */
+        .media-main-badge {
+            position: absolute; bottom: 44px; left: 0; right: 0;
+            text-align: center; z-index: 10; pointer-events: none;
+        }
+        .media-main-badge span {
+            display: inline-block;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff; font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            padding: 2px 10px; border-radius: 10px;
         }
 
-        .media-preview-item .drag-handle:hover {
-            background: rgba(0, 0, 0, 0.9);
+        /* Move up / down buttons */
+        .media-move-btns {
+            position: absolute; bottom: 48px; right: 4px;
+            display: flex; flex-direction: column; gap: 2px;
+            z-index: 10; opacity: 0; transition: opacity 0.15s;
         }
-
-        .media-preview-item .media-type {
-            top: 30px;
+        .media-preview-item:hover .media-move-btns { opacity: 1; }
+        .move-btn {
+            width: 22px; height: 22px; border: none; border-radius: 4px;
+            background: rgba(0,0,0,0.6); color: #fff; font-size: 11px;
+            cursor: pointer; display: flex; align-items: center;
+            justify-content: center; transition: background 0.15s; padding: 0;
         }
-
-        .media-preview-item .remove-media {
-            top: 4px;
-            right: 4px;
-        }
+        .move-btn:hover { background: rgba(79, 70, 229, 0.9); }
+        .move-btn:disabled { opacity: 0.3; cursor: default; background: rgba(0,0,0,0.3); }
 
         .reorder-instructions {
-            background: #f8f9fa;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            background: linear-gradient(135deg, #f0f0ff, #f8f9fa);
+            border: 1px solid #e0e0e0; border-radius: 8px;
+            padding: 10px 16px; margin-bottom: 12px;
+            font-size: 13px; color: #666;
+            display: flex; align-items: center; gap: 8px;
         }
+        .reorder-instructions i { color: #4f46e5; flex-shrink: 0; }
 
-        .reorder-instructions i {
-            color: #4f46e5;
-        }
-
-        /* Enhanced Drop Zone Styles */
-        .drop-zone {
-            width: 120px;
-            height: 120px;
-            border: 2px dashed #4f46e5;
-            border-radius: 8px;
-            background: rgba(102, 126, 234, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #4f46e5;
-            font-size: 12px;
-            font-weight: 500;
-            text-align: center;
-            opacity: 0;
-            transition: all 0.3s ease;
-            pointer-events: none;
-            position: relative;
-        }
-
-        .drop-zone.active {
-            opacity: 1;
-            background: rgba(102, 126, 234, 0.2);
-            border-color: #4caf50;
-            transform: scale(1.05);
-        }
-
-        .drop-zone::before {
-            content: "Drop Here";
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(76, 175, 80, 0.9);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .media-preview-item.drag-over {
-            border: 2px solid #4caf50;
-            background: rgba(76, 175, 80, 0.1);
-            transform: scale(1.02);
-        }
-
+        /* Drag states — pointer-events:none lets events reach slots/items underneath */
         .media-preview-item.dragging {
-            opacity: 0.6;
-            transform: rotate(3deg) scale(1.05);
-            z-index: 1000;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            opacity: 0.25; transform: scale(0.92);
+            border: 1px dashed #aaa; background: #eee;
+            pointer-events: none;
         }
 
-        .media-preview-item.drag-placeholder {
-            opacity: 0.3;
-            border: 2px dashed #ccc;
-            background: #f5f5f5;
+        /* Drop slots between images */
+        .media-drop-slot {
+            width: 8px; flex-shrink: 0; align-self: stretch;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 80px; border-radius: 4px;
+            transition: width 0.15s ease, background 0.15s ease;
+        }
+        .media-drop-slot::after {
+            content: ''; display: block;
+            width: 2px; height: 60%; border-radius: 2px;
+            background: #d5d5d5; transition: all 0.15s ease;
         }
 
-        .drag-indicator {
-            position: absolute;
-            top: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-top: 8px solid #4caf50;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+        /* While a drag is in progress, widen slots to make them easier to hit */
+        .media-preview-grid.is-dragging .media-drop-slot {
+            width: 18px; cursor: copy;
+        }
+        .media-preview-grid.is-dragging .media-drop-slot::after {
+            width: 3px; height: 70%; background: #bbb;
         }
 
-        .drag-indicator.active {
-            opacity: 1;
+        /* Slot actively hovered during drag */
+        .media-drop-slot.slot-active {
+            width: 22px; background: rgba(79, 70, 229, 0.08);
+        }
+        .media-drop-slot.slot-active::after {
+            width: 4px; height: 85%; background: #4f46e5;
+            box-shadow: 0 0 10px rgba(79, 70, 229, 0.6);
         }
     </style>
 </head>
@@ -1867,9 +1942,9 @@
                     </a>
                     <a href="/app/Product_Creator" class="app-tab active">
                         <i class="fas fa-plus-circle"></i>
-                        <span>Product Editor/Creator</span>
+                        <span>Product Manager</span>
                     </a>
-                    <a href="/app/Templates_Uploader" class="app-tab">
+                    <a href="/app/Templates_Uploader" class="app-tab templates-uploader-nav" style="display: none;">
                         <i class="fas fa-file-archive"></i>
                         <span>Templates Uploader</span>
                     </a>
@@ -1886,7 +1961,7 @@
         <div class="main-wrap">
             <h1 class="page-title">
                 <i class="fas fa-plus-circle"></i>
-                Product Editor/Creator
+                Product Manager
             </h1>
             <div class="main-content">
             <div id="product-loading-overlay" aria-live="polite">
@@ -1915,10 +1990,21 @@
                             <button type="button" class="btn btn-primary duplicate-trigger-btn" onclick="openDuplicateModal(); return false;">
                                 <i class="fas fa-copy"></i> Duplicate Existing Product
                             </button>
+                            <button type="button" class="btn btn-primary" onclick="openCreateFromParentModal(); return false;">
+                                <i class="fas fa-sitemap"></i> Create from Parent
+                            </button>
                         </div>
                         <button type="button" class="btn btn-secondary" id="product-back-button" onclick="backToProductCreatorHome()" style="display: none;" title="Back to start">
                             <i class="fas fa-arrow-left"></i> Back
                         </button>
+                    </div>
+                </div>
+
+                <!-- Parent–child diagram (below the 4 buttons) -->
+                <div id="parent-child-diagram-section" class="parent-child-diagram-section" style="margin-top: 24px; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; color: #374151;">Product Families</h3>
+                    <div id="parent-child-diagram" class="parent-child-diagram">
+                        <span class="muted">Loading…</span>
                     </div>
                 </div>
 
@@ -1948,6 +2034,26 @@
                             <button type="button" class="btn btn-secondary" onclick="closeDuplicateModal()">Cancel</button>
                         </div>
                     </div>
+                </div>
+
+                <!-- Create from Parent Modal -->
+                <div id="createFromParentModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 10000; align-items: center; justify-content: center;" class="create-from-parent-modal-overlay">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 520px; width: 90%; max-height: 80vh; display: flex; flex-direction: column;">
+                        <h3 style="margin: 0 0 16px 0; font-size: 1.25rem;">Select parent product to create from</h3>
+                        <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9rem;">Products with a Parent type (e.g. Parent - Maxi) are listed below. Selecting one will duplicate that product.</p>
+                        <div id="create-from-parent-list" style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; min-height: 200px;">
+                            <span class="muted">Loading parent products…</span>
+                        </div>
+                        <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeCreateFromParentModal()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notice when editing a child product (same restricted view as Create from Parent) -->
+                <div id="child-product-edit-notice" style="display: none; margin-bottom: 16px; padding: 14px 18px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e;">
+                    <strong><i class="fas fa-info-circle"></i> Child product</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 0.95rem;">This product is a child. You can edit the fields shown below. To change pricing, VAT, ingredients, artwork, or other inherited details, edit the parent product instead.</p>
                 </div>
 
                 <!-- Basic Information Section -->
@@ -2002,6 +2108,51 @@ Dietary</textarea>
                                     </label>
                                 </div>
                             </div>
+                            <div class="form-group form-group-parent parent-child-option-row" style="display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 24px;">
+                                <div class="parent-option-only" id="parent-option-wrap">
+                                    <label class="form-label">Parent?</label>
+                                    <div class="radio-group">
+                                        <label class="radio-label">
+                                            <input type="radio" id="parentYes" name="parentProduct" value="yes" class="radio-input">
+                                            <span class="radio-custom"></span>
+                                            <span class="radio-text">Yes</span>
+                                        </label>
+                                        <label class="radio-label">
+                                            <input type="radio" id="parentNo" name="parentProduct" value="no" class="radio-input" checked>
+                                            <span class="radio-custom"></span>
+                                            <span class="radio-text">No</span>
+                                        </label>
+                                    </div>
+                                    <div id="parent-dropdown-wrap" style="display: none; margin-top: 8px;">
+                                        <label class="form-label" style="margin-bottom: 4px;">Parent type</label>
+                                        <select id="parent-child-select" class="form-select" style="min-width: 160px;">
+                                            <option value="">— Select —</option>
+                                        </select>
+                                        <input type="hidden" id="parent-child-create-from-parent-value" value="">
+                                    </div>
+                                </div>
+                                <div class="child-option-only" id="child-option-wrap">
+                                    <label class="form-label">Child?</label>
+                                    <div class="radio-group">
+                                        <label class="radio-label">
+                                            <input type="radio" id="childYes" name="childProduct" value="yes" class="radio-input">
+                                            <span class="radio-custom"></span>
+                                            <span class="radio-text">Yes</span>
+                                        </label>
+                                        <label class="radio-label">
+                                            <input type="radio" id="childNo" name="childProduct" value="no" class="radio-input" checked>
+                                            <span class="radio-custom"></span>
+                                            <span class="radio-text">No</span>
+                                        </label>
+                                    </div>
+                                    <div id="child-dropdown-wrap" style="display: none; margin-top: 8px;">
+                                        <label class="form-label" style="margin-bottom: 4px;">Child type</label>
+                                        <select id="parent-child-child-select" class="form-select" style="min-width: 160px;">
+                                            <option value="">— Select —</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-group form-group-colour-options">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                 <label class="form-label" style="margin: 0;">Colour Options</label>
@@ -2054,8 +2205,8 @@ Dietary</textarea>
                                     </button>
                                 </div>
                                 <div class="reorder-instructions">
-                                    <i class="fas fa-info-circle"></i>
-                                    <span>Drag any media item by its grip handle to reorder. Drop it on another item to place it in that position. The order here will be the order on your Shopify product page.</span>
+                                    <i class="fas fa-arrows-alt"></i>
+                                    <span>Drag an image to a slot line between others to reorder, or use the arrow buttons. The first image becomes the main product image.</span>
                                 </div>
                                 <div class="media-preview-grid" id="mediaPreviewGrid">
                                     <!-- Media previews will be added here -->
@@ -2082,7 +2233,7 @@ Dietary</textarea>
                 </div>
 
                 <!-- Pricing Section -->
-                <div class="collapsible-section" style="display: none;">
+                <div class="collapsible-section" id="pricing-section" style="display: none;">
                     <div class="section-content" id="pricing-content">
                         
                         <!-- Price Manager Integration -->
@@ -2166,11 +2317,17 @@ Dietary</textarea>
                 </div>
 
                 <!-- Artwork Section -->
-                <div class="collapsible-section" style="display: none;">
+                <div class="collapsible-section" id="artwork-section" style="display: none;">
                     <div class="section-content" id="artwork-content">
                         <div class="form-grid">
                             <div class="form-group full-width">
-                                <label class="form-label">Guidelines</label>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                                    <label class="form-label" style="margin-bottom:0;">Guidelines</label>
+                                    <span id="guideline-status" style="display:none;font-size:0.85rem;color:#666;">
+                                        Selected: <span id="guideline-status-name"></span>
+                                        <button type="button" onclick="clearSelectedGuideline()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove guideline"><i class="fas fa-times"></i> Remove</button>
+                                    </span>
+                                </div>
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <div class="form-label">General:</div>
@@ -2189,7 +2346,13 @@ Dietary</textarea>
                             </div>
 
                             <div class="form-group full-width">
-                                <label class="form-label">Templates</label>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                                    <label class="form-label" style="margin-bottom:0;">Templates</label>
+                                    <span id="template-status" style="display:none;font-size:0.85rem;color:#666;">
+                                        Template attached
+                                        <button type="button" onclick="clearAllTemplates()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove all templates"><i class="fas fa-times"></i> Remove</button>
+                                    </span>
+                                </div>
                                 <div class="media-upload-container">
                                     <div class="media-upload-area" id="artworkTemplatesUploadArea">
                                         <div class="upload-icon">
@@ -2265,11 +2428,20 @@ Dietary</textarea>
         function showBackButtonAndHideActions() {
             const actionBtns = document.getElementById('product-action-buttons');
             const backBtn = document.getElementById('product-back-button');
+            const diagramSection = document.getElementById('parent-child-diagram-section');
             if (actionBtns) actionBtns.style.display = 'none';
             if (backBtn) backBtn.style.display = 'inline-flex';
+            if (diagramSection) diagramSection.style.display = 'none';
         }
 
         function backToProductCreatorHome() {
+            pcCreateFromParentMode = false;
+            const formEl = document.getElementById('productForm');
+            if (formEl) formEl.classList.remove('pc-create-from-parent');
+            const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
+            if (hiddenParentChildEl) hiddenParentChildEl.value = '';
+            const childNotice = document.getElementById('child-product-edit-notice');
+            if (childNotice) childNotice.style.display = 'none';
             // Hide all form sections and action buttons (same as initial load)
             document.querySelectorAll('.collapsible-section').forEach(section => {
                 section.style.display = 'none';
@@ -2279,13 +2451,134 @@ Dietary</textarea>
             // Reset edit state
             selectedProduct = null;
             isEditingProduct = false;
+            clearSelectedGuideline();
+            clearAllTemplates();
             const submitBtn = document.querySelector('#productForm button[type="submit"]');
             if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
-            // Show the three buttons again, hide the back button
+            // Show the three buttons again, hide the back button, show Product Families again
             const actionBtns = document.getElementById('product-action-buttons');
             const backBtn = document.getElementById('product-back-button');
+            const diagramSection = document.getElementById('parent-child-diagram-section');
             if (actionBtns) actionBtns.style.display = 'flex';
             if (backBtn) backBtn.style.display = 'none';
+            if (diagramSection) diagramSection.style.display = 'block';
+        }
+
+        async function refreshParentChildDropdown(currentParentValue) {
+            const selectEl = document.getElementById('parent-child-select');
+            if (!selectEl) return;
+            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child');
+            const choicesData = await choicesResp.json();
+            const choices = (choicesData.choices || []).map(c => String(c || '').trim()).filter(c => c.startsWith('Parent - '));
+            const prevVal = selectEl.value;
+            selectEl.innerHTML = '<option value="">— Select —</option>';
+            choices.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                selectEl.appendChild(o);
+            });
+            if (prevVal && prevVal.startsWith('Parent - ') && choices.includes(prevVal)) selectEl.value = prevVal;
+        }
+
+        async function refreshChildDropdown(currentChildValue) {
+            const selectEl = document.getElementById('parent-child-child-select');
+            if (!selectEl) return;
+            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child');
+            const choicesData = await choicesResp.json();
+            const allChoices = (choicesData.choices || []).map(c => String(c || '').trim());
+            let choices = allChoices.filter(c => c.startsWith('Child - '));
+            if (choices.length === 0 && allChoices.length > 0) {
+                choices = allChoices.filter(c => c.startsWith('Parent - ')).map(p => 'Child - ' + p.slice(9));
+            }
+            const prevVal = selectEl.value;
+            selectEl.innerHTML = '<option value="">— Select —</option>';
+            choices.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                selectEl.appendChild(o);
+            });
+            if (currentChildValue && currentChildValue.startsWith('Child - ') && choices.includes(currentChildValue)) selectEl.value = currentChildValue;
+        }
+
+        function setupParentRadioListeners() {
+            const parentYes = document.getElementById('parentYes');
+            const parentNo = document.getElementById('parentNo');
+            const wrap = document.getElementById('parent-dropdown-wrap');
+            const selectEl = document.getElementById('parent-child-select');
+            const childYes = document.getElementById('childYes');
+            const childNo = document.getElementById('childNo');
+            const childWrap = document.getElementById('child-dropdown-wrap');
+            const childSelectEl = document.getElementById('parent-child-child-select');
+            const parentOptionWrap = document.getElementById('parent-option-wrap');
+            const childOptionWrap = document.getElementById('child-option-wrap');
+            const formEl = document.getElementById('productForm');
+            const childNotice = document.getElementById('child-product-edit-notice');
+            if (!parentYes || !parentNo || !wrap) return;
+
+            function applyChildModeVisibility() {
+                const isChildMode = childYes && childYes.checked;
+                if (formEl) {
+                    if (isChildMode) formEl.classList.add('pc-create-from-parent');
+                    else formEl.classList.remove('pc-create-from-parent');
+                }
+                if (childNotice) childNotice.style.display = isChildMode ? 'block' : 'none';
+            }
+
+            function updateParentUI() {
+                if (parentYes.checked) {
+                    wrap.style.display = 'block';
+                    refreshParentChildDropdown(selectEl ? selectEl.value : '');
+                    if (childYes) { childYes.checked = false; childNo.checked = true; }
+                    if (childWrap) childWrap.style.display = 'none';
+                    if (childSelectEl) childSelectEl.value = '';
+                    if (childOptionWrap) childOptionWrap.style.display = 'none';
+                    if (parentOptionWrap) parentOptionWrap.style.display = '';
+                    applyChildModeVisibility();
+                } else {
+                    wrap.style.display = 'none';
+                    if (selectEl) selectEl.value = '';
+                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
+                    if (hiddenEl) hiddenEl.value = '';
+                    if (childOptionWrap) childOptionWrap.style.display = '';
+                    applyChildModeVisibility();
+                }
+            }
+            function updateChildUI() {
+                if (childYes && childYes.checked) {
+                    if (childWrap) childWrap.style.display = 'block';
+                    refreshChildDropdown(childSelectEl ? childSelectEl.value : '');
+                    if (parentYes) { parentYes.checked = false; parentNo.checked = true; }
+                    if (wrap) wrap.style.display = 'none';
+                    if (selectEl) selectEl.value = '';
+                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
+                    if (hiddenEl) hiddenEl.value = '';
+                    if (parentOptionWrap) parentOptionWrap.style.display = 'none';
+                    if (childOptionWrap) childOptionWrap.style.display = '';
+                    applyChildModeVisibility();
+                } else {
+                    if (childWrap) childWrap.style.display = 'none';
+                    if (childSelectEl) childSelectEl.value = '';
+                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
+                    if (hiddenEl) hiddenEl.value = '';
+                    pcCreateFromParentMode = false;
+                    if (parentOptionWrap) parentOptionWrap.style.display = '';
+                    applyChildModeVisibility();
+                }
+            }
+            parentYes.addEventListener('change', updateParentUI);
+            parentNo.addEventListener('change', updateParentUI);
+            if (childYes) childYes.addEventListener('change', updateChildUI);
+            if (childNo) childNo.addEventListener('change', updateChildUI);
+            if (selectEl) {
+                selectEl.addEventListener('change', function() {
+                    if (selectEl.value && selectEl.value.startsWith('Parent - ')) {
+                        const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
+                        if (hiddenEl) hiddenEl.value = '';
+                    }
+                });
+            }
         }
 
         // Artwork: load guidelines and enable templates staging
@@ -2298,6 +2591,7 @@ Dietary</textarea>
         // Track if we're editing an existing product
         let selectedProduct = null;
         let isEditingProduct = false;
+        let pcCreateFromParentMode = false;
 
         document.addEventListener('DOMContentLoaded', async function () {
             try {
@@ -2325,6 +2619,80 @@ Dietary</textarea>
                 const files = Array.from(e.target.files);
                 stageArtworkTemplates(files);
             });
+
+            // Product Families diagram: parents load immediately (hardcoded), children from cache or background
+            (function() {
+                function esc(s) {
+                    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                }
+                function renderProductFamilyDiagram(treeData) {
+                    const diagramEl = document.getElementById('parent-child-diagram');
+                    if (!diagramEl) return;
+                    const tree = (treeData && treeData.tree) ? treeData.tree : [];
+                    if (tree.length === 0) {
+                        diagramEl.innerHTML = '<span class="muted">No parent products defined. Add parents in PARENT_PRODUCTS (categories.py) and assign products a Parent type.</span>';
+                        return;
+                    }
+                    const hasChildren = tree.some(item => (item.children || []).length > 0);
+                    diagramEl.innerHTML = tree.map(item => {
+                        const parent = item.parent || {};
+                        const parentId = parent.id;
+                        const parentTitle = (parent.title || '').trim() || 'Untitled';
+                        const children = item.children || [];
+                        let childrenHtml;
+                        if (children.length) {
+                            childrenHtml = `<ul class="children-list">${children.map(c => `<li>${esc(c.title || 'Product')}</li>`).join('')}</ul>`;
+                        } else if (!hasChildren && tree.length) {
+                            childrenHtml = '<p class="no-children">Loading products…</p>';
+                        } else {
+                            childrenHtml = '<p class="no-children">No child products yet</p>';
+                        }
+                        const editBtnHtml = (parentId != null && parentId !== '' && !isNaN(Number(parentId)))
+                            ? `<button type="button" class="diagram-parent-edit-btn" data-product-id="${esc(String(parentId))}" data-product-title="${esc(parentTitle)}" title="Edit parent product"><i class="fas fa-pen"></i></button>`
+                            : '';
+                        const headerHtml = `<div class="diagram-parent-card-header"><div class="diagram-parent-card-header-left"><div class="parent-label">Parent</div><div class="parent-title">${esc(parentTitle)}</div></div>${editBtnHtml}</div>`;
+                        return `<div class="diagram-parent-card">${headerHtml}${childrenHtml}</div>`;
+                    }).join('');
+                }
+                window.__renderProductFamilyDiagram = renderProductFamilyDiagram;
+
+                const diagramEl = document.getElementById('parent-child-diagram');
+                if (!diagramEl) return;
+
+                // Click on Edit button in a parent card -> same as Edit Existing Product then selecting that product
+                diagramEl.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.diagram-parent-edit-btn');
+                    if (!btn || !btn.dataset.productId) return;
+                    const id = Number(btn.dataset.productId);
+                    const title = (btn.dataset.productTitle || '').trim() || 'Product';
+                    if (typeof closeEditModal === 'function') closeEditModal();
+                    if (typeof pcPopulateFromProduct === 'function') pcPopulateFromProduct(id, title);
+                });
+
+                // 1) Load parents only immediately (hardcoded list, no API delay for children)
+                fetch('/api/products-parent-child-tree?parents_only=1')
+                    .then(r => r.json())
+                    .then(treeData => {
+                        renderProductFamilyDiagram(treeData);
+                        // 2) If we have cached full tree from index prefetch, use it now
+                        if (window.__productFamilyTreeCache && window.__productFamilyTreeCache.tree && window.__productFamilyTreeCache.tree.some(item => (item.children || []).length > 0)) {
+                            renderProductFamilyDiagram(window.__productFamilyTreeCache);
+                            return;
+                        }
+                        // 3) Otherwise fetch full tree in background and update when ready
+                        fetch('/api/products-parent-child-tree')
+                            .then(r2 => r2.json())
+                            .then(fullTree => {
+                                if (fullTree && fullTree.tree) {
+                                    window.__productFamilyTreeCache = fullTree;
+                                    window.__productFamilyTreeCacheTime = Date.now();
+                                    renderProductFamilyDiagram(fullTree);
+                                }
+                            })
+                            .catch(() => {});
+                    })
+                    .catch(() => { diagramEl.innerHTML = '<span class="muted">Could not load diagram.</span>'; });
+            })();
 
             // Versions panel will only show when a product is selected
         });
@@ -2362,6 +2730,7 @@ Dietary</textarea>
                     }
                 }
             }
+            updateGuidelineStatus();
         }
 
         function buildGuidelinesListHtml(arr, col) {
@@ -2378,21 +2747,68 @@ Dietary</textarea>
         }
 
         let selectedGuideline = null; // { id, name, column }
-        function selectGuideline(nameEnc, column, idEnc, buttonEl) {
-            const name = decodeURIComponent(nameEnc);
-            const gid = idEnc ? decodeURIComponent(idEnc) : '';
-            selectedGuideline = { id: gid, name, column };
-            // Visual feedback: toggle buttons to reflect single selection
+
+        function updateGuidelineStatus() {
+            const statusEl = document.getElementById('guideline-status');
+            const nameEl = document.getElementById('guideline-status-name');
+            if (statusEl && nameEl) {
+                if (selectedGuideline && selectedGuideline.id) {
+                    const displayName = selectedGuideline.name || selectedGuideline.id.split('/').pop() || 'Unknown';
+                    nameEl.textContent = displayName;
+                    statusEl.style.display = 'inline';
+                } else {
+                    statusEl.style.display = 'none';
+                }
+            }
+        }
+
+        function clearSelectedGuideline() {
+            selectedGuideline = null;
             document.querySelectorAll('.guideline-row .use-btn').forEach(btn => {
                 btn.classList.remove('btn-success');
                 btn.classList.add('btn-secondary');
                 btn.textContent = 'Use';
             });
-            if (buttonEl) {
-                buttonEl.classList.remove('btn-secondary');
-                buttonEl.classList.add('btn-success');
-                buttonEl.textContent = 'Selected';
+            updateGuidelineStatus();
+            console.log('🎨 Guideline cleared');
+        }
+
+        function updateTemplateStatus() {
+            const statusEl = document.getElementById('template-status');
+            if (statusEl) {
+                statusEl.style.display = pcCurrentTemplatesFileGlobalId ? 'inline' : 'none';
             }
+        }
+
+        function clearAllTemplates() {
+            pcCurrentTemplatesFileGlobalId = '';
+            pcStagedRemoteEntries = [];
+            stagedArtworkTemplateFiles = [];
+            stageArtworkTemplates([]);
+            updateTemplateStatus();
+            console.log('🎨 Templates cleared');
+        }
+
+        function selectGuideline(nameEnc, column, idEnc, buttonEl) {
+            const name = decodeURIComponent(nameEnc);
+            const gid = idEnc ? decodeURIComponent(idEnc) : '';
+            const alreadySelected = selectedGuideline && selectedGuideline.id === gid;
+            document.querySelectorAll('.guideline-row .use-btn').forEach(btn => {
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+                btn.textContent = 'Use';
+            });
+            if (alreadySelected) {
+                selectedGuideline = null;
+            } else {
+                selectedGuideline = { id: gid, name, column };
+                if (buttonEl) {
+                    buttonEl.classList.remove('btn-secondary');
+                    buttonEl.classList.add('btn-success');
+                    buttonEl.textContent = 'Selected';
+                }
+            }
+            updateGuidelineStatus();
         }
 
         function stageArtworkTemplates(files) {
@@ -2439,7 +2855,13 @@ Dietary</textarea>
             } else if (type === 'remote') {
                 pcStagedRemoteEntries = pcStagedRemoteEntries.filter(e => e.name !== arg);
             }
+            // When all template entries are removed, clear the stored file reference
+            // so saving will send an empty value and the backend deletes the metafield
+            if (pcStagedRemoteEntries.length === 0 && stagedArtworkTemplateFiles.length === 0) {
+                pcCurrentTemplatesFileGlobalId = '';
+            }
             stageArtworkTemplates([]);
+            updateTemplateStatus();
         }
 
         // Sanitize name base on client (moved to global scope)
@@ -3601,11 +4023,23 @@ Dietary</textarea>
                     const errorText = await productResponse.text();
                     console.log(`Error fetching template product details: ${productResponse.statusText}`);
                     console.log('Error response:', errorText);
-                    showMetafieldsError();
+                    displayMetafieldsWithFallback();
                 }
             } catch (error) {
                 console.log('Error loading metafields:', error.message);
                 console.error('Full error:', error);
+                displayMetafieldsWithFallback();
+            }
+        }
+
+        function displayMetafieldsWithFallback() {
+            var minimal = [
+                { namespace: 'custom', key: 'custom_category', type: 'list.single_line_text_field', value: '', id: null },
+                { namespace: 'custom', key: 'subcategory', type: 'list.single_line_text_field', value: '', id: null }
+            ];
+            if (typeof displayMetafields === 'function') {
+                displayMetafields(minimal);
+            } else {
                 showMetafieldsError();
             }
         }
@@ -3759,6 +4193,7 @@ Dietary</textarea>
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
                     if (namespace === 'custom' && key === 'sku') return false;
                     if (namespace === 'custom' && key === 'leadtime2') return false;
+                    if (namespace === 'custom' && key === 'parent_child') return false;
                     if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packing_info'].includes(key)) return false;
                     return true;
                 });
@@ -3770,6 +4205,7 @@ Dietary</textarea>
                 
                 const metafieldDiv = document.createElement('div');
                 metafieldDiv.className = 'metafield-item';
+                metafieldDiv.setAttribute('data-metafield-key', metafield.key || '');
                 
                 // Create a more readable display name by converting technical keys to human-readable names
                 let displayName = getHumanReadableName(metafield.key);
@@ -4310,6 +4746,20 @@ Dietary</textarea>
             productData.status = formData.get('status') || 'active';
             productData.tags = getVatTag();
             productData.charge_vat = document.getElementById('chargeVatYes').checked;
+            const parentYesEl = document.getElementById('parentYes');
+            const parentSelectEl = document.getElementById('parent-child-select');
+            const childYesEl = document.getElementById('childYes');
+            const childSelectEl = document.getElementById('parent-child-child-select');
+            const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
+            if (hiddenParentChildEl && hiddenParentChildEl.value.trim()) {
+                productData.parent_child = hiddenParentChildEl.value.trim();
+            } else if (parentYesEl && parentYesEl.checked && parentSelectEl && parentSelectEl.value) {
+                productData.parent_child = String(parentSelectEl.value).trim();
+            } else if (childYesEl && childYesEl.checked && childSelectEl && childSelectEl.value) {
+                productData.parent_child = String(childSelectEl.value).trim();
+            } else {
+                productData.parent_child = '';
+            }
             
             // Get colour options from multiple inputs (new format with separate name/code)
             const colourCells = document.querySelectorAll('.colour-cell');
@@ -4443,15 +4893,22 @@ Dietary</textarea>
                 });
             }
             
-            // Artwork: selected guideline saved as file_reference metafield
-            if (selectedGuideline && selectedGuideline.id) {
-                productData.metafields.push({
-                    namespace: 'custom',
-                    key: 'artworkguidelines',
-                    type: 'file_reference',
-                    value: selectedGuideline.id
-                });
-            }
+            // Artwork: always send guideline (empty when deselected so backend can remove it)
+            const guidelineVal = (selectedGuideline && selectedGuideline.id) ? selectedGuideline.id : '';
+            const templateVal = pcCurrentTemplatesFileGlobalId || '';
+            console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}"`);
+            productData.metafields.push({
+                namespace: 'custom',
+                key: 'artworkguidelines',
+                type: 'file_reference',
+                value: guidelineVal
+            });
+            productData.metafields.push({
+                namespace: 'custom',
+                key: 'artworktemplates',
+                type: 'file_reference',
+                value: templateVal
+            });
             
             // Add product ID for updates
             if (isEditingProduct && selectedProduct) {
@@ -4495,64 +4952,10 @@ Dietary</textarea>
                     // Before adding media, ensure we preserve existing images when editing
                     // BUT: Respect user's intentional removals - if images are already selected, 
                     // only merge in missing ones if the selection is empty (to handle initial load failures)
+                    // When editing, send whatever the user currently has selected (no re-population).
+                    // Deselected media/images will be removed from the product by the backend.
                     if (isEditingProduct) {
-                        console.log(`📷 Re-fetching product images...`);
-                        console.log(`📷 Current state: ${selectedMediaFiles.length} uploaded files, ${selectedShopifyMedia.length} Shopify media selected`);
-                        try {
-                            // Use the prices endpoint which includes images
-                            const productResponse = await fetch(`/api/product/${selectedProduct.id}/prices`);
-                            if (!productResponse.ok) {
-                                throw new Error(`Failed to fetch product: ${productResponse.status}`);
-                            }
-                            const productData = await productResponse.json();
-                            const existingImages = Array.isArray(productData.images) ? productData.images : [];
-                            console.log(`📷 Found ${existingImages.length} existing images on product`);
-                            console.log(`📷 All images from API:`, existingImages.map(img => ({id: img.id, src: img.src, position: img.position})));
-                            
-                            // Create a set of already-selected image IDs to avoid duplicates
-                            const selectedIds = new Set(selectedShopifyMedia.map(m => String(m.id)));
-                            console.log(`📷 Already have ${selectedIds.size} images in selectedShopifyMedia:`, Array.from(selectedIds));
-                            
-                            // Only add missing images if selection is empty (initial load failure scenario)
-                            // If user has already made selections (including removals), respect their choices
-                            if (selectedShopifyMedia.length === 0) {
-                                console.log(`📷 No images selected - loading all existing images from product`);
-                                let addedCount = 0;
-                                existingImages.forEach(img => {
-                                    // Use the same format as the main loading code
-                                    let globalId = img.admin_graphql_api_id;
-                                    if (!globalId) {
-                                        const isImage = img.src && (img.src.includes('.jpg') || img.src.includes('.jpeg') || img.src.includes('.png') || img.src.includes('.gif') || img.src.includes('cdn.shopify.com'));
-                                        globalId = isImage ? `gid://shopify/MediaImage/${img.id}` : `gid://shopify/GenericFile/${img.id}`;
-                                    }
-                                    
-                                    selectedShopifyMedia.push({
-                                        id: img.id,
-                                        global_id: globalId,
-                                        rest_api_id: img.id,
-                                        url: img.src,
-                                        filename: (img.alt || `image_${img.id}`),
-                                        size: 0,
-                                        is_image: true,
-                                        content_type: 'image/jpeg'
-                                    });
-                                    addedCount++;
-                                    console.log(`✅ Added image to preserve: REST ID ${img.id}, Global ID ${globalId}`);
-                                });
-                                console.log(`✅ Preserved ${selectedShopifyMedia.length} total images (added ${addedCount} new ones)`);
-                            } else {
-                                // User has made selections - respect them, don't add removed images back
-                                console.log(`📷 User has ${selectedShopifyMedia.length} images selected - respecting their selection (not adding removed images back)`);
-                                const existingImageIds = new Set(existingImages.map(img => String(img.id)));
-                                const selectedButNotOnProduct = selectedShopifyMedia.filter(m => !existingImageIds.has(String(m.id)));
-                                if (selectedButNotOnProduct.length > 0) {
-                                    console.warn(`⚠️ ${selectedButNotOnProduct.length} selected images not found on product - they may have been deleted:`, selectedButNotOnProduct.map(m => m.id));
-                                }
-                            }
-                        } catch (e) {
-                            console.error('❌ Failed to fetch existing images for preservation:', e);
-                            console.error('Full error details:', e);
-                        }
+                        console.log(`📷 Saving with ${selectedShopifyMedia.length} media selected (deselected items will be removed from product)`);
                     }
                     
                     // Add media files (this preserves existing media when editing)
@@ -4606,6 +5009,8 @@ Dietary</textarea>
                 resultDiv.style.display = 'block';
                 
                 if (result.success) {
+                    const escapeHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    // Keep create-from-parent filtering so hidden sections stay hidden (cleared only on Back/Reset)
                     // Validate that product data exists
                     if (!result.product || !result.product.id) {
                         throw new Error('Product creation reported success but no product data was returned');
@@ -4613,15 +5018,26 @@ Dietary</textarea>
                     resultDiv.className = 'result-message result-success';
                     const actionText = isEditingProduct ? 'Updated' : 'Created';
                     const actionVerb = isEditingProduct ? 'updated' : 'created';
+                    let propagatedHtml = '';
+                    if (result.propagated_list && result.propagated_list.length > 0) {
+                        propagatedHtml = `
+                        <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                            <strong style="display: block; margin-bottom: 8px;">Products saved (parent then children):</strong>
+                            <ul style="margin: 0; padding-left: 20px; list-style: none;">
+                                ${result.propagated_list.map(item => `<li style="margin-bottom: 4px;"><i class="fas fa-check" style="color: #22c55e; margin-right: 6px;"></i> ${escapeHtml(item.title || 'Product')}</li>`).join('')}
+                            </ul>
+                        </div>`;
+                    }
                     resultDiv.innerHTML = `
                         <h4><i class="fas fa-check-circle"></i> Product ${actionText} Successfully!</h4>
-                        <p><strong>${result.product.title}</strong> has been ${actionVerb} in your Shopify store.</p>
+                        <p><strong>${escapeHtml(result.product.title)}</strong> has been ${actionVerb} in your Shopify store.</p>
                         <div class="product-link">
                             <strong>Product ID:</strong> ${result.product.id}<br>
                             <strong>Handle:</strong> ${result.product.handle}<br>
                             <a href="https://${result.product.admin_graphql_api_id ? result.product.admin_graphql_api_id.split('/').pop() : 'admin'}.myshopify.com/admin/products/${result.product.id}" target="_blank">
                             </a>
                         </div>
+                        ${propagatedHtml}
                     `;
 
                     // After creation: if artwork templates are staged, zip and save to metafield
@@ -4906,6 +5322,8 @@ Dietary</textarea>
             // Load Shopify media on page load
             // Removed loadShopifyMedia() - no longer using Shopify media selection tab
 
+            setupParentRadioListeners();
+
             // Load products for search (cached)
             try {
                 const resp = await fetch('/api/products');
@@ -4973,20 +5391,33 @@ Dietary</textarea>
                 selectedProduct = { id: productId, title: title };
                 const submitBtn = document.querySelector('#productForm button[type="submit"]');
                 if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Product';
+                showCreateForm();
+                pcCreateFromParentMode = false;
+                const formEl = document.getElementById('productForm');
+                if (formEl) formEl.classList.remove('pc-create-from-parent');
+                const childNotice = document.getElementById('child-product-edit-notice');
+                if (childNotice) childNotice.style.display = 'none';
             }
-
-            showCreateForm();
             if (loadingEl) loadingEl.classList.add('visible');
             try {
                 const resp = await fetch(`/api/product/${productId}/prices`);
-                const data = await resp.json();
+                const data = await resp.json().catch(function() { return {}; });
+                if (!resp.ok) {
+                    var msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);
+                    if (data && data.detail) msg += ' — ' + (typeof data.detail === 'string' ? data.detail.substring(0, 200) : '');
+                    throw new Error(msg);
+                }
                 if (!data || !data.id) throw new Error('Failed to load product');
 
-                // Title (add " (Copy)" when duplicating)
+                // Title: when create-from-parent with versionName use "Base - Version"; else when duplicating use "Base (Copy)"
                 const titleEl = document.getElementById('title');
+                let baseTitle = data.title || title || '';
                 if (titleEl) {
-                    const baseTitle = data.title || title || '';
-                    titleEl.value = isDuplicate ? (baseTitle + ' (Copy)') : baseTitle;
+                    if (isDuplicate && opts && opts.versionName !== undefined) {
+                        titleEl.value = baseTitle + (opts.versionName ? ' - ' + opts.versionName : '');
+                    } else {
+                        titleEl.value = isDuplicate ? (baseTitle + ' (Copy)') : baseTitle;
+                    }
                 }
 
                 // Status (default to active if unknown)
@@ -5092,6 +5523,78 @@ Dietary</textarea>
                     }
                 }
 
+                // Parent? and parent_child from metafields (list.single_line_text_field: value may be JSON array)
+                const mfParent = mfs.find(m => m.namespace === 'custom' && m.key === 'parent_child');
+                let parentChildVal = '';
+                if (mfParent && mfParent.value != null && mfParent.value !== '') {
+                    const v = String(mfParent.value).trim();
+                    if (v.startsWith('[')) {
+                        try {
+                            const arr = JSON.parse(v);
+                            parentChildVal = Array.isArray(arr) && arr.length ? String(arr[0]).trim() : '';
+                        } catch (e) {
+                            parentChildVal = v;
+                        }
+                    } else {
+                        parentChildVal = v;
+                    }
+                }
+                // When creating a child from parent, use Child - X instead of Parent - X
+                if (isDuplicate && parentChildVal && parentChildVal.startsWith('Parent - ')) {
+                    parentChildVal = 'Child - ' + parentChildVal.slice(9);
+                }
+                const parentYesEl = document.getElementById('parentYes');
+                const parentNoEl = document.getElementById('parentNo');
+                const parentWrap = document.getElementById('parent-dropdown-wrap');
+                const parentSelect = document.getElementById('parent-child-select');
+                const childYesEl = document.getElementById('childYes');
+                const childNoEl = document.getElementById('childNo');
+                const childWrap = document.getElementById('child-dropdown-wrap');
+                const childSelect = document.getElementById('parent-child-child-select');
+                const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
+                const parentOptionWrap = document.getElementById('parent-option-wrap');
+                const childOptionWrap = document.getElementById('child-option-wrap');
+                if (parentNoEl) parentNoEl.checked = true;
+                if (parentYesEl) parentYesEl.checked = false;
+                if (parentWrap) parentWrap.style.display = 'none';
+                if (parentSelect) parentSelect.value = '';
+                if (childNoEl) childNoEl.checked = true;
+                if (childYesEl) childYesEl.checked = false;
+                if (childWrap) childWrap.style.display = 'none';
+                if (childSelect) childSelect.value = '';
+                if (hiddenParentChildEl) hiddenParentChildEl.value = '';
+                if (parentOptionWrap) parentOptionWrap.style.display = '';
+                if (childOptionWrap) childOptionWrap.style.display = '';
+                if (parentChildVal && (parentChildVal.startsWith('Parent - ') || parentChildVal.startsWith('Child - '))) {
+                    if (parentChildVal.startsWith('Child - ')) {
+                        if (childYesEl) childYesEl.checked = true;
+                        if (childNoEl) childNoEl.checked = false;
+                        if (childWrap) childWrap.style.display = 'block';
+                        if (parentOptionWrap) parentOptionWrap.style.display = 'none';
+                        if (childOptionWrap) childOptionWrap.style.display = '';
+                        refreshChildDropdown(parentChildVal).then(() => {
+                            if (childSelect && parentChildVal) childSelect.value = parentChildVal;
+                        });
+                        if (!isDuplicate) {
+                            pcCreateFromParentMode = true;
+                            const formEl = document.getElementById('productForm');
+                            if (formEl) formEl.classList.add('pc-create-from-parent');
+                            const childNotice = document.getElementById('child-product-edit-notice');
+                            if (childNotice) childNotice.style.display = 'block';
+                        }
+                    } else {
+                        if (parentYesEl) parentYesEl.checked = true;
+                        if (parentNoEl) parentNoEl.checked = false;
+                        if (parentWrap) parentWrap.style.display = 'block';
+                        if (hiddenParentChildEl) hiddenParentChildEl.value = '';
+                        if (parentOptionWrap) parentOptionWrap.style.display = '';
+                        if (childOptionWrap) childOptionWrap.style.display = 'none';
+                        refreshParentChildDropdown(parentChildVal).then(() => {
+                            if (parentSelect && parentChildVal) parentSelect.value = parentChildVal;
+                        });
+                    }
+                }
+
                 // Close dropdown and set main search input (leave empty when duplicating)
                 if (pcInput) pcInput.value = isDuplicate ? '' : (data.title || title || '');
                 if (pcDrop) pcDrop.style.display = 'none';
@@ -5151,56 +5654,56 @@ Dietary</textarea>
                     showEditableTable('end-customer-content');
                 } catch (e) { console.log('Price data load failed', e); }
 
-                // Prefill media preview with Shopify images
+                // Prefill media preview with Shopify images (skip when creating from parent - leave images blank)
                 try {
-                    // Don't clear selectedMediaFiles - those might be newly uploaded files that haven't been saved yet
-                    // Only clear selectedShopifyMedia which will be repopulated from the product
                     selectedShopifyMedia = [];
-                    console.log(`📷 Raw product data.images:`, data.images);
-                    console.log(`📷 Type of data.images:`, typeof data.images, Array.isArray(data.images));
-                    const media = Array.isArray(data.images) ? data.images : [];
-                    console.log(`📷 Loading ${media.length} existing images for product ${productId}`);
-                    console.log(`📷 Full images array:`, JSON.stringify(media, null, 2));
-                    if (media.length === 0) {
-                        console.warn(`⚠️ No images found in product data! This might indicate missing images or API issue.`);
-                    }
-                    media.slice(0, maxFiles).forEach((img, idx) => {
-                        console.log(`📷 Processing image ${idx + 1}/${media.length}:`, {
-                            id: img.id,
-                            src: img.src,
-                            alt: img.alt,
-                            admin_graphql_api_id: img.admin_graphql_api_id,
-                            position: img.position,
-                            created_at: img.created_at
-                        });
-                        // For images, use MediaImage format; for videos, use Video format
-                        // Try admin_graphql_api_id first, then construct the correct format
-                        let globalId = img.admin_graphql_api_id;
-                        if (!globalId) {
-                            // If it's an image, use MediaImage; otherwise use GenericFile
-                            // Check if src suggests it's an image (has image extension or is from shopify cdn)
-                            const isImage = img.src && (img.src.includes('.jpg') || img.src.includes('.jpeg') || img.src.includes('.png') || img.src.includes('.gif') || img.src.includes('cdn.shopify.com'));
-                            if (isImage) {
-                                globalId = `gid://shopify/MediaImage/${img.id}`;
-                            } else {
-                                globalId = `gid://shopify/GenericFile/${img.id}`;
-                            }
+                    if (!isDuplicate) {
+                        console.log(`📷 Raw product data.images:`, data.images);
+                        console.log(`📷 Type of data.images:`, typeof data.images, Array.isArray(data.images));
+                        const media = Array.isArray(data.images) ? data.images : [];
+                        console.log(`📷 Loading ${media.length} existing images for product ${productId}`);
+                        console.log(`📷 Full images array:`, JSON.stringify(media, null, 2));
+                        if (media.length === 0) {
+                            console.warn(`⚠️ No images found in product data! This might indicate missing images or API issue.`);
                         }
-                        
-                        const mediaItem = {
-                            id: img.id,  // REST API numeric ID - this is what we need to preserve
-                            global_id: globalId,  // GraphQL global ID - used for some operations
-                            rest_api_id: img.id,  // Explicitly store REST API ID for backend comparison
-                            url: img.src,
-                            filename: (img.alt || `image_${img.id}`),
-                            size: 0,
-                            is_image: true,
-                            content_type: 'image/jpeg'
-                        };
-                        selectedShopifyMedia.push(mediaItem);
-                        console.log(`✅ Added image to selectedShopifyMedia: REST ID ${img.id}, Global ID ${globalId}`);
+                        media.slice(0, maxFiles).forEach((img, idx) => {
+                            console.log(`📷 Processing image ${idx + 1}/${media.length}:`, {
+                                id: img.id,
+                                src: img.src,
+                                alt: img.alt,
+                                admin_graphql_api_id: img.admin_graphql_api_id,
+                                position: img.position,
+                                created_at: img.created_at
+                            });
+                            // For images, use MediaImage format; for videos, use Video format
+                            // Try admin_graphql_api_id first, then construct the correct format
+                            let globalId = img.admin_graphql_api_id;
+                            if (!globalId) {
+                                // If it's an image, use MediaImage; otherwise use GenericFile
+                                // Check if src suggests it's an image (has image extension or is from shopify cdn)
+                                const isImage = img.src && (img.src.includes('.jpg') || img.src.includes('.jpeg') || img.src.includes('.png') || img.src.includes('.gif') || img.src.includes('cdn.shopify.com'));
+                                if (isImage) {
+                                    globalId = `gid://shopify/MediaImage/${img.id}`;
+                                } else {
+                                    globalId = `gid://shopify/GenericFile/${img.id}`;
+                                }
+                            }
+                            
+                            const mediaItem = {
+                                id: img.id,  // REST API numeric ID - this is what we need to preserve
+                                global_id: globalId,  // GraphQL global ID - used for some operations
+                                rest_api_id: img.id,  // Explicitly store REST API ID for backend comparison
+                                url: img.src,
+                                filename: (img.alt || `image_${img.id}`),
+                                size: 0,
+                                is_image: true,
+                                content_type: 'image/jpeg'
+                            };
+                            selectedShopifyMedia.push(mediaItem);
+                            console.log(`✅ Added image to selectedShopifyMedia: REST ID ${img.id}, Global ID ${globalId}`);
                         });
-                    console.log(`📦 Total images loaded into selectedShopifyMedia: ${selectedShopifyMedia.length}`);
+                        console.log(`📦 Total images loaded into selectedShopifyMedia: ${selectedShopifyMedia.length}`);
+                    }
                     updateMediaPreview();
                 } catch (e) { 
                     console.error('❌ Media prefill failed', e); 
@@ -5212,7 +5715,6 @@ Dietary</textarea>
                     const glMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworkguidelines') || {}).value || '';
                     if (glMf) {
                         selectedGuideline = { id: glMf, name: '', column: '' };
-                        // reset all buttons
                         document.querySelectorAll('.guideline-row .use-btn').forEach(btn => {
                             btn.classList.remove('btn-success');
                             btn.classList.add('btn-secondary');
@@ -5227,8 +5729,13 @@ Dietary</textarea>
                                 btn.classList.add('btn-success');
                                 btn.textContent = 'Selected';
                             }
+                            const nameEl = row.querySelector('.guideline-name');
+                            if (nameEl) selectedGuideline.name = nameEl.textContent;
                         }
+                    } else {
+                        clearSelectedGuideline();
                     }
+                    updateGuidelineStatus();
                 } catch (e) { console.log('Guideline reflect failed', e); }
 
                 // Load product artwork templates like Templates Uploader
@@ -5255,6 +5762,7 @@ Dietary</textarea>
                         } catch (e) { console.log('Version list load failed', e); }
                     }
                     stageArtworkTemplates([]);
+                    updateTemplateStatus();
                 } catch (e) { console.log('Templates prefill failed', e); }
 
                 if (isDuplicate) {
@@ -5263,10 +5771,30 @@ Dietary</textarea>
                     const submitBtn = document.querySelector('#productForm button[type="submit"]');
                     if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
                     closeDuplicateModal();
+                    closeCreateFromParentModal();
+                    // If version name was not already provided (e.g. from Create from Parent prompt), prompt now for Duplicate flow
+                    const versionNameFromPrompt = (opts && opts.versionName !== undefined) ? null : prompt('What do you want to call this version?', '');
+                    if (titleEl && versionNameFromPrompt !== undefined && versionNameFromPrompt !== null) {
+                        const current = titleEl.value || '';
+                        if (current.includes('(Copy)')) {
+                            const replacement = versionNameFromPrompt.trim() ? ' - ' + versionNameFromPrompt.trim() : '';
+                            titleEl.value = current.replace(/\s*\(Copy\)\s*$/, replacement).trim() || current.replace(/\s*\(Copy\)\s*$/, '').trim();
+                        }
+                    }
+                    // Enter create-from-parent mode: hide VAT, Parent, price, artwork, and listed metafields (values still duplicated and saved)
+                    pcCreateFromParentMode = true;
+                    const formEl = document.getElementById('productForm');
+                    if (formEl) formEl.classList.add('pc-create-from-parent');
+                    // Show form only after filtering so user never sees the raw duplication
+                    showCreateForm();
                 }
             } catch (e) {
                 console.log('Populate failed:', e);
-                if (isDuplicate) closeDuplicateModal();
+                if (typeof alert === 'function') alert('Could not load product: ' + (e && e.message ? e.message : String(e)));
+                if (isDuplicate) {
+                    closeDuplicateModal();
+                    closeCreateFromParentModal();
+                }
             } finally {
                 if (loadingEl) loadingEl.classList.remove('visible');
             }
@@ -5331,6 +5859,78 @@ Dietary</textarea>
             const dupDrop = document.getElementById('dup-autocomplete-dropdown');
             if (dupInput) dupInput.value = '';
             if (dupDrop) dupDrop.style.display = 'none';
+        }
+
+        async function openCreateFromParentModal() {
+            const modal = document.getElementById('createFromParentModal');
+            const listEl = document.getElementById('create-from-parent-list');
+            if (!modal || !listEl) return;
+            modal.style.display = 'flex';
+            listEl.innerHTML = '<span class="muted">Loading parent products…</span>';
+            const escHandler = function(e) {
+                if (e.key === 'Escape') {
+                    closeCreateFromParentModal();
+                    document.removeEventListener('keydown', escHandler);
+                }
+            };
+            document.addEventListener('keydown', escHandler);
+            try {
+                const resp = await fetch('/api/products-parent-child');
+                const data = await resp.json();
+                const parents = data.parentProducts || [];
+                listEl.innerHTML = '';
+                if (parents.length === 0) {
+                    listEl.innerHTML = '<p class="muted">No parent products found. Assign a product a Parent type (e.g. Parent - Maxi) in Basic Information to see it here.</p>';
+                } else {
+                    parents.forEach(p => {
+                        const productId = p.id != null ? Number(p.id) : 0;
+                        const title = (p.title || 'Untitled').trim();
+                        const item = document.createElement('div');
+                        item.className = 'autocomplete-item';
+                        item.style.cursor = 'pointer';
+                        item.innerHTML = `<div class="product-name">${p.title || 'Untitled'}</div><div class="product-id">${p.parent_child_value || ''}</div>`;
+                        item.onclick = async () => {
+                            const versionName = prompt('What do you want to call this version?', '');
+                            if (versionName === null) return;
+                            let idToLoad = productId;
+                            let titleToLoad = title;
+                            if (!idToLoad) {
+                                let products = pcAllProducts || [];
+                                if (products.length === 0) {
+                                    try {
+                                        const r = await fetch('/api/products');
+                                        products = await r.json();
+                                    } catch (e) {}
+                                }
+                                const found = (products || []).find(prod => String(prod.title || '').trim() === title);
+                                if (found && found.id) {
+                                    idToLoad = found.id;
+                                    titleToLoad = found.title || title;
+                                } else {
+                                    alert('No product found with title: "' + title + '". Make sure the product exists and refresh the page, or set "id" in PARENT_PRODUCTS in categories.py.');
+                                    return;
+                                }
+                            }
+                            closeCreateFromParentModal();
+                            pcPopulateFromProduct(idToLoad, titleToLoad, { duplicate: true, versionName: (versionName || '').trim() });
+                        };
+                        listEl.appendChild(item);
+                    });
+                }
+            } catch (e) {
+                listEl.innerHTML = '<p class="muted">Failed to load parent products.</p>';
+            }
+            modal.addEventListener('click', function clickOut(e) {
+                if (e.target === modal) {
+                    closeCreateFromParentModal();
+                    modal.removeEventListener('click', clickOut);
+                }
+            });
+        }
+
+        function closeCreateFromParentModal() {
+            const modal = document.getElementById('createFromParentModal');
+            if (modal) modal.style.display = 'none';
         }
 
         function openEditModal() {
@@ -5821,6 +6421,7 @@ Dietary</textarea>
         // Note: updateMediaPreview is defined later with full Shopify media support
 
         function createMediaPreview(file, index, source = 'uploaded') {
+            const totalMedia = (selectedMediaFiles ? selectedMediaFiles.length : 0) + (selectedShopifyMedia ? selectedShopifyMedia.length : 0);
             const previewItem = document.createElement('div');
             previewItem.className = 'media-preview-item';
             previewItem.draggable = true;
@@ -5840,6 +6441,11 @@ Dietary</textarea>
                 <button class="remove-media" title="Remove file" draggable="false">
                     <i class="fas fa-times"></i>
                 </button>
+                ${index === 0 ? '<div class="media-main-badge"><span>Main Image</span></div>' : ''}
+                <div class="media-move-btns">
+                    <button type="button" class="move-btn" title="Move up" ${index === 0 ? 'disabled' : ''} onclick="event.stopPropagation(); moveMediaItem(${index}, -1)"><i class="fas fa-chevron-up"></i></button>
+                    <button type="button" class="move-btn" title="Move down" ${index >= totalMedia - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); moveMediaItem(${index}, 1)"><i class="fas fa-chevron-down"></i></button>
+                </div>
                 ${isVideo ? 
                     `<video draggable="false"><source src="${URL.createObjectURL(file)}" type="${file.type}"></video>` :
                     `<img src="${URL.createObjectURL(file)}" alt="${file.name}" draggable="false">`
@@ -5906,165 +6512,106 @@ Dietary</textarea>
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        // Simplified Drag and Drop Reordering Functions
+        function moveMediaItem(fromIndex, direction) {
+            if (!selectedMediaFiles) selectedMediaFiles = [];
+            if (!selectedShopifyMedia) selectedShopifyMedia = [];
+            const allMedia = [
+                ...selectedMediaFiles.map((file, i) => ({ type: 'uploaded', item: file })),
+                ...selectedShopifyMedia.map((media, i) => ({ type: 'shopify', item: media }))
+            ];
+            const toIndex = fromIndex + direction;
+            if (toIndex < 0 || toIndex >= allMedia.length) return;
+            const item = allMedia.splice(fromIndex, 1)[0];
+            allMedia.splice(toIndex, 0, item);
+            selectedMediaFiles = allMedia.filter(m => m.type === 'uploaded').map(m => m.item);
+            selectedShopifyMedia = allMedia.filter(m => m.type === 'shopify').map(m => m.item);
+            updateMediaPreview();
+        }
+
+        // Drag and Drop Reordering — slot-based (drop between items)
         let draggedElement = null;
         let draggedIndex = null;
 
         function addDragAndDropListeners(element) {
             element.addEventListener('dragstart', handleDragStart);
             element.addEventListener('dragend', handleDragEnd);
-            element.addEventListener('dragover', handleDragOver);
-            element.addEventListener('dragenter', handleDragEnter);
-            element.addEventListener('dragleave', handleDragLeave);
-            element.addEventListener('drop', handleDrop);
+            element.addEventListener('dragover', handleItemDragOver);
+            element.addEventListener('drop', handleItemDrop);
         }
 
         function handleDragStart(e) {
             draggedElement = this;
             draggedIndex = parseInt(this.dataset.index);
-            console.log('🖱️ Drag started: index=', draggedIndex, 'type=', this.dataset.type);
-            this.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', this.outerHTML);
+            e.dataTransfer.setData('text/plain', String(draggedIndex));
+            // Delay adding the class so the browser captures the ghost image first
+            requestAnimationFrame(() => {
+                if (draggedElement) draggedElement.classList.add('dragging');
+                const grid = document.getElementById('mediaPreviewGrid');
+                if (grid) grid.classList.add('is-dragging');
+            });
         }
 
-        function handleDragEnd(e) {
-            this.classList.remove('dragging');
+        function cleanupDragState() {
+            if (draggedElement) draggedElement.classList.remove('dragging');
             draggedElement = null;
             draggedIndex = null;
-            
-            // Remove drag-over class from all elements
-            document.querySelectorAll('.media-preview-item').forEach(item => {
-                item.classList.remove('drag-over');
-            });
+            const grid = document.getElementById('mediaPreviewGrid');
+            if (grid) grid.classList.remove('is-dragging');
+            document.querySelectorAll('.media-drop-slot').forEach(s => s.classList.remove('slot-active'));
         }
 
-        function handleDragOver(e) {
+        function handleDragEnd() {
+            cleanupDragState();
+        }
+
+        function handleItemDragOver(e) {
+            if (!draggedElement || this === draggedElement) return;
             e.preventDefault();
-            e.stopPropagation();
             e.dataTransfer.dropEffect = 'move';
-            // Allow drop on any media preview item, regardless of type
-            return false;
+            const rect = this.getBoundingClientRect();
+            const midX = rect.left + rect.width / 2;
+            const idx = parseInt(this.dataset.index);
+            if (isNaN(idx)) return;
+            document.querySelectorAll('.media-drop-slot').forEach(s => s.classList.remove('slot-active'));
+            const slotIdx = e.clientX < midX ? idx : idx + 1;
+            const slot = document.querySelector(`.media-drop-slot[data-slot="${slotIdx}"]`);
+            if (slot) slot.classList.add('slot-active');
         }
 
-        function handleDragEnter(e) {
-            e.preventDefault();
-            if (this !== draggedElement) {
-                this.classList.add('drag-over');
-                console.log('📍 Drag enter: index=', this.dataset.index, 'type=', this.dataset.type);
-            }
-        }
-
-        function handleDragLeave(e) {
-            this.classList.remove('drag-over');
-        }
-
-        function handleDrop(e) {
+        function handleItemDrop(e) {
+            if (!draggedElement || this === draggedElement) return;
             e.preventDefault();
             e.stopPropagation();
-            this.classList.remove('drag-over');
-            
-            console.log('🎯 Drop event fired!');
-            
-            if (this === draggedElement) {
-                console.log('⚠️ Dropped on self, ignoring');
-                return;
+            const active = document.querySelector('.media-drop-slot.slot-active');
+            if (active) {
+                performSlotDrop(parseInt(active.dataset.slot));
+            } else {
+                const rect = this.getBoundingClientRect();
+                const idx = parseInt(this.dataset.index);
+                if (isNaN(idx)) return;
+                performSlotDrop(e.clientX < rect.left + rect.width / 2 ? idx : idx + 1);
             }
-            
-            if (!draggedElement || draggedIndex === null || draggedIndex === undefined) {
-                console.error('❌ No dragged element or index');
-                return;
-            }
-            
-            const dropIndex = parseInt(this.dataset.index);
-            const draggedType = draggedElement.dataset.type;
-            const dropType = this.dataset.type;
-            
-            console.log('🎯 Drop: draggedIndex=', draggedIndex, 'draggedType=', draggedType, 'dropIndex=', dropIndex, 'dropType=', dropType);
-            
-            // Validate indices
-            if (isNaN(dropIndex) || dropIndex < 0) {
-                console.error('❌ Invalid dropIndex:', dropIndex, 'from dataset.index:', this.dataset.index);
-                return;
-            }
-            
-            if (isNaN(draggedIndex) || draggedIndex < 0) {
-                console.error('❌ Invalid draggedIndex:', draggedIndex);
-                return;
-            }
-            
-            // Create combined array for reordering - MUST match the order in updateMediaPreview
+        }
+
+        function performSlotDrop(slotIndex) {
+            if (draggedIndex === null || draggedIndex === undefined) return;
             if (!selectedMediaFiles) selectedMediaFiles = [];
             if (!selectedShopifyMedia) selectedShopifyMedia = [];
-            
-            // Build array in the SAME order as displayed in preview (uploaded first, then shopify)
             const allMedia = [
-                ...selectedMediaFiles.map((file, i) => ({ type: 'uploaded', item: file, originalIndex: i })),
-                ...selectedShopifyMedia.map((media, i) => ({ type: 'shopify', item: media, originalIndex: i }))
+                ...selectedMediaFiles.map(f => ({ type: 'uploaded', item: f })),
+                ...selectedShopifyMedia.map(m => ({ type: 'shopify', item: m }))
             ];
-            
-            console.log('📊 allMedia array:', allMedia.map((m, i) => `${i}: ${m.type}`));
-            console.log('📊 Current arrays: uploaded=', selectedMediaFiles.length, 'shopify=', selectedShopifyMedia.length);
-            
-            // Validate indices are within bounds
-            if (draggedIndex >= allMedia.length) {
-                console.error('❌ draggedIndex out of bounds:', draggedIndex, '>=', allMedia.length);
-                return;
-            }
-            
-            if (dropIndex >= allMedia.length) {
-                console.error('❌ dropIndex out of bounds:', dropIndex, '>=', allMedia.length);
-                return;
-            }
-            
-            const draggedItem = allMedia[draggedIndex];
-            if (!draggedItem) {
-                console.error('❌ No item at draggedIndex:', draggedIndex);
-                return;
-            }
-            
-            console.log('✅ Dragged item:', draggedItem.type, 'from index', draggedIndex);
-            
-            // Perform the reorder
-            allMedia.splice(draggedIndex, 1);
-            // Adjust dropIndex if we removed an item before it
-            const adjustedDropIndex = draggedIndex < dropIndex ? dropIndex - 1 : dropIndex;
-            allMedia.splice(adjustedDropIndex, 0, draggedItem);
-            
-            console.log('✅ Reordered. New order:', allMedia.map((m, i) => `${i}: ${m.type}`));
-            
-            // Separate back into the two arrays - preserve the exact order
-            const newSelectedMediaFiles = [];
-            const newSelectedShopifyMedia = [];
-            
-            allMedia.forEach(mediaItem => {
-                if (mediaItem.type === 'uploaded') {
-                    newSelectedMediaFiles.push(mediaItem.item);
-                } else if (mediaItem.type === 'shopify') {
-                    newSelectedShopifyMedia.push(mediaItem.item);
-                }
-            });
-            
-            // Update the global arrays
-            selectedMediaFiles = newSelectedMediaFiles;
-            selectedShopifyMedia = newSelectedShopifyMedia;
-            
-            console.log('✅ Separated: uploaded=', selectedMediaFiles.length, 'shopify=', selectedShopifyMedia.length);
-            console.log('✅ Final order check:', {
-                uploaded: selectedMediaFiles.map((f, i) => `${i}: ${f.name || 'file'}`),
-                shopify: selectedShopifyMedia.map((m, i) => `${i}: ${m.id || m.rest_api_id || 'media'}`)
-            });
-            
-            // Update the preview to reflect the new order
+            if (draggedIndex < 0 || draggedIndex >= allMedia.length) return;
+            let insertAt = slotIndex;
+            if (draggedIndex < slotIndex) insertAt = slotIndex - 1;
+            if (insertAt === draggedIndex) { cleanupDragState(); return; }
+            const item = allMedia.splice(draggedIndex, 1)[0];
+            allMedia.splice(insertAt, 0, item);
+            selectedMediaFiles = allMedia.filter(m => m.type === 'uploaded').map(m => m.item);
+            selectedShopifyMedia = allMedia.filter(m => m.type === 'shopify').map(m => m.item);
+            cleanupDragState();
             updateMediaPreview();
-            
-            // Re-attach drag handlers after preview update (all elements are recreated)
-            setTimeout(() => {
-                const allPreviewItems = document.querySelectorAll('.media-preview-item');
-                allPreviewItems.forEach(item => {
-                    addDragAndDropListeners(item);
-                });
-            }, 50);
         }
 
         // Note: addMediaToFormData is defined later with full Shopify media support
@@ -6079,44 +6626,89 @@ Dietary</textarea>
         // These functions were: loadShopifyMedia, displayShopifyMedia, toggleShopifyMediaSelection, 
         // updateShopifyMediaSelection, filterShopifyMedia
 
+        function createDropSlot(slotIndex) {
+            const slot = document.createElement('div');
+            slot.className = 'media-drop-slot';
+            slot.dataset.slot = slotIndex;
+            slot.addEventListener('dragover', function(e) {
+                if (!draggedElement) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                document.querySelectorAll('.media-drop-slot').forEach(s => s.classList.remove('slot-active'));
+                this.classList.add('slot-active');
+            });
+            slot.addEventListener('dragleave', function() {
+                this.classList.remove('slot-active');
+            });
+            slot.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                performSlotDrop(parseInt(this.dataset.slot));
+            });
+            return slot;
+        }
+
         function updateMediaPreview() {
             if (!selectedMediaFiles) selectedMediaFiles = [];
             if (!selectedShopifyMedia) selectedShopifyMedia = [];
-            
+
             const totalFiles = selectedMediaFiles.length + selectedShopifyMedia.length;
             const mediaPreviewContainer = document.getElementById('mediaPreviewContainer');
             const mediaCount = document.querySelector('.media-count');
             const mediaPreviewGrid = document.getElementById('mediaPreviewGrid');
-            
+
             if (!mediaPreviewContainer || !mediaPreviewGrid) return;
-            
+
             if (totalFiles === 0) {
                 mediaPreviewContainer.style.display = 'none';
                 return;
             }
-            
+
             mediaPreviewContainer.style.display = 'block';
             if (mediaCount) mediaCount.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''} selected`;
-            
-            // Clear existing previews
+
             mediaPreviewGrid.innerHTML = '';
-            
-            // Add uploaded files
-            selectedMediaFiles.forEach((file, index) => {
-                const preview = createMediaPreview(file, index, 'uploaded');
-                mediaPreviewGrid.appendChild(preview);
+            let itemIndex = 0;
+
+            mediaPreviewGrid.appendChild(createDropSlot(0));
+
+            selectedMediaFiles.forEach((file, i) => {
+                mediaPreviewGrid.appendChild(createMediaPreview(file, itemIndex, 'uploaded'));
+                itemIndex++;
+                mediaPreviewGrid.appendChild(createDropSlot(itemIndex));
             });
-            
-            // Add selected Shopify media
-            selectedShopifyMedia.forEach((media, index) => {
-                const preview = createShopifyMediaPreview(media, selectedMediaFiles.length + index);
-                mediaPreviewGrid.appendChild(preview);
+
+            selectedShopifyMedia.forEach((media, i) => {
+                mediaPreviewGrid.appendChild(createShopifyMediaPreview(media, itemIndex));
+                itemIndex++;
+                mediaPreviewGrid.appendChild(createDropSlot(itemIndex));
             });
-            
-            // Drag handlers are already attached in createMediaPreview/createShopifyMediaPreview
+
+            // Grid-level fallback: allow drop anywhere on the grid
+            mediaPreviewGrid.ondragover = function(e) {
+                if (!draggedElement) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            };
+            mediaPreviewGrid.ondrop = function(e) {
+                if (!draggedElement || draggedIndex === null) return;
+                e.preventDefault();
+                // Find the closest slot to the cursor
+                let closest = null, closestDist = Infinity;
+                document.querySelectorAll('.media-drop-slot').forEach(s => {
+                    const r = s.getBoundingClientRect();
+                    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                    const d = Math.hypot(e.clientX - cx, e.clientY - cy);
+                    if (d < closestDist) { closestDist = d; closest = s; }
+                });
+                if (closest) performSlotDrop(parseInt(closest.dataset.slot));
+                else cleanupDragState();
+            };
         }
 
         function createShopifyMediaPreview(media, index) {
+            const totalMedia = (selectedMediaFiles ? selectedMediaFiles.length : 0) + (selectedShopifyMedia ? selectedShopifyMedia.length : 0);
             const preview = document.createElement('div');
             preview.className = 'media-preview-item';
             preview.draggable = true;
@@ -6133,6 +6725,11 @@ Dietary</textarea>
                 <div class="drag-handle">
                     <i class="fas fa-grip-vertical"></i>
                     <span>${index + 1}</span>
+                </div>
+                ${index === 0 ? '<div class="media-main-badge"><span>Main Image</span></div>' : ''}
+                <div class="media-move-btns">
+                    <button type="button" class="move-btn" title="Move up" ${index === 0 ? 'disabled' : ''} onclick="event.stopPropagation(); moveMediaItem(${index}, -1)"><i class="fas fa-chevron-up"></i></button>
+                    <button type="button" class="move-btn" title="Move down" ${index >= totalMedia - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); moveMediaItem(${index}, 1)"><i class="fas fa-chevron-down"></i></button>
                 </div>
                 ${mediaElement}
                 <div class="media-info">
@@ -6190,14 +6787,6 @@ Dietary</textarea>
         function removeShopifyMedia(index) {
             selectedShopifyMedia.splice(index, 1);
             updateMediaPreview();
-        }
-
-        function clearAllMedia() {
-            if (selectedMediaFiles.length + (selectedShopifyMedia ? selectedShopifyMedia.length : 0) > 0 && confirm('Are you sure you want to remove all selected media files?')) {
-                selectedMediaFiles = [];
-                if (selectedShopifyMedia) selectedShopifyMedia = [];
-                updateMediaPreview();
-            }
         }
 
         // Update the addMediaToFormData function to handle both types

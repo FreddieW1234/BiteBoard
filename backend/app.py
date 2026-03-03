@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, Response, make_response, requ
 import os
 import subprocess
 import requests
+import time
 from datetime import datetime
 import json
 
@@ -435,27 +436,40 @@ def api_update_products_to_file():
         print(f"💥 Product update error: {error_msg}")
         return jsonify({'success': False, 'error': error_msg}), 500
 
-@app.route('/api/product/<int:product_id>')
+def _parse_product_id(product_id):
+    """Return positive int product ID or None if invalid."""
+    if product_id is None or (isinstance(product_id, str) and not product_id.strip()):
+        return None
+    try:
+        pid = int(product_id)
+        return pid if pid > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+@app.route('/api/product/<product_id>')
 def api_product_detail(product_id):
     try:
+        pid = _parse_product_id(product_id)
+        if pid is None:
+            return jsonify({"error": "Invalid product ID"}), 400
+        product_id = pid
         import sys
         import os
         sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
         
         from Field_Finder import fetch_all_metafields  # type: ignore
         
-        # Get product details
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
-        
-        response = requests.get(url, headers=headers)
-        
+        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        response, err = _shopify_get_with_retry(url, headers)
+        if err:
+            return jsonify({"error": "Failed to fetch product", "detail": err.get("detail", "")}), 400
         if response.status_code != 200:
-            return jsonify({"error": "Failed to fetch product"}), 400
-        
+            err_body = response.text[:500] if response.text else ""
+            return jsonify({"error": "Failed to fetch product", "detail": err_body}), 400
         product_data = response.json().get("product", {})
-        
-        # Get metafields
+        time.sleep(0.6)
         metafields = fetch_all_metafields(product_id)
         
         # Format the response
@@ -476,28 +490,47 @@ def api_product_detail(product_id):
         print(f"💥 Product detail error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/product/<int:product_id>/prices')
+def _shopify_get_with_retry(url, headers, max_retries=2):
+    """GET request to Shopify with 429 rate-limit retry. Returns (response, None) or (None, error_dict)."""
+    for attempt in range(max_retries + 1):
+        resp = requests.get(url, headers=headers, timeout=30)
+        if resp.status_code == 429:
+            if attempt < max_retries:
+                time.sleep(2)
+                continue
+            return None, {"error": "Rate limit exceeded", "detail": resp.text[:500] if resp.text else ""}
+        return resp, None
+    return None, {"error": "Request failed", "detail": ""}
+
+
+@app.route('/api/product/<product_id>/prices')
 def api_product_prices(product_id):
     """Special endpoint for Price Manager that returns all metafields including pricejson ones"""
     try:
-        # Get product details
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        pid = _parse_product_id(product_id)
+        if pid is None:
+            return jsonify({"error": "Invalid product ID"}), 400
+        product_id = pid
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
-        
-        response = requests.get(url, headers=headers)
-        
+        # Get product details (with 429 retry)
+        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
+        response, err = _shopify_get_with_retry(url, headers)
+        if err:
+            return jsonify({"error": "Failed to fetch product", "detail": err.get("detail", "")}), 400
         if response.status_code != 200:
-            return jsonify({"error": "Failed to fetch product"}), 400
-        
+            err_body = response.text[:500] if response.text else ""
+            return jsonify({"error": "Failed to fetch product", "detail": err_body}), 400
         product_data = response.json().get("product", {})
-        
-        # Get ALL metafields without filtering
+        # Throttle: stay under 2 calls/sec before second request
+        time.sleep(0.6)
+        # Get ALL metafields without filtering (with 429 retry)
         url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json?limit=250"
-        response = requests.get(url, headers=headers)
-        
+        response, err = _shopify_get_with_retry(url, headers)
+        if err:
+            return jsonify({"error": "Failed to fetch metafields", "detail": err.get("detail", "")}), 400
         if response.status_code != 200:
-            return jsonify({"error": "Failed to fetch metafields"}), 400
-        
+            err_body = response.text[:500] if response.text else ""
+            return jsonify({"error": "Failed to fetch metafields", "detail": err_body}), 400
         metafields_data = response.json()
         all_metafields = metafields_data.get("metafields", [])
         
@@ -599,7 +632,7 @@ def api_metafield_create():
 
 @app.route('/api/update_metafield', methods=['POST'])
 def api_update_metafield():
-    """Update a product metafield using Product Creator's create_metafields (same code path as product editor)."""
+    """Update a product metafield using Product Manager's create_metafields (same code path as product editor)."""
     try:
         data = request.get_json()
         product_id = data.get('product_id')
@@ -640,7 +673,7 @@ def api_update_metafield():
                 "type": metafield_type,
             }
         ]
-        print(f"[update_metafield] product_id={product_id} key={metafield_key} type={metafield_type} value_len={len(value_to_save)} (using Product Creator create_metafields)", flush=True)
+        print(f"[update_metafield] product_id={product_id} key={metafield_key} type={metafield_type} value_len={len(value_to_save)} (using Product Manager create_metafields)", flush=True)
 
         result = create_metafields(product_id_int, metafields_data, shopify_domain=None)
 
@@ -1405,6 +1438,8 @@ def api_create_product():
         elif request.is_json:
             # Handle JSON data (backward compatibility)
             data = request.get_json()
+            if data is None:
+                data = {}
         else:
             # Handle other content types
             return jsonify({
@@ -1412,7 +1447,7 @@ def api_create_product():
                 'error': f"Unsupported content type: {request.content_type}"
             }), 400
         
-        # Import the Product Creator script
+        # Import the Product Manager script
         from scripts.product_creator.Product_Creator import create_product, validate_product_data
         
         # Validate the product data
@@ -1506,6 +1541,27 @@ def api_metafield_choices(namespace_key):
             'success': False,
             'error': f'Error fetching metafield choices: {str(e)}'
         }), 500
+
+@app.route('/api/products-parent-child', methods=['GET'])
+def api_products_parent_child():
+    """Return products that have a Parent - X parent_child metafield and which Parent values are taken."""
+    try:
+        from scripts.product_creator.Product_Creator import get_products_parent_child
+        result = get_products_parent_child()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'parentProducts': [], 'takenParentValues': [], 'error': str(e)}), 500
+
+@app.route('/api/products-parent-child-tree', methods=['GET'])
+def api_products_parent_child_tree():
+    """Return parent-child tree. ?parents_only=1 returns instantly with empty children (hardcoded parents only)."""
+    try:
+        from scripts.product_creator.Product_Creator import get_parent_child_tree
+        parents_only = request.args.get('parents_only', '').strip() in ('1', 'true', 'yes')
+        result = get_parent_child_tree(parents_only=parents_only)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'tree': [], 'error': str(e)}), 500
 
 @app.route('/api/pricing-qty-bands', methods=['GET'])
 def api_pricing_qty_bands():

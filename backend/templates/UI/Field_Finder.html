@@ -599,8 +599,8 @@
                 <div class="app-tabs">
                     <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
                     <a href="/app/price_bandit" class="app-tab"><i class="fas fa-robot"></i><span>Price Bandit</span></a>
-                    <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Editor/Creator</span></a>
-                    <a href="/app/Templates_Uploader" class="app-tab"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
+                    <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Manager</span></a>
+                    <a href="/app/Templates_Uploader" class="app-tab" style="display: none;"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
                     <a href="/app/Field_Finder" class="app-tab active"><i class="fas fa-search"></i><span>Field Finder</span></a>
                 </div>
             </nav>
@@ -1192,7 +1192,7 @@
                 return;
             }
             
-            // Apply the same filtering logic as Product Creator
+            // Apply the same filtering logic as Product Manager
             metafields = (metafields || []).filter(m => {
                 const namespace = (m.namespace || '').toLowerCase();
                 const key = (m.key || '').toLowerCase();
@@ -1331,7 +1331,7 @@
                 `;
                 metafieldsContainer.appendChild(metafieldDiv);
 
-                // Chocolate quick-fill: fill Ingredients + Nutritional Info (same as Product Creator)
+                // Chocolate quick-fill: fill Ingredients + Nutritional Info (same as Product Manager)
                 if (isIngredients) {
                     const chocolateBtn = metafieldDiv.querySelector('.card-quickfill-btn');
                     if (chocolateBtn) {

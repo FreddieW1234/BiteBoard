@@ -347,7 +347,7 @@
                 color: '#e91e63'
             },
             'Product_Creator': {
-                name: 'Product Editor/Creator',
+                name: 'Product Manager',
                 description: 'Create a new product from scratch and publish to the Bite website',
                 icon: 'fas fa-plus-circle',
                 color: '#ff9800'
@@ -393,8 +393,8 @@
                 const response = await fetch('/api/tools');
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
-                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor');
-                const tabOrder = ['Artwork_Updater', 'Price_Bandit', 'Product_Creator', 'Templates_Uploader'];
+                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader');
+                const tabOrder = ['Artwork_Updater', 'Price_Bandit', 'Product_Creator'];
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 
                 appTabsEl.innerHTML = '';
@@ -483,8 +483,24 @@
 
 
 
+        // Preload Product Families (parent-child tree) when site opens so Product Manager loads instantly
+        window.__productFamilyTreeCache = null;
+        window.__productFamilyTreeCacheTime = 0;
+        function prefetchProductFamilyTree() {
+            fetch('/api/products-parent-child-tree')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.tree) {
+                        window.__productFamilyTreeCache = data;
+                        window.__productFamilyTreeCacheTime = Date.now();
+                    }
+                })
+                .catch(() => {});
+        }
+
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
+            prefetchProductFamilyTree();
             loadTools();
             loadLiveProductsCount();
             // Add some interactive effects
