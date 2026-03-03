@@ -58,7 +58,8 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         
         response = None
         for _get_attempt in range(3):
-            time.sleep(1.0 if _get_attempt == 0 else 3.0 * _get_attempt)
+            if _get_attempt > 0:
+                time.sleep(2.0 * _get_attempt)
             response = requests.get(url, headers=headers, allow_redirects=True)
             if response.status_code == 200:
                 break
@@ -110,7 +111,8 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         def _delete_with_retry(del_url, max_attempts=4):
             r = None
             for attempt in range(max_attempts):
-                time.sleep(1.0)
+                if attempt > 0:
+                    time.sleep(0.5)
                 r = requests.delete(del_url, headers=headers, allow_redirects=False)
                 if r.status_code in (301, 302, 303, 307, 308):
                     from urllib.parse import urlparse
@@ -118,10 +120,9 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
                     if loc.startswith('/'):
                         p = urlparse(del_url)
                         loc = f"{p.scheme}://{p.netloc}{loc}"
-                    time.sleep(1.0)
                     r = requests.delete(loc, headers=headers)
                 if r.status_code == 429 and attempt < max_attempts - 1:
-                    backoff = 3.0 * (attempt + 1)
+                    backoff = 2.0 * (attempt + 1)
                     print(f"⚠️ Rate limit (429) on image delete, waiting {backoff}s (attempt {attempt+1}/{max_attempts})...", flush=True)
                     time.sleep(backoff)
                     continue
@@ -192,10 +193,9 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
             'Content-Type': 'application/json'
         }
         
-        time.sleep(1.5)
         response = requests.get(url, headers=headers)
         if response.status_code == 429:
-            time.sleep(3.0)
+            time.sleep(2.0)
             response = requests.get(url, headers=headers)
         if not response.ok:
             return {"success": False, "errors": [f"Failed to get product: {response.status_code}"]}
@@ -328,7 +328,8 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         def _put_with_retry(put_url, put_payload, label=""):
             """PUT with redirect-follow and 429 retry (up to 3 attempts)."""
             for attempt in range(3):
-                time.sleep(1.0)
+                if attempt > 0:
+                    time.sleep(0.3)
                 r = requests.put(put_url, headers=headers, json=put_payload, allow_redirects=False)
                 if r.status_code in [301, 302, 303, 307, 308]:
                     from urllib.parse import urlparse
@@ -336,12 +337,11 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                     if loc.startswith('/'):
                         p = urlparse(put_url)
                         loc = f"{p.scheme}://{p.netloc}{loc}"
-                    time.sleep(1.0)
                     r = requests.put(loc, headers=headers, json=put_payload, allow_redirects=True)
                 if r.status_code == 429 and attempt < 2:
-                    wait = 3.0
+                    wait = 2.0
                     try:
-                        wait = max(3.0, float(r.headers.get("retry-after", 3)))
+                        wait = max(2.0, float(r.headers.get("retry-after", 2)))
                     except (ValueError, TypeError):
                         pass
                     print(f"⚠️ Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
@@ -419,8 +419,10 @@ def reorder_product_media(product_id, shopify_media_ids_in_order, shopify_domain
             'Content-Type': 'application/json'
         }
         
-        time.sleep(0.6)
         response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            time.sleep(2.0)
+            response = requests.get(url, headers=headers)
         if not response.ok:
             return {"success": False, "errors": [f"Failed to get product: {response.status_code}"]}
         
@@ -1434,7 +1436,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
             cursor = page_info.get("endCursor")
             if not cursor:
                 break
-            time.sleep(0.55)
+            time.sleep(0.25)
         except Exception as e:
             print(f"⚠️ _find_parent_product_id_by_parent_value: {e}", flush=True)
             break
@@ -1453,7 +1455,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 if not pid:
                     continue
                 mf_r = requests.get(f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1", headers=headers, timeout=15)
-                time.sleep(0.55)
+                time.sleep(0.25)
                 if mf_r.status_code != 200:
                     continue
                 mf_list = mf_r.json().get("metafields") or []
@@ -1497,7 +1499,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
     if not parent_id:
         print(f"⚠️ Parent product not found for child type {child_parent_child_value!r} (add parent id to PARENT_PRODUCTS or ensure parent exists in store)", flush=True)
         return None
-    time.sleep(0.5)  # Avoid rate limit when we just did a lookup
+    time.sleep(0.2)
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
     headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
@@ -1618,7 +1620,8 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         try:
             mf_fetch_url = f"{base_url}/metafields.json?limit=250"
             for _mf_attempt in range(3):
-                time.sleep(1.5 if _mf_attempt == 0 else 4.0 * _mf_attempt)
+                if _mf_attempt > 0:
+                    time.sleep(2.0 * _mf_attempt)
                 resp = requests.get(mf_fetch_url, headers=headers, allow_redirects=True)
                 if resp.status_code == 200:
                     for mf in resp.json().get("metafields", []):
@@ -1635,9 +1638,9 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         except Exception as e:
             print(f"⚠️ Could not fetch existing metafields for upsert: {e}", flush=True)
         
-        # Throttle after fetch
+        # Brief pause after fetch
         if metafields_data:
-            time.sleep(0.5)
+            time.sleep(0.2)
         
         success_count = 0
         errors = []
@@ -1658,7 +1661,8 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                             try:
                                 del_ok = False
                                 for del_attempt in range(4):
-                                    time.sleep(1.0)
+                                    if del_attempt > 0:
+                                        time.sleep(0.5)
                                     del_r = requests.delete(del_url, headers=headers, allow_redirects=False)
                                     if del_r.status_code in (301, 302, 303, 307, 308):
                                         from urllib.parse import urlparse
@@ -1666,10 +1670,9 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                         if loc.startswith("/"):
                                             parsed = urlparse(del_url)
                                             loc = f"{parsed.scheme}://{parsed.netloc}{loc}"
-                                        time.sleep(1.0)
                                         del_r = requests.delete(loc, headers=headers, timeout=15)
                                     if del_r.status_code == 429 and del_attempt < 3:
-                                        backoff = 3.0 * (del_attempt + 1)
+                                        backoff = 2.0 * (del_attempt + 1)
                                         print(f"⚠️ Rate limit (429) deleting {namespace}.{key}, waiting {backoff}s (attempt {del_attempt+1}/4)...", flush=True)
                                         time.sleep(backoff)
                                         continue
@@ -1740,9 +1743,9 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 key = metafield_data.get("key", "")
                 existing_id = existing_by_ns_key.get((namespace, key))
                 
-                # Rate limit: Shopify allows 2 calls/sec (bucket of 40). Throttle between calls.
+                # Shopify REST rate limit: 40-call bucket, refills at 2/sec. Light throttle + retry on 429.
                 if idx > 0:
-                    time.sleep(0.55)
+                    time.sleep(0.25)
                 
                 def _do_request():
                     if existing_id:
@@ -1780,7 +1783,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 response = _do_request()
                 for _retry in range(3):
                     if response.status_code == 429:
-                        wait = 3.0 * (_retry + 1)
+                        wait = 2.0 * (_retry + 1)
                         print(f"⚠️ Rate limit (429) on metafield {namespace}.{key}, waiting {wait}s (retry {_retry+1}/3)...", flush=True)
                         time.sleep(wait)
                         response = _do_request()
@@ -2371,10 +2374,10 @@ def create_product(product_data):
                     # Let rate-limit bucket recover between steps, and wait for Shopify to index uploads
                     import time
                     if has_new_media:
-                        print("⏳ Waiting for Shopify to process new uploads and rate limit to recover...")
-                        time.sleep(4)
-                    else:
+                        print("⏳ Waiting for Shopify to process new uploads...")
                         time.sleep(2)
+                    else:
+                        time.sleep(0.5)
                     
                     media_order = product_data.get("media_order", [])
                     if media_order:
@@ -2429,8 +2432,8 @@ def create_product(product_data):
                     # Add a delay to ensure Shopify has processed the uploads
                     import time
                     if has_new_media:
-                        print("⏳ Waiting 2 seconds for Shopify to process new uploads...")
-                        time.sleep(2)
+                        print("⏳ Waiting for Shopify to process new uploads...")
+                        time.sleep(1)
                     
                     media_order = product_data.get("media_order", [])
                     print(f"🔍 DEBUG: media_order received for new product: {media_order}")
@@ -2633,7 +2636,8 @@ def create_product(product_data):
                 try:
                     r = None
                     for _pc_attempt in range(3):
-                        time.sleep(2.0 if _pc_attempt == 0 else 4.0)
+                        if _pc_attempt > 0:
+                            time.sleep(2.0)
                         r = requests.get(f"{base_url}/metafields.json?limit=250", headers=headers, timeout=15, allow_redirects=True)
                         if r.status_code == 200:
                             break
@@ -2646,7 +2650,7 @@ def create_product(product_data):
                             if mf.get("namespace") == "custom" and mf.get("key") == "parent_child":
                                 mf_id = mf.get("id")
                                 if mf_id:
-                                    time.sleep(0.6)
+                                    time.sleep(0.3)
                                     del_r = requests.delete(f"{base_url}/metafields/{mf_id}.json", headers=headers, timeout=15)
                                     if del_r.status_code in (200, 204):
                                         print("✅ Removed parent_child metafield (cleared Parent/Child).", flush=True)
@@ -2675,28 +2679,25 @@ def create_product(product_data):
                 print(f"📋 Overwrote inherited metafields from parent", flush=True)
             
             if metafields and product_id:
-                # Let rate limit recover after media management + parent_child operations
-                time.sleep(4.0)
+                time.sleep(1.0)
                 print(f"🔄 Step 3: Creating {len(metafields)} metafields...")
                 # Use the actual Shopify domain if we extracted it from redirects
                 metafield_results = create_metafields(product_id, metafields, shopify_domain=actual_shopify_domain)
                 if metafield_results.get("success"):
                     print(f"✅ Step 3 Complete: All metafields created successfully!")
-                    # Small delay to ensure metafields are fully saved before Price Bandit reads them
                     import time
-                    time.sleep(0.5)
+                    time.sleep(0.2)
                 else:
                     print(f"⚠️ Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
             else:
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
             
-            # Step 4: Run Price Bandit script to create variants (after media and metafields are created)
-            time.sleep(1.5)
-            # For new products, add extra delay to ensure images are fully indexed
+            # Step 4: Run Price Bandit script to create variants
+            time.sleep(0.5)
             if not existing_product_id:
-                print("⏳ Waiting 2 seconds before Price Bandit to ensure all images are indexed...", flush=True)
+                print("⏳ Waiting for images to be indexed before Price Bandit...", flush=True)
                 import time
-                time.sleep(2.0)
+                time.sleep(1.0)
             
             print(f"🔄 Step 4: Running Price Bandit script to create variants...")
             
