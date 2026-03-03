@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: gunicorn app:app --chdir backend --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:app --chdir backend --bind 0.0.0.0:$PORT --timeout 300
     autoDeploy: true
     envVars:
       - key: SHOPIFY_STORE_DOMAIN
