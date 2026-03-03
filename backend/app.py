@@ -469,7 +469,6 @@ def api_product_detail(product_id):
             err_body = response.text[:500] if response.text else ""
             return jsonify({"error": "Failed to fetch product", "detail": err_body}), 400
         product_data = response.json().get("product", {})
-        time.sleep(0.6)
         metafields = fetch_all_metafields(product_id)
         
         # Format the response
@@ -493,7 +492,12 @@ def api_product_detail(product_id):
 def _shopify_get_with_retry(url, headers, max_retries=2):
     """GET request to Shopify with 429 rate-limit retry. Returns (response, None) or (None, error_dict)."""
     for attempt in range(max_retries + 1):
-        resp = requests.get(url, headers=headers, timeout=30)
+        try:
+            resp = requests.get(url, headers=headers, timeout=15)
+        except requests.exceptions.Timeout:
+            if attempt < max_retries:
+                continue
+            return None, {"error": "Request timed out", "detail": f"Shopify API did not respond after {max_retries + 1} attempts"}
         if resp.status_code == 429:
             if attempt < max_retries:
                 time.sleep(2)
@@ -521,8 +525,6 @@ def api_product_prices(product_id):
             err_body = response.text[:500] if response.text else ""
             return jsonify({"error": "Failed to fetch product", "detail": err_body}), 400
         product_data = response.json().get("product", {})
-        # Throttle: stay under 2 calls/sec before second request
-        time.sleep(0.6)
         # Get ALL metafields without filtering (with 429 retry)
         url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json?limit=250"
         response, err = _shopify_get_with_retry(url, headers)

@@ -5400,7 +5400,16 @@ Dietary</textarea>
             }
             if (loadingEl) loadingEl.classList.add('visible');
             try {
-                const resp = await fetch(`/api/product/${productId}/prices`);
+                const _fetchCtrl = new AbortController();
+                const _fetchTimeout = setTimeout(() => _fetchCtrl.abort(), 30000);
+                let resp;
+                try {
+                    resp = await fetch(`/api/product/${productId}/prices`, { signal: _fetchCtrl.signal });
+                } catch (fetchErr) {
+                    clearTimeout(_fetchTimeout);
+                    throw new Error(fetchErr.name === 'AbortError' ? 'Request timed out — the server took too long to respond. Try again.' : (fetchErr.message || 'Network error'));
+                }
+                clearTimeout(_fetchTimeout);
                 const data = await resp.json().catch(function() { return {}; });
                 if (!resp.ok) {
                     var msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);
@@ -5795,6 +5804,7 @@ Dietary</textarea>
                     closeDuplicateModal();
                     closeCreateFromParentModal();
                 }
+                backToProductCreatorHome();
             } finally {
                 if (loadingEl) loadingEl.classList.remove('visible');
             }
