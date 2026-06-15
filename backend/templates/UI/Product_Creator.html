@@ -836,6 +836,29 @@
             min-height: 0;
         }
         
+        .dropdown-group-heading {
+            padding: 8px 12px 4px 12px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #1f2937;
+            background-color: #f1f3f5;
+            border-top: 1px solid #e9ecef;
+            cursor: default;
+            user-select: none;
+            pointer-events: none;
+            position: sticky;
+            top: 0;
+        }
+        .dropdown-group-heading:first-child {
+            border-top: none;
+        }
+        /* Indent the options so they sit visually under their bold heading (filters dropdown only) */
+        .custom-dropdown[data-key="filters"] .dropdown-option {
+            padding-left: 24px;
+        }
+        
         .dropdown-option {
             display: flex;
             align-items: center;
@@ -3008,7 +3031,66 @@ Dietary</textarea>
                         const namespace = inputElement.dataset.namespace;
                         const key = inputElement.dataset.key;
                         const metafieldType = inputElement.dataset.type;
-                        
+
+                        // Combined Category & Subcategory dropdown: derive both metafields from the ticked subcategories.
+                        if (key === 'categorysub') {
+                            const checkedBoxes = inputElement.querySelectorAll('input[type="checkbox"][data-category]:checked');
+                            const subs = [];
+                            const cats = [];
+                            checkedBoxes.forEach(cb => {
+                                const sub = (cb.value || '').trim();
+                                const cat = (cb.getAttribute('data-category') || '').trim();
+                                if (sub) subs.push(sub);
+                                if (cat) cats.push(cat);
+                            });
+                            const uSubs = [...new Set(subs)];
+                            const uCats = [...new Set(cats)];
+                            // Always emit both metafields (empty string when none) so clearing all selections clears them
+                            metafieldsData.push({
+                                namespace: 'custom',
+                                key: 'custom_category',
+                                type: 'list.single_line_text_field',
+                                value: uCats.length > 0 ? JSON.stringify(uCats) : ''
+                            });
+                            metafieldsData.push({
+                                namespace: 'custom',
+                                key: 'subcategory',
+                                type: 'list.single_line_text_field',
+                                value: uSubs.length > 0 ? JSON.stringify(uSubs) : ''
+                            });
+                            console.log(`✅ Combined category/subcategory -> categories:`, uCats, 'subcategories:', uSubs);
+                            return; // done with the combined item
+                        }
+
+                        // Combined Filters dropdown: split selections back into their separate metafields by group.
+                        // Always emit every group (even empty) so deselecting all options clears that metafield.
+                        if (key === 'filters') {
+                            const allBoxes = inputElement.querySelectorAll('input[type="checkbox"][data-group-key]');
+                            const byGroup = {};
+                            allBoxes.forEach(cb => {
+                                const gKey = cb.getAttribute('data-group-key');
+                                const gNs = cb.getAttribute('data-group-namespace') || 'custom';
+                                if (!gKey) return;
+                                if (!byGroup[gKey]) byGroup[gKey] = { namespace: gNs, values: [] };
+                                if (cb.checked) {
+                                    const val = (cb.value || '').trim();
+                                    if (val) byGroup[gKey].values.push(val);
+                                }
+                            });
+                            Object.keys(byGroup).forEach(gKey => {
+                                const grp = byGroup[gKey];
+                                metafieldsData.push({
+                                    namespace: grp.namespace,
+                                    key: gKey,
+                                    type: 'list.single_line_text_field',
+                                    // Empty string signals the backend to delete/clear this metafield
+                                    value: grp.values.length > 0 ? JSON.stringify(grp.values) : ''
+                                });
+                                console.log(`✅ Added filter group ${grp.namespace}.${gKey} to metafieldsData:`, grp.values);
+                            });
+                            return; // done with the filters item
+                        }
+
                         // Handle custom dropdowns for category and subcategory
                         let value;
                         if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
@@ -4088,7 +4170,7 @@ Dietary</textarea>
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
                 'description': 'Description',
-                'leadtime1': 'Lead Time (Days)',
+                'leadtime1': 'Lead Time >5000 units (Days)',
                 'leadtime2': 'Lead Time 5000-10000 units (Days)',
                 'sku': 'Product Code',
                 'recycle_info': 'Recycle Info',
@@ -4096,6 +4178,8 @@ Dietary</textarea>
                 'product_size': 'Product Size in mm (l*w*h)',
                 'custom_category': 'Category',
                 'subcategory': 'Subcategory',
+                'categorysub': 'Category & Subcategory',
+                'filters': 'Filters',
                 
                 // Default fallback - capitalize and replace underscores
                 'default': key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -4117,7 +4201,17 @@ Dietary</textarea>
             
             const container = document.getElementById('metafields-container');
             container.innerHTML = '';
-            
+
+            // Ensure the combined Category & Subcategory dropdown always renders (virtual UI field)
+            if (!metafields.some(m => m && m.key === 'categorysub' && (m.namespace || 'custom') === 'custom')) {
+                metafields = metafields.concat([{ namespace: 'custom', key: 'categorysub', type: 'list.single_line_text_field', value: '', id: null }]);
+            }
+
+            // Ensure the filters dropdown always renders, even if the product has no filters metafield yet
+            if (!metafields.some(m => m && m.key === 'filters' && (m.namespace || 'custom') === 'custom')) {
+                metafields = metafields.concat([{ namespace: 'custom', key: 'filters', type: 'list.single_line_text_field', value: '', id: null }]);
+            }
+
             if (metafields.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-style: italic; grid-column: 1 / -1;">No metafields found</p>';
                 return;
@@ -4125,8 +4219,8 @@ Dietary</textarea>
 
             // Default metafield order (hardcoded fallback)
             const DEFAULT_METAFIELD_ORDER = [
-                "custom_category",
-                "subcategory",
+                "categorysub",
+                "filters",
                 "description",
                 "ingredients",
                 "nutritional_info",
@@ -4207,8 +4301,11 @@ Dietary</textarea>
                     if (key.startsWith('pricejson') && !key.includes('.')) return false;
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
                     if (namespace === 'custom' && key === 'sku') return false;
-                    if (namespace === 'custom' && key === 'leadtime2') return false;
                     if (namespace === 'custom' && key === 'parent_child') return false;
+                    // Category + subcategory are merged into one combined "Category & Subcategory" dropdown
+                    if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
+                    // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
+                    if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
                     if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packing_info'].includes(key)) return false;
                     return true;
                 });
@@ -4264,6 +4361,24 @@ Dietary</textarea>
                             <input type="text" class="metafield-value product-size-field" data-key="${metafield.key || ''}" data-namespace="${metafield.namespace || 'custom'}" data-type="${metafield.type || 'single_line_text_field'}" data-part="height" placeholder="Height" value="${height}" style="flex: 1; padding: 8px;">
                         </div>
                     `;
+                } else if (metafield.key === 'categorysub') {
+                    // Combined Category & Subcategory dropdown: categories are bold headings, subcategories are selectable
+                    console.log(`🔧 Creating combined category & subcategory dropdown`);
+                    inputElement = `
+                        <div class="custom-dropdown" data-id="null" data-namespace="custom" data-key="categorysub" data-type="list.single_line_text_field">
+                            <div class="dropdown-trigger-wrap">
+                                <div class="dropdown-button" onclick="toggleDropdown(this)">
+                                    <span class="dropdown-text">Select category & subcategory...</span>
+                                    <span class="dropdown-arrow">▼</span>
+                                </div>
+                                <div class="dropdown-content" style="display: none;">
+                                    <div class="dropdown-loading">Loading options...</div>
+                                </div>
+                            </div>
+                            <ul class="dropdown-selected-list" aria-label="Selected categories and subcategories"></ul>
+                        </div>
+                    `;
+                    console.log(`✅ Combined category/subcategory dropdown HTML created`);
                 } else if (metafield.key === 'custom_category') {
                     // Special handling for category field - create custom dropdown menu
                     console.log(`🔧 Creating custom dropdown for ${metafield.key}`);
@@ -4300,6 +4415,24 @@ Dietary</textarea>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for subcategory`);
+                } else if (metafield.key === 'filters') {
+                    // Multi-select filters dropdown (custom.filters), options loaded from API
+                    console.log(`🔧 Creating filters dropdown`);
+                    inputElement = `
+                        <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="filters" data-type="list.single_line_text_field">
+                            <div class="dropdown-trigger-wrap">
+                                <div class="dropdown-button" onclick="toggleDropdown(this)">
+                                    <span class="dropdown-text">Select filters...</span>
+                                    <span class="dropdown-arrow">▼</span>
+                                </div>
+                                <div class="dropdown-content" style="display: none;">
+                                    <div class="dropdown-loading">Loading options...</div>
+                                </div>
+                            </div>
+                            <ul class="dropdown-selected-list" aria-label="Selected filters"></ul>
+                        </div>
+                    `;
+                    console.log(`✅ Custom dropdown HTML created for filters`);
                 } else if (hasOptions) {
                     console.log(`🔧 Creating dropdown for ${metafield.key} (hasOptions)`);
                         // Use Shopify's predefined options
@@ -4364,7 +4497,7 @@ Dietary</textarea>
                 let headerExtra = '';
                 if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
                 else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
-                const fullWidthKeys = ['custom_category', 'subcategory', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
+                const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
                 if (fullWidthKeys.includes(metafield.key)) metafieldDiv.classList.add('metafield-item-full-width');
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
@@ -4448,12 +4581,21 @@ Dietary</textarea>
                     });
                 }
 
+                // Combined Category & Subcategory dropdown: just load options (values set later via populateMetafieldValues)
+                if (metafield.key === 'categorysub') {
+                    const dropdown = metafieldDiv.querySelector('.custom-dropdown');
+                    if (dropdown) loadCategorySubDropdownOptions(dropdown);
+                }
+
                 // For custom dropdowns, load options immediately and set initial values
-                if (metafield.key === 'custom_category' || metafield.key === 'subcategory') {
+                if (metafield.key === 'custom_category' || metafield.key === 'subcategory' || metafield.key === 'filters') {
                     const dropdown = metafieldDiv.querySelector('.custom-dropdown');
                     if (dropdown) {
-                        // Subcategory: load all options (?all=1); category: load category options
-                        const loadFunc = metafield.key === 'custom_category' ? loadCategoryDropdownOptions : (d) => loadSubcategoryDropdownOptions(d, 'subcategory', true);
+                        // Subcategory: load all options (?all=1); category: load category options; filters: load filter options
+                        let loadFunc;
+                        if (metafield.key === 'custom_category') loadFunc = loadCategoryDropdownOptions;
+                        else if (metafield.key === 'filters') loadFunc = loadFiltersDropdownOptions;
+                        else loadFunc = (d) => loadSubcategoryDropdownOptions(d, 'subcategory', true);
                         loadFunc(dropdown).then(() => {
                             // After options are loaded, set the initial values (merged from subcategory, subcategory_2, etc.)
                             if (metafield.value) {
@@ -5133,7 +5275,7 @@ Dietary</textarea>
             const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
             const textElement = dropdown.querySelector('.dropdown-text');
             const key = dropdown.dataset.key;
-            textElement.textContent = key === 'custom_category' ? 'Select categories...' : 'Select subcategories...';
+            textElement.textContent = key === 'custom_category' ? 'Select categories...' : (key === 'filters' ? 'Select filters...' : (key === 'categorysub' ? 'Select category & subcategory...' : 'Select subcategories...'));
             // Update bullet list of selected options below the dropdown
             const listEl = dropdown.querySelector('.dropdown-selected-list');
             if (listEl) {
@@ -5152,13 +5294,29 @@ Dietary</textarea>
         
         function filterDropdownOptions(optionsList, searchValue) {
             const q = (searchValue || '').trim().toLowerCase();
-            const options = optionsList.querySelectorAll('.dropdown-option');
-            options.forEach(opt => {
-                const label = opt.querySelector('label');
-                const text = (label && label.textContent) ? label.textContent : '';
-                const show = !q || text.toLowerCase().includes(q);
-                opt.style.display = show ? '' : 'none';
+            // Walk children in order so we can hide group headings that have no visible options
+            const children = Array.from(optionsList.children);
+            let currentHeading = null;
+            let headingHasVisible = false;
+            const finalizeHeading = () => {
+                if (currentHeading) currentHeading.style.display = headingHasVisible ? '' : 'none';
+            };
+            children.forEach(child => {
+                if (child.classList.contains('dropdown-group-heading')) {
+                    finalizeHeading();
+                    currentHeading = child;
+                    headingHasVisible = false;
+                    return;
+                }
+                if (child.classList.contains('dropdown-option')) {
+                    const label = child.querySelector('label');
+                    const text = (label && label.textContent) ? label.textContent : '';
+                    const show = !q || text.toLowerCase().includes(q);
+                    child.style.display = show ? '' : 'none';
+                    if (show) headingHasVisible = true;
+                }
             });
+            finalizeHeading();
         }
 
         // Category and Subcategory Functions - Updated to work with custom dropdowns
@@ -5282,6 +5440,191 @@ Dietary</textarea>
             }
         }
         
+        // Keys of the metafields that feed the combined Filters dropdown (kept in sync with backend FILTER_GROUPS)
+        let FILTER_GROUP_KEYS = ['packaging', 'size', 'brand', 'eco'];
+
+        // How many categories each subcategory appears under (built when category groups load).
+        // Used to disambiguate shared subcategories (e.g. "Lollipops") when restoring selections.
+        let CATEGORYSUB_SUB_COUNT = {};
+
+        async function loadCategorySubDropdownOptions(dropdown) {
+            try {
+                console.log('🔍 Loading category groups from API...');
+                const response = await fetch('/api/category-groups');
+                const data = await response.json();
+                if (data.success && Array.isArray(data.groups)) {
+                    CATEGORYSUB_SUB_COUNT = {};
+                    data.groups.forEach(g => (g.subcategories || []).forEach(s => {
+                        CATEGORYSUB_SUB_COUNT[s] = (CATEGORYSUB_SUB_COUNT[s] || 0) + 1;
+                    }));
+                    const content = dropdown.querySelector('.dropdown-content');
+                    content.innerHTML = '';
+                    const searchWrap = document.createElement('div');
+                    searchWrap.className = 'dropdown-search-wrap';
+                    const searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.className = 'dropdown-search';
+                    searchInput.placeholder = 'Search subcategories...';
+                    searchInput.setAttribute('aria-label', 'Search subcategories');
+                    searchWrap.appendChild(searchInput);
+                    const optionsList = document.createElement('div');
+                    optionsList.className = 'dropdown-options-list';
+                    content.appendChild(searchWrap);
+                    content.appendChild(optionsList);
+
+                    let totalOptions = 0;
+                    data.groups.forEach((group, gIndex) => {
+                        const category = group.category;
+                        // Bold, non-selectable category heading
+                        const headingDiv = document.createElement('div');
+                        headingDiv.className = 'dropdown-group-heading';
+                        headingDiv.setAttribute('data-group-heading', category);
+                        headingDiv.textContent = category;
+                        optionsList.appendChild(headingDiv);
+
+                        (group.subcategories || []).forEach((subVal, sIndex) => {
+                            const optionDiv = document.createElement('div');
+                            optionDiv.className = 'dropdown-option';
+                            const safeId = `catsub_${gIndex}_${sIndex}_${String(subVal).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.id = safeId;
+                            checkbox.value = subVal;
+                            checkbox.setAttribute('data-category', category);
+                            const label = document.createElement('label');
+                            label.htmlFor = safeId;
+                            label.textContent = subVal;
+                            optionDiv.appendChild(checkbox);
+                            optionDiv.appendChild(label);
+                            optionsList.appendChild(optionDiv);
+                            checkbox.addEventListener('change', function() {
+                                updateDropdownText(dropdown);
+                            });
+                            totalOptions++;
+                        });
+                    });
+
+                    searchInput.addEventListener('input', function() {
+                        filterDropdownOptions(optionsList, this.value);
+                    });
+                    searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
+                    console.log(`✅ Successfully loaded ${data.groups.length} categories (${totalOptions} subcategories)`);
+                } else {
+                    console.log('❌ Category groups API returned no data or failed');
+                }
+            } catch (error) {
+                console.error('❌ Error loading category groups:', error);
+            }
+        }
+
+        // Tick the combined Category & Subcategory dropdown from a product's custom_category + subcategory metafields
+        function setCategorySubFromMetafields(metafields) {
+            const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
+            if (!dd) return;
+            const toArray = (m) => {
+                if (!m) return [];
+                let v = m.value;
+                if (v == null || v === '') return [];
+                if (Array.isArray(v)) return v;
+                if (typeof v === 'string') {
+                    const s = v.trim();
+                    try { return s.startsWith('[') ? JSON.parse(s) : [s]; } catch (e) { return [s]; }
+                }
+                return [String(v)];
+            };
+            let cats = [];
+            let subs = [];
+            (metafields || []).forEach(m => {
+                if (!m || m.namespace !== 'custom') return;
+                if (m.key === 'custom_category') cats = cats.concat(toArray(m));
+                else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) subs = subs.concat(toArray(m));
+            });
+            cats = [...new Set(cats.map(s => String(s).trim()).filter(Boolean))];
+            subs = [...new Set(subs.map(s => String(s).trim()).filter(Boolean))];
+            const boxes = dd.querySelectorAll('input[type="checkbox"][data-category]');
+            boxes.forEach(cb => {
+                const sub = (cb.value || '').trim();
+                const cat = (cb.getAttribute('data-category') || '').trim();
+                let check = subs.includes(sub);
+                // For subcategories shared by multiple categories, only tick the box whose category was saved
+                if (check && (CATEGORYSUB_SUB_COUNT[sub] || 1) > 1 && cats.length > 0) {
+                    check = cats.includes(cat);
+                }
+                cb.checked = check;
+            });
+            updateDropdownText(dd);
+            console.log('✅ Restored category/subcategory selections — cats:', cats, 'subs:', subs);
+        }
+
+        async function loadFiltersDropdownOptions(dropdown) {
+            try {
+                console.log('🔍 Loading filter groups from API...');
+                const response = await fetch('/api/filter-groups');
+                const data = await response.json();
+                if (data.success && Array.isArray(data.groups)) {
+                    FILTER_GROUP_KEYS = data.groups.map(g => g.key);
+                    const content = dropdown.querySelector('.dropdown-content');
+                    content.innerHTML = '';
+                    const searchWrap = document.createElement('div');
+                    searchWrap.className = 'dropdown-search-wrap';
+                    const searchInput = document.createElement('input');
+                    searchInput.type = 'text';
+                    searchInput.className = 'dropdown-search';
+                    searchInput.placeholder = 'Search filters...';
+                    searchInput.setAttribute('aria-label', 'Search filters');
+                    searchWrap.appendChild(searchInput);
+                    const optionsList = document.createElement('div');
+                    optionsList.className = 'dropdown-options-list';
+                    content.appendChild(searchWrap);
+                    content.appendChild(optionsList);
+
+                    let totalOptions = 0;
+                    data.groups.forEach((group, gIndex) => {
+                        const groupKey = group.key;
+                        const groupNs = group.namespace || 'custom';
+                        // Bold, non-selectable heading row
+                        const headingDiv = document.createElement('div');
+                        headingDiv.className = 'dropdown-group-heading';
+                        headingDiv.setAttribute('data-group-heading', groupKey);
+                        headingDiv.textContent = group.heading || groupKey;
+                        optionsList.appendChild(headingDiv);
+
+                        (group.options || []).forEach((optVal, oIndex) => {
+                            const optionDiv = document.createElement('div');
+                            optionDiv.className = 'dropdown-option';
+                            const safeId = `filter_${gIndex}_${oIndex}_${String(optVal).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.id = safeId;
+                            checkbox.value = optVal;
+                            checkbox.setAttribute('data-group-key', groupKey);
+                            checkbox.setAttribute('data-group-namespace', groupNs);
+                            const label = document.createElement('label');
+                            label.htmlFor = safeId;
+                            label.textContent = optVal;
+                            optionDiv.appendChild(checkbox);
+                            optionDiv.appendChild(label);
+                            optionsList.appendChild(optionDiv);
+                            checkbox.addEventListener('change', function() {
+                                updateDropdownText(dropdown);
+                            });
+                            totalOptions++;
+                        });
+                    });
+
+                    searchInput.addEventListener('input', function() {
+                        filterDropdownOptions(optionsList, this.value);
+                    });
+                    searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
+                    console.log(`✅ Successfully loaded ${data.groups.length} filter groups (${totalOptions} options)`);
+                } else {
+                    console.log('❌ Filter groups API returned no data or failed');
+                }
+            } catch (error) {
+                console.error('❌ Error loading filter groups:', error);
+            }
+        }
+
         // Legacy functions for backward compatibility
         async function loadCategoryOptions() {
             // This function is kept for backward compatibility but does nothing
@@ -6034,7 +6377,10 @@ Dietary</textarea>
         // Populate metafield values without recreating the UI
         function populateMetafieldValues(metafields) {
             console.log('🔍 populateMetafieldValues called with:', metafields.length, 'metafields');
-            
+
+            // Restore the combined Category & Subcategory dropdown once (needs both metafields together)
+            setCategorySubFromMetafields(metafields);
+
             metafields.forEach(metafield => {
                 const key = metafield.key;
                 const namespace = metafield.namespace;
@@ -6062,7 +6408,31 @@ Dietary</textarea>
                     }
                     return;
                 }
-                
+
+                // Category + subcategory are handled together by the combined dropdown above
+                if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || (key && key.startsWith('subcategory_')))) {
+                    return;
+                }
+
+                // Filter group metafields (packaging, size, brand, eco) feed the combined Filters dropdown
+                if (namespace === 'custom' && FILTER_GROUP_KEYS.includes(key)) {
+                    const filtersDropdown = document.querySelector('.custom-dropdown[data-key="filters"]');
+                    if (filtersDropdown) {
+                        let vals = parsedValues.length > 0 ? parsedValues : (value ? [value] : []);
+                        vals.forEach(val => {
+                            const trimmedVal = String(val).trim();
+                            const cb = filtersDropdown.querySelector(`input[type="checkbox"][data-group-key="${key}"][value="${trimmedVal.replace(/"/g, '\\"')}"]`);
+                            if (cb) {
+                                cb.checked = true;
+                            } else {
+                                console.warn(`⚠️ No filter checkbox for ${key} = "${trimmedVal}"`);
+                            }
+                        });
+                        updateDropdownText(filtersDropdown);
+                    }
+                    return;
+                }
+
                 // Find the corresponding input element (including custom dropdowns)
                 const input = document.querySelector(`[data-key="${key}"][data-namespace="${namespace}"]`);
                 

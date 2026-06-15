@@ -78,368 +78,249 @@ PARENT_PRODUCTS = [
     {"title": "Organza Bag - Heroes", "parent_child_value": "Parent - Organza Bag - Heroes", "id": None},
 ]
 
+# Filter groups: each is a SEPARATE Shopify metafield (List / choice list, single line text)
+# but they are all shown together in ONE dropdown in Product Manager, grouped under bold
+# (non-selectable) headings.
+#
+# IMPORTANT: the "namespace"/"key" and every option below must match the Shopify metafield
+# definitions EXACTLY, or saving/loading will fail. To create these in Shopify, add one
+# "List > Choice list (single line text)" metafield per group using the namespace.key shown.
+FILTER_GROUPS = [
+    {
+        "heading": "Packaging",
+        "namespace": "custom",
+        "key": "packaging",
+        "options": ["Bag", "Box", "Tin", "Envelope", "Gift Pack", "Individually Wrapped", "Bulk"],
+    },
+    {
+        "heading": "Size",
+        "namespace": "custom",
+        "key": "size",
+        "options": ["Mini", "Midi", "Maxi"],
+    },
+    {
+        "heading": "Brand",
+        "namespace": "custom",
+        "key": "brand",
+        "options": ["Haribo", "Lindt", "Swizzles"],
+    },
+    {
+        "heading": "Eco",
+        "namespace": "custom",
+        "key": "eco",
+        "options": ["Eco-Friendly Packaging", "Plastic Free Packaging"],
+    },
+]
+
+# Set of filter metafield keys (used by the UI to know which metafields feed the combined dropdown)
+FILTER_GROUP_KEYS = [g["key"] for g in FILTER_GROUPS]
+
 # Category choices for custom.custom_category metafield
 CATEGORIES = [
-    "All",
-    "Latest",
-    "Best Sellers",
-    "Express",
-    "Super Express",
-    "Seasonal",
-    "Themes",
-    "Events & Charities",
-    "Brands",
-    "Eco",
-    "Biscuits, Cakes & Pies",
-    "Cereals & Cereal Bars",
-    "Chewing Gum",
     "Chocolate",
-    "Crisps",
-    "Dried Fruits",
-    "Drinks",
-    "Flapjacks",
-    "Honey",
-    "Jams, Marmalades & Spreads",
-    "Lollipops",
-    "Popcorn",
-    "Pretzels",
-    "Protein",
-    "Savoury Snacks",
-    "Soup",
-    "Sprinkles",
     "Sweets",
-    "Mints",
-    "Vegan",
-    "Packaging",
+    "Dietary",
+    "Biscuits & Cakes",
+    "Snacks",
+    "Drinks",
+    "Seasonal",
+    "Industries",
+    "Events",
+    "Food & Pastry",
+    "Branded Merchandise & Packaging",
 ]
 
 # Subcategory choices for custom.subcategory metafield
-# This list is organized hierarchically by category (order matches CATEGORY_MAPPING)
+# This list is the flat (de-duplicated) set of all subcategories, organized by category
+# (order matches CATEGORY_MAPPING). "Lollipops" is shared by Chocolate and Sweets, so it
+# appears once here but is mapped to both categories in CATEGORY_MAPPING.
 SUBCATEGORIES = [
-    # Seasonal
-    "Black Friday",
-    "Christmas",
-    "Easter",
-    "Eid",
-    "Halloween",
-    "New Year",
-    "Ramadan",
-    "Summer",
-    "Valentines Day",
-    # Themes
-    "Achievement",
-    "Anniversary",
-    "Appreciation",
-    "Awards",
-    "Back To School",
-    "British",
-    "Carnival",
-    "Celebrations",
-    "Community",
-    "Countdown to Launch",
-    "Customers",
-    "Diversity & Inclusion",
-    "Empowerment",
-    "Football",
-    "Heroes",
-    "Ideas",
-    "Loyalty",
-    "Meet The Team",
-    "Mental Health",
-    "Milestones",
-    "Product Launch",
-    "Referral Rewards",
-    "Sale",
-    "Saver Offers",
-    "Staff",
-    "Success",
-    "Support",
-    "Sustainability",
-    "Thank You",
-    "University",
-    "Volunteer",
-    "Wellbeing",
-    "We Miss You",
-    # Events & Charities
-    "Cancer Research",
-    "Careers Week",
-    "Mental Health Awareness",
-    "Movember",
-    "Pride",
-    "Volunteers Week",
-    "Wimbledon",
-    "World Bee Day",
-    "World Blood Donor Day",
-    "World Cup - Football",
-    "World Cup - Rugby",
-    # Brands
-    "Cadbury",
-    "Haribo",
-    "Heinz",
-    "Jordans",
-    "Kelloggs",
-    "Mars",
-    "McVities",
-    "Nature Valley",
-    "Nestle",
-    "Swizzels",
-    "Walkers",
-    # Biscuits, Cakes & Pies
-    "Biscuits - Box",
-    "Biscuits - Single",
-    "Cake - Box",
-    "Cake Bars - Single",
-    "Cakes - Round",
-    "Cakes - Traybake",
-    "Cupcakes - Box",
-    "Cupcakes - Single",
-    "Pies - Box",
-    "Pies - Single",
-    # Cereals & Cereal Bars
-    "Breakfast Cereals",
-    "Cereal Bars",
-    "Porridge",
-    # Chewing Gum
-    "Mint",
     # Chocolate
-    "Balls",
     "Bars",
-    "Coins",
-    "Hearts",
-    "Neapolitans",
-    "Stars",
-    "Truffles",
-    # Dried Fruits
-    "Apricots",
-    "Bananas",
-    "Dates",
-    # Drinks
-    "Coffee",
-    "Soft Drinks",
-    "Hot Chocolate",
-    "Tea",
-    "Water",
-    # Jams, Marmalades & Spreads
-    "Marmalade",
-    "Marmite",
-    "Nutella",
-    "Jams",
-    # Lollipops
-    "Chocolate",
-    "Sugar",
-    # Popcorn
-    "Microwave",
-    "Popped",
-    # Protein
-    "Nuts",
-    # Savoury Snacks
-    "Bags",
-    "Packs",
-    # Sprinkles
-    "Shapes",
-    "Vermicelli",
+    "Assorted",
+    "Shapes & Novelties",
+    "Lollipops",
+    "Advent Calendars",
     # Sweets
-    "Boiled/Compressed",
-    "Jellies",
-    # Vegan
-    "Sweets",
-    "Treats",
-    # Packaging
-    "Bottle",
-    "Card",
-    "Card Box - A Box",
-    "Card Box - Rectangle",
-    "Card Box - Shape",
-    "Card Box - Square",
-    "Eco",
-    "Header Card",
-    "Jar",
-    "Label",
-    "Nets",
-    "Organza Bag",
-    "Popcorn Box",
-    "Plastic Box",
-    "Tin",
-    "Tub",
-    "Wrap",
+    "Gums & Jellies",
+    "Toffees & Chews",
+    "Boiled & Hard",
+    "Mints",
+    "Fudge, Nougat & Coconut Ice",
+    "Sherbet & Fizzy",
+    "Retro & Novelty",
+    # Dietary
+    "Vegan",
+    "Vegetarian",
+    "Gluten Free",
+    "Dairy Free",
+    # Biscuits & Cakes
+    "Biscuits & Cookies",
+    "Cake Bars, Slices & Flapjacks",
+    "Mini Cakes & Cupcakes",
+    "Cakes & Traybakes",
+    # Snacks
+    "Crisps & Chips",
+    "Popcorn",
+    "Pretzels",
+    "Nuts, Dried Fruit & Savoury Mixes",
+    "Rice Cakes & Corn Cakes",
+    "Crackers & Savoury Biscuits",
+    "Protein, Cereal & Energy Bars",
+    "Snack Pots & Dippers",
+    # Drinks
+    "Tea",
+    "Coffee",
+    "Hot Chocolate & Malt Drinks",
+    "Soft Drinks",
+    "Juices",
+    "Water & Flavoured Water",
+    "Energy & Sports Drinks",
+    # Seasonal
+    "Valentine's Day",
+    "Chinese New Year",
+    "Easter",
+    "Mother's Day",
+    "Father's Day",
+    "Summer",
+    "Ramadan & Eid",
+    "Diwali",
+    "Halloween",
+    "Hanukkah",
+    "Christmas",
+    # Industries
+    "Retail",
+    "Hospitality",
+    "Offices & Services",
+    "Education",
+    "Health & Care",
+    "Travel & Leisure",
+    "Media & Creative",
+    "Trade & Construction",
+    # Events
+    "Appreciation & Workplace Events",
+    "Fun & Feel Good Days",
+    "Community Charities & Causes",
+    "Wellbeing & Inclusion Events",
+    "Sports Events",
+    # Food & Pastry
+    "Cereal & Porridge",
+    "Soup",
+    "Pasta & Noodles",
+    "Rice & Grains",
+    "Desserts",
+    "Baking Kits",
+    "Spreads, Jams and Condiments",
+    "Herbs, Spices & Seasonings",
+    "Ice & Freeze Pops",
+    # Branded Merchandise & Packaging
+    "Packaging",
+    "Merchandise",
+    "Fulfillment Service",
 ]
 
-# Overflow boundary: subcategory_2 contains this item and everything after it in SUBCATEGORIES
-SUBCATEGORY_2_FIRST_ITEM = "Sweets"
+# Overflow boundary: subcategory_2 contains this item and everything after it in SUBCATEGORIES.
+# All current subcategories fit within Shopify's 128-choice limit, so they all live in the
+# single "subcategory" metafield and subcategory_2 stays empty (set to None).
+SUBCATEGORY_2_FIRST_ITEM = None
 
 # Category to subcategory mapping
 # This dictionary stores which subcategories belong to which categories
 # Format: {"Category Name": ["Subcategory1", "Subcategory2", ...]}
 CATEGORY_MAPPING = {
-    "Seasonal": [
-        "Black Friday",
-        "Christmas",
-        "Easter",
-        "Eid",
-        "Halloween",
-        "New Year",
-        "Ramadan",
-        "Summer",
-        "Valentines Day",
-    ],
-    "Themes": [
-        "Achievement",
-        "Anniversary",
-        "Appreciation",
-        "Awards",
-        "Back To School",
-        "British",
-        "Carnival",
-        "Celebrations",
-        "Community",
-        "Countdown to Launch",
-        "Customers",
-        "Diversity & Inclusion",
-        "Empowerment",
-        "Football",
-        "Heroes",
-        "Ideas",
-        "Loyalty",
-        "Meet The Team",
-        "Mental Health",
-        "Milestones",
-        "Product Launch",
-        "Referral Rewards",
-        "Sale",
-        "Saver Offers",
-        "Staff",
-        "Success",
-        "Support",
-        "Sustainability",
-        "Thank You",
-        "University",
-        "Volunteer",
-        "Wellbeing",
-        "We Miss You",
-    ],
-    "Events & Charities": [
-        "Cancer Research",
-        "Careers Week",
-        "Mental Health Awareness",
-        "Movember",
-        "Pride",
-        "Volunteers Week",
-        "Wimbledon",
-        "World Bee Day",
-        "World Blood Donor Day",
-        "World Cup - Football",
-        "World Cup - Rugby",
-    ],
-    "Brands": [
-        "Cadbury",
-        "Haribo",
-        "Heinz",
-        "Jordans",
-        "Kelloggs",
-        "Mars",
-        "McVities",
-        "Nature Valley",
-        "Nestle",
-        "Swizzels",
-        "Walkers",
-    ],
-    "Biscuits, Cakes & Pies": [
-        "Biscuits - Bags"
-        "Biscuits - Box",
-        "Biscuits - Single",
-        "Cake - Box",
-        "Cake Bars - Single",
-        "Cakes - Round",
-        "Cakes - Traybake",
-        "Cupcakes - Box",
-        "Cupcakes - Single",
-        "Pies - Box",
-        "Pies - Single",
-    ],
-    "Cereals & Cereal Bars": [
-        "Breakfast Cereals",
-        "Cereal Bars",
-        "Porridge",
-    ],
-    "Chewing Gum": [
-        "Mint",
-    ],
     "Chocolate": [
-        "Balls",
         "Bars",
-        "Coins",
-        "Hearts",
-        "Neapolitans",
-        "Shapes",
-        "Stars",
-        "Truffles",
-    ],
-    "Dried Fruits": [
-        "Apricots",
-        "Bananas",
-        "Dates",
-    ],
-    "Drinks": [
-        "Coffee",
-        "Hot Chocolate",
-        "Soft Drinks",
-        "Tea",
-        "Water",
-    ],
-    "Jams, Marmalades & Spreads": [
-        "Marmalade",
-        "Marmite",
-        "Nutella",
-        "Jams",
-    ],
-    "Lollipops": [
-        "Chocolate",
-        "Sugar",
-    ],
-    "Popcorn": [
-        "Microwave",
-        "Popped",
-    ],
-    "Protein": [
-        "Bars",
-        "Nuts",
-    ],
-    "Savoury Snacks": [
-        "Bags",
-        "Bars",
-        "Packs",
-    ],
-    "Sprinkles": [
-        "Shapes",
-        "Vermicelli",
+        "Assorted",
+        "Shapes & Novelties",
+        "Lollipops",
+        "Advent Calendars",
     ],
     "Sweets": [
-        "Boiled/Compressed",
-        "Jellies",
+        "Gums & Jellies",
+        "Toffees & Chews",
+        "Boiled & Hard",
+        "Mints",
+        "Fudge, Nougat & Coconut Ice",
+        "Sherbet & Fizzy",
+        "Lollipops",
+        "Retro & Novelty",
     ],
-    "Vegan": [
-        "Sweets",
-        "Treats",
+    "Dietary": [
+        "Vegan",
+        "Vegetarian",
+        "Gluten Free",
+        "Dairy Free",
     ],
-    "Packaging": [
-        "Bags",
-        "Bottle",
-        "Card",
-        "Card Box - A Box",
-        "Card Box - Rectangle",
-        "Card Box - Shape",
-        "Card Box - Square",
-        "Eco",
-        "Header Card",
-        "Jar",
-        "Label",
-        "Nets",
-        "Organza Bag",
-        "Popcorn Box",
-        "Plastic Box",
-        "Tin",
-        "Tub",
-        "Wrap",
+    "Biscuits & Cakes": [
+        "Biscuits & Cookies",
+        "Cake Bars, Slices & Flapjacks",
+        "Mini Cakes & Cupcakes",
+        "Cakes & Traybakes",
+    ],
+    "Snacks": [
+        "Crisps & Chips",
+        "Popcorn",
+        "Pretzels",
+        "Nuts, Dried Fruit & Savoury Mixes",
+        "Rice Cakes & Corn Cakes",
+        "Crackers & Savoury Biscuits",
+        "Protein, Cereal & Energy Bars",
+        "Snack Pots & Dippers",
+    ],
+    "Drinks": [
+        "Tea",
+        "Coffee",
+        "Hot Chocolate & Malt Drinks",
+        "Soft Drinks",
+        "Juices",
+        "Water & Flavoured Water",
+        "Energy & Sports Drinks",
+    ],
+    "Seasonal": [
+        "Valentine's Day",
+        "Chinese New Year",
+        "Easter",
+        "Mother's Day",
+        "Father's Day",
+        "Summer",
+        "Ramadan & Eid",
+        "Diwali",
+        "Halloween",
+        "Hanukkah",
+        "Christmas",
+    ],
+    "Industries": [
+        "Retail",
+        "Hospitality",
+        "Offices & Services",
+        "Education",
+        "Health & Care",
+        "Travel & Leisure",
+        "Media & Creative",
+        "Trade & Construction",
+    ],
+    "Events": [
+        "Appreciation & Workplace Events",
+        "Fun & Feel Good Days",
+        "Community Charities & Causes",
+        "Wellbeing & Inclusion Events",
+        "Sports Events",
+    ],
+    "Food & Pastry": [
+        "Cereal & Porridge",
+        "Soup",
+        "Pasta & Noodles",
+        "Rice & Grains",
+        "Desserts",
+        "Baking Kits",
+        "Spreads, Jams and Condiments",
+        "Herbs, Spices & Seasonings",
+        "Ice & Freeze Pops",
+    ],
+    "Branded Merchandise & Packaging": [
+        "Packaging",
+        "Merchandise",
+        "Fulfillment Service",
     ],
 }
 
@@ -461,8 +342,48 @@ def get_subcategory_choices():
     """
     return SUBCATEGORIES.copy()
 
+def get_category_subcategory_groups():
+    """
+    Get categories with their subcategories for the combined Category & Subcategory dropdown.
+
+    Each category is shown as a bold, non-selectable heading; its subcategories are the
+    selectable options. Selecting a subcategory implies (and saves) its parent category.
+    Note: a subcategory may appear under more than one category (e.g. "Lollipops" under
+    both Chocolate and Sweets) - it is listed under each.
+
+    Returns:
+        list: List of {category, subcategories} dicts (in CATEGORY_MAPPING order)
+    """
+    return [
+        {"category": cat, "subcategories": list(subs)}
+        for cat, subs in CATEGORY_MAPPING.items()
+    ]
+
+def get_filter_groups():
+    """
+    Get the filter groups for the combined Filters dropdown.
+
+    Each group maps to a separate Shopify metafield but is shown under one bold,
+    non-selectable heading in the UI.
+
+    Returns:
+        list: List of {heading, namespace, key, options} dicts
+    """
+    return [
+        {
+            "heading": g["heading"],
+            "namespace": g.get("namespace", "custom"),
+            "key": g["key"],
+            "options": list(g["options"]),
+        }
+        for g in FILTER_GROUPS
+    ]
+
 def _subcategory_2_start_index():
-    """Index in SUBCATEGORIES where subcategory_2 starts (Sweets and everything after)."""
+    """Index in SUBCATEGORIES where subcategory_2 starts. When SUBCATEGORY_2_FIRST_ITEM
+    is None or not present, there is no overflow and everything stays in subcategory."""
+    if not SUBCATEGORY_2_FIRST_ITEM:
+        return len(SUBCATEGORIES)
     try:
         return SUBCATEGORIES.index(SUBCATEGORY_2_FIRST_ITEM)
     except ValueError:
@@ -501,6 +422,10 @@ def get_metafield_choices(metafield_key):
     elif metafield_key == "parent_child":
         return list(PARENT_CHILD_CHOICES)
     else:
+        # Filter group metafields (custom.packaging, custom.size, custom.brand, custom.eco)
+        for group in FILTER_GROUPS:
+            if group["key"] == metafield_key:
+                return list(group["options"])
         return []
 
 def get_subcategory_metafield_key(subcategory):

@@ -1679,6 +1679,24 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "X-Shopify-Access-Token": ACCESS_TOKEN,
             "Content-Type": "application/json"
         }
+
+        # Metafields that should be DELETED when cleared (sent with an empty value):
+        # artwork, filter groups (custom.packaging, custom.size, etc.), and category/subcategory.
+        try:
+            from .categories import FILTER_GROUP_KEYS
+        except Exception:
+            FILTER_GROUP_KEYS = []
+        clearable_keys = set(["artworkguidelines", "artworktemplates", "custom_category", "subcategory"]) | set(FILTER_GROUP_KEYS or [])
+
+        def _is_clearable(ns, k):
+            if ns != "custom":
+                return False
+            if k in clearable_keys:
+                return True
+            # subcategory overflow keys (subcategory_2, subcategory_3, ...)
+            if (k or "").startswith("subcategory_"):
+                return True
+            return False
         
         # Fetch existing metafields to support upsert (POST fails with 422 if namespace+key already exists)
         existing_by_ns_key = {}
@@ -1717,8 +1735,9 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 raw_value = metafield_data.get("value", "")
                 mf_type = metafield_data.get("type", "single_line_text_field") or "single_line_text_field"
 
-                # When guidelines/templates are cleared (empty value), delete the metafield if it exists
-                if namespace == "custom" and key in ("artworkguidelines", "artworktemplates"):
+                # When clearable metafields (guidelines/templates/filter-groups/category/subcategory) are
+                # sent with an empty value, delete the metafield if it exists
+                if _is_clearable(namespace, key):
                     if not (raw_value and str(raw_value).strip()):
                         existing_id_for_del = existing_by_ns_key.get((namespace, key))
                         if existing_id_for_del:
@@ -2587,6 +2606,19 @@ def create_product(product_data):
             if subcats_from_mf and subcategories is not None:
                 subcategories = list(dict.fromkeys(list(subcategories) + list(subcats_from_mf)))
             
+            # Detect whether the request explicitly included category/subcategory metafields.
+            # If it did but they're now empty, the user cleared them => delete the metafields.
+            had_category_mf = any(
+                mf.get("namespace") == "custom" and mf.get("key") == "custom_category"
+                for mf in metafields
+            )
+            had_subcategory_mf = any(
+                mf.get("namespace") == "custom" and (
+                    mf.get("key") == "subcategory" or (mf.get("key") or "").startswith("subcategory_")
+                )
+                for mf in metafields
+            )
+
             # Remove category from metafields (we add it)
             # KEEP subcategory metafields - frontend sends multiple selections per key (subcategory, subcategory_2, etc.)
             # Each overflow has no duplicates, so pass them through as-is
@@ -2616,6 +2648,15 @@ def create_product(product_data):
                     "value": json.dumps(categories),
                     "type": "list.single_line_text_field"
                 })
+            elif had_category_mf:
+                # Category was explicitly cleared - send empty so create_metafields deletes it
+                metafields.append({
+                    "namespace": "custom",
+                    "key": "custom_category",
+                    "value": "",
+                    "type": "list.single_line_text_field"
+                })
+                print("🗑️ Category cleared - will delete custom_category metafield", flush=True)
             
             # Ensure subcategory metafields are saved - ALWAYS merge from top-level subcategories
             # (Frontend sends subcategories merged; we must route each to correct key: subcategory, subcategory_2, etc.)
@@ -2643,6 +2684,16 @@ def create_product(product_data):
                             print(f"📂 Subcategory metafield {mf_key}: {vals}", flush=True)
                 except Exception as e:
                     print(f"⚠️ Failed to route subcategories: {e}", flush=True)
+            elif had_subcategory_mf:
+                # Subcategory was explicitly cleared - send empty so create_metafields deletes it (and any overflow)
+                metafields = [mf for mf in metafields if not (mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory"))]
+                metafields.append({
+                    "namespace": "custom",
+                    "key": "subcategory",
+                    "value": "",
+                    "type": "list.single_line_text_field"
+                })
+                print("🗑️ Subcategory cleared - will delete subcategory metafield", flush=True)
             
             # Debug: log subcategory metafields being sent
             subcat_mfs = [mf for mf in metafields if mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")]

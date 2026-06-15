@@ -1575,6 +1575,38 @@ def api_metafield_choices(namespace_key):
             'error': f'Error fetching metafield choices: {str(e)}'
         }), 500
 
+@app.route('/api/category-groups', methods=['GET'])
+def api_category_groups():
+    """Get categories with their subcategories for the combined Category & Subcategory dropdown"""
+    try:
+        from scripts.product_creator.categories import get_category_subcategory_groups
+        groups = get_category_subcategory_groups()
+        return jsonify({
+            'success': True,
+            'groups': groups or []
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error fetching category groups: {str(e)}'
+        }), 500
+
+@app.route('/api/filter-groups', methods=['GET'])
+def api_filter_groups():
+    """Get the grouped filter options for the combined Filters dropdown"""
+    try:
+        from scripts.product_creator.categories import get_filter_groups
+        groups = get_filter_groups()
+        return jsonify({
+            'success': True,
+            'groups': groups or []
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error fetching filter groups: {str(e)}'
+        }), 500
+
 @app.route('/api/products-parent-child', methods=['GET'])
 def api_products_parent_child():
     """Return products that have a Parent - X parent_child metafield and which Parent values are taken."""
