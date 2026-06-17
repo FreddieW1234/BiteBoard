@@ -1628,6 +1628,17 @@ def api_products_parent_child_tree():
     except Exception as e:
         return jsonify({'tree': [], 'error': str(e)}), 500
 
+@app.route('/api/all-products', methods=['GET'])
+def api_all_products():
+    """Return every product organised by category -> subcategory (alphabetical) with SKU + title for the All Products page."""
+    try:
+        from scripts.product_creator.Product_Creator import get_all_products_overview
+        result = get_all_products_overview()
+        result['success'] = True
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
+
 @app.route('/api/pricing-qty-bands', methods=['GET'])
 def api_pricing_qty_bands():
     """Get the pricing quantity bands for autofill"""

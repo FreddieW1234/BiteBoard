@@ -1967,6 +1967,10 @@
                         <i class="fas fa-plus-circle"></i>
                         <span>Product Manager</span>
                     </a>
+                    <a href="/app/All_Products" class="app-tab">
+                        <i class="fas fa-list"></i>
+                        <span>All Products</span>
+                    </a>
                     <a href="/app/Templates_Uploader" class="app-tab templates-uploader-nav" style="display: none;">
                         <i class="fas fa-file-archive"></i>
                         <span>Templates Uploader</span>
@@ -4791,10 +4795,18 @@ Dietary</textarea>
 
         // Load metafields when the page loads
         document.addEventListener('DOMContentLoaded', async function() {
-            loadMetafields();
+            await loadMetafields();
             initializePriceManager();
             await fetchPricingQtyBands();
             autofillQuantities();
+
+            // Deep-link: /app/Product_Creator?edit=<productId> opens that product in edit mode
+            try {
+                const editId = new URLSearchParams(window.location.search).get('edit');
+                if (editId && typeof pcPopulateFromProduct === 'function') {
+                    pcPopulateFromProduct(editId, '');
+                }
+            } catch (e) { console.log('Edit deep-link failed', e); }
         });
 
         function toggleConverter() {

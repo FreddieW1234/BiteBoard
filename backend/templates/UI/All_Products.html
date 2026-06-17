@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Products - Shopify Tools</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 4px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+
+        .main-wrap { flex: 1; min-width: 0; padding: 24px; }
+        .main-wrap.has-hscroll { padding-bottom: 28px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+
+        .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+        .search-box { position: relative; flex: 1; min-width: 240px; max-width: 460px; }
+        .search-box i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.9rem; }
+        .search-box input { width: 100%; padding: 11px 14px 11px 38px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; font-family: inherit; background: #fff; }
+        .search-box input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .count-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+        .toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
+        .btn-ghost { background: #fff; border: 1px solid #e5e7eb; color: #374151; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: background-color 0.15s, border-color 0.15s; }
+        .btn-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
+
+        .category-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px; overflow: hidden; }
+        .category-header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: #f8fafc; border-bottom: 1px solid #eef0f3; cursor: pointer; user-select: none; }
+        .category-header .chev { color: #9ca3af; font-size: 0.8rem; transition: transform 0.15s; width: 14px; }
+        .category-card.collapsed .chev { transform: rotate(-90deg); }
+        .category-card.collapsed .category-body { display: none; }
+        .category-title { font-size: 1rem; font-weight: 700; color: #111827; }
+        .category-title.unassigned { color: #b45309; }
+        .category-count { margin-left: auto; font-size: 0.78rem; color: #6b7280; font-weight: 500; }
+        .category-body { padding: 6px 0 10px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+        .category-body::-webkit-scrollbar { display: none; }
+        .ap-scroll-content { display: inline-block; min-width: 100%; padding: 0 18px; box-sizing: border-box; vertical-align: top; }
+
+        .ap-hscroll-bar {
+            position: fixed;
+            bottom: 0;
+            z-index: 50;
+            height: 16px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            background: rgba(246, 248, 250, 0.97);
+            border-top: 1px solid #e5e7eb;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+        }
+        .ap-hscroll-bar[hidden] { display: none; }
+        .ap-hscroll-inner { height: 1px; }
+
+        .subcategory-block { padding: 0; }
+        .subcategory-title { font-size: 0.82rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; margin: 14px 0 6px; padding-bottom: 6px; border-bottom: 1px dashed #e5e7eb; }
+        .subcategory-title .subcat-label { position: sticky; left: 0; display: inline-block; margin-left: -18px; padding-left: 26px; background: #fff; }
+
+        .ap-col-header { display: grid; grid-template-columns: var(--ap-grid); gap: 12px; align-items: center; padding: 8px 8px; margin-bottom: 2px; border-bottom: 1px solid #eef0f3; width: 100%; min-width: min-content; }
+        .ap-col-header .col-label { font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ap-col-header .col-label.col-action { position: sticky; right: 0; align-self: stretch; display: flex; align-items: center; justify-content: flex-end; text-align: right; background: #fff; padding: 0 18px 0 12px; margin-right: -18px; border-left: 1px solid #eef0f3; z-index: 3; }
+        .ap-col-header .col-label.col-sku { position: sticky; left: 0; align-self: stretch; display: flex; align-items: center; background: #fff; padding-left: 26px; margin: -8px 0 -8px -26px; z-index: 5; }
+        .ap-col-header .col-label.col-title { position: sticky; left: 146px; align-self: stretch; display: flex; align-items: center; background: #fff; padding: 0 12px; margin: -8px 0 -8px -12px; border-right: 1px solid #eef0f3; box-shadow: 8px 0 12px -8px rgba(0,0,0,0.08); z-index: 4; }
+
+        .product-row { display: grid; grid-template-columns: var(--ap-grid); gap: 12px; align-items: center; padding: 9px 8px; border-radius: 8px; transition: background-color 0.12s; width: 100%; min-width: min-content; }
+        .product-row:hover { background: #f9fafb; }
+        .cell { font-size: 0.86rem; color: #374151; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell.muted { color: #9ca3af; }
+        .cell.price-cell { text-align: center; font-size: 1rem; }
+        .product-sku { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.78rem; color: #4338ca; background: #eef2ff; border-radius: 6px; padding: 3px 8px; white-space: nowrap; text-align: center; overflow: hidden; text-overflow: ellipsis; }
+        .product-sku.empty { color: #9ca3af; background: #f3f4f6; }
+        .product-name { font-size: 0.9rem; color: #1f2937; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .cell-sku { position: sticky; left: 0; align-self: stretch; display: flex; align-items: center; gap: 6px; background: #fff; padding-left: 26px; margin: -9px 0 -9px -26px; z-index: 5; min-width: 0; }
+        .cell-title { position: sticky; left: 146px; align-self: stretch; display: flex; align-items: center; background: #fff; padding: 0 12px; margin: -9px 0 -9px -12px; border-right: 1px solid #eef0f3; box-shadow: 8px 0 12px -8px rgba(0,0,0,0.08); z-index: 4; min-width: 0; }
+        .product-row:hover .cell-sku, .product-row:hover .cell-title { background: #f9fafb; }
+        .status-badge { display: inline-block; font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 2px 9px; }
+        .status-badge.active { background: #dcfce7; color: #166534; }
+        .status-badge.draft { background: #fef9c3; color: #854d0e; }
+        .status-badge.archived { background: #f3f4f6; color: #6b7280; }
+        .cell-action { position: sticky; right: 0; align-self: stretch; display: flex; align-items: center; justify-content: flex-end; text-align: right; background: #fff; padding: 0 18px 0 12px; margin: -9px -18px -9px 0; border-left: 1px solid #eef0f3; z-index: 2; }
+        .product-row:hover .cell-action { background: #f9fafb; }
+        .edit-btn { background: #4f46e5; color: #fff; border: none; border-radius: 7px; padding: 7px 14px; font-size: 0.82rem; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: background-color 0.15s; white-space: nowrap; }
+        .edit-btn:hover { background: #4338ca; }
+
+        .col-menu-wrap { position: relative; }
+        .col-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); padding: 8px; width: 220px; max-height: 360px; overflow-y: auto; display: none; }
+        .col-menu.open { display: block; }
+        .col-menu-title { font-size: 0.72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 8px; }
+        .col-menu label { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 6px; font-size: 0.86rem; color: #374151; cursor: pointer; }
+        .col-menu label:hover { background: #f3f4f6; }
+        .col-menu label.locked { color: #9ca3af; cursor: not-allowed; }
+        .col-menu input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4f46e5; cursor: pointer; }
+
+        .state-msg { text-align: center; color: #6b7280; padding: 60px 20px; font-size: 0.95rem; }
+        .state-msg i { font-size: 1.6rem; display: block; margin-bottom: 12px; color: #9ca3af; }
+        .spinner { width: 34px; height: 34px; border: 3px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-msg { color: #b91c1c; }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 64px; }
+            .sidebar .brand-text, .sidebar .app-tab span, .sidebar .dashboard-tab span { display: none; }
+            .product-sku { min-width: 70px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/price_bandit" class="app-tab"><i class="fas fa-robot"></i><span>Price Bandit</span></a>
+                    <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Manager</span></a>
+                    <a href="/app/All_Products" class="app-tab active"><i class="fas fa-list"></i><span>All Products</span></a>
+                    <a href="/app/Templates_Uploader" class="app-tab" style="display: none;"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
+                </div>
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-list"></i> All Products</h1>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="ap-search" placeholder="Search by name or SKU…" autocomplete="off">
+                </div>
+                <span class="count-pill" id="ap-count">–</span>
+                <div class="toolbar-actions">
+                    <div class="col-menu-wrap">
+                        <button type="button" class="btn-ghost" id="ap-columns-btn"><i class="fas fa-table-columns"></i> Columns</button>
+                        <div class="col-menu" id="ap-columns-menu">
+                            <div class="col-menu-title">Show columns</div>
+                            <div id="ap-columns-list"></div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-ghost" id="ap-expand"><i class="fas fa-angles-down"></i> Expand all</button>
+                    <button type="button" class="btn-ghost" id="ap-collapse"><i class="fas fa-angles-up"></i> Collapse all</button>
+                    <button type="button" class="btn-ghost" id="ap-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+                </div>
+            </div>
+
+            <div id="ap-content">
+                <div class="state-msg">
+                    <div class="spinner"></div>
+                    Loading products… <span id="ap-slow"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ap-hscroll-bar" class="ap-hscroll-bar" hidden aria-hidden="true">
+        <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
+    </div>
+
+    <script>
+        let AP_DATA = { groups: [], unassigned: [] };
+
+        // Column definitions. 'sku' and 'title' are always shown; the action (Edit) column is always last.
+        const COLUMN_DEFS = [
+            { key: 'sku',              label: 'SKU',                          width: '120px',               always: true },
+            { key: 'title',            label: 'Product',                      width: 'minmax(270px, 3fr)',  always: true },
+            { key: 'category',         label: 'Category',                     width: 'minmax(110px, 1fr)',  def: true },
+            { key: 'subcategory',      label: 'Subcategory',                  width: 'minmax(110px, 1fr)',  def: true },
+            { key: 'has_prices',       label: 'Prices',                       width: '80px',                def: true },
+            { key: 'filters',          label: 'Filters',                      width: 'minmax(140px, 1.5fr)' },
+            { key: 'description',      label: 'Description',                  width: 'minmax(200px, 2.5fr)' },
+            { key: 'ingredients',      label: 'Ingredients',                  width: 'minmax(200px, 2.5fr)' },
+            { key: 'nutritional_info', label: 'Nutritional Info',             width: 'minmax(180px, 2fr)' },
+            { key: 'whats_inside',     label: "What's Inside",                width: 'minmax(160px, 2fr)' },
+            { key: 'print_info',       label: 'Print Info',                   width: 'minmax(140px, 1.5fr)' },
+            { key: 'recycle_info',     label: 'Recycle Info',                 width: 'minmax(140px, 1.5fr)' },
+            { key: 'product_size',     label: 'Product Size (l*w*h mm)',      width: '150px' },
+            { key: 'moq',              label: 'MOQ (Units)',                  width: '100px' },
+            { key: 'origination',      label: 'Origination (£)',              width: '120px' },
+            { key: 'shelf_life',       label: 'Shelf Life (Months)',          width: '130px' },
+            { key: 'unit_weight',      label: 'Unit Weight (g)',              width: '120px' },
+            { key: 'case_quantity',    label: 'Case Quantity (Units)',        width: '140px' },
+            { key: 'case_weight',      label: 'Case Weight (g)',              width: '120px' },
+            { key: 'leadtime1',        label: 'Lead Time >5000 units (Days)', width: '170px' },
+            { key: 'leadtime2',        label: 'Lead Time 5000-10000 (Days)',  width: '170px' },
+            { key: 'commodity_code',   label: 'Commodity Code',               width: '130px' },
+            { key: 'vegan',            label: 'Suitable: Vegans',             width: '110px' },
+            { key: 'vegetarian',       label: 'Suitable: Vegetarians',        width: '120px' },
+            { key: 'halal',            label: 'Suitable: Halal',              width: '110px' },
+            { key: 'coeliac',          label: 'Suitable: Coeliacs',           width: '120px' },
+            { key: 'peanuts',          label: 'Contains: Peanuts',            width: '120px' },
+            { key: 'tree_nuts',        label: 'Contains: Tree Nuts',          width: '130px' },
+            { key: 'sesame',           label: 'Contains: Sesame',             width: '120px' },
+            { key: 'milk',             label: 'Contains: Milk',               width: '110px' },
+            { key: 'egg',              label: 'Contains: Egg',                width: '110px' },
+            { key: 'cereals',          label: 'Contains: Cereals',            width: '120px' },
+            { key: 'soya',             label: 'Contains: Soya',               width: '110px' }
+        ];
+        const STORAGE_KEY = 'ap_columns_v3';
+
+        function loadSelectedColumns() {
+            let stored = null;
+            try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
+            const valid = COLUMN_DEFS.map(c => c.key);
+            if (Array.isArray(stored)) {
+                const set = new Set(stored.filter(k => valid.includes(k)));
+                set.add('title');
+                return set;
+            }
+            return new Set(COLUMN_DEFS.filter(c => c.always || c.def).map(c => c.key));
+        }
+        let selectedColumns = loadSelectedColumns();
+        let apHScrollSyncing = false;
+
+        function getCategoryBodies() {
+            return document.querySelectorAll('.category-body');
+        }
+
+        function getSampleScrollContent() {
+            return document.querySelector('.category-card:not(.collapsed) .ap-scroll-content')
+                || document.querySelector('.ap-scroll-content');
+        }
+
+        function updateHorizontalScrollBar() {
+            const bar = document.getElementById('ap-hscroll-bar');
+            const inner = document.getElementById('ap-hscroll-inner');
+            const mainWrap = document.querySelector('.main-wrap');
+            if (!bar || !inner || !mainWrap) return;
+
+            const sample = getSampleScrollContent();
+            const body = sample && sample.closest('.category-body');
+            if (!sample || !body) {
+                bar.hidden = true;
+                mainWrap.classList.remove('has-hscroll');
+                return;
+            }
+
+            const scrollWidth = Math.max(sample.scrollWidth, sample.offsetWidth);
+            const clientWidth = body.clientWidth;
+            const needsScroll = scrollWidth > clientWidth + 1;
+
+            if (!needsScroll) {
+                bar.hidden = true;
+                mainWrap.classList.remove('has-hscroll');
+                getCategoryBodies().forEach(b => { b.scrollLeft = 0; });
+                bar.scrollLeft = 0;
+                return;
+            }
+
+            const rect = body.getBoundingClientRect();
+            bar.hidden = false;
+            mainWrap.classList.add('has-hscroll');
+            inner.style.width = scrollWidth + 'px';
+            bar.style.left = rect.left + 'px';
+            bar.style.width = rect.width + 'px';
+
+            if (!apHScrollSyncing) {
+                bar.scrollLeft = body.scrollLeft;
+            }
+        }
+
+        function setupHorizontalScrollSync() {
+            const bar = document.getElementById('ap-hscroll-bar');
+            if (!bar || bar._apSyncBound) return;
+            bar._apSyncBound = true;
+
+            bar.addEventListener('scroll', function() {
+                if (apHScrollSyncing) return;
+                apHScrollSyncing = true;
+                const left = bar.scrollLeft;
+                getCategoryBodies().forEach(function(b) { b.scrollLeft = left; });
+                apHScrollSyncing = false;
+            });
+
+            window.addEventListener('resize', updateHorizontalScrollBar);
+
+            const mainWrap = document.querySelector('.main-wrap');
+            if (mainWrap && typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(updateHorizontalScrollBar).observe(mainWrap);
+            }
+
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.addEventListener('transitionend', updateHorizontalScrollBar);
+                sidebar.addEventListener('mouseenter', function() { setTimeout(updateHorizontalScrollBar, 220); });
+                sidebar.addEventListener('mouseleave', function() { setTimeout(updateHorizontalScrollBar, 220); });
+            }
+
+            document.getElementById('ap-content').addEventListener('click', function(e) {
+                if (e.target.closest('.category-header')) {
+                    requestAnimationFrame(updateHorizontalScrollBar);
+                }
+            });
+
+            document.getElementById('ap-content').addEventListener('scroll', function(e) {
+                if (apHScrollSyncing || !e.target.classList.contains('category-body')) return;
+                apHScrollSyncing = true;
+                const left = e.target.scrollLeft;
+                const bar = document.getElementById('ap-hscroll-bar');
+                if (bar) bar.scrollLeft = left;
+                getCategoryBodies().forEach(function(b) {
+                    if (b !== e.target) b.scrollLeft = left;
+                });
+                apHScrollSyncing = false;
+            }, true);
+        }
+
+        function saveSelectedColumns() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedColumns])); } catch (e) {}
+        }
+
+        function activeColumns() {
+            return COLUMN_DEFS.filter(c => c.always || selectedColumns.has(c.key));
+        }
+
+        function gridTemplate() {
+            const widths = activeColumns().map(c => c.width);
+            widths.push('92px'); // action column
+            return widths.join(' ');
+        }
+
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function cellHtml(p, key) {
+            switch (key) {
+                case 'sku': {
+                    const sku = (p.sku || '').trim();
+                    const pill = sku
+                        ? `<span class="product-sku" title="${escapeHtml(sku)}">${escapeHtml(sku)}</span>`
+                        : `<span class="product-sku empty">No SKU</span>`;
+                    return `<span class="cell-sku">${pill}</span>`;
+                }
+                case 'title': {
+                    const name = escapeHtml(p.title || 'Untitled product');
+                    return `<span class="cell-title"><span class="product-name" title="${name}">${name}</span></span>`;
+                }
+                case 'category': {
+                    const v = (p.categories || []).join(', ');
+                    return v ? `<span class="cell" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` : `<span class="cell muted">—</span>`;
+                }
+                case 'subcategory': {
+                    const v = (p.subcategories || []).join(', ');
+                    return v ? `<span class="cell" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` : `<span class="cell muted">—</span>`;
+                }
+                case 'has_prices': {
+                    return p.has_prices
+                        ? `<span class="cell price-cell" title="Prices set"><i class="fas fa-circle-check" style="color:#16a34a"></i></span>`
+                        : `<span class="cell price-cell" title="No prices"><i class="fas fa-circle-xmark" style="color:#dc2626"></i></span>`;
+                }
+                default: {
+                    const v = (p.fields || {})[key];
+                    return (v === '' || v == null) ? `<span class="cell muted">—</span>` : `<span class="cell" title="${escapeHtml(v)}">${escapeHtml(v)}</span>`;
+                }
+            }
+        }
+
+        function productRowHtml(p) {
+            const cols = activeColumns().map(c => cellHtml(p, c.key)).join('');
+            const fieldText = Object.values(p.fields || {}).join(' ');
+            const searchStr = ((p.title || '') + ' ' + (p.sku || '') + ' ' + (p.categories || []).join(' ') + ' ' + (p.subcategories || []).join(' ') + ' ' + fieldText).toLowerCase();
+            return `<div class="product-row" data-search="${escapeHtml(searchStr)}">
+                ${cols}
+                <span class="cell-action"><a class="edit-btn" href="/app/Product_Creator?edit=${encodeURIComponent(p.id)}"><i class="fas fa-pen"></i> Edit</a></span>
+            </div>`;
+        }
+
+        function columnHeaderHtml() {
+            const labels = activeColumns().map(c => `<span class="col-label col-${escapeHtml(c.key)}" title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</span>`).join('');
+            return `<div class="ap-col-header">${labels}<span class="col-label col-action"></span></div>`;
+        }
+
+        function totalProductCount(data) {
+            const ids = new Set();
+            (data.groups || []).forEach(g => (g.subgroups || []).forEach(sg => (sg.products || []).forEach(p => ids.add(p.id))));
+            (data.unassigned || []).forEach(p => ids.add(p.id));
+            return ids.size;
+        }
+
+        function render(data) {
+            const content = document.getElementById('ap-content');
+            const groups = data.groups || [];
+            const unassigned = data.unassigned || [];
+
+            if (!groups.length && !unassigned.length) {
+                content.innerHTML = `<div class="state-msg"><i class="fas fa-box-open"></i>No products found.</div>`;
+                return;
+            }
+
+            content.style.setProperty('--ap-grid', gridTemplate());
+            const header = columnHeaderHtml();
+
+            let html = '';
+            groups.forEach((g) => {
+                const groupCount = (g.subgroups || []).reduce((n, sg) => n + (sg.products || []).length, 0);
+                let body = '';
+                (g.subgroups || []).forEach(sg => {
+                    if (!(sg.products || []).length) return;
+                    body += `<div class="subcategory-block">
+                        <div class="subcategory-title"><span class="subcat-label">${escapeHtml(sg.subcategory || '(No subcategory)')}</span></div>
+                        ${sg.products.map(productRowHtml).join('')}
+                    </div>`;
+                });
+                html += `<div class="category-card" data-category>
+                    <div class="category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <i class="fas fa-chevron-down chev"></i>
+                        <span class="category-title">${escapeHtml(g.category)}</span>
+                        <span class="category-count">${groupCount} product${groupCount === 1 ? '' : 's'}</span>
+                    </div>
+                    <div class="category-body"><div class="ap-scroll-content">${header}${body}</div></div>
+                </div>`;
+            });
+
+            if (unassigned.length) {
+                html += `<div class="category-card" data-category>
+                    <div class="category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <i class="fas fa-chevron-down chev"></i>
+                        <span class="category-title unassigned"><i class="fas fa-triangle-exclamation"></i> Unassigned</span>
+                        <span class="category-count">${unassigned.length} product${unassigned.length === 1 ? '' : 's'}</span>
+                    </div>
+                    <div class="category-body"><div class="ap-scroll-content">${header}<div class="subcategory-block">
+                        ${unassigned.map(productRowHtml).join('')}
+                    </div></div></div>
+                </div>`;
+            }
+
+            content.innerHTML = html;
+            document.getElementById('ap-count').textContent = totalProductCount(data) + ' products';
+            requestAnimationFrame(updateHorizontalScrollBar);
+        }
+
+        function renderColumnsMenu() {
+            const list = document.getElementById('ap-columns-list');
+            list.innerHTML = COLUMN_DEFS.map(c => {
+                const checked = (c.always || selectedColumns.has(c.key)) ? 'checked' : '';
+                const locked = c.always ? 'locked' : '';
+                const disabled = c.always ? 'disabled' : '';
+                return `<label class="${locked}">
+                    <input type="checkbox" data-col="${escapeHtml(c.key)}" ${checked} ${disabled}>
+                    <span>${escapeHtml(c.label)}${c.always ? ' (always)' : ''}</span>
+                </label>`;
+            }).join('');
+            list.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    const key = this.getAttribute('data-col');
+                    if (this.checked) selectedColumns.add(key); else selectedColumns.delete(key);
+                    saveSelectedColumns();
+                    if (AP_DATA.groups.length || AP_DATA.unassigned.length) { render(AP_DATA); applySearch(); }
+                });
+            });
+        }
+
+        function applySearch() {
+            const q = (document.getElementById('ap-search').value || '').trim().toLowerCase();
+            const cards = document.querySelectorAll('.category-card');
+            cards.forEach(card => {
+                let cardVisible = false;
+                card.querySelectorAll('.subcategory-block').forEach(block => {
+                    let blockVisible = false;
+                    block.querySelectorAll('.product-row').forEach(row => {
+                        const match = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+                        row.style.display = match ? '' : 'none';
+                        if (match) blockVisible = true;
+                    });
+                    block.style.display = blockVisible ? '' : 'none';
+                    if (blockVisible) cardVisible = true;
+                });
+                card.style.display = cardVisible ? '' : 'none';
+                if (q && cardVisible) card.classList.remove('collapsed');
+            });
+        }
+
+        async function loadProducts() {
+            const content = document.getElementById('ap-content');
+            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            const slowTimer = setTimeout(() => {
+                const el = document.getElementById('ap-slow');
+                if (el) el.textContent = '(fetching every product\u2019s details — this can take a couple of minutes)';
+            }, 8000);
+            try {
+                const ctrl = new AbortController();
+                const timeout = setTimeout(() => ctrl.abort(), 180000);
+                const resp = await fetch('/api/all-products', { signal: ctrl.signal });
+                clearTimeout(timeout);
+                clearTimeout(slowTimer);
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || data.success === false) {
+                    throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
+                }
+                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [] };
+                render(AP_DATA);
+                applySearch();
+            } catch (err) {
+                clearTimeout(slowTimer);
+                const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');
+                content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(msg)}<br><br><button type="button" class="btn-ghost" onclick="loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupHorizontalScrollSync();
+            renderColumnsMenu();
+            loadProducts();
+            document.getElementById('ap-search').addEventListener('input', applySearch);
+            document.getElementById('ap-refresh').addEventListener('click', loadProducts);
+            document.getElementById('ap-expand').addEventListener('click', function() {
+                document.querySelectorAll('.category-card').forEach(c => c.classList.remove('collapsed'));
+                requestAnimationFrame(updateHorizontalScrollBar);
+            });
+            document.getElementById('ap-collapse').addEventListener('click', function() {
+                document.querySelectorAll('.category-card').forEach(c => c.classList.add('collapsed'));
+                requestAnimationFrame(updateHorizontalScrollBar);
+            });
+
+            const colBtn = document.getElementById('ap-columns-btn');
+            const colMenu = document.getElementById('ap-columns-menu');
+            colBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                colMenu.classList.toggle('open');
+            });
+            colMenu.addEventListener('click', function(e) { e.stopPropagation(); });
+            document.addEventListener('click', function() { colMenu.classList.remove('open'); });
+        });
+    </script>
+</body>
+</html>

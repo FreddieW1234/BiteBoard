@@ -6,6 +6,7 @@ Product Manager - Tool for creating and editing products in Shopify
 import os
 import sys
 import time
+import re
 import requests
 import json
 import base64
@@ -1133,6 +1134,415 @@ def get_all_children_by_family(shopify_domain=None):
     return family_to_children, parent_family_to_product
 
 
+def _parse_metafield_list(value):
+    """
+    Normalise a metafield value into a list of non-empty strings.
+    Shopify list metafields store a JSON array string like '["Bars","Mints"]';
+    single metafields store a plain string. Returns [] for empty/None.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    s = str(value).strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(v).strip() for v in parsed if str(v).strip()]
+        except (ValueError, TypeError):
+            pass
+    return [s]
+
+
+# Field-finder metafield keys exposed as optional columns on the All Products page.
+# Maps the value-key used in the response "fields" dict -> the custom metafield key.
+ALL_PRODUCTS_FIELD_KEYS = {
+    "ingredients": "ingredients",
+    "nutritional_info": "nutritional_info",
+    "whats_inside": "whats_inside",
+    "print_info": "print_info",
+    "recycle_info": "recycle_info",
+    "product_size": "product_size",
+    "moq": "moq",
+    "origination": "origination",
+    "shelf_life": "shelf_life",
+    "unit_weight": "unit_weight",
+    "case_quantity": "case_quantity",
+    "case_weight": "case_weight",
+    "leadtime1": "leadtime1",
+    "leadtime2": "leadtime2",
+    "commodity_code": "commodity_code",
+    "vegan": "vegan",
+    "vegetarian": "vegetarian",
+    "halal": "halal",
+    "coeliac": "coeliac",
+    "peanuts": "peanuts",
+    "tree_nuts": "tree_nuts",
+    "sesame": "sesame",
+    "milk": "milk",
+    "egg": "egg",
+    "cereals": "cereals",
+    "soya": "soya",
+}
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(value, limit=240):
+    """Strip HTML tags/entities from a string and truncate for list display."""
+    if not value:
+        return ""
+    text = _HTML_TAG_RE.sub(" ", str(value))
+    text = (text.replace("&nbsp;", " ").replace("&amp;", "&")
+            .replace("&lt;", "<").replace("&gt;", ">").replace("&#39;", "'").replace("&quot;", '"'))
+    text = " ".join(text.split())
+    return text[:limit].rstrip() + ("…" if len(text) > limit else "")
+
+
+def _stringify_mf(value, limit=240):
+    """Turn a metafield value into a short display string."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    low = s.lower()
+    if low == "true":
+        return "Yes"
+    if low == "false":
+        return "No"
+    if s.startswith("["):
+        parts = _parse_metafield_list(s)
+        s = ", ".join(parts)
+    if len(s) > limit:
+        return s[:limit].rstrip() + "…"
+    return s
+
+
+def _price_table_has_value(value):
+    """Return True if a price-table metafield (JSON list of bands) has any entry with a non-zero price."""
+    if not value:
+        return False
+    try:
+        data = json.loads(value) if isinstance(value, str) else value
+        if isinstance(data, list):
+            for band in data:
+                if isinstance(band, dict):
+                    try:
+                        if float(band.get("price") or 0) > 0:
+                            return True
+                    except (TypeError, ValueError):
+                        continue
+    except (ValueError, TypeError):
+        return False
+    return False
+
+
+def _build_field_values(mf_map):
+    """Build the display-value dict for the All Products optional columns."""
+    try:
+        from .categories import FILTER_GROUP_KEYS
+    except Exception:
+        FILTER_GROUP_KEYS = ["packaging", "size", "brand", "eco"]
+    # Description is the custom.description metafield (not Shopify's body_html)
+    fields = {"description": _strip_html(mf_map.get("description"))}
+    for out_key, mf_key in ALL_PRODUCTS_FIELD_KEYS.items():
+        fields[out_key] = _stringify_mf(mf_map.get(mf_key))
+    # Aggregate all selected filter values across the filter group metafields
+    filter_vals = []
+    for fk in FILTER_GROUP_KEYS:
+        filter_vals.extend(_parse_metafield_list(mf_map.get(fk)))
+    fields["filters"] = ", ".join(filter_vals)
+    return fields
+
+
+def get_all_products_overview(shopify_domain=None):
+    """
+    Fetch every product with its first SKU, category/subcategory, price presence and
+    all field-finder metafield values, then organise them into an ordered structure
+    for the All Products page:
+
+      {
+        "groups": [
+          { "category": "Chocolate", "subgroups": [
+              { "subcategory": "Bars", "products": [
+                  {id, title, sku, categories, subcategories, has_prices, fields:{...}}, ...
+              ] }, ...
+          ]}, ...
+        ],
+        "unassigned": [ {id, title, sku, ...}, ... ]
+      }
+
+    Categories and subcategories follow CATEGORY_MAPPING order; products within a
+    subcategory are sorted alphabetically by title. Products with no category and
+    no subcategory go into "unassigned".
+    """
+    try:
+        from .categories import CATEGORY_MAPPING
+    except Exception:
+        CATEGORY_MAPPING = {}
+
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return {"groups": [], "unassigned": [], "error": "No store domain configured"}
+
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+
+    products = []  # list of {id, title, sku, categories: [], subcategories: []}
+    cursor = None
+    use_rest_fallback = False
+
+    while True:
+        query = """
+        query GetAllProductsOverview($cursor: String) {
+          products(first: 13, after: $cursor) {
+            edges {
+              node {
+                legacyResourceId
+                title
+                priceRangeV2 { maxVariantPrice { amount } }
+                variants(first: 3) { edges { node { sku } } }
+                metafields(first: 50, namespace: "custom") { edges { node { key value } } }
+              }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+        """
+        try:
+            resp = requests.post(
+                graphql_url,
+                json={"query": query, "variables": {"cursor": cursor} if cursor else {}},
+                headers=headers,
+                timeout=30,
+            )
+            if resp.status_code == 404:
+                use_rest_fallback = True
+                break
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            if data.get("errors"):
+                # Throttled? back off and retry; otherwise stop.
+                err_str = json.dumps(data.get("errors"))
+                if "THROTTLED" in err_str.upper():
+                    time.sleep(2)
+                    continue
+                break
+            products_data = (data.get("data") or {}).get("products") or {}
+            edges = products_data.get("edges") or []
+            page_info = products_data.get("pageInfo") or {}
+            for edge in edges:
+                node = edge.get("node") or {}
+                leg_id = node.get("legacyResourceId")
+                if not leg_id:
+                    continue
+                title = (node.get("title") or "").strip() or f"Product {leg_id}"
+                sku = ""
+                for v_edge in ((node.get("variants") or {}).get("edges") or []):
+                    v_sku = ((v_edge.get("node") or {}).get("sku") or "").strip()
+                    if v_sku:
+                        sku = v_sku
+                        break
+                try:
+                    pid = int(leg_id)
+                except (TypeError, ValueError):
+                    continue
+                # Build custom metafields map
+                mf_map = {}
+                for mf_edge in ((node.get("metafields") or {}).get("edges") or []):
+                    mf_node = mf_edge.get("node") or {}
+                    k = mf_node.get("key")
+                    if k:
+                        mf_map[k] = mf_node.get("value")
+                cats = _parse_metafield_list(mf_map.get("custom_category"))
+                subs = _parse_metafield_list(mf_map.get("subcategory"))
+                # Price presence: any priced variant, or a non-zero entry in price tables
+                try:
+                    max_price = float(((node.get("priceRangeV2") or {}).get("maxVariantPrice") or {}).get("amount") or 0)
+                except (TypeError, ValueError):
+                    max_price = 0
+                has_prices = max_price > 0 or _price_table_has_value(mf_map.get("pricejsontr")) or _price_table_has_value(mf_map.get("pricejsoner"))
+                fields = _build_field_values(mf_map)
+                products.append({
+                    "id": pid,
+                    "title": title,
+                    "sku": sku,
+                    "categories": cats,
+                    "subcategories": subs,
+                    "has_prices": has_prices,
+                    "fields": fields,
+                })
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+            # Pace requests against Shopify's GraphQL cost bucket
+            try:
+                cost = (data.get("extensions") or {}).get("cost") or {}
+                throttle = cost.get("throttleStatus") or {}
+                available = float(throttle.get("currentlyAvailable") or 0)
+                restore = float(throttle.get("restoreRate") or 50) or 50
+                needed = float(cost.get("requestedQueryCost") or cost.get("actualQueryCost") or 0)
+                if needed and available < needed:
+                    time.sleep(min(10.0, (needed - available) / restore + 0.3))
+            except Exception:
+                pass
+        except Exception:
+            break
+
+    if use_rest_fallback:
+        base_url = f"https://{domain}/admin/api/{API_VERSION}"
+        url = f"{base_url}/products.json?limit=250&fields=id,title,variants"
+        seen = 0
+        max_products = 2000
+        while url and seen < max_products:
+            try:
+                r = requests.get(url, headers=headers, timeout=30)
+                if r.status_code != 200:
+                    break
+                data = r.json()
+                rest_products = data.get("products") or []
+                if not rest_products:
+                    break
+                for p in rest_products:
+                    seen += 1
+                    if seen > max_products:
+                        break
+                    pid = p.get("id")
+                    if not pid:
+                        continue
+                    title = (p.get("title") or "").strip() or f"Product {pid}"
+                    variants = p.get("variants") or []
+                    sku = ""
+                    for v in variants:
+                        v_sku = (v.get("sku") or "").strip()
+                        if v_sku:
+                            sku = v_sku
+                            break
+                    variant_has_price = False
+                    for v in variants:
+                        try:
+                            if float(v.get("price") or 0) > 0:
+                                variant_has_price = True
+                                break
+                        except (TypeError, ValueError):
+                            pass
+                    mf_map = {}
+                    mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=250"
+                    try:
+                        mf_r = requests.get(mf_url, headers=headers, timeout=15)
+                        if mf_r.status_code == 200:
+                            for mf in (mf_r.json().get("metafields") or []):
+                                k = mf.get("key")
+                                if k:
+                                    mf_map[k] = mf.get("value")
+                    except Exception:
+                        pass
+                    cats = _parse_metafield_list(mf_map.get("custom_category"))
+                    subs = _parse_metafield_list(mf_map.get("subcategory"))
+                    has_prices = variant_has_price or _price_table_has_value(mf_map.get("pricejsontr")) or _price_table_has_value(mf_map.get("pricejsoner"))
+                    fields = _build_field_values(mf_map)
+                    products.append({
+                        "id": int(pid),
+                        "title": title,
+                        "sku": sku,
+                        "categories": cats,
+                        "subcategories": subs,
+                        "has_prices": has_prices,
+                        "fields": fields,
+                    })
+                link = r.headers.get("Link") or ""
+                url = None
+                for part in link.split(","):
+                    if 'rel="next"' in part:
+                        url = part[part.find("<") + 1:part.find(">")].strip()
+                        break
+            except Exception:
+                break
+
+    # Organise into ordered (category -> subcategory -> products) structure.
+    # placement: category -> subcategory -> list of products
+    placement = {}
+    placed_ids = set()
+
+    def _add(category, subcategory, product):
+        placement.setdefault(category, {}).setdefault(subcategory, []).append(product)
+        placed_ids.add(product["id"])
+
+    for product in products:
+        cats = product["categories"]
+        subs = product["subcategories"]
+        if subs:
+            for sub in subs:
+                matched_cats = [c for c in cats if sub in CATEGORY_MAPPING.get(c, [])]
+                if matched_cats:
+                    for c in matched_cats:
+                        _add(c, sub, product)
+                elif cats:
+                    # subcategory doesn't map to product's category list; attach to its categories
+                    for c in cats:
+                        _add(c, sub, product)
+                else:
+                    # no category on the product: derive from mapping (first matching category)
+                    derived = next((c for c, sublist in CATEGORY_MAPPING.items() if sub in sublist), "Other")
+                    _add(derived, sub, product)
+        elif cats:
+            # category but no subcategory
+            for c in cats:
+                _add(c, None, product)
+        # else: handled as unassigned below
+
+    NO_SUB_LABEL = "(No subcategory)"
+
+    def _build_subgroups(category):
+        subs_map = placement.get(category, {})
+        ordered_subs = list(CATEGORY_MAPPING.get(category, []))
+        # extra subcategories present on products but not in the mapping
+        extras = sorted(
+            s for s in subs_map.keys()
+            if s is not None and s not in ordered_subs
+        )
+        result = []
+        for sub in ordered_subs + extras:
+            prods = subs_map.get(sub)
+            if not prods:
+                continue
+            result.append({
+                "subcategory": sub,
+                "products": sorted(prods, key=lambda p: (p["title"] or "").lower()),
+            })
+        # products with this category but no subcategory go last
+        if None in subs_map and subs_map[None]:
+            result.append({
+                "subcategory": NO_SUB_LABEL,
+                "products": sorted(subs_map[None], key=lambda p: (p["title"] or "").lower()),
+            })
+        return result
+
+    groups = []
+    ordered_categories = list(CATEGORY_MAPPING.keys())
+    extra_categories = sorted(c for c in placement.keys() if c not in ordered_categories)
+    for category in ordered_categories + extra_categories:
+        if category not in placement:
+            continue
+        subgroups = _build_subgroups(category)
+        if subgroups:
+            groups.append({"category": category, "subgroups": subgroups})
+
+    unassigned = sorted(
+        (p for p in products if p["id"] not in placed_ids),
+        key=lambda p: (p["title"] or "").lower(),
+    )
+
+    return {"groups": groups, "unassigned": unassigned}
+
+
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
     """
     Fallback: find child products via REST (list products + metafields per product).
@@ -2095,7 +2505,7 @@ def create_product(product_data):
         # Wait enough to let the bucket recover before our first real request.
         time.sleep(2.0)
         if did_parent_fetch:
-            _time_module.sleep(2.0)  # extra gap after parent product + metafields (2+ API calls)
+            time.sleep(2.0)  # extra gap after parent product + metafields (2+ API calls)
         # Extract the actual Shopify domain from redirects (if any)
         actual_shopify_domain = None
         response = None
@@ -2112,7 +2522,7 @@ def create_product(product_data):
                     except (ValueError, TypeError):
                         pass
                     print(f"⚠️ Step 1 rate limit (429), waiting {wait_sec}s then retry ({step1_attempt + 1}/3)...", flush=True)
-                    _time_module.sleep(wait_sec)
+                    time.sleep(wait_sec)
                     continue
                 print(f"❌ Shopify API returned 429 after retries. Response: {response.text[:500]}", flush=True)
                 return {"success": False, "error": f"Rate limit exceeded. {response.text[:300]}"}
@@ -2127,7 +2537,7 @@ def create_product(product_data):
             from urllib.parse import urlparse
             parsed_redirect = urlparse(redirect_url)
             actual_shopify_domain = parsed_redirect.netloc
-            _time_module.sleep(2.0)  # let bucket recover before following redirect
+            time.sleep(2.0)  # let bucket recover before following redirect
             for redirect_attempt in range(4):
                 if method == "PUT":
                     response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
@@ -2141,7 +2551,7 @@ def create_product(product_data):
                     except (ValueError, TypeError):
                         pass
                     print(f"⚠️ Step 1 (after redirect) rate limit (429), waiting {wait_sec}s then retry ({redirect_attempt + 1}/3)...", flush=True)
-                    _time_module.sleep(wait_sec)
+                    time.sleep(wait_sec)
                     continue
                 break
         if hasattr(response, 'url') and response.url != url and not actual_shopify_domain:
