@@ -156,13 +156,6 @@
                 </div>
                 <span class="count-pill" id="ap-count">–</span>
                 <div class="toolbar-actions">
-                    <div class="col-menu-wrap">
-                        <button type="button" class="btn-ghost" id="ap-columns-btn"><i class="fas fa-table-columns"></i> Columns</button>
-                        <div class="col-menu" id="ap-columns-menu">
-                            <div class="col-menu-title">Show columns</div>
-                            <div id="ap-columns-list"></div>
-                        </div>
-                    </div>
                     <button type="button" class="btn-ghost" id="ap-expand"><i class="fas fa-angles-down"></i> Expand all</button>
                     <button type="button" class="btn-ghost" id="ap-collapse"><i class="fas fa-angles-up"></i> Collapse all</button>
                     <button type="button" class="btn-ghost" id="ap-refresh"><i class="fas fa-rotate"></i> Refresh</button>
@@ -221,20 +214,6 @@
             { key: 'cereals',          label: 'Contains: Cereals',            width: '120px' },
             { key: 'soya',             label: 'Contains: Soya',               width: '110px' }
         ];
-        const STORAGE_KEY = 'ap_columns_v3';
-
-        function loadSelectedColumns() {
-            let stored = null;
-            try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
-            const valid = COLUMN_DEFS.map(c => c.key);
-            if (Array.isArray(stored)) {
-                const set = new Set(stored.filter(k => valid.includes(k)));
-                set.add('title');
-                return set;
-            }
-            return new Set(COLUMN_DEFS.filter(c => c.always || c.def).map(c => c.key));
-        }
-        let selectedColumns = loadSelectedColumns();
         let apHScrollSyncing = false;
 
         function getCategoryBodies() {
@@ -330,12 +309,8 @@
             }, true);
         }
 
-        function saveSelectedColumns() {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...selectedColumns])); } catch (e) {}
-        }
-
         function activeColumns() {
-            return COLUMN_DEFS.filter(c => c.always || selectedColumns.has(c.key));
+            return COLUMN_DEFS.slice();
         }
 
         function gridTemplate() {
@@ -457,27 +432,6 @@
             requestAnimationFrame(updateHorizontalScrollBar);
         }
 
-        function renderColumnsMenu() {
-            const list = document.getElementById('ap-columns-list');
-            list.innerHTML = COLUMN_DEFS.map(c => {
-                const checked = (c.always || selectedColumns.has(c.key)) ? 'checked' : '';
-                const locked = c.always ? 'locked' : '';
-                const disabled = c.always ? 'disabled' : '';
-                return `<label class="${locked}">
-                    <input type="checkbox" data-col="${escapeHtml(c.key)}" ${checked} ${disabled}>
-                    <span>${escapeHtml(c.label)}${c.always ? ' (always)' : ''}</span>
-                </label>`;
-            }).join('');
-            list.querySelectorAll('input[type="checkbox"]:not([disabled])').forEach(cb => {
-                cb.addEventListener('change', function() {
-                    const key = this.getAttribute('data-col');
-                    if (this.checked) selectedColumns.add(key); else selectedColumns.delete(key);
-                    saveSelectedColumns();
-                    if (AP_DATA.groups.length || AP_DATA.unassigned.length) { render(AP_DATA); applySearch(); }
-                });
-            });
-        }
-
         function applySearch() {
             const q = (document.getElementById('ap-search').value || '').trim().toLowerCase();
             const cards = document.querySelectorAll('.category-card');
@@ -527,7 +481,6 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             setupHorizontalScrollSync();
-            renderColumnsMenu();
             loadProducts();
             document.getElementById('ap-search').addEventListener('input', applySearch);
             document.getElementById('ap-refresh').addEventListener('click', loadProducts);
@@ -539,15 +492,6 @@
                 document.querySelectorAll('.category-card').forEach(c => c.classList.add('collapsed'));
                 requestAnimationFrame(updateHorizontalScrollBar);
             });
-
-            const colBtn = document.getElementById('ap-columns-btn');
-            const colMenu = document.getElementById('ap-columns-menu');
-            colBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                colMenu.classList.toggle('open');
-            });
-            colMenu.addEventListener('click', function(e) { e.stopPropagation(); });
-            document.addEventListener('click', function() { colMenu.classList.remove('open'); });
         });
     </script>
 </body>
