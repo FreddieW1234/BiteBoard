@@ -738,6 +738,20 @@
         .custom-dropdown {
             width: 100%;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+            z-index: 1;
+        }
+        .custom-dropdown.is-open {
+            z-index: 3000;
+        }
+        .metafield-item:has(.custom-dropdown.is-open) {
+            z-index: 3000;
+            position: relative;
+        }
+        .collapsible-section:has(.custom-dropdown.is-open) {
+            overflow: visible;
+            z-index: 2500;
+            position: relative;
         }
         .dropdown-trigger-wrap {
             position: relative;
@@ -800,17 +814,19 @@
             top: 100%;
             left: 0;
             right: 0;
-            z-index: 10;
             background-color: #fff;
             border: 1px solid #ced4da;
             border-top: none;
             border-radius: 0 0 6px 6px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            max-height: 360px;
+            z-index: 3001;
+            height: 360px;
+            min-height: 180px;
+            max-height: 80vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            resize: vertical;
         }
         .dropdown-search-wrap {
             flex-shrink: 0;
@@ -830,7 +846,6 @@
             border-color: #4f46e5;
         }
         .dropdown-options-list {
-            max-height: 300px;
             overflow-y: auto;
             flex: 1;
             min-height: 0;
@@ -1018,6 +1033,8 @@
             gap: 15px;
             justify-content: center;
             margin-top: 30px;
+            position: relative;
+            z-index: 1;
         }
 
         .btn {
@@ -1285,6 +1302,13 @@
         .pc-create-from-parent .metafield-item[data-metafield-key="cereals"],
         .pc-create-from-parent .metafield-item[data-metafield-key="soya"],
         .pc-create-from-parent .metafield-item[data-metafield-key="milk"] { display: none !important; }
+        /* Create-from-parent: fewer fields — let cat/subcat dropdown extend over the action buttons */
+        #productForm.pc-create-from-parent .field-finder-container,
+        #productForm.pc-create-from-parent .metafields-section,
+        #productForm.pc-create-from-parent .metafields-grid,
+        #productForm.pc-create-from-parent .collapsible-section:has(#metafields-container) {
+            overflow: visible;
+        }
 
         .parent-child-diagram-section { max-width: 100%; }
         .parent-child-diagram {
@@ -1971,6 +1995,10 @@
                         <i class="fas fa-list"></i>
                         <span>All Products</span>
                     </a>
+                    <a href="/app/Customers" class="app-tab">
+                        <i class="fas fa-users"></i>
+                        <span>Customers</span>
+                    </a>
                     <a href="/app/Templates_Uploader" class="app-tab templates-uploader-nav" style="display: none;">
                         <i class="fas fa-file-archive"></i>
                         <span>Templates Uploader</span>
@@ -2011,7 +2039,7 @@
                             <button type="button" class="btn btn-primary edit-trigger-btn" onclick="openEditModal(); return false;">
                                 <i class="fas fa-edit"></i> Edit Existing Product
                             </button>
-                            <button type="button" class="btn btn-primary" onclick="showCreateForm()">
+                            <button type="button" class="btn btn-primary" onclick="startNewProduct()">
                                 <i class="fas fa-plus-circle"></i> Create New Product
                             </button>
                             <button type="button" class="btn btn-primary duplicate-trigger-btn" onclick="openDuplicateModal(); return false;">
@@ -2068,6 +2096,7 @@
                     <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 520px; width: 90%; max-height: 80vh; display: flex; flex-direction: column;">
                         <h3 style="margin: 0 0 16px 0; font-size: 1.25rem;">Select parent product to create from</h3>
                         <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9rem;">Products with a Parent type (e.g. Parent - Maxi) are listed below. Selecting one will duplicate that product.</p>
+                        <input type="text" id="create-from-parent-search" placeholder="Search by name or SKU…" autocomplete="off" style="width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; font-family: inherit;">
                         <div id="create-from-parent-list" style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; min-height: 200px;">
                             <span class="muted">Loading parent products…</span>
                         </div>
@@ -2443,12 +2472,116 @@ Dietary</textarea>
             }
         }
 
+        // Default Shopify product description (body_html) for new products.
+        const DEFAULT_PRODUCT_DESCRIPTION = 'Product Info\n\n\nIngredients\n\n\nDietary';
+
+        function applyDefaultProductDescription() {
+            const descEl = document.getElementById('description');
+            if (descEl) {
+                descEl.value = DEFAULT_PRODUCT_DESCRIPTION;
+                isHtmlMode = false;
+                if (typeof updateConverterButton === 'function') updateConverterButton();
+            }
+        }
+
+        async function resetProductFormToBlank() {
+            isEditingProduct = false;
+            selectedProduct = null;
+            pcCreateFromParentMode = false;
+
+            const formEl = document.getElementById('productForm');
+            if (formEl) formEl.classList.remove('pc-create-from-parent');
+
+            const titleEl = document.getElementById('title');
+            if (titleEl) titleEl.value = '';
+            const productCodeEl = document.getElementById('product-code');
+            if (productCodeEl) productCodeEl.value = '';
+            const statusEl = document.getElementById('status');
+            if (statusEl) statusEl.value = 'active';
+
+            applyDefaultProductDescription();
+
+            const chargeVatYes = document.getElementById('chargeVatYes');
+            if (chargeVatYes) chargeVatYes.checked = true;
+
+            const parentNo = document.getElementById('parentNo');
+            const parentYes = document.getElementById('parentYes');
+            const childNo = document.getElementById('childNo');
+            const childYes = document.getElementById('childYes');
+            if (parentNo) parentNo.checked = true;
+            if (parentYes) parentYes.checked = false;
+            if (childNo) childNo.checked = true;
+            if (childYes) childYes.checked = false;
+            const wrap = document.getElementById('parent-dropdown-wrap');
+            const childWrap = document.getElementById('child-dropdown-wrap');
+            if (wrap) wrap.style.display = 'none';
+            if (childWrap) childWrap.style.display = 'none';
+            const selectEl = document.getElementById('parent-child-select');
+            const childSelectEl = document.getElementById('parent-child-child-select');
+            if (selectEl) selectEl.value = '';
+            if (childSelectEl) childSelectEl.value = '';
+            const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
+            if (hiddenParentChildEl) hiddenParentChildEl.value = '';
+
+            const pcInput = document.getElementById('pc-product-input');
+            if (pcInput) pcInput.value = '';
+            const pcDrop = document.getElementById('pc-autocomplete-dropdown');
+            if (pcDrop) pcDrop.style.display = 'none';
+
+            if (typeof resetPricingTables === 'function') resetPricingTables();
+            if (typeof clearAllTemplates === 'function') clearAllTemplates();
+            if (typeof resetColourOptions === 'function') resetColourOptions();
+
+            selectedMediaFiles = [];
+            selectedShopifyMedia = [];
+            const mediaInput = document.getElementById('mediaFiles');
+            if (mediaInput) mediaInput.value = '';
+            if (typeof updateMediaPreview === 'function') updateMediaPreview();
+
+            const childNotice = document.getElementById('child-product-edit-notice');
+            if (childNotice) childNotice.style.display = 'none';
+
+            const submitBtn = document.querySelector('#productForm button[type="submit"]');
+            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
+
+            await loadMetafields();
+            applyNewProductFieldDefaults();
+            await applyNewProductPricingAndGuidelines();
+        }
+
+        async function applyDefaultArtworkGuideline() {
+            selectedGuideline = null;
+            try {
+                if (!artworkGuidelinesFilesCache.length) {
+                    const resp = await fetch('/api/shopify/files');
+                    artworkGuidelinesFilesCache = (await resp.json()) || [];
+                }
+                renderGuidelinesColumns(artworkGuidelinesFilesCache);
+            } catch (e) {
+                console.log('Could not apply default artwork guideline', e);
+            }
+        }
+
+        async function applyNewProductPricingAndGuidelines() {
+            if (!pricingQtyBands.length) {
+                await fetchPricingQtyBands();
+            }
+            if (typeof autofillQuantities === 'function') autofillQuantities();
+            await applyDefaultArtworkGuideline();
+        }
+
+        async function startNewProduct() {
+            await resetProductFormToBlank();
+            showCreateForm();
+        }
+
         function showCreateForm() {
             // Show all hidden form sections
             const sections = document.querySelectorAll('.collapsible-section[style*="display: none"], .action-buttons[style*="display: none"]');
             sections.forEach(section => {
                 section.style.display = 'block';
             });
+            applyNewProductFieldDefaults();
             // Hide the three action buttons and show the back button
             showBackButtonAndHideActions();
         }
@@ -2463,26 +2596,19 @@ Dietary</textarea>
         }
 
         function backToProductCreatorHome() {
-            pcCreateFromParentMode = false;
-            const formEl = document.getElementById('productForm');
-            if (formEl) formEl.classList.remove('pc-create-from-parent');
-            const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
-            if (hiddenParentChildEl) hiddenParentChildEl.value = '';
-            const childNotice = document.getElementById('child-product-edit-notice');
-            if (childNotice) childNotice.style.display = 'none';
+            // Clear any ?edit=<id> deep-link from the URL so a later refresh starts blank
+            // instead of reloading the product we just came from.
+            try {
+                if (window.location.search) {
+                    history.replaceState(null, '', window.location.pathname);
+                }
+            } catch (e) {}
             // Hide all form sections and action buttons (same as initial load)
             document.querySelectorAll('.collapsible-section').forEach(section => {
                 section.style.display = 'none';
             });
             const actionButtonsDiv = document.querySelector('.action-buttons');
             if (actionButtonsDiv) actionButtonsDiv.style.display = 'none';
-            // Reset edit state
-            selectedProduct = null;
-            isEditingProduct = false;
-            clearSelectedGuideline();
-            clearAllTemplates();
-            const submitBtn = document.querySelector('#productForm button[type="submit"]');
-            if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
             // Show the three buttons again, hide the back button, show Product Families again
             const actionBtns = document.getElementById('product-action-buttons');
             const backBtn = document.getElementById('product-back-button');
@@ -2490,13 +2616,15 @@ Dietary</textarea>
             if (actionBtns) actionBtns.style.display = 'flex';
             if (backBtn) backBtn.style.display = 'none';
             if (diagramSection) diagramSection.style.display = 'block';
+            // Clear form data so the next "Create New Product" starts blank (like Reset Form)
+            void resetProductFormToBlank();
         }
 
         async function refreshParentChildDropdown(currentParentValue) {
             const selectEl = document.getElementById('parent-child-select');
             if (!selectEl) return;
             const [choicesResp, takenResp] = await Promise.all([
-                fetch('/api/metafield-choices/custom.parent_child'),
+                fetch('/api/metafield-choices/custom.parent_child?all=1'),
                 fetch('/api/products-parent-child')
             ]);
             const choicesData = await choicesResp.json();
@@ -2526,7 +2654,7 @@ Dietary</textarea>
         async function refreshChildDropdown(currentChildValue) {
             const selectEl = document.getElementById('parent-child-child-select');
             if (!selectEl) return;
-            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child');
+            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child?all=1');
             const choicesData = await choicesResp.json();
             const allChoices = (choicesData.choices || []).map(c => String(c || '').trim());
             let choices = allChoices.filter(c => c.startsWith('Child - '));
@@ -2626,6 +2754,7 @@ Dietary</textarea>
         // Artwork: load guidelines and enable templates staging
         let artworkGuidelinesLeft = [];
         let artworkGuidelinesRight = [];
+        let artworkGuidelinesFilesCache = [];
         let stagedArtworkTemplateFiles = [];
         let pcStagedRemoteEntries = [];
         let pcCurrentTemplatesFileGlobalId = '';
@@ -2634,12 +2763,14 @@ Dietary</textarea>
         let selectedProduct = null;
         let isEditingProduct = false;
         let pcCreateFromParentMode = false;
+        let pcCreateFromParentItems = [];
 
         document.addEventListener('DOMContentLoaded', async function () {
             try {
                 const resp = await fetch('/api/shopify/files');
                 const files = await resp.json();
-                renderGuidelinesColumns(files || []);
+                artworkGuidelinesFilesCache = files || [];
+                renderGuidelinesColumns(artworkGuidelinesFilesCache);
             } catch (e) {
                 document.getElementById('artworkGuidelinesLeft').innerHTML = '<div class="danger">Failed to load files</div>';
                 document.getElementById('artworkGuidelinesRight').innerHTML = '<div class="danger">Failed to load files</div>';
@@ -2711,29 +2842,24 @@ Dietary</textarea>
                     if (typeof pcPopulateFromProduct === 'function') pcPopulateFromProduct(id, title);
                 });
 
-                // 1) Load parents only immediately (hardcoded list, no API delay for children)
-                fetch('/api/products-parent-child-tree?parents_only=1')
+                // Show only real parent products (those that actually exist in the store with a
+                // "Parent - X" metafield). Use the cached full tree from the index prefetch for an
+                // instant render, then refresh from the API.
+                if (window.__productFamilyTreeCache && window.__productFamilyTreeCache.tree) {
+                    renderProductFamilyDiagram(window.__productFamilyTreeCache);
+                } else {
+                    diagramEl.innerHTML = '<span class="muted">Loading product families…</span>';
+                }
+                fetch('/api/products-parent-child-tree')
                     .then(r => r.json())
-                    .then(treeData => {
-                        renderProductFamilyDiagram(treeData);
-                        // 2) If we have cached full tree from index prefetch, use it now
-                        if (window.__productFamilyTreeCache && window.__productFamilyTreeCache.tree && window.__productFamilyTreeCache.tree.some(item => (item.children || []).length > 0)) {
-                            renderProductFamilyDiagram(window.__productFamilyTreeCache);
-                            return;
+                    .then(fullTree => {
+                        if (fullTree && fullTree.tree) {
+                            window.__productFamilyTreeCache = fullTree;
+                            window.__productFamilyTreeCacheTime = Date.now();
+                            renderProductFamilyDiagram(fullTree);
                         }
-                        // 3) Otherwise fetch full tree in background and update when ready
-                        fetch('/api/products-parent-child-tree')
-                            .then(r2 => r2.json())
-                            .then(fullTree => {
-                                if (fullTree && fullTree.tree) {
-                                    window.__productFamilyTreeCache = fullTree;
-                                    window.__productFamilyTreeCacheTime = Date.now();
-                                    renderProductFamilyDiagram(fullTree);
-                                }
-                            })
-                            .catch(() => {});
                     })
-                    .catch(() => { diagramEl.innerHTML = '<span class="muted">Could not load diagram.</span>'; });
+                    .catch(() => { if (!window.__productFamilyTreeCache) diagramEl.innerHTML = '<span class="muted">Could not load diagram.</span>'; });
             })();
 
             // Versions panel will only show when a product is selected
@@ -2948,8 +3074,9 @@ Dietary</textarea>
         }
 
         function resetForm() {
-            // Simply refresh the entire page
-            window.location.reload();
+            // Reload as a blank form by dropping any ?edit=<id> deep-link param,
+            // otherwise the same product would just be reloaded into edit mode.
+            window.location.href = window.location.pathname;
         }
 
         function getVatTag() {
@@ -4071,6 +4198,20 @@ Dietary</textarea>
         }
 
 
+        // Default metafield values when starting a brand-new product (Create New Product).
+        const NEW_PRODUCT_FIELD_DEFAULTS = {
+            leadtime1: '5',
+            leadtime2: '10',
+        };
+
+        function applyNewProductFieldDefaults() {
+            Object.entries(NEW_PRODUCT_FIELD_DEFAULTS).forEach(([key, val]) => {
+                document.querySelectorAll(`.metafield-value[data-key="${key}"]`).forEach(el => {
+                    el.value = val;
+                });
+            });
+        }
+
         // Load metafields automatically when page loads - using specific template product
         async function loadMetafields() {
             try {
@@ -4087,10 +4228,13 @@ Dietary</textarea>
                     const productData = await productResponse.json();
                     console.log('Template product data received:', productData);
                     
-                    // Clear all values from metafields so they're empty for the new product
+                    // Clear all values from metafields so they're empty for the new product,
+                    // except fields with configured defaults (e.g. lead times).
                     let emptyMetafields = (productData.metafields || []).map(metafield => ({
                         ...metafield,
-                        value: '', // Clear the value so it's empty for the new product
+                        value: Object.prototype.hasOwnProperty.call(NEW_PRODUCT_FIELD_DEFAULTS, metafield.key)
+                            ? NEW_PRODUCT_FIELD_DEFAULTS[metafield.key]
+                            : '',
                         id: null   // Clear the ID since this is for a new product
                     }));
                     
@@ -4305,7 +4449,7 @@ Dietary</textarea>
                     if (key.startsWith('pricejson') && !key.includes('.')) return false;
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
                     if (namespace === 'custom' && key === 'sku') return false;
-                    if (namespace === 'custom' && key === 'parent_child') return false;
+                    if (namespace === 'custom' && (key === 'parent_child' || key === 'parent_child2')) return false;
                     // Category + subcategory are merged into one combined "Category & Subcategory" dropdown
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
@@ -4559,8 +4703,8 @@ Dietary</textarea>
                     const chocolateBtn = metafieldDiv.querySelector('.card-quickfill-btn');
                     if (chocolateBtn) {
                         chocolateBtn.addEventListener('click', function fillChocolateIngredientsAndNutritional() {
-                            const ingredientsText = 'Ingredients: Sugar, Cocoa Butter, Whole MILK Powder, Cocoa Mass, Emulsifier: SOYA Lecithin, Flavouring: Vanilla Extract. Milk Chocolate Contains: Cocoa Solids 32% Minimum, Milk Solids 21% Minimum.\nAllergen Information: For allergens see CAPITALISED ingredients';
-                            const nutritionalText = 'Nutritional Information (per 100g)\nEnergy\t2308kJ/556kcal\nFat\t34.4g\nOf which saturates\t21.1g\nCarbohydrates\t53.1g\nOf which sugars\t52.4g\nProtein\t6.7g\nSalt\t0.206g';
+                            const ingredientsText = 'Ingredients: Sugar, Cocoa Butter, Whole MILK Powder, Cocoa Mass, Emulsifier: SOYA Lecithin, Flavouring: Vanilla Extract. Milk Chocolate Contains: Cocoa Solids 32% Minimum, Milk Solids 21% Minimum. Allergen Information: For allergens see CAPITALISED ingredients';
+                            const nutritionalText = 'Nutritional Information (per 100g) Energy 2308kJ/556kcal Fat 34.4g Of which saturates 21.1g Carbohydrates 53.1g Of which sugars 52.4g Protein 6.7g Salt 0.206g';
                             const ingredientsEl = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
                             const nutritionalEl = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
                             if (ingredientsEl) {
@@ -5185,6 +5329,13 @@ Dietary</textarea>
                         throw new Error('Product creation reported success but no product data was returned');
                     }
                     resultDiv.className = 'result-message result-success';
+                    // Detach from the ?edit=<id> deep-link after a successful save so that
+                    // a refresh (or Reset) starts a blank form instead of reloading this product.
+                    try {
+                        if (window.location.search) {
+                            history.replaceState(null, '', window.location.pathname);
+                        }
+                    } catch (e) {}
                     const actionText = isEditingProduct ? 'Updated' : 'Created';
                     const actionVerb = isEditingProduct ? 'updated' : 'created';
                     let propagatedHtml = '';
@@ -5258,17 +5409,25 @@ Dietary</textarea>
             // Close all other dropdowns
             document.querySelectorAll('.dropdown-content').forEach(dd => {
                 dd.style.display = 'none';
-                dd.closest('.custom-dropdown').querySelector('.dropdown-button').classList.remove('open');
+                const wrap = dd.closest('.custom-dropdown');
+                if (wrap) {
+                    wrap.classList.remove('is-open');
+                    wrap.querySelector('.dropdown-button')?.classList.remove('open');
+                }
             });
             
             // Toggle current dropdown
             if (isOpen) {
                 content.style.display = 'none';
                 button.classList.remove('open');
+                dropdown.classList.remove('is-open');
             } else {
-                content.style.display = 'block';
+                // Use flex (matches the .dropdown-content stylesheet) so the inner options
+                // list can flex-grow and scroll within the fixed/resizable panel height.
+                content.style.display = 'flex';
                 button.classList.add('open');
-                
+                dropdown.classList.add('is-open');
+
                 // Options are already loaded on page load, no need to reload
             }
         }
@@ -5278,7 +5437,11 @@ Dietary</textarea>
             if (!event.target.closest('.custom-dropdown')) {
                 document.querySelectorAll('.dropdown-content').forEach(content => {
                     content.style.display = 'none';
-                    content.closest('.custom-dropdown').querySelector('.dropdown-button').classList.remove('open');
+                    const wrap = content.closest('.custom-dropdown');
+                    if (wrap) {
+                        wrap.classList.remove('is-open');
+                        wrap.querySelector('.dropdown-button')?.classList.remove('open');
+                    }
                 });
             }
         });
@@ -5530,6 +5693,13 @@ Dietary</textarea>
         }
 
         // Tick the combined Category & Subcategory dropdown from a product's custom_category + subcategory metafields
+        function clearCategorySubDropdown() {
+            const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
+            if (!dd) return;
+            dd.querySelectorAll('input[type="checkbox"][data-category]').forEach(cb => { cb.checked = false; });
+            updateDropdownText(dd);
+        }
+
         function setCategorySubFromMetafields(metafields) {
             const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
             if (!dd) return;
@@ -5754,6 +5924,10 @@ Dietary</textarea>
             const pcInput = document.getElementById('pc-product-input');
             const pcDrop = document.getElementById('pc-autocomplete-dropdown');
             const isDuplicate = opts && opts.duplicate === true;
+            // "Create from Parent" passes a versionName and intentionally creates a restricted
+            // child product. A plain "Duplicate" (no versionName) should behave like creating a
+            // brand-new product with the full set of editable fields.
+            const isCreateFromParent = isDuplicate && opts && opts.versionName !== undefined;
             const loadingEl = document.getElementById('product-loading-overlay');
 
             if (!isDuplicate) {
@@ -5886,47 +6060,58 @@ Dietary</textarea>
                 console.log('🔍 Setting category value to:', mfCat);
                 console.log('🔍 Setting subcategory value to:', mfSub);
                 
-                if (catSel && mfCat) {
-                    // Check if the option exists before setting
-                    const optionExists = Array.from(catSel.options).some(option => option.value === mfCat);
-                    console.log('🔍 Category option exists:', optionExists);
-                    if (optionExists) {
-                        catSel.value = mfCat;
-                        console.log('✅ Category value set successfully');
-                    } else {
-                        console.log('⚠️ Category option not found, available options:', Array.from(catSel.options).map(o => o.value));
+                if (!isCreateFromParent) {
+                    if (catSel && mfCat) {
+                        // Check if the option exists before setting
+                        const optionExists = Array.from(catSel.options).some(option => option.value === mfCat);
+                        console.log('🔍 Category option exists:', optionExists);
+                        if (optionExists) {
+                            catSel.value = mfCat;
+                            console.log('✅ Category value set successfully');
+                        } else {
+                            console.log('⚠️ Category option not found, available options:', Array.from(catSel.options).map(o => o.value));
+                        }
                     }
-                }
-                if (subSel && mfSub) {
-                    // Check if the option exists before setting
-                    const optionExists = Array.from(subSel.options).some(option => option.value === mfSub);
-                    console.log('🔍 Subcategory option exists:', optionExists);
-                    if (optionExists) {
-                        subSel.value = mfSub;
-                        console.log('✅ Subcategory value set successfully');
-                    } else {
-                        console.log('⚠️ Subcategory option not found, available options:', Array.from(subSel.options).map(o => o.value));
+                    if (subSel && mfSub) {
+                        // Check if the option exists before setting
+                        const optionExists = Array.from(subSel.options).some(option => option.value === mfSub);
+                        console.log('🔍 Subcategory option exists:', optionExists);
+                        if (optionExists) {
+                            subSel.value = mfSub;
+                            console.log('✅ Subcategory value set successfully');
+                        } else {
+                            console.log('⚠️ Subcategory option not found, available options:', Array.from(subSel.options).map(o => o.value));
+                        }
                     }
+                } else {
+                    clearCategorySubDropdown();
                 }
 
                 // Parent? and parent_child from metafields (list.single_line_text_field: value may be JSON array)
-                const mfParent = mfs.find(m => m.namespace === 'custom' && m.key === 'parent_child');
                 let parentChildVal = '';
-                if (mfParent && mfParent.value != null && mfParent.value !== '') {
-                    const v = String(mfParent.value).trim();
+                for (const pcKey of ['parent_child', 'parent_child2']) {
+                    const mfPc = mfs.find(m => m.namespace === 'custom' && m.key === pcKey);
+                    if (!mfPc || mfPc.value == null || mfPc.value === '') continue;
+                    const v = String(mfPc.value).trim();
+                    let parsed = '';
                     if (v.startsWith('[')) {
                         try {
                             const arr = JSON.parse(v);
-                            parentChildVal = Array.isArray(arr) && arr.length ? String(arr[0]).trim() : '';
+                            parsed = Array.isArray(arr) && arr.length ? String(arr[0]).trim() : '';
                         } catch (e) {
-                            parentChildVal = v;
+                            parsed = v;
                         }
                     } else {
-                        parentChildVal = v;
+                        parsed = v;
+                    }
+                    if (parsed && (parsed.startsWith('Parent - ') || parsed.startsWith('Child - '))) {
+                        parentChildVal = parsed;
+                        break;
                     }
                 }
-                // When creating a child from parent, use Child - X instead of Parent - X
-                if (isDuplicate && parentChildVal && parentChildVal.startsWith('Parent - ')) {
+                // When creating a child from parent, use Child - X instead of Parent - X.
+                // A plain duplicate keeps the original parent/child designation.
+                if (isCreateFromParent && parentChildVal && parentChildVal.startsWith('Parent - ')) {
                     parentChildVal = 'Child - ' + parentChildVal.slice(9);
                 }
                 const parentYesEl = document.getElementById('parentYes');
@@ -5991,7 +6176,7 @@ Dietary</textarea>
                 
                 // Instead, populate individual metafield values without recreating the UI
                 try {
-                    populateMetafieldValues(mfs);
+                    populateMetafieldValues(mfs, { skipCategorySub: isCreateFromParent });
                 } catch (e) { console.log('Populate metafield values failed', e); }
                 
                 // Handle color loading separately since we skipped displayMetafields
@@ -6167,10 +6352,19 @@ Dietary</textarea>
                             titleEl.value = current.replace(/\s*\(Copy\)\s*$/, replacement).trim() || current.replace(/\s*\(Copy\)\s*$/, '').trim();
                         }
                     }
-                    // Enter create-from-parent mode: hide VAT, Parent, price, artwork, and listed metafields (values still duplicated and saved)
-                    pcCreateFromParentMode = true;
+                    // Only "Create from Parent" enters the restricted child mode (hides VAT,
+                    // Parent, price, artwork, and inherited metafields). A plain Duplicate must
+                    // expose the full form, exactly like creating a new product.
                     const formEl = document.getElementById('productForm');
-                    if (formEl) formEl.classList.add('pc-create-from-parent');
+                    if (isCreateFromParent) {
+                        pcCreateFromParentMode = true;
+                        if (formEl) formEl.classList.add('pc-create-from-parent');
+                    } else {
+                        pcCreateFromParentMode = false;
+                        if (formEl) formEl.classList.remove('pc-create-from-parent');
+                        const childNotice = document.getElementById('child-product-edit-notice');
+                        if (childNotice) childNotice.style.display = 'none';
+                    }
                     // Show form only after filtering so user never sees the raw duplication
                     showCreateForm();
                 }
@@ -6248,11 +6442,75 @@ Dietary</textarea>
             if (dupDrop) dupDrop.style.display = 'none';
         }
 
+        async function selectCreateFromParentProduct(p) {
+            const productId = p.id != null ? Number(p.id) : 0;
+            const title = (p.title || 'Untitled').trim();
+            const versionName = prompt('What do you want to call this version?', '');
+            if (versionName === null) return;
+            let idToLoad = productId;
+            let titleToLoad = title;
+            if (!idToLoad) {
+                let products = pcAllProducts || [];
+                if (products.length === 0) {
+                    try {
+                        const r = await fetch('/api/products');
+                        products = await r.json();
+                    } catch (e) {}
+                }
+                const found = (products || []).find(prod => String(prod.title || '').trim() === title);
+                if (found && found.id) {
+                    idToLoad = found.id;
+                    titleToLoad = found.title || title;
+                } else {
+                    alert('No product found with title: "' + title + '". Make sure the product exists and refresh the page, or set "id" in PARENT_PRODUCTS in categories.py.');
+                    return;
+                }
+            }
+            closeCreateFromParentModal();
+            pcPopulateFromProduct(idToLoad, titleToLoad, { duplicate: true, versionName: (versionName || '').trim() });
+        }
+
+        function renderCreateFromParentList() {
+            const listEl = document.getElementById('create-from-parent-list');
+            const searchEl = document.getElementById('create-from-parent-search');
+            if (!listEl) return;
+            const q = (searchEl && searchEl.value || '').trim().toLowerCase();
+            const parents = pcCreateFromParentItems || [];
+            const filtered = !q ? parents : parents.filter(p => {
+                const name = (p.title || '').toLowerCase();
+                const sku = (p.sku || '').toLowerCase();
+                const family = (p.parent_child_value || '').toLowerCase();
+                return name.includes(q) || sku.includes(q) || family.includes(q);
+            });
+            listEl.innerHTML = '';
+            if (!parents.length) {
+                listEl.innerHTML = '<p class="muted">No parent products found. Assign a product a Parent type (e.g. Parent - Maxi) in Basic Information to see it here.</p>';
+                return;
+            }
+            if (!filtered.length) {
+                listEl.innerHTML = '<p class="muted">No parent products match your search.</p>';
+                return;
+            }
+            filtered.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.style.cursor = 'pointer';
+                const sku = (p.sku || '').trim();
+                const sub = sku ? (sku + ' · ' + (p.parent_child_value || '')) : (p.parent_child_value || '');
+                item.innerHTML = `<div class="product-name">${p.title || 'Untitled'}</div><div class="product-id">${sub}</div>`;
+                item.onclick = () => selectCreateFromParentProduct(p);
+                listEl.appendChild(item);
+            });
+        }
+
         async function openCreateFromParentModal() {
             const modal = document.getElementById('createFromParentModal');
             const listEl = document.getElementById('create-from-parent-list');
+            const searchEl = document.getElementById('create-from-parent-search');
             if (!modal || !listEl) return;
             modal.style.display = 'flex';
+            pcCreateFromParentItems = [];
+            if (searchEl) searchEl.value = '';
             listEl.innerHTML = '<span class="muted">Loading parent products…</span>';
             const escHandler = function(e) {
                 if (e.key === 'Escape') {
@@ -6261,49 +6519,16 @@ Dietary</textarea>
                 }
             };
             document.addEventListener('keydown', escHandler);
+            if (searchEl && !searchEl._cfpBound) {
+                searchEl._cfpBound = true;
+                searchEl.addEventListener('input', renderCreateFromParentList);
+            }
             try {
                 const resp = await fetch('/api/products-parent-child');
                 const data = await resp.json();
-                const parents = data.parentProducts || [];
-                listEl.innerHTML = '';
-                if (parents.length === 0) {
-                    listEl.innerHTML = '<p class="muted">No parent products found. Assign a product a Parent type (e.g. Parent - Maxi) in Basic Information to see it here.</p>';
-                } else {
-                    parents.forEach(p => {
-                        const productId = p.id != null ? Number(p.id) : 0;
-                        const title = (p.title || 'Untitled').trim();
-                        const item = document.createElement('div');
-                        item.className = 'autocomplete-item';
-                        item.style.cursor = 'pointer';
-                        item.innerHTML = `<div class="product-name">${p.title || 'Untitled'}</div><div class="product-id">${p.parent_child_value || ''}</div>`;
-                        item.onclick = async () => {
-                            const versionName = prompt('What do you want to call this version?', '');
-                            if (versionName === null) return;
-                            let idToLoad = productId;
-                            let titleToLoad = title;
-                            if (!idToLoad) {
-                                let products = pcAllProducts || [];
-                                if (products.length === 0) {
-                                    try {
-                                        const r = await fetch('/api/products');
-                                        products = await r.json();
-                                    } catch (e) {}
-                                }
-                                const found = (products || []).find(prod => String(prod.title || '').trim() === title);
-                                if (found && found.id) {
-                                    idToLoad = found.id;
-                                    titleToLoad = found.title || title;
-                                } else {
-                                    alert('No product found with title: "' + title + '". Make sure the product exists and refresh the page, or set "id" in PARENT_PRODUCTS in categories.py.');
-                                    return;
-                                }
-                            }
-                            closeCreateFromParentModal();
-                            pcPopulateFromProduct(idToLoad, titleToLoad, { duplicate: true, versionName: (versionName || '').trim() });
-                        };
-                        listEl.appendChild(item);
-                    });
-                }
+                pcCreateFromParentItems = data.parentProducts || [];
+                renderCreateFromParentList();
+                if (searchEl) searchEl.focus();
             } catch (e) {
                 listEl.innerHTML = '<p class="muted">Failed to load parent products.</p>';
             }
@@ -6318,6 +6543,7 @@ Dietary</textarea>
         function closeCreateFromParentModal() {
             const modal = document.getElementById('createFromParentModal');
             if (modal) modal.style.display = 'none';
+            pcCreateFromParentItems = [];
         }
 
         function openEditModal() {
@@ -6387,11 +6613,15 @@ Dietary</textarea>
         function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
         
         // Populate metafield values without recreating the UI
-        function populateMetafieldValues(metafields) {
+        function populateMetafieldValues(metafields, opts) {
             console.log('🔍 populateMetafieldValues called with:', metafields.length, 'metafields');
 
             // Restore the combined Category & Subcategory dropdown once (needs both metafields together)
-            setCategorySubFromMetafields(metafields);
+            if (opts && opts.skipCategorySub) {
+                clearCategorySubDropdown();
+            } else {
+                setCategorySubFromMetafields(metafields);
+            }
 
             metafields.forEach(metafield => {
                 const key = metafield.key;

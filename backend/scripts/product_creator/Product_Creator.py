@@ -891,6 +891,9 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
                 metafield(namespace: "custom", key: "parent_child") {
                   value
                 }
+                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
               }
             }
             pageInfo {
@@ -915,35 +918,15 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
             page_info = products_data.get("pageInfo") or {}
             for edge in edges:
                 node = edge.get("node") or {}
-                mf = node.get("metafield")
-                if not mf or not mf.get("value"):
+                val = _parent_child_value_from_graphql_node(node)
+                if not val or val != child_value:
                     continue
-                val = mf.get("value", "").strip()
-                try:
-                    if val.startswith("["):
-                        arr = json.loads(val)
-                        if isinstance(arr, list) and arr and str(arr[0]).strip() == child_value:
-                            leg_id = node.get("legacyResourceId")
-                            if leg_id:
-                                try:
-                                    ids.append(int(leg_id))
-                                except (TypeError, ValueError):
-                                    pass
-                    elif val == child_value:
-                        leg_id = node.get("legacyResourceId")
-                        if leg_id:
-                            try:
-                                ids.append(int(leg_id))
-                            except (TypeError, ValueError):
-                                pass
-                except (json.JSONDecodeError, TypeError):
-                    if val == child_value:
-                        leg_id = node.get("legacyResourceId")
-                        if leg_id:
-                            try:
-                                ids.append(int(leg_id))
-                            except (TypeError, ValueError):
-                                pass
+                leg_id = node.get("legacyResourceId")
+                if leg_id:
+                    try:
+                        ids.append(int(leg_id))
+                    except (TypeError, ValueError):
+                        pass
             if not page_info.get("hasNextPage"):
                 break
             cursor = page_info.get("endCursor")
@@ -1037,6 +1020,12 @@ def get_all_children_by_family(shopify_domain=None):
                 metafield(namespace: "custom", key: "parent_child") {
                   value
                 }
+                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
+                skuMetafield: metafield(namespace: "custom", key: "sku") {
+                  value
+                }
               }
             }
             pageInfo { hasNextPage endCursor }
@@ -1058,23 +1047,24 @@ def get_all_children_by_family(shopify_domain=None):
             page_info = products_data.get("pageInfo") or {}
             for edge in edges:
                 node = edge.get("node") or {}
-                mf = node.get("metafield")
-                if not mf or not mf.get("value"):
+                mf_val = _parent_child_value_from_graphql_node(node)
+                if not mf_val:
                     continue
-                mf_val = mf.get("value")
                 leg_id = node.get("legacyResourceId")
                 title = (node.get("title") or "").strip() or f"Product {leg_id}"
+                sku_mf = node.get("skuMetafield") or {}
+                sku = str(sku_mf.get("value") or "").strip()
                 child_family = _parse_child_family(mf_val)
                 if child_family is not None and leg_id:
                     try:
-                        family_to_children.setdefault(child_family, []).append({"id": int(leg_id), "title": title})
+                        family_to_children.setdefault(child_family, []).append({"id": int(leg_id), "title": title, "sku": sku})
                     except (TypeError, ValueError):
                         pass
                 else:
                     parent_family = _parse_parent_family(mf_val)
                     if parent_family is not None and leg_id:
                         try:
-                            parent_family_to_product[parent_family] = {"id": int(leg_id), "title": title}
+                            parent_family_to_product[parent_family] = {"id": int(leg_id), "title": title, "sku": sku}
                         except (TypeError, ValueError):
                             pass
             if not page_info.get("hasNextPage"):
@@ -1104,7 +1094,7 @@ def get_all_children_by_family(shopify_domain=None):
                         break
                     pid = p.get("id")
                     title = (p.get("title") or "").strip() or f"Product {pid}"
-                    mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1"
+                    mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=25"
                     try:
                         mf_r = requests.get(mf_url, headers=headers, timeout=15)
                         if mf_r.status_code != 200:
@@ -1113,14 +1103,23 @@ def get_all_children_by_family(shopify_domain=None):
                         metafields = mf_data.get("metafields") or []
                         if not metafields:
                             continue
-                        val = (metafields[0].get("value") or "").strip()
+                        val = ""
+                        sku = ""
+                        for mf in metafields:
+                            key = mf.get("key")
+                            if key == "sku":
+                                sku = str(mf.get("value") or "").strip()
+                            elif key in PARENT_CHILD_METAFIELD_KEYS and not val:
+                                val = (mf.get("value") or "").strip()
+                        if not val:
+                            continue
                         child_family = _parse_child_family(val)
                         if child_family is not None and pid:
-                            family_to_children.setdefault(child_family, []).append({"id": int(pid), "title": title})
+                            family_to_children.setdefault(child_family, []).append({"id": int(pid), "title": title, "sku": sku})
                         else:
                             parent_family = _parse_parent_family(val)
                             if parent_family is not None and pid:
-                                parent_family_to_product[parent_family] = {"id": int(pid), "title": title}
+                                parent_family_to_product[parent_family] = {"id": int(pid), "title": title, "sku": sku}
                     except Exception:
                         continue
                 link = r.headers.get("Link") or ""
@@ -1191,6 +1190,20 @@ ALL_PRODUCTS_FIELD_KEYS = {
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
+def _format_single_line_metafield_value(value):
+    """
+    Shopify single_line_text_field rejects embedded newlines/tabs (422).
+    Collapse line breaks and excess whitespace to a single line.
+    """
+    if value is None:
+        return value
+    if not isinstance(value, str):
+        value = str(value)
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\n", " ").replace("\t", " ")
+    return " ".join(text.split())
+
+
 def _strip_html(value, limit=240):
     """Strip HTML tags/entities from a string and truncate for list display."""
     if not value:
@@ -1259,6 +1272,79 @@ def _build_field_values(mf_map):
     return fields
 
 
+def _build_filter_values(mf_map):
+    """Return the selected values per filter group metafield, e.g. {"packaging": ["Box"], ...}."""
+    try:
+        from .categories import FILTER_GROUP_KEYS
+    except Exception:
+        FILTER_GROUP_KEYS = ["packaging", "size", "brand", "eco"]
+    return {fk: _parse_metafield_list(mf_map.get(fk)) for fk in FILTER_GROUP_KEYS}
+
+
+PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2")
+
+
+def _parent_child_allocation_from_raw(raw):
+    """First Parent - / Child - value in a metafield payload."""
+    for val in _parse_metafield_list(raw):
+        s = str(val).strip()
+        if s.lower().startswith("parent - ") or s.lower().startswith("child - "):
+            return s
+    return ""
+
+
+def _parent_child_value_from_mf_map(mf_map):
+    """Read parent/child allocation from parent_child or overflow parent_child2."""
+    for key in PARENT_CHILD_METAFIELD_KEYS:
+        val = _parent_child_allocation_from_raw(mf_map.get(key))
+        if val:
+            return val
+    return ""
+
+
+def _metafield_raw_matches_value(raw, target_value):
+    target = str(target_value).strip()
+    for val in _parse_metafield_list(raw):
+        if str(val).strip() == target:
+            return True
+    return False
+
+
+def _parent_child_value_from_graphql_node(node):
+    for alias in ("metafield", "parentChild2Metafield"):
+        mf = node.get(alias)
+        if not mf or not mf.get("value"):
+            continue
+        val = _parent_child_allocation_from_raw(mf.get("value"))
+        if val:
+            return val
+    return ""
+
+
+def _graphql_node_matches_parent_child(node, target_value):
+    target = str(target_value).strip()
+    for alias in ("metafield", "parentChild2Metafield"):
+        mf = node.get(alias)
+        if mf and mf.get("value") and _metafield_raw_matches_value(mf.get("value"), target):
+            return True
+    return False
+
+
+def _is_child_product(mf_map):
+    """A product is a child when its parent/child metafield starts with 'Child'."""
+    return _parent_child_value_from_mf_map(mf_map).lower().startswith("child")
+
+
+def _has_parent_child_allocation(mf_map):
+    """True when parent_child or parent_child2 is set to a Parent/Child value."""
+    return bool(_parent_child_value_from_mf_map(mf_map))
+
+
+def _sku_from_metafield(mf_map):
+    """SKU for All Products: custom.sku metafield (Product Manager product code)."""
+    return str(mf_map.get("sku") or "").strip()
+
+
 def get_all_products_overview(shopify_domain=None):
     """
     Fetch every product with its first SKU, category/subcategory, price presence and
@@ -1305,7 +1391,6 @@ def get_all_products_overview(shopify_domain=None):
                 legacyResourceId
                 title
                 priceRangeV2 { maxVariantPrice { amount } }
-                variants(first: 3) { edges { node { sku } } }
                 metafields(first: 50, namespace: "custom") { edges { node { key value } } }
               }
             }
@@ -1342,12 +1427,6 @@ def get_all_products_overview(shopify_domain=None):
                 if not leg_id:
                     continue
                 title = (node.get("title") or "").strip() or f"Product {leg_id}"
-                sku = ""
-                for v_edge in ((node.get("variants") or {}).get("edges") or []):
-                    v_sku = ((v_edge.get("node") or {}).get("sku") or "").strip()
-                    if v_sku:
-                        sku = v_sku
-                        break
                 try:
                     pid = int(leg_id)
                 except (TypeError, ValueError):
@@ -1359,6 +1438,7 @@ def get_all_products_overview(shopify_domain=None):
                     k = mf_node.get("key")
                     if k:
                         mf_map[k] = mf_node.get("value")
+                sku = _sku_from_metafield(mf_map)
                 cats = _parse_metafield_list(mf_map.get("custom_category"))
                 subs = _parse_metafield_list(mf_map.get("subcategory"))
                 # Price presence: any priced variant, or a non-zero entry in price tables
@@ -1376,6 +1456,10 @@ def get_all_products_overview(shopify_domain=None):
                     "subcategories": subs,
                     "has_prices": has_prices,
                     "fields": fields,
+                    "filter_values": _build_filter_values(mf_map),
+                    "is_child": _is_child_product(mf_map),
+                    "has_parent_child": _has_parent_child_allocation(mf_map),
+                    "parent_child_value": _parent_child_value_from_mf_map(mf_map),
                 })
             if not page_info.get("hasNextPage"):
                 break
@@ -1419,12 +1503,6 @@ def get_all_products_overview(shopify_domain=None):
                         continue
                     title = (p.get("title") or "").strip() or f"Product {pid}"
                     variants = p.get("variants") or []
-                    sku = ""
-                    for v in variants:
-                        v_sku = (v.get("sku") or "").strip()
-                        if v_sku:
-                            sku = v_sku
-                            break
                     variant_has_price = False
                     for v in variants:
                         try:
@@ -1444,6 +1522,7 @@ def get_all_products_overview(shopify_domain=None):
                                     mf_map[k] = mf.get("value")
                     except Exception:
                         pass
+                    sku = _sku_from_metafield(mf_map)
                     cats = _parse_metafield_list(mf_map.get("custom_category"))
                     subs = _parse_metafield_list(mf_map.get("subcategory"))
                     has_prices = variant_has_price or _price_table_has_value(mf_map.get("pricejsontr")) or _price_table_has_value(mf_map.get("pricejsoner"))
@@ -1456,6 +1535,10 @@ def get_all_products_overview(shopify_domain=None):
                         "subcategories": subs,
                         "has_prices": has_prices,
                         "fields": fields,
+                        "filter_values": _build_filter_values(mf_map),
+                        "is_child": _is_child_product(mf_map),
+                        "has_parent_child": _has_parent_child_allocation(mf_map),
+                        "parent_child_value": _parent_child_value_from_mf_map(mf_map),
                     })
                 link = r.headers.get("Link") or ""
                 url = None
@@ -1475,9 +1558,27 @@ def get_all_products_overview(shopify_domain=None):
         placement.setdefault(category, {}).setdefault(subcategory, []).append(product)
         placed_ids.add(product["id"])
 
+    misaligned = []
+
+    def _is_misaligned(cats, subs):
+        # A product is misaligned when it has both a category and a subcategory but at
+        # least one of its subcategories does not belong to any of its categories
+        # (per CATEGORY_MAPPING). Without this guard such products get force-attached to
+        # the wrong category (e.g. "Summer" showing under "Snacks" as well as "Seasonal").
+        if not cats or not subs:
+            return False
+        for sub in subs:
+            if not any(sub in CATEGORY_MAPPING.get(c, []) for c in cats):
+                return True
+        return False
+
     for product in products:
         cats = product["categories"]
         subs = product["subcategories"]
+        if _is_misaligned(cats, subs):
+            misaligned.append(product)
+            placed_ids.add(product["id"])
+            continue
         if subs:
             for sub in subs:
                 matched_cats = [c for c in cats if sub in CATEGORY_MAPPING.get(c, [])]
@@ -1540,7 +1641,9 @@ def get_all_products_overview(shopify_domain=None):
         key=lambda p: (p["title"] or "").lower(),
     )
 
-    return {"groups": groups, "unassigned": unassigned}
+    misaligned = sorted(misaligned, key=lambda p: (p["title"] or "").lower())
+
+    return {"groups": groups, "unassigned": unassigned, "misaligned": misaligned}
 
 
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
@@ -1568,31 +1671,21 @@ def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped,
                     break
                 pid = p.get("id")
                 title = (p.get("title") or "").strip() or f"Product {pid}"
-                mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1"
+                mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=25"
                 try:
                     mf_r = requests.get(mf_url, headers=headers, timeout=15)
                     if mf_r.status_code != 200:
                         continue
                     mf_data = mf_r.json()
                     metafields = mf_data.get("metafields") or []
-                    if not metafields:
-                        continue
-                    val = (metafields[0].get("value") or "").strip()
-                    match = False
-                    try:
-                        if val.startswith("["):
-                            arr = json.loads(val)
-                            if isinstance(arr, list):
-                                for item in arr:
-                                    if str(item).strip() == child_value_stripped:
-                                        match = True
-                                        break
-                        elif val == child_value_stripped:
-                            match = True
-                    except (json.JSONDecodeError, TypeError):
-                        if val == child_value_stripped:
-                            match = True
-                    if match and pid:
+                    matched = False
+                    for mf in metafields:
+                        if mf.get("key") not in PARENT_CHILD_METAFIELD_KEYS:
+                            continue
+                        if _metafield_raw_matches_value(mf.get("value"), child_value_stripped):
+                            matched = True
+                            break
+                    if matched and pid:
                         result.append({"id": int(pid), "title": title})
                 except Exception:
                     continue
@@ -1642,6 +1735,9 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
                 metafield(namespace: "custom", key: "parent_child") {
                   value
                 }
+                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
               }
             }
             pageInfo {
@@ -1674,33 +1770,15 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
             page_info = products_data.get("pageInfo") or {}
             for edge in edges:
                 node = edge.get("node") or {}
-                mf = node.get("metafield")
-                if not mf or not mf.get("value"):
+                if not _graphql_node_matches_parent_child(node, child_value_stripped):
                     continue
-                val = (mf.get("value") or "").strip()
-                match = False
-                try:
-                    if val.startswith("["):
-                        arr = json.loads(val)
-                        if isinstance(arr, list):
-                            for item in arr:
-                                if str(item).strip() == child_value_stripped:
-                                    match = True
-                                    break
-                    else:
-                        if val == child_value_stripped:
-                            match = True
-                except (json.JSONDecodeError, TypeError):
-                    if val == child_value_stripped:
-                        match = True
-                if match:
-                    leg_id = node.get("legacyResourceId")
-                    title = (node.get("title") or "").strip() or f"Product {leg_id}"
-                    if leg_id:
-                        try:
-                            result.append({"id": int(leg_id), "title": title})
-                        except (TypeError, ValueError):
-                            pass
+                leg_id = node.get("legacyResourceId")
+                title = (node.get("title") or "").strip() or f"Product {leg_id}"
+                if leg_id:
+                    try:
+                        result.append({"id": int(leg_id), "title": title})
+                    except (TypeError, ValueError):
+                        pass
             if not page_info.get("hasNextPage"):
                 break
             cursor = page_info.get("endCursor")
@@ -1717,63 +1795,22 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
 def get_parent_child_tree(parents_only=False):
     """
     Return a tree of all parent products with their child products.
-    Scan-first approach: the store is scanned for all products with a Parent/Child
-    metafield. Any product with "Parent - X" becomes a parent entry. The hardcoded
-    PARENT_PRODUCTS list supplements with parent types not yet assigned to a product.
-    When parents_only=True, returns only the hardcoded list (instant, no scan).
+    Only products that ACTUALLY exist in the store with a "Parent - X" metafield are
+    included — the hardcoded PARENT_PRODUCTS preset list is intentionally NOT used here,
+    so the Product Families diagram never shows parent types that don't exist as products.
+    When parents_only=True, the children lists are omitted (parents render immediately).
     Returns: { "tree": [ { "parent": {id, title}, "parent_value": "Parent - X", "children": [...] }, ... ] }
     """
     try:
-        from .categories import PARENT_PRODUCTS
-        if parents_only:
-            tree = []
-            for p in PARENT_PRODUCTS or []:
-                val = (p.get("parent_child_value") or "").strip()
-                if not val.startswith("Parent - "):
-                    continue
-                pid = p.get("id")
-                try:
-                    pid = int(pid) if pid is not None else None
-                except (TypeError, ValueError):
-                    pid = None
-                tree.append({
-                    "parent": {"id": pid, "title": (p.get("title") or "").strip() or "Untitled"},
-                    "parent_value": val,
-                    "children": [],
-                })
-            return {"tree": tree}
-
         family_to_children, parent_family_to_product = get_all_children_by_family()
         tree = []
-        seen_families = set()
 
         for family_key, scanned in parent_family_to_product.items():
             val = "Parent - " + family_key
-            seen_families.add(family_key)
-            parent_entry = {"id": scanned["id"], "title": scanned["title"]}
-            children = family_to_children.get(family_key, [])
             tree.append({
-                "parent": parent_entry,
+                "parent": {"id": scanned["id"], "title": scanned["title"]},
                 "parent_value": val,
-                "children": children,
-            })
-
-        for p in PARENT_PRODUCTS or []:
-            val = (p.get("parent_child_value") or "").strip()
-            if not val.startswith("Parent - "):
-                continue
-            family_key = val[9:].strip()
-            if family_key in seen_families:
-                continue
-            pid = p.get("id")
-            try:
-                pid = int(pid) if pid is not None else None
-            except (TypeError, ValueError):
-                pid = None
-            tree.append({
-                "parent": {"id": pid, "title": (p.get("title") or "").strip() or "Untitled"},
-                "parent_value": val,
-                "children": family_to_children.get(family_key, []),
+                "children": [] if parents_only else family_to_children.get(family_key, []),
             })
 
         tree.sort(key=lambda t: t.get("parent_value", ""))
@@ -1855,6 +1892,9 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 metafield(namespace: "custom", key: "parent_child") {
                   value
                 }
+                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
               }
             }
             pageInfo { hasNextPage endCursor }
@@ -1878,34 +1918,16 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
             page_info = products_data.get("pageInfo") or {}
             for edge in edges:
                 node = edge.get("node") or {}
-                mf = node.get("metafield")
-                if not mf or not mf.get("value"):
+                if not _graphql_node_matches_parent_child(node, pv):
                     continue
-                val = (mf.get("value") or "").strip()
-                match = False
-                try:
-                    if val.startswith("["):
-                        arr = json.loads(val)
-                        if isinstance(arr, list):
-                            for item in arr:
-                                if str(item).strip() == pv:
-                                    match = True
-                                    break
-                    else:
-                        if val == pv:
-                            match = True
-                except (json.JSONDecodeError, TypeError):
-                    if val == pv:
-                        match = True
-                if match:
-                    leg_id = node.get("legacyResourceId")
-                    if leg_id:
-                        try:
-                            pid_found = int(leg_id)
-                            print(f"📋 Resolved parent product ID {pid_found} for {pv!r} via API (GraphQL)", flush=True)
-                            return pid_found
-                        except (TypeError, ValueError):
-                            pass
+                leg_id = node.get("legacyResourceId")
+                if leg_id:
+                    try:
+                        pid_found = int(leg_id)
+                        print(f"📋 Resolved parent product ID {pid_found} for {pv!r} via API (GraphQL)", flush=True)
+                        return pid_found
+                    except (TypeError, ValueError):
+                        pass
             if not page_info.get("hasNextPage"):
                 break
             cursor = page_info.get("endCursor")
@@ -1929,27 +1951,21 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 pid = p.get("id")
                 if not pid:
                     continue
-                mf_r = requests.get(f"{base_url}/products/{pid}/metafields.json?namespace=custom&key=parent_child&limit=1", headers=headers, timeout=15)
+                mf_r = requests.get(f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=25", headers=headers, timeout=15)
                 time.sleep(0.25)
                 if mf_r.status_code != 200:
                     continue
                 mf_list = mf_r.json().get("metafields") or []
-                if not mf_list:
-                    continue
-                val = (mf_list[0].get("value") or "").strip()
-                try:
-                    if val.startswith("["):
-                        arr = json.loads(val)
-                        if isinstance(arr, list) and pv in [str(x).strip() for x in arr]:
-                            print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
-                            return int(pid)
-                    elif val == pv:
-                        print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
-                        return int(pid)
-                except (json.JSONDecodeError, TypeError):
-                    if val == pv:
-                        print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
-                        return int(pid)
+                matched = False
+                for mf in mf_list:
+                    if mf.get("key") not in PARENT_CHILD_METAFIELD_KEYS:
+                        continue
+                    if _metafield_raw_matches_value(mf.get("value"), pv):
+                        matched = True
+                        break
+                if matched:
+                    print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
+                    return int(pid)
             link = r.headers.get("Link") or ""
             url = None
             for part in link.split(","):
@@ -2096,7 +2112,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             from .categories import FILTER_GROUP_KEYS
         except Exception:
             FILTER_GROUP_KEYS = []
-        clearable_keys = set(["artworkguidelines", "artworktemplates", "custom_category", "subcategory"]) | set(FILTER_GROUP_KEYS or [])
+        clearable_keys = set(["artworkguidelines", "artworktemplates", "custom_category", "subcategory", "parent_child", "parent_child2"]) | set(FILTER_GROUP_KEYS or [])
 
         def _is_clearable(ns, k):
             if ns != "custom":
@@ -2205,6 +2221,8 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     if isinstance(formatted_value, str):
                         if not formatted_value.strip():
                             formatted_value = "-"
+                        elif mf_type == "single_line_text_field":
+                            formatted_value = _format_single_line_metafield_value(formatted_value)
                     elif formatted_value is None or formatted_value == "":
                         formatted_value = "-"
                 elif mf_type.startswith('list.'):
@@ -2232,6 +2250,21 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                     formatted_value = json.dumps(filtered)
                         except Exception as e:
                             print(f"⚠️ Could not filter subcategory choices for {key}: {e}", flush=True)
+                    if namespace == "custom" and key in PARENT_CHILD_METAFIELD_KEYS:
+                        try:
+                            from .categories import get_metafield_choices
+                            allowed = set(get_metafield_choices(key) or [])
+                            if allowed:
+                                parsed = json.loads(formatted_value) if isinstance(formatted_value, str) else formatted_value
+                                if isinstance(parsed, list):
+                                    filtered = [v for v in parsed if str(v).strip() in allowed]
+                                    if filtered != parsed:
+                                        print(f"⚠️ Filtered parent/child values for {key}: kept {filtered}, removed {set(parsed) - set(filtered)}", flush=True)
+                                    if not filtered:
+                                        continue
+                                    formatted_value = json.dumps(filtered)
+                        except Exception as e:
+                            print(f"⚠️ Could not filter parent/child choices for {key}: {e}", flush=True)
 
                 namespace = metafield_data.get("namespace", "custom")
                 key = metafield_data.get("key", "")
@@ -3036,19 +3069,47 @@ def create_product(product_data):
                 mf for mf in metafields
                 if not (mf.get("namespace") == "custom" and mf.get("key") == "custom_category")
             ]
-            # Remove parent_child from metafields (we add it from top-level, same as category)
+            # Remove parent_child keys from metafields (we add routed value from top-level, same as category)
             metafields = [
                 mf for mf in metafields
-                if not (mf.get("namespace") == "custom" and mf.get("key") == "parent_child")
+                if not (mf.get("namespace") == "custom" and mf.get("key") in PARENT_CHILD_METAFIELD_KEYS)
             ]
             parent_child_value = (product_data.get("parent_child") or "").strip()
             if parent_child_value:
-                metafields.append({
-                    "namespace": "custom",
-                    "key": "parent_child",
-                    "value": json.dumps([parent_child_value]),
-                    "type": "list.single_line_text_field",
-                })
+                try:
+                    from .categories import get_parent_child_metafield_key
+                    pc_key = get_parent_child_metafield_key(parent_child_value)
+                    print(f"📂 Routed parent/child '{parent_child_value}' -> {pc_key}", flush=True)
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": pc_key,
+                        "value": json.dumps([parent_child_value]),
+                        "type": "list.single_line_text_field",
+                    })
+                    other_key = "parent_child2" if pc_key == "parent_child" else "parent_child"
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": other_key,
+                        "value": "",
+                        "type": "list.single_line_text_field",
+                    })
+                except Exception as e:
+                    print(f"⚠️ Failed to route parent/child: {e}", flush=True)
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": "parent_child",
+                        "value": json.dumps([parent_child_value]),
+                        "type": "list.single_line_text_field",
+                    })
+            elif product_id:
+                for pc_key in PARENT_CHILD_METAFIELD_KEYS:
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": pc_key,
+                        "value": "",
+                        "type": "list.single_line_text_field",
+                    })
+                print("🗑️ Parent/Child cleared - will delete parent_child and parent_child2 metafields", flush=True)
             
             # Add category metafield if we have it
             if categories:
@@ -3146,40 +3207,6 @@ def create_product(product_data):
                         "value": '[{"min": 0, "max": 100, "price": 0.00}]',  # Default pricing band
                         "type": "single_line_text_field"
                     })
-            
-            # When user cleared Parent/Child (neither Yes), remove the parent_child metafield if it exists
-            if not parent_child_value and product_id:
-                domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
-                base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}"
-                headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
-                try:
-                    r = None
-                    for _pc_attempt in range(3):
-                        if _pc_attempt > 0:
-                            time.sleep(2.0)
-                        r = requests.get(f"{base_url}/metafields.json?limit=250", headers=headers, timeout=15, allow_redirects=True)
-                        if r.status_code == 200:
-                            break
-                        elif r.status_code == 429 and _pc_attempt < 2:
-                            print(f"⚠️ Rate limit on parent_child fetch, retrying ({_pc_attempt+1}/3)...", flush=True)
-                        else:
-                            break
-                    if r and r.status_code == 200:
-                        for mf in r.json().get("metafields", []):
-                            if mf.get("namespace") == "custom" and mf.get("key") == "parent_child":
-                                mf_id = mf.get("id")
-                                if mf_id:
-                                    time.sleep(0.3)
-                                    del_r = requests.delete(f"{base_url}/metafields/{mf_id}.json", headers=headers, timeout=15)
-                                    if del_r.status_code in (200, 204):
-                                        print("✅ Removed parent_child metafield (cleared Parent/Child).", flush=True)
-                                    else:
-                                        print(f"⚠️ Failed to delete parent_child metafield: {del_r.status_code}", flush=True)
-                                    break
-                    else:
-                        print(f"⚠️ Could not fetch metafields for parent_child deletion: {r.status_code}", flush=True)
-                except Exception as e:
-                    print(f"⚠️ Could not delete parent_child metafield: {e}", flush=True)
             
             # For child products, overwrite inherited metafields with parent's values
             parent_mfs = product_data.get("_parent_metafields")
@@ -3500,6 +3527,7 @@ def get_products_parent_child():
             parent_products.append({
                 "id": scanned["id"],
                 "title": scanned["title"],
+                "sku": scanned.get("sku") or "",
                 "parent_child_value": val,
             })
 
@@ -3519,6 +3547,7 @@ def get_products_parent_child():
             parent_products.append({
                 "id": pid or 0,
                 "title": (p.get("title") or "").strip() or "Untitled",
+                "sku": "",
                 "parent_child_value": val,
             })
 

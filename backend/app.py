@@ -20,6 +20,11 @@ app = Flask(
 # Increase maximum file size to 100MB
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
+# Re-read HTML templates from disk on each request so UI edits show up on a refresh
+# (Flask caches compiled templates when debug is off). Negligible overhead for this app.
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+
 # Add CORS headers
 @app.after_request
 def after_request(response):
@@ -32,7 +37,7 @@ def after_request(response):
 def get_tools():
     scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
     files = [f[:-3] for f in os.listdir(scripts_dir)
-             if f.endswith('.py') and f not in ('app.py', '__init__.py')]
+             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py')]
     return files
 
 @app.route('/api/health')
@@ -801,6 +806,104 @@ def api_update_price_metafields():
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 
+@app.route('/api/bulk-update-field', methods=['POST'])
+def api_bulk_update_field():
+    """
+    Bulk-update a single column across many products from the All Products page.
+
+    Body: { "column": "<key>", "updates": [ { "id": <product_id>,
+                                              "title": "<new title>"?,        # title column only
+                                              "metafields": [ {namespace,key,type,value}, ... ]? } ] }
+
+    Each product is updated independently using the same code path as Product Manager
+    (create_metafields), so list/clearable handling, rate-limit retries and redirects
+    all behave identically. Title updates use a product PUT.
+    """
+    try:
+        data = request.get_json() or {}
+        column = data.get('column')
+        updates = data.get('updates') or []
+        if not isinstance(updates, list) or not updates:
+            return jsonify({"error": "No updates provided"}), 400
+
+        from scripts.product_creator.Product_Creator import create_metafields
+
+        domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+        headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+
+        saved = 0
+        failed = 0
+        errors = []
+
+        def _normalize_id(pid):
+            if isinstance(pid, str) and pid.startswith("gid://"):
+                pid = pid.split("/")[-1]
+            try:
+                return int(str(pid).strip())
+            except (TypeError, ValueError):
+                return None
+
+        for i, upd in enumerate(updates):
+            if not isinstance(upd, dict):
+                continue
+            pid = _normalize_id(upd.get('id'))
+            if pid is None:
+                failed += 1
+                errors.append(f"Invalid product id: {upd.get('id')}")
+                continue
+
+            # Light pacing between products to stay within Shopify's REST bucket
+            if i > 0:
+                time.sleep(0.2)
+
+            try:
+                # Title is a product field, not a metafield
+                if 'title' in upd:
+                    new_title = str(upd.get('title') or '').strip()
+                    if not new_title:
+                        failed += 1
+                        errors.append(f"Product {pid}: title cannot be empty")
+                        continue
+                    url = f"https://{domain}/admin/api/{API_VERSION}/products/{pid}.json"
+                    payload = {"product": {"id": pid, "title": new_title}}
+                    r = requests.put(url, headers=headers, json=payload, allow_redirects=True)
+                    if r.status_code in (200, 201):
+                        saved += 1
+                    else:
+                        failed += 1
+                        errors.append(f"Product {pid}: title update failed ({r.status_code})")
+                    continue
+
+                metafields = upd.get('metafields') or []
+                if not metafields:
+                    continue
+                result = create_metafields(pid, metafields, shopify_domain=domain or None)
+                expected = len(metafields)
+                got = result.get("success_count", 0)
+                if result.get("success") and got >= expected:
+                    saved += 1
+                else:
+                    failed += 1
+                    errs = result.get("errors", [])
+                    errors.append(f"Product {pid}: " + ("; ".join(errs) if errs else f"saved {got}/{expected}"))
+            except Exception as e:
+                failed += 1
+                errors.append(f"Product {pid}: {e}")
+
+        print(f"[bulk-update-field] column={column} saved={saved} failed={failed}", flush=True)
+        return jsonify({
+            "success": failed == 0,
+            "saved": saved,
+            "failed": failed,
+            "errors": errors[:50],
+        })
+    except Exception as e:
+        print(f"💥 bulk-update-field error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+
 def run_price_bandit_for_product(product_id):
     """Run Price Bandit for a specific product to update pricing"""
     try:
@@ -1560,6 +1663,9 @@ def api_metafield_choices(namespace_key):
         if namespace_key == 'custom.subcategory' and request.args.get('all') == '1':
             from scripts.product_creator.categories import get_subcategory_choices
             choices = get_subcategory_choices()
+        elif namespace_key == 'custom.parent_child' and request.args.get('all') == '1':
+            from scripts.product_creator.categories import get_parent_child_choices
+            choices = get_parent_child_choices()
         else:
             from scripts.product_creator.Product_Creator import get_metafield_choices
             choices = get_metafield_choices(namespace_key)
@@ -1638,6 +1744,63 @@ def api_all_products():
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
+
+
+@app.route('/api/customers', methods=['GET'])
+def api_customers():
+    """Return all Shopify customers grouped by Pending / trade / end-customer tags."""
+    try:
+        from scripts.Customers import get_customers_overview
+        return jsonify(get_customers_overview())
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'customers': [],
+            'total': 0,
+            'conflict_count': 0,
+            'error': str(e),
+        }), 500
+
+
+@app.route('/api/customers/<customer_id>/type-tag', methods=['POST'])
+def api_customer_type_tag(customer_id):
+    """Replace a customer's type tag (trade / end-customer / Pending) on Shopify."""
+    try:
+        from scripts.Customers import update_customer_type_tag, CUSTOMER_TYPE_TAGS
+        data = request.get_json(silent=True) or {}
+        type_tag = data.get('type_tag')
+        if type_tag is not None and type_tag != '':
+            key = str(type_tag).strip().lower()
+            if key not in CUSTOMER_TYPE_TAGS:
+                return jsonify({'success': False, 'error': 'Invalid type tag'}), 400
+            type_tag = key
+        else:
+            type_tag = None
+        customer = update_customer_type_tag(customer_id, type_tag)
+        return jsonify({'success': True, 'customer': customer})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/customers/<customer_id>', methods=['PUT'])
+def api_customer_update(customer_id):
+    """Save customer email, type tag, and custom_fields metafields."""
+    try:
+        from scripts.Customers import update_customer_details, CUSTOMER_TYPE_TAGS
+        data = request.get_json(silent=True) or {}
+        type_tag = data.get('type_tag')
+        if type_tag is not None and type_tag != '':
+            key = str(type_tag).strip().lower()
+            if key not in CUSTOMER_TYPE_TAGS:
+                return jsonify({'success': False, 'error': 'Invalid type tag'}), 400
+            data['type_tag'] = key
+        elif type_tag == '':
+            data['type_tag'] = None
+        customer = update_customer_details(customer_id, data)
+        return jsonify({'success': True, 'customer': customer})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/pricing-qty-bands', methods=['GET'])
 def api_pricing_qty_bands():

@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customers - Shopify Tools</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 4px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+
+        .main-wrap { flex: 1; min-width: 0; padding: 24px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+
+        .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+        .search-box { position: relative; flex: 1; min-width: 240px; max-width: 460px; }
+        .search-box i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.9rem; }
+        .search-box input { width: 100%; padding: 11px 14px 11px 38px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; font-family: inherit; background: #fff; }
+        .search-box input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .count-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+        .toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
+        .btn-ghost { background: #fff; border: 1px solid #e5e7eb; color: #374151; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: background-color 0.15s, border-color 0.15s; }
+        .btn-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
+
+        .controls-bar { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; padding: 12px 16px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; }
+        .control-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .control-label { font-size: 0.78rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+        .control-select { padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.86rem; font-family: inherit; background: #fff; color: #374151; cursor: pointer; min-width: 160px; }
+        .control-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .filter-checks { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .filter-check { display: inline-flex; align-items: center; gap: 7px; font-size: 0.86rem; color: #374151; cursor: pointer; user-select: none; }
+        .filter-check input { width: 15px; height: 15px; accent-color: #4f46e5; cursor: pointer; }
+        .filter-check .tag-pill { margin: 0; cursor: pointer; }
+
+        .alert-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; color: #991b1b; font-size: 0.88rem; line-height: 1.5; }
+        .alert-banner strong { display: block; font-size: 0.95rem; margin-bottom: 4px; }
+        .alert-banner i { margin-right: 6px; }
+
+        .list-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+        .list-card-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .list-card .cust-table { width: 100%; border-collapse: collapse; min-width: 960px; }
+        .cust-table th { text-align: left; font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; padding: 12px 16px; border-bottom: 1px solid #eef0f3; background: #f8fafc; white-space: nowrap; }
+        .cust-table td { font-size: 0.86rem; color: #374151; padding: 11px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .cust-table td.col-name,
+        .cust-table td.col-expand { background: #fff; }
+        .cust-table tbody tr.row-conflict td.col-name,
+        .cust-table tbody tr.row-conflict td.col-expand { background: #fff5f5; }
+        .cust-table tbody tr.cu-row:hover td.col-name,
+        .cust-table tbody tr.cu-row:hover td.col-expand { background: #f9fafb; }
+        .cust-table tbody tr.row-conflict:hover td.col-name,
+        .cust-table tbody tr.row-conflict:hover td.col-expand { background: #fee2e2; }
+        .cust-table th.col-name,
+        .cust-table td.col-name {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            min-width: 140px;
+            max-width: 200px;
+            box-shadow: 4px 0 10px -6px rgba(0, 0, 0, 0.12);
+        }
+        .cust-table th.col-name { z-index: 4; background: #f8fafc; }
+        .cust-table th.col-expand,
+        .cust-table td.col-expand {
+            position: sticky;
+            right: 0;
+            z-index: 3;
+            box-shadow: -4px 0 10px -6px rgba(0, 0, 0, 0.12);
+            border-left: 1px solid #eef0f3;
+        }
+        .cust-table th.col-expand { z-index: 4; background: #f8fafc; }
+        .cust-table td.col-email { max-width: 200px; }
+        .cust-table td.col-company { max-width: 160px; }
+        .cust-table td.col-email,
+        .cust-table td.col-company,
+        .cust-table td.col-name .cust-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cust-table td.cell-wrap { white-space: pre-wrap; max-width: 240px; line-height: 1.45; word-break: break-word; }
+        .cust-table tr:last-child td { border-bottom: none; }
+        .cust-table tbody tr:hover td { background: #f9fafb; }
+        .cust-table tbody tr.row-conflict td { background: #fff5f5; }
+        .cust-table tbody tr.row-conflict:hover td { background: #fee2e2; }
+        .cust-name { font-weight: 600; color: #111827; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .conflict-icon { color: #dc2626; font-size: 0.78rem; margin-right: 4px; }
+        .cust-email { color: #4338ca; text-decoration: none; }
+        .cust-email:hover { text-decoration: underline; }
+        .tag-pill { display: inline-block; font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 2px 8px; margin: 1px 3px 1px 0; background: #f3f4f6; color: #4b5563; }
+        .tag-pill.type-pending { background: #fef3c7; color: #92400e; }
+        .tag-pill.type-trade { background: #dbeafe; color: #1e40af; }
+        .tag-pill.type-end-customer { background: #d1fae5; color: #065f46; }
+        .tag-pill.type-unassigned { background: #f3f4f6; color: #6b7280; }
+        .tag-cell { display: flex; flex-direction: column; gap: 6px; min-width: 140px; }
+        .cu-type-tag-select {
+            width: 100%;
+            max-width: 160px;
+            padding: 6px 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-family: inherit;
+            background: #fff;
+            color: #374151;
+            cursor: pointer;
+        }
+        .cu-type-tag-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.12); }
+        .cu-type-tag-select:disabled { opacity: 0.6; cursor: wait; }
+        .cu-type-tag-select.conflict { border-color: #fca5a5; background: #fff5f5; }
+        .cu-type-tag-select.saving { border-color: #c7d2fe; background: #eef2ff; }
+        .other-tags { display: flex; flex-wrap: wrap; gap: 3px; }
+        .type-tag-display { display: inline-flex; align-items: center; min-height: 24px; }
+        .type-tag-display .muted-tag { color: #9ca3af; font-size: 0.82rem; }
+        .cu-expand-cell { width: 44px; text-align: right; padding-right: 12px !important; }
+        .cu-expand-btn {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .cu-expand-btn:hover { background: #f3f4f6; border-color: #d1d5db; color: #4f46e5; }
+        .cu-expand-btn[aria-expanded="true"] { background: #eef2ff; border-color: #c7d2fe; color: #4f46e5; }
+        .cu-detail-row td { padding: 0 !important; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+        .cu-detail-row[hidden] { display: none; }
+        .cu-edit-panel { padding: 16px 18px 18px; }
+        .cu-edit-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .cu-edit-header-title { font-size: 0.95rem; font-weight: 600; color: #111827; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cu-edit-header-sub { font-size: 0.8rem; font-weight: 400; color: #6b7280; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cust-table thead.is-hidden { display: none; }
+        .cu-detail-row-expanded td { background: #fff; }
+        .cu-edit-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+        .cu-edit-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .cu-edit-field.full-width { grid-column: 1 / -1; }
+        .cu-edit-field label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .cu-edit-input, .cu-edit-textarea, .cu-edit-select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 9px 11px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.86rem;
+            font-family: inherit;
+            background: #fff;
+            color: #374151;
+        }
+        .cu-edit-textarea { min-height: 114px; resize: vertical; line-height: 1.45; }
+        .cu-edit-input:focus, .cu-edit-textarea:focus, .cu-edit-select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+        }
+        .cu-edit-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+        .btn-primary {
+            background: #4f46e5;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 9px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            transition: background-color 0.15s;
+        }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-primary:disabled { opacity: 0.6; cursor: wait; }
+        .empty-row { font-size: 0.86rem; color: #9ca3af; font-style: italic; text-align: center; padding: 40px 16px !important; }
+
+        .state-msg { text-align: center; color: #6b7280; padding: 60px 20px; font-size: 0.95rem; }
+        .spinner { width: 34px; height: 34px; border: 3px solid #e5e7eb; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-msg { color: #b91c1c; }
+
+        @media (max-width: 1400px) {
+            .main-wrap { padding: 18px; }
+            .list-card .cust-table { min-width: 820px; }
+            .cust-table th, .cust-table td { padding-left: 12px; padding-right: 12px; }
+            .cust-table .col-landline,
+            .cust-table .col-mobile { display: none; }
+        }
+
+        @media (max-width: 1200px) {
+            .main-wrap { padding: 14px; }
+            .page-title { font-size: 1.1rem; margin-bottom: 14px; }
+            .toolbar { gap: 10px; }
+            .search-box { min-width: 180px; max-width: none; }
+            .controls-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 14px; }
+            .control-group { width: 100%; }
+            .control-select { min-width: 0; flex: 1; }
+            .filter-checks { gap: 10px; }
+            .list-card .cust-table { min-width: 640px; }
+            .cust-table .col-created,
+            .cust-table .col-orders,
+            .cust-table .col-spent { display: none; }
+            .cust-table th.col-name,
+            .cust-table td.col-name { min-width: 120px; max-width: 160px; }
+            .cust-table td.col-email { max-width: 160px; }
+            .cust-table td.col-company { max-width: 130px; }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 64px; }
+            .sidebar .brand-text, .sidebar .app-tab span, .sidebar .dashboard-tab span { display: none; }
+            .main-wrap { padding: 12px; }
+            .toolbar-actions { width: 100%; margin-left: 0; }
+            .toolbar-actions .btn-ghost { flex: 1; justify-content: center; }
+            .count-pill { width: 100%; text-align: center; }
+            .list-card .cust-table { min-width: 520px; }
+            .cust-table .col-company { display: none; }
+            .cu-edit-grid { grid-template-columns: 1fr; }
+            .cu-edit-panel { padding: 12px 14px 14px; }
+            .cu-edit-actions { flex-wrap: wrap; }
+            .cu-edit-actions .btn-primary,
+            .cu-edit-actions .btn-ghost { flex: 1; justify-content: center; min-width: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/price_bandit" class="app-tab"><i class="fas fa-robot"></i><span>Price Bandit</span></a>
+                    <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Manager</span></a>
+                    <a href="/app/All_Products" class="app-tab"><i class="fas fa-list"></i><span>All Products</span></a>
+                    <a href="/app/Customers" class="app-tab active"><i class="fas fa-users"></i><span>Customers</span></a>
+                    <a href="/app/Templates_Uploader" class="app-tab" style="display: none;"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
+                </div>
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-users"></i> Customers</h1>
+
+            <div class="toolbar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="cu-search" placeholder="Search by name, email, company or tag…" autocomplete="off">
+                </div>
+                <span class="count-pill" id="cu-count">–</span>
+                <div class="toolbar-actions">
+                    <button type="button" class="btn-ghost" id="cu-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+                </div>
+            </div>
+
+            <div class="controls-bar">
+                <div class="control-group">
+                    <span class="control-label">Sort by</span>
+                    <select id="cu-sort" class="control-select">
+                        <option value="alpha">Alphabetical</option>
+                        <option value="created">Created on</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <span class="control-label">Filter by tag</span>
+                    <div class="filter-checks">
+                        <label class="filter-check">
+                            <input type="checkbox" id="cu-filter-pending" value="pending">
+                            <span class="tag-pill type-pending">Pending</span>
+                        </label>
+                        <label class="filter-check">
+                            <input type="checkbox" id="cu-filter-trade" value="trade">
+                            <span class="tag-pill type-trade">trade</span>
+                        </label>
+                        <label class="filter-check">
+                            <input type="checkbox" id="cu-filter-end-customer" value="end-customer">
+                            <span class="tag-pill type-end-customer">end-customer</span>
+                        </label>
+                        <label class="filter-check">
+                            <input type="checkbox" id="cu-filter-unassigned" value="unassigned">
+                            <span class="tag-pill type-unassigned">Unassigned</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="cu-flagged"></div>
+            <div id="cu-content">
+                <div class="state-msg">
+                    <div class="spinner"></div>
+                    Loading customers…
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let CU_DATA = { customers: [], total: 0, conflict_count: 0 };
+        let CU_SEARCH = '';
+        let CU_SORT = 'alpha';
+        let CU_FILTERS = { pending: false, trade: false, 'end-customer': false, unassigned: false };
+        let CU_EXPANDED_ID = null;
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+
+        function customerIsUnassigned(c) {
+            return !(c.matched_tags || []).length;
+        }
+
+        function customerHasTypeTag(c, typeKey) {
+            return (c.matched_tags || []).some(t => String(t).toLowerCase() === typeKey);
+        }
+
+        function activeFilters() {
+            return Object.entries(CU_FILTERS).filter(([, on]) => on).map(([key]) => key);
+        }
+
+        function customerMatchesFilters(c) {
+            const filters = activeFilters();
+            if (!filters.length) return true;
+            return filters.some(key => {
+                if (key === 'unassigned') return customerIsUnassigned(c);
+                return customerHasTypeTag(c, key);
+            });
+        }
+
+        function customerMatchesSearch(c) {
+            if (!CU_SEARCH) return true;
+            const hay = [
+                c.name, c.first_name, c.last_name, c.email, c.company_name, c.invoice_address,
+                c.landline_phone, c.mobile_number, c.phone,
+                ...(c.tags || []), ...(c.matched_tags || [])
+            ].join(' ').toLowerCase();
+            return hay.includes(CU_SEARCH);
+        }
+
+        function formatCreatedAt(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '—';
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function displayField(value) {
+            if (value == null || String(value).trim() === '') return '—';
+            return escapeHtml(String(value).trim());
+        }
+
+        const TYPE_TAG_OPTIONS = [
+            { value: 'trade', label: 'trade' },
+            { value: 'end-customer', label: 'end-customer' },
+            { value: 'pending', label: 'Pending' },
+        ];
+
+        function getCurrentTypeTagKey(c) {
+            const matched = c.matched_tags || [];
+            if (matched.length === 1) return String(matched[0]).toLowerCase();
+            return '';
+        }
+
+        function otherTags(tags) {
+            return (tags || []).filter(t =>
+                !['pending', 'trade', 'end-customer'].includes(String(t).toLowerCase())
+            );
+        }
+
+        function recalcConflictCount() {
+            CU_DATA.conflict_count = (CU_DATA.customers || []).filter(c => c.tag_conflict).length;
+        }
+
+        function mergeCustomerUpdate(customerId, patch) {
+            const idx = (CU_DATA.customers || []).findIndex(c => String(c.id) === String(customerId));
+            if (idx < 0) return;
+            CU_DATA.customers[idx] = { ...CU_DATA.customers[idx], ...patch };
+            recalcConflictCount();
+        }
+
+        function typeTagSelectHtml(c) {
+            const current = getCurrentTypeTagKey(c);
+            const conflict = c.tag_conflict;
+            const selectClass = ['cu-type-tag-select', conflict ? 'conflict' : ''].filter(Boolean).join(' ');
+            const options = [
+                `<option value=""${current ? '' : ' selected'}>${conflict ? 'Fix conflict…' : '—'}</option>`,
+                ...TYPE_TAG_OPTIONS.map(opt =>
+                    `<option value="${escapeHtml(opt.value)}"${current === opt.value ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
+                ),
+            ].join('');
+            const others = otherTags(c.tags);
+            const otherHtml = others.length
+                ? `<div class="other-tags">${others.map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div>`
+                : '';
+            return `<div class="tag-cell">
+                <select class="${selectClass}" data-customer-id="${escapeHtml(c.id)}" aria-label="Customer type tag">${options}</select>
+                ${otherHtml}
+            </div>`;
+        }
+
+        async function updateCustomerTypeTag(customerId, typeKey) {
+            const idx = (CU_DATA.customers || []).findIndex(c => String(c.id) === String(customerId));
+            if (idx < 0) return;
+            const snapshot = {
+                ...CU_DATA.customers[idx],
+                tags: [...(CU_DATA.customers[idx].tags || [])],
+                matched_tags: [...(CU_DATA.customers[idx].matched_tags || [])],
+                tag_conflict: CU_DATA.customers[idx].tag_conflict,
+            };
+            const prevValue = snapshot.matched_tags.length === 1
+                ? String(snapshot.matched_tags[0]).toLowerCase()
+                : '';
+
+            const kept = otherTags(snapshot.tags);
+            const label = TYPE_TAG_OPTIONS.find(o => o.value === typeKey)?.label;
+            const optimisticTags = label ? [...kept, label] : kept;
+            mergeCustomerUpdate(customerId, {
+                tags: optimisticTags,
+                matched_tags: label ? [label] : [],
+                tag_conflict: false,
+            });
+            render();
+
+            let selectEl = document.querySelector(`.cu-type-tag-select[data-customer-id="${customerId}"]`);
+            if (selectEl) {
+                selectEl.disabled = true;
+                selectEl.classList.add('saving');
+                selectEl.value = typeKey;
+            }
+
+            try {
+                const resp = await fetch(`/api/customers/${customerId}/type-tag`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type_tag: typeKey || null }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error((data && data.error) ? data.error : 'Update failed');
+                }
+                mergeCustomerUpdate(customerId, data.customer);
+                render();
+            } catch (err) {
+                mergeCustomerUpdate(customerId, {
+                    tags: snapshot.tags,
+                    matched_tags: snapshot.matched_tags,
+                    tag_conflict: snapshot.tag_conflict,
+                });
+                render();
+                selectEl = document.querySelector(`.cu-type-tag-select[data-customer-id="${customerId}"]`);
+                if (selectEl) selectEl.value = prevValue;
+                alert('Could not update tag: ' + (err.message || err));
+            } finally {
+                selectEl = document.querySelector(`.cu-type-tag-select[data-customer-id="${customerId}"]`);
+                if (selectEl) {
+                    selectEl.disabled = false;
+                    selectEl.classList.remove('saving');
+                }
+            }
+        }
+
+        function typeTagSelectFieldHtml(c, fieldClass) {
+            const current = getCurrentTypeTagKey(c);
+            const conflict = c.tag_conflict;
+            const options = [
+                `<option value=""${current ? '' : ' selected'}>${conflict ? 'Fix conflict…' : '—'}</option>`,
+                ...TYPE_TAG_OPTIONS.map(opt =>
+                    `<option value="${escapeHtml(opt.value)}"${current === opt.value ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
+                ),
+            ].join('');
+            return `<select name="type_tag" class="${fieldClass}" aria-label="Customer type tag">${options}</select>`;
+        }
+
+        function customerDetailRowHtml(c) {
+            const others = otherTags(c.tags);
+            const otherHtml = others.length
+                ? `<div class="cu-edit-field full-width"><label>Other tags</label><div class="other-tags">${others.map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div></div>`
+                : '';
+            const conflictIcon = c.tag_conflict
+                ? `<i class="fas fa-triangle-exclamation conflict-icon" title="Multiple type tags"></i>`
+                : '';
+            const emailSub = c.email
+                ? `<div class="cu-edit-header-sub">${escapeHtml(c.email)}</div>`
+                : '';
+            return `<tr class="cu-detail-row cu-detail-row-expanded${c.tag_conflict ? ' row-conflict' : ''}" data-customer-id="${escapeHtml(c.id)}">
+                <td colspan="10">
+                    <div class="cu-edit-panel">
+                        <div class="cu-edit-header">
+                            <div class="cu-edit-header-title">
+                                <div>${conflictIcon}${escapeHtml(c.name)}</div>
+                                ${emailSub}
+                            </div>
+                            <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="true" aria-label="Collapse customer">
+                                <i class="fas fa-chevron-up"></i>
+                            </button>
+                        </div>
+                        <form class="cu-edit-form" data-customer-id="${escapeHtml(c.id)}">
+                            <div class="cu-edit-grid">
+                                <div class="cu-edit-field">
+                                    <label for="cu-first-${escapeHtml(c.id)}">First name</label>
+                                    <input class="cu-edit-input" id="cu-first-${escapeHtml(c.id)}" name="first_name" type="text" value="${escapeHtml(c.first_name || '')}">
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-last-${escapeHtml(c.id)}">Last name</label>
+                                    <input class="cu-edit-input" id="cu-last-${escapeHtml(c.id)}" name="last_name" type="text" value="${escapeHtml(c.last_name || '')}">
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-email-${escapeHtml(c.id)}">Email</label>
+                                    <input class="cu-edit-input" id="cu-email-${escapeHtml(c.id)}" name="email" type="email" value="${escapeHtml(c.email || '')}">
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-type-${escapeHtml(c.id)}">Type tag</label>
+                                    ${typeTagSelectFieldHtml(c, 'cu-edit-select')}
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-company-${escapeHtml(c.id)}">Company</label>
+                                    <input class="cu-edit-input" id="cu-company-${escapeHtml(c.id)}" name="company_name" type="text" value="${escapeHtml(c.company_name || '')}">
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-landline-${escapeHtml(c.id)}">Landline</label>
+                                    <input class="cu-edit-input" id="cu-landline-${escapeHtml(c.id)}" name="landline_phone" type="text" value="${escapeHtml(c.landline_phone || '')}">
+                                </div>
+                                <div class="cu-edit-field">
+                                    <label for="cu-mobile-${escapeHtml(c.id)}">Mobile</label>
+                                    <input class="cu-edit-input" id="cu-mobile-${escapeHtml(c.id)}" name="mobile_number" type="text" value="${escapeHtml(c.mobile_number || '')}">
+                                </div>
+                                <div class="cu-edit-field full-width">
+                                    <label for="cu-invoice-${escapeHtml(c.id)}">Invoice address</label>
+                                    <textarea class="cu-edit-textarea" id="cu-invoice-${escapeHtml(c.id)}" name="invoice_address">${escapeHtml(c.invoice_address || '')}</textarea>
+                                </div>
+                                ${otherHtml}
+                            </div>
+                            <div class="cu-edit-actions">
+                                <button type="submit" class="btn-primary cu-save-btn"><i class="fas fa-check"></i> Save changes</button>
+                                <button type="button" class="btn-ghost cu-edit-cancel">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        async function saveCustomerDetails(customerId, formEl) {
+            const saveBtn = formEl.querySelector('.cu-save-btn');
+            const fd = new FormData(formEl);
+            const body = {
+                first_name: fd.get('first_name'),
+                last_name: fd.get('last_name'),
+                email: fd.get('email'),
+                company_name: fd.get('company_name'),
+                invoice_address: fd.get('invoice_address'),
+                landline_phone: fd.get('landline_phone'),
+                mobile_number: fd.get('mobile_number'),
+                type_tag: fd.get('type_tag') || null,
+            };
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+            }
+            try {
+                const resp = await fetch(`/api/customers/${customerId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error((data && data.error) ? data.error : 'Save failed');
+                }
+                mergeCustomerUpdate(customerId, data.customer);
+                render();
+            } catch (err) {
+                alert('Could not save customer: ' + (err.message || err));
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-check"></i> Save changes';
+                }
+            }
+        }
+
+        function toggleExpand(customerId) {
+            const id = String(customerId);
+            CU_EXPANDED_ID = CU_EXPANDED_ID === id ? null : id;
+            render();
+        }
+
+        function sortCustomers(list) {
+            const sorted = list.slice();
+            if (CU_SORT === 'created') {
+                sorted.sort((a, b) => {
+                    const ta = Date.parse(a.created_at || '') || 0;
+                    const tb = Date.parse(b.created_at || '') || 0;
+                    return tb - ta;
+                });
+            } else {
+                sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+            }
+            return sorted;
+        }
+
+        function getVisibleCustomers() {
+            return sortCustomers(
+                (CU_DATA.customers || []).filter(c => customerMatchesSearch(c) && customerMatchesFilters(c))
+            );
+        }
+
+        function customerRowHtml(c) {
+            const expanded = String(CU_EXPANDED_ID) === String(c.id);
+            if (expanded) {
+                return customerDetailRowHtml(c);
+            }
+
+            const email = c.email
+                ? `<a class="cust-email" href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>`
+                : '—';
+            const conflictIcon = c.tag_conflict
+                ? `<i class="fas fa-triangle-exclamation conflict-icon" title="Multiple type tags"></i>`
+                : '';
+            const rowClass = ['cu-row', c.tag_conflict ? 'row-conflict' : ''].filter(Boolean).join(' ');
+            return `<tr class="${rowClass}" data-customer-id="${escapeHtml(c.id)}">
+                <td class="col-name"><span class="cust-name">${conflictIcon}${escapeHtml(c.name)}</span></td>
+                <td class="col-email">${email}</td>
+                <td class="col-company">${escapeHtml(c.company_name || '—')}</td>
+                <td class="col-landline">${displayField(c.landline_phone)}</td>
+                <td class="col-mobile">${displayField(c.mobile_number)}</td>
+                <td class="col-tag">${typeTagSelectHtml(c)}</td>
+                <td class="col-created">${formatCreatedAt(c.created_at)}</td>
+                <td class="col-orders">${c.orders_count || 0}</td>
+                <td class="col-spent">£${escapeHtml(c.total_spent || '0.00')}</td>
+                <td class="cu-expand-cell col-expand">
+                    <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="false" aria-label="Expand customer">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </td>
+            </tr>`;
+        }
+
+        function render() {
+            const flaggedEl = document.getElementById('cu-flagged');
+            const content = document.getElementById('cu-content');
+            const visible = getVisibleCustomers();
+            if (CU_EXPANDED_ID && !visible.some(c => String(c.id) === String(CU_EXPANDED_ID))) {
+                CU_EXPANDED_ID = null;
+            }
+            const conflictCount = CU_DATA.conflict_count || 0;
+            const filtersActive = activeFilters().length > 0;
+            const hideTableHead = !!CU_EXPANDED_ID;
+
+            if (conflictCount > 0 && !CU_EXPANDED_ID) {
+                flaggedEl.innerHTML = `<div class="alert-banner">
+                    <strong><i class="fas fa-triangle-exclamation"></i>${conflictCount} customer${conflictCount === 1 ? '' : 's'} with conflicting tags</strong>
+                    These customers have more than one of the tags <em>Pending</em>, <em>trade</em>, and <em>end-customer</em>. Each customer should only have one. They are highlighted in the list below.
+                </div>`;
+            } else {
+                flaggedEl.innerHTML = '';
+            }
+
+            const rows = visible.length
+                ? visible.map(customerRowHtml).join('')
+                : `<tr><td colspan="10" class="empty-row">${CU_SEARCH || filtersActive ? 'No customers match your search or filters.' : 'No customers found.'}</td></tr>`;
+
+            content.innerHTML = `<div class="list-card">
+                <div class="list-card-scroll">
+                <table class="cust-table">
+                    <thead${hideTableHead ? ' class="is-hidden"' : ''}>
+                        <tr>
+                            <th class="col-name">Name</th>
+                            <th class="col-email">Email</th>
+                            <th class="col-company">Company</th>
+                            <th class="col-landline">Landline</th>
+                            <th class="col-mobile">Mobile</th>
+                            <th class="col-tag">Type tag</th>
+                            <th class="col-created">Created</th>
+                            <th class="col-orders">Orders</th>
+                            <th class="col-spent">Total spent</th>
+                            <th class="col-expand" aria-label="Expand"></th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                </div>
+            </div>`;
+
+            const total = CU_DATA.total || 0;
+            const showing = visible.length;
+            document.getElementById('cu-count').textContent =
+                (CU_SEARCH || filtersActive) ? `${showing} of ${total}` : `${total} total`;
+        }
+
+        function applyControls() {
+            CU_SEARCH = (document.getElementById('cu-search').value || '').trim().toLowerCase();
+            CU_SORT = document.getElementById('cu-sort').value;
+            CU_FILTERS = {
+                pending: document.getElementById('cu-filter-pending').checked,
+                trade: document.getElementById('cu-filter-trade').checked,
+                'end-customer': document.getElementById('cu-filter-end-customer').checked,
+                unassigned: document.getElementById('cu-filter-unassigned').checked,
+            };
+            render();
+        }
+
+        async function loadCustomers() {
+            const content = document.getElementById('cu-content');
+            document.getElementById('cu-flagged').innerHTML = '';
+            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
+            try {
+                const resp = await fetch('/api/customers');
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || data.success === false) {
+                    throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
+                }
+                CU_DATA = {
+                    customers: data.customers || [],
+                    total: data.total || 0,
+                    conflict_count: data.conflict_count || 0,
+                };
+                render();
+            } catch (err) {
+                content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCustomers();
+            document.getElementById('cu-search').addEventListener('input', applyControls);
+            document.getElementById('cu-sort').addEventListener('change', applyControls);
+            document.getElementById('cu-filter-pending').addEventListener('change', applyControls);
+            document.getElementById('cu-filter-trade').addEventListener('change', applyControls);
+            document.getElementById('cu-filter-end-customer').addEventListener('change', applyControls);
+            document.getElementById('cu-filter-unassigned').addEventListener('change', applyControls);
+            document.getElementById('cu-refresh').addEventListener('click', function() {
+                CU_EXPANDED_ID = null;
+                loadCustomers();
+            });
+            document.getElementById('cu-content').addEventListener('change', function(e) {
+                const sel = e.target.closest('.cu-type-tag-select');
+                if (!sel || sel.disabled) return;
+                updateCustomerTypeTag(sel.dataset.customerId, sel.value);
+            });
+            document.getElementById('cu-content').addEventListener('click', function(e) {
+                const expandBtn = e.target.closest('.cu-expand-btn');
+                if (expandBtn) {
+                    toggleExpand(expandBtn.dataset.customerId);
+                    return;
+                }
+                const cancelBtn = e.target.closest('.cu-edit-cancel');
+                if (cancelBtn) {
+                    CU_EXPANDED_ID = null;
+                    render();
+                }
+            });
+            document.getElementById('cu-content').addEventListener('submit', function(e) {
+                const form = e.target.closest('.cu-edit-form');
+                if (!form) return;
+                e.preventDefault();
+                saveCustomerDetails(form.dataset.customerId, form);
+            });
+        });
+    </script>
+</body>
+</html>
