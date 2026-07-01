@@ -52,7 +52,12 @@ def clear_client_session() -> None:
 
 
 def is_client_path(path: str) -> bool:
-    return path.startswith("/client") or path.startswith("/api/client")
+    return (
+        path.startswith("/client")
+        or path.startswith("/api/client")
+        or path == "/portal"
+        or path.startswith("/portal/")
+    )
 
 
 def is_staff_public_path(path: str) -> bool:

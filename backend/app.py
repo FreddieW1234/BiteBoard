@@ -66,6 +66,7 @@ def staff_login():
     if is_staff_authenticated():
         return redirect(request.args.get("next") or url_for("index"))
     next_url = request.args.get("next") or "/"
+    in_iframe = request.headers.get("Sec-Fetch-Dest") == "iframe"
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -75,8 +76,13 @@ def staff_login():
             if not dest.startswith("/") or dest.startswith("//"):
                 dest = url_for("index")
             return redirect(dest)
-        return render_template("UI/Staff_Login.html", error="Invalid username or password", next_url=next_url)
-    return render_template("UI/Staff_Login.html", next_url=next_url)
+        return render_template(
+            "UI/Staff_Login.html",
+            error="Invalid username or password",
+            next_url=next_url,
+            in_iframe=in_iframe,
+        )
+    return render_template("UI/Staff_Login.html", next_url=next_url, in_iframe=in_iframe)
 
 
 @app.route("/staff/logout")
@@ -86,6 +92,7 @@ def staff_logout():
 
 
 @app.route("/client/orders")
+@app.route("/portal")
 def client_orders_page():
     customer_id = request.args.get("customer_id")
     email = request.args.get("email")
@@ -154,7 +161,7 @@ def add_headers(response):
 def get_tools():
     scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
     files = [f[:-3] for f in os.listdir(scripts_dir)
-             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py', 'Client_Orders.py')]
+             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py', 'Client_Orders.py', 'Orders.py')]
     return files
 
 @app.route('/api/health')
@@ -1861,6 +1868,16 @@ def api_all_products():
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
+
+
+@app.route('/api/orders', methods=['GET'])
+def api_orders():
+    """Return recent Shopify orders for the staff Orders page."""
+    try:
+        from scripts.Orders import get_orders_overview
+        return jsonify(get_orders_overview())
+    except Exception as e:
+        return jsonify({'success': False, 'orders': [], 'total': 0, 'error': str(e)}), 500
 
 
 @app.route('/api/customers', methods=['GET'])

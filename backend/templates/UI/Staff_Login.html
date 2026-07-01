@@ -76,6 +76,12 @@
     <div class="login-card">
         <div class="brand"><i class="fas fa-store"></i> BiteBoard</div>
         <h1>Staff login</h1>
+        {% if in_iframe %}
+        <div class="error" style="background:#eff6ff;color:#1e40af;border-color:#bfdbfe;">
+            If you're a customer, you shouldn't see this screen. Ask your theme developer to point the Portal iframe at
+            <strong>/portal?customer_id=…&amp;email=…</strong> (see BiteBoard setup), not the main portal homepage.
+        </div>
+        {% endif %}
         {% if error %}
         <div class="error">{{ error }}</div>
         {% endif %}

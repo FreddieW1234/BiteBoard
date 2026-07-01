@@ -353,6 +353,12 @@
                 icon: 'fas fa-plus-circle',
                 color: '#ff9800'
             },
+            'Orders': {
+                name: 'Orders',
+                description: 'View recent Shopify orders',
+                icon: 'fas fa-box',
+                color: '#6366f1'
+            },
             'All_Products': {
                 name: 'All Products',
                 description: 'Browse every product organised by category and subcategory for quick access',
@@ -380,7 +386,7 @@
         };
 
         // Static tools that don't require Python scripts
-        const staticTools = ['Product_Creator', 'All_Products', 'Category_Editor', 'Customers'];
+        const staticTools = ['Product_Creator', 'Orders', 'All_Products', 'Category_Editor', 'Customers'];
 
         // Load live products count for header tile
         async function loadLiveProductsCount() {
@@ -407,7 +413,7 @@
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
                 const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
-                const tabOrder = ['All_Products', 'Product_Creator', 'Customers', 'Artwork_Updater'];
+                const tabOrder = ['All_Products', 'Product_Creator', 'Orders', 'Customers', 'Artwork_Updater'];
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 
                 appTabsEl.innerHTML = '';

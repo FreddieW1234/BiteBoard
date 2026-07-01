@@ -153,10 +153,17 @@
         }
     </script>
     <!--
-      Shopify theme iframe (account page, customer must be logged in):
+      Shopify Portal page (HTML editor) — customer must be logged in:
       {% if customer %}
-      <iframe src="https://bitepromotionsportal.co.uk/client/orders?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}"
-        width="100%" height="900" style="border:none;" title="My Orders"></iframe>
+      <iframe
+        src="https://bitepromotionsportal.co.uk/portal?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}"
+        width="100%"
+        height="900"
+        style="border:none;"
+        title="My Orders">
+      </iframe>
+      {% else %}
+      <p>Please <a href="/account/login">log in</a> to view your orders.</p>
       {% endif %}
     -->
 </body>
