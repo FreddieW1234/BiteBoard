@@ -405,8 +405,8 @@
                 const response = await fetch('/api/tools');
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
-                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader');
-                const tabOrder = ['Artwork_Updater', 'Price_Bandit', 'Product_Creator', 'All_Products', 'Customers'];
+                const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
+                const tabOrder = ['All_Products', 'Product_Creator', 'Customers', 'Artwork_Updater'];
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 
                 appTabsEl.innerHTML = '';

@@ -1304,6 +1304,7 @@
         .pc-create-from-parent .metafield-item[data-metafield-key="case_weight"],
         .pc-create-from-parent .metafield-item[data-metafield-key="leadtime1"],
         .pc-create-from-parent .metafield-item[data-metafield-key="leadtime2"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="packingfee"],
         .pc-create-from-parent .metafield-item[data-metafield-key="commodity_code"],
         .pc-create-from-parent .metafield-item[data-metafield-key="vegan"],
         .pc-create-from-parent .metafield-item[data-metafield-key="vegetarian"],
@@ -1993,25 +1994,21 @@
             </div>
             <nav class="sidebar-nav">
                 <div class="app-tabs">
-                    <a href="/app/Artwork_Updater" class="app-tab">
-                        <i class="fas fa-palette"></i>
-                        <span>Artwork Updater</span>
-                    </a>
-                    <a href="/app/price_bandit" class="app-tab">
-                        <i class="fas fa-robot"></i>
-                        <span>Price Bandit</span>
+                    <a href="/app/All_Products" class="app-tab">
+                        <i class="fas fa-list"></i>
+                        <span>All Products</span>
                     </a>
                     <a href="/app/Product_Creator" class="app-tab active">
                         <i class="fas fa-plus-circle"></i>
                         <span>Product Manager</span>
                     </a>
-                    <a href="/app/All_Products" class="app-tab">
-                        <i class="fas fa-list"></i>
-                        <span>All Products</span>
-                    </a>
                     <a href="/app/Customers" class="app-tab">
                         <i class="fas fa-users"></i>
                         <span>Customers</span>
+                    </a>
+                    <a href="/app/Artwork_Updater" class="app-tab">
+                        <i class="fas fa-palette"></i>
+                        <span>Artwork Updater</span>
                     </a>
                     <a href="/app/Templates_Uploader" class="app-tab templates-uploader-nav" style="display: none;">
                         <i class="fas fa-file-archive"></i>
@@ -4232,6 +4229,14 @@ Dietary</textarea>
             };
         }
 
+        function pricingDataHasNonZeroPrices(priceData) {
+            const rowsHavePrice = (rows) => (rows || []).some(row => {
+                const p = parseFloat(String(row.price ?? '0').replace(/[£,\s]/g, ''));
+                return !isNaN(p) && p > 0;
+            });
+            return rowsHavePrice(priceData.trade) || rowsHavePrice(priceData.endCustomer);
+        }
+
 
         // Default metafield values when starting a brand-new product (Create New Product).
         const NEW_PRODUCT_FIELD_DEFAULTS = {
@@ -4355,6 +4360,7 @@ Dietary</textarea>
                 'description': 'Description',
                 'leadtime1': 'Lead Time >5000 units (Days)',
                 'leadtime2': 'Lead Time 5000-10000 units (Days)',
+                'packingfee': 'Packing Fee',
                 'sku': 'Product Code',
                 'recycle_info': 'Recycle Info',
                 'commodity_code': 'Commodity Code',
@@ -4395,6 +4401,11 @@ Dietary</textarea>
                 metafields = metafields.concat([{ namespace: 'custom', key: 'filters', type: 'list.single_line_text_field', value: '', id: null }]);
             }
 
+            // Ensure packing fee always renders (custom.packingfee — number_integer)
+            if (!metafields.some(m => m && m.key === 'packingfee' && (m.namespace || 'custom') === 'custom')) {
+                metafields = metafields.concat([{ namespace: 'custom', key: 'packingfee', type: 'number_integer', value: '', id: null }]);
+            }
+
             if (metafields.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-style: italic; grid-column: 1 / -1;">No metafields found</p>';
                 return;
@@ -4420,6 +4431,7 @@ Dietary</textarea>
                 "case_weight",
                 "leadtime1",
                 "leadtime2",
+                "packingfee",
                 "commodity_code",
                 "vegan",
                 "vegetarian",
@@ -4444,6 +4456,11 @@ Dietary</textarea>
                     if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
                         order = parsedOrder; // Use saved order if valid
                     }
+                }
+                if (!order.includes('packingfee')) {
+                    const commodityIdx = order.indexOf('commodity_code');
+                    if (commodityIdx >= 0) order.splice(commodityIdx, 0, 'packingfee');
+                    else order.push('packingfee');
                 }
                 
                         const byKey = new Map();
@@ -4616,6 +4633,15 @@ Dietary</textarea>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for filters`);
+                } else if (metafield.key === 'packingfee') {
+                    const packingFeeOptions = [15, 20, 25];
+                    const storedPackingFee = String(currentValue || '').trim();
+                    inputElement = `
+                        <select class="metafield-value list-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'number_integer'}">
+                            <option value="">-- Select --</option>
+                            ${packingFeeOptions.map(opt => `<option value="${opt}" ${storedPackingFee === String(opt) ? 'selected' : ''}>${opt}p</option>`).join('')}
+                        </select>
+                    `;
                 } else if (hasOptions) {
                     console.log(`🔧 Creating dropdown for ${metafield.key} (hasOptions)`);
                         // Use Shopify's predefined options
@@ -5229,23 +5255,37 @@ Dietary</textarea>
                 }
             }
             
-            // Collect price data
-            const priceData = collectPriceData();
-            if (priceData.trade.length > 0) {
-                productData.metafields.push({
-                    namespace: 'custom',
-                    key: 'pricejsontr',
-                    type: 'single_line_text_field',
-                    value: JSON.stringify(priceData.trade)
-                });
-            }
-            if (priceData.endCustomer.length > 0) {
-                productData.metafields.push({
-                    namespace: 'custom',
-                    key: 'pricejsoner',
-                    type: 'single_line_text_field',
-                    value: JSON.stringify(priceData.endCustomer)
-                });
+            // Collect price data (parent products only — children inherit pricing from parent)
+            if (!isChildProduct()) {
+                const priceData = collectPriceData();
+                const hasPricing = pricingDataHasNonZeroPrices(priceData);
+                if (hasPricing) {
+                    if (priceData.trade.length > 0) {
+                        productData.metafields.push({
+                            namespace: 'custom',
+                            key: 'pricejsontr',
+                            type: 'single_line_text_field',
+                            value: JSON.stringify(priceData.trade)
+                        });
+                    }
+                    if (priceData.endCustomer.length > 0) {
+                        productData.metafields.push({
+                            namespace: 'custom',
+                            key: 'pricejsoner',
+                            type: 'single_line_text_field',
+                            value: JSON.stringify(priceData.endCustomer)
+                        });
+                    }
+                } else {
+                    ['pricejsontr', 'pricejsoner', 'pricejsontid', 'pricejsoneid'].forEach(key => {
+                        productData.metafields.push({
+                            namespace: 'custom',
+                            key,
+                            type: 'single_line_text_field',
+                            value: ''
+                        });
+                    });
+                }
             }
             
             // Artwork: always send guideline (empty when deselected so backend can remove it)

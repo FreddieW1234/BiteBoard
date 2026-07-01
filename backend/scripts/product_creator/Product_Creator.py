@@ -809,6 +809,44 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
             "errors": [error_msg]
         }
 
+def _zero_all_variant_prices(product_id, shopify_domain=None):
+    """Set every variant price to 0.00 when pricing tables are cleared."""
+    domain = (shopify_domain or STORE_DOMAIN).replace("https://", "").replace("http://", "").rstrip("/")
+    url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
+    headers = {
+        "X-Shopify-Access-Token": ACCESS_TOKEN,
+        "Content-Type": "application/json",
+    }
+    try:
+        get_resp = requests.get(url, headers=headers, timeout=15)
+        if get_resp.status_code != 200:
+            print(f"⚠️ Could not fetch product {product_id} to zero variant prices", flush=True)
+            return False
+        prod = get_resp.json().get("product", {})
+        variants = prod.get("variants") or []
+        if not variants:
+            return True
+        payload = {
+            "product": {
+                "id": product_id,
+                "variants": [
+                    {"id": v.get("id"), "price": "0.00"}
+                    for v in variants
+                    if v.get("id")
+                ],
+            }
+        }
+        put_resp = requests.put(url, headers=headers, json=payload, timeout=25)
+        if put_resp.status_code == 200:
+            print(f"✅ Zeroed prices on {len(variants)} variant(s) for product {product_id}", flush=True)
+            return True
+        print(f"⚠️ Failed to zero variant prices for product {product_id}: {put_resp.status_code}", flush=True)
+        return False
+    except Exception as e:
+        print(f"⚠️ _zero_all_variant_prices error for product {product_id}: {e}", flush=True)
+        return False
+
+
 def update_product_taxable(product_id, taxable):
     """
     Update the taxable field for a product's variants
@@ -1236,21 +1274,55 @@ def _stringify_mf(value, limit=240):
 
 def _price_table_has_value(value):
     """Return True if a price-table metafield (JSON list of bands) has any entry with a non-zero price."""
-    if not value:
+    if value is None:
+        return False
+    if isinstance(value, str) and not value.strip():
         return False
     try:
         data = json.loads(value) if isinstance(value, str) else value
         if isinstance(data, list):
             for band in data:
                 if isinstance(band, dict):
+                    raw_price = band.get("price")
+                    if raw_price is None:
+                        continue
                     try:
-                        if float(band.get("price") or 0) > 0:
+                        price_str = str(raw_price).strip().replace("£", "").replace(",", "")
+                        if price_str and float(price_str) > 0:
                             return True
                     except (TypeError, ValueError):
                         continue
     except (ValueError, TypeError):
         return False
     return False
+
+
+def _metafields_list_has_pricing(metafields):
+    """True when a save payload includes at least one non-zero pricing band."""
+    for mf in metafields or []:
+        if mf.get("namespace") == "custom" and mf.get("key") in ("pricejsontr", "pricejsoner"):
+            if _price_table_has_value(mf.get("value")):
+                return True
+    return False
+
+
+def _product_has_prices(mf_map):
+    """All Products price indicator — only non-zero pricejsontr/pricejsoner tables count."""
+    return (
+        _price_table_has_value(mf_map.get("pricejsontr"))
+        or _price_table_has_value(mf_map.get("pricejsoner"))
+    )
+
+
+def _merge_price_metafields_from_graphql_node(node, mf_map):
+    """Ensure pricejsontr/pricejsoner reflect dedicated metafield lookups (source of truth)."""
+    for alias, key in (("pricejsonTr", "pricejsontr"), ("pricejsonEr", "pricejsoner")):
+        mf = node.get(alias)
+        if not mf:
+            mf_map.pop(key, None)
+        else:
+            mf_map[key] = mf.get("value")
+    return mf_map
 
 
 def _build_field_values(mf_map):
@@ -1427,7 +1499,8 @@ def get_all_products_overview(shopify_domain=None):
               node {
                 legacyResourceId
                 title
-                priceRangeV2 { maxVariantPrice { amount } }
+                pricejsonTr: metafield(namespace: "custom", key: "pricejsontr") { value }
+                pricejsonEr: metafield(namespace: "custom", key: "pricejsoner") { value }
                 metafields(first: 50, namespace: "custom") { edges { node { key value } } }
               }
             }
@@ -1475,15 +1548,11 @@ def get_all_products_overview(shopify_domain=None):
                     k = mf_node.get("key")
                     if k:
                         mf_map[k] = mf_node.get("value")
+                mf_map = _merge_price_metafields_from_graphql_node(node, mf_map)
                 sku = _sku_from_metafield(mf_map)
                 cats = _parse_metafield_list(mf_map.get("custom_category"))
                 subs = _parse_metafield_list(mf_map.get("subcategory"))
-                # Price presence: any priced variant, or a non-zero entry in price tables
-                try:
-                    max_price = float(((node.get("priceRangeV2") or {}).get("maxVariantPrice") or {}).get("amount") or 0)
-                except (TypeError, ValueError):
-                    max_price = 0
-                has_prices = max_price > 0 or _price_table_has_value(mf_map.get("pricejsontr")) or _price_table_has_value(mf_map.get("pricejsoner"))
+                has_prices = _product_has_prices(mf_map)
                 fields = _build_field_values(mf_map)
                 products.append({
                     "id": pid,
@@ -1540,14 +1609,6 @@ def get_all_products_overview(shopify_domain=None):
                         continue
                     title = (p.get("title") or "").strip() or f"Product {pid}"
                     variants = p.get("variants") or []
-                    variant_has_price = False
-                    for v in variants:
-                        try:
-                            if float(v.get("price") or 0) > 0:
-                                variant_has_price = True
-                                break
-                        except (TypeError, ValueError):
-                            pass
                     mf_map = {}
                     mf_url = f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=250"
                     try:
@@ -1562,7 +1623,7 @@ def get_all_products_overview(shopify_domain=None):
                     sku = _sku_from_metafield(mf_map)
                     cats = _parse_metafield_list(mf_map.get("custom_category"))
                     subs = _parse_metafield_list(mf_map.get("subcategory"))
-                    has_prices = variant_has_price or _price_table_has_value(mf_map.get("pricejsontr")) or _price_table_has_value(mf_map.get("pricejsoner"))
+                    has_prices = _product_has_prices(mf_map)
                     fields = _build_field_values(mf_map)
                     products.append({
                         "id": int(pid),
@@ -1861,7 +1922,7 @@ def get_parent_child_tree(parents_only=False):
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
-    "case_weight", "leadtime1", "leadtime2", "commodity_code",
+    "case_weight", "leadtime1", "leadtime2", "packingfee", "commodity_code",
     "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame",
     "egg", "cereals", "soya", "milk",
     "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "product_colours", "packaging_colours",
@@ -2121,8 +2182,17 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
             if m.get("namespace") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
         ]
 
-    pricing_keys = {"pricejsontr", "pricejsoner"}
-    should_run_price_bandit = any(m.get("key") in pricing_keys for m in mfs_to_propagate)
+    propagated_keys = {m.get("key") for m in mfs_to_propagate}
+    for key in ("pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid"):
+        if key not in propagated_keys:
+            mfs_to_propagate.append({
+                "namespace": "custom",
+                "key": key,
+                "value": "",
+                "type": "single_line_text_field",
+            })
+
+    should_run_price_bandit = _metafields_list_has_pricing(mfs_to_propagate)
 
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
@@ -2158,6 +2228,8 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                             process_product({"id": cid, "title": child_title})
                         except Exception as pb_err:
                             print(f"⚠️ Price Bandit failed for child {cid}: {pb_err}", flush=True)
+                    else:
+                        _zero_all_variant_prices(cid, shopify_domain)
                     saved_list.append({"id": cid, "title": child_title, "is_parent": False})
                 else:
                     print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
@@ -2195,7 +2267,11 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             from .categories import FILTER_GROUP_KEYS
         except Exception:
             FILTER_GROUP_KEYS = []
-        clearable_keys = set(["artworkguidelines", "artworktemplates", "custom_category", "subcategory", "parent_child", "parent_child2"]) | set(FILTER_GROUP_KEYS or [])
+        clearable_keys = set([
+            "artworkguidelines", "artworktemplates", "custom_category", "subcategory",
+            "parent_child", "parent_child2",
+            "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
+        ]) | set(FILTER_GROUP_KEYS or [])
 
         def _is_clearable(ns, k):
             if ns != "custom":
@@ -3301,73 +3377,78 @@ def create_product(product_data):
             else:
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
             
-            # Step 4: Run Price Bandit script to create variants
+            # Step 4: Run Price Bandit script to create variants (skip when pricing cleared)
             time.sleep(0.5)
-            if not existing_product_id:
-                print("⏳ Waiting for images to be indexed before Price Bandit...", flush=True)
-                time.sleep(1.0)
-            
-            print(f"🔄 Step 4: Running Price Bandit script to create variants...")
-            
-            # Import Price Bandit functions first
-            try:
-                import sys
-                import os
-                # Add the scripts directory to the path
-                scripts_dir = os.path.join(os.path.dirname(__file__), '..')
-                if scripts_dir not in sys.path:
-                    sys.path.append(scripts_dir)
-                from Price_Bandit import process_product
-                import Price_Bandit
-                
-                # Temporarily update STORE_DOMAIN in both config and Price_Bandit if we have the actual Shopify domain
-                # This ensures Price Bandit uses the correct domain to avoid redirects
-                original_store_domain = None
-                if actual_shopify_domain:
-                    try:
-                        import config
-                        original_store_domain = config.STORE_DOMAIN
-                        config.STORE_DOMAIN = actual_shopify_domain
-                        # Also update Price_Bandit's imported STORE_DOMAIN directly
-                        Price_Bandit.STORE_DOMAIN = actual_shopify_domain
-                    except Exception as e:
-                        print(f"⚠️ Could not update STORE_DOMAIN: {e}", flush=True)
-                        original_store_domain = None
-                
-                print(f"🔍 Price Bandit imported successfully")
-                
-                # Create a product object that Price Bandit expects
-                product_for_bandit = {
-                    "id": product_id,
-                    "title": product.get('title', 'Unknown Product')
-                }
-                
-                print(f"🔍 Running Price Bandit for product ID: {product_id}")
-                
-                # Run Price Bandit's process_product function
-                price_bandit_success = process_product(product_for_bandit)
-                if price_bandit_success:
-                    print(f"✅ Step 4 Complete: Price Bandit script executed successfully!")
-                else:
-                    print(f"❌ Step 4 Failed: Price Bandit script failed to create variants!")
-                
-            except ImportError as e:
-                print(f"❌ Step 4 Failed: Could not import Price Bandit: {str(e)}")
-            except Exception as e:
-                print(f"❌ Step 4 Failed: Price Bandit execution error: {str(e)}")
-                import traceback
-                traceback.print_exc()
-            finally:
-                # Restore original STORE_DOMAIN if we changed it
-                if 'original_store_domain' in locals() and original_store_domain is not None:
-                    try:
-                        import config
-                        config.STORE_DOMAIN = original_store_domain
-                        # Also restore Price_Bandit's STORE_DOMAIN
-                        if 'Price_Bandit' in locals():
-                            Price_Bandit.STORE_DOMAIN = original_store_domain
-                    except Exception as e:
-                        print(f"⚠️ Could not restore STORE_DOMAIN: {e}", flush=True)
+            has_pricing_in_save = _metafields_list_has_pricing(metafields)
+            if not has_pricing_in_save and not is_child_product:
+                print("💰 No pricing bands — zeroing variant prices and skipping Price Bandit", flush=True)
+                _zero_all_variant_prices(product_id, actual_shopify_domain)
+            else:
+                if not existing_product_id:
+                    print("⏳ Waiting for images to be indexed before Price Bandit...", flush=True)
+                    time.sleep(1.0)
+
+                print(f"🔄 Step 4: Running Price Bandit script to create variants...")
+
+                # Import Price Bandit functions first
+                try:
+                    import sys
+                    import os
+                    # Add the scripts directory to the path
+                    scripts_dir = os.path.join(os.path.dirname(__file__), '..')
+                    if scripts_dir not in sys.path:
+                        sys.path.append(scripts_dir)
+                    from Price_Bandit import process_product
+                    import Price_Bandit
+
+                    # Temporarily update STORE_DOMAIN in both config and Price_Bandit if we have the actual Shopify domain
+                    # This ensures Price Bandit uses the correct domain to avoid redirects
+                    original_store_domain = None
+                    if actual_shopify_domain:
+                        try:
+                            import config
+                            original_store_domain = config.STORE_DOMAIN
+                            config.STORE_DOMAIN = actual_shopify_domain
+                            # Also update Price_Bandit's imported STORE_DOMAIN directly
+                            Price_Bandit.STORE_DOMAIN = actual_shopify_domain
+                        except Exception as e:
+                            print(f"⚠️ Could not update STORE_DOMAIN: {e}", flush=True)
+                            original_store_domain = None
+
+                    print(f"🔍 Price Bandit imported successfully")
+
+                    # Create a product object that Price Bandit expects
+                    product_for_bandit = {
+                        "id": product_id,
+                        "title": product.get('title', 'Unknown Product')
+                    }
+
+                    print(f"🔍 Running Price Bandit for product ID: {product_id}")
+
+                    # Run Price Bandit's process_product function
+                    price_bandit_success = process_product(product_for_bandit)
+                    if price_bandit_success:
+                        print(f"✅ Step 4 Complete: Price Bandit script executed successfully!")
+                    else:
+                        print(f"❌ Step 4 Failed: Price Bandit script failed to create variants!")
+
+                except ImportError as e:
+                    print(f"❌ Step 4 Failed: Could not import Price Bandit: {str(e)}")
+                except Exception as e:
+                    print(f"❌ Step 4 Failed: Price Bandit execution error: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    # Restore original STORE_DOMAIN if we changed it
+                    if 'original_store_domain' in locals() and original_store_domain is not None:
+                        try:
+                            import config
+                            config.STORE_DOMAIN = original_store_domain
+                            # Also restore Price_Bandit's STORE_DOMAIN
+                            if 'Price_Bandit' in locals():
+                                Price_Bandit.STORE_DOMAIN = original_store_domain
+                        except Exception as e:
+                            print(f"⚠️ Could not restore STORE_DOMAIN: {e}", flush=True)
             
             # Step 5: Update taxable field on variants if needed (Price Bandit sets taxable=True by default)
             if not taxable:  # If user selected "No" for charge VAT

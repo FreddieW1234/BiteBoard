@@ -20,6 +20,7 @@ DEFAULT_METAFIELD_ORDER = [
     "nutritional_info",
     "leadtime1",
     "leadtime2",
+    "packingfee",
     "whats_inside",
     "vegan",
     "vegetarian",
@@ -45,7 +46,7 @@ ALTERNATIVE_ORDERS = {
         # Quantities & Weights
         "moq", "unit_weight", "case_quantity", "case_weight",
         # Logistics
-        "origination", "shelf_life", "leadtime1", "leadtime2",
+        "origination", "shelf_life", "leadtime1", "leadtime2", "packingfee",
         # Content
         "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info",
         # Dietary Info
@@ -60,7 +61,7 @@ ALTERNATIVE_ORDERS = {
         "unit_weight", "case_weight", "case_quantity", "origination", "shelf_life",
         # Lower Priority
         "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame", "milk", "egg", "cereals", "soya",
-        "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info", "leadtime1", "leadtime2",
+        "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info", "leadtime1", "leadtime2", "packingfee",
         "product_size", "commodity_code"
     ]
 }
