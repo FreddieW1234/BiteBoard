@@ -25,18 +25,13 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 
-# CORS + iframe embedding headers (Shopify storefront pages, admin previews, etc.)
 @app.after_request
-def after_request(response):
+def add_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
     response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-
-    # Allow embedding in iframes from any parent (e.g. bitepromotions.uk/pages/portal).
-    # X-Frame-Options ALLOWALL is invalid; use CSP frame-ancestors instead.
-    response.headers.pop('X-Frame-Options', None)
-    response.headers['Content-Security-Policy'] = "frame-ancestors *;"
-
+    response.headers['X-Frame-Options'] = 'ALLOWALL'
+    response.headers['Content-Security-Policy'] = "frame-ancestors *"
     return response
 
 # Dynamically detect available tools (scripts) by listing filenames in scripts folder
