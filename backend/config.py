@@ -26,6 +26,13 @@ STORE_DOMAIN = os.environ.get("SHOPIFY_STORE_DOMAIN", "")
 API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2025-07")
 ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 
+# Staff portal login (hardcoded — blocks customers from staff area only)
+STAFF_USERNAME = "Chocolate1!"
+STAFF_PASSWORD = "Chocolate2!"
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "biteboard-portal-session-key")
+# Set to "false" for local HTTP dev so session cookies work without HTTPS
+FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in ("1", "true", "yes")
+
 # Common headers for API requests
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN or "",

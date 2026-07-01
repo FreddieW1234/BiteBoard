@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, Response, make_response, request
+from flask import Flask, render_template, jsonify, Response, make_response, request, session, redirect, url_for
 import os
 import subprocess
 import requests
@@ -6,7 +6,18 @@ import time
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE  # type: ignore
+from portal_auth import (  # type: ignore
+    check_staff_credentials,
+    is_staff_authenticated,
+    login_staff,
+    logout_staff,
+    establish_client_session,
+    get_client_customer_id,
+    get_client_email,
+    is_client_path,
+    is_staff_public_path,
+)
 
 print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
       f"ACCESS_TOKEN={'✅ set' if ACCESS_TOKEN else '❌ EMPTY'}, API_VERSION={API_VERSION}", flush=True)
@@ -25,6 +36,111 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 
+app.config['SECRET_KEY'] = FLASK_SECRET_KEY
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = FLASK_SESSION_SECURE
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
+
+print("🔐 Staff login enabled", flush=True)
+
+
+@app.before_request
+def portal_auth_gate():
+    path = request.path or ""
+    if path.startswith("/static/"):
+        return None
+    if request.method == "OPTIONS":
+        return None
+    if is_staff_public_path(path) or is_client_path(path):
+        return None
+    if is_staff_authenticated():
+        return None
+    if path.startswith("/api/"):
+        return jsonify({"success": False, "error": "Staff login required"}), 401
+    return redirect(url_for("staff_login", next=path))
+
+
+@app.route("/staff/login", methods=["GET", "POST"])
+def staff_login():
+    if is_staff_authenticated():
+        return redirect(request.args.get("next") or url_for("index"))
+    next_url = request.args.get("next") or "/"
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if check_staff_credentials(username, password):
+            login_staff()
+            dest = request.form.get("next") or request.args.get("next") or url_for("index")
+            if not dest.startswith("/") or dest.startswith("//"):
+                dest = url_for("index")
+            return redirect(dest)
+        return render_template("UI/Staff_Login.html", error="Invalid username or password", next_url=next_url)
+    return render_template("UI/Staff_Login.html", next_url=next_url)
+
+
+@app.route("/staff/logout")
+def staff_logout():
+    logout_staff()
+    return redirect(url_for("staff_login"))
+
+
+@app.route("/client/orders")
+def client_orders_page():
+    customer_id = request.args.get("customer_id")
+    email = request.args.get("email")
+    if customer_id and email:
+        from scripts.Client_Orders import verify_customer  # type: ignore
+        if verify_customer(customer_id, email):
+            establish_client_session(customer_id, email)
+        else:
+            return render_template(
+                "UI/Client_Orders.html",
+                error="We couldn't verify your account. Please open this page from your profile on the store.",
+                orders=[],
+                customer_email=None,
+            )
+    cid = get_client_customer_id()
+    if not cid:
+        return render_template(
+            "UI/Client_Orders.html",
+            error="Please open this page from your account on the store (Orders link on your profile).",
+            orders=[],
+            customer_email=None,
+        )
+    try:
+        from scripts.Client_Orders import get_customer_orders  # type: ignore
+        result = get_customer_orders(cid)
+        orders = result.get("orders") or []
+        customer = result.get("customer") or {}
+        display_email = get_client_email() or customer.get("email")
+    except Exception as e:
+        print(f"Client orders error: {e}", flush=True)
+        return render_template(
+            "UI/Client_Orders.html",
+            error="Sorry, we couldn't load your orders right now. Please try again later.",
+            orders=[],
+            customer_email=get_client_email(),
+        )
+    return render_template(
+        "UI/Client_Orders.html",
+        orders=orders,
+        customer_email=display_email,
+        error=None,
+    )
+
+
+@app.route("/api/client/orders")
+def api_client_orders():
+    cid = get_client_customer_id()
+    if not cid:
+        return jsonify({"success": False, "error": "Not signed in as a customer"}), 403
+    try:
+        from scripts.Client_Orders import get_customer_orders  # type: ignore
+        return jsonify(get_customer_orders(cid))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.after_request
 def add_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
@@ -38,7 +154,7 @@ def add_headers(response):
 def get_tools():
     scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
     files = [f[:-3] for f in os.listdir(scripts_dir)
-             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py')]
+             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py', 'Client_Orders.py')]
     return files
 
 @app.route('/api/health')

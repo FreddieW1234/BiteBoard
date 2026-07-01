@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Orders</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f6f8fa;
+            min-height: 100vh;
+            color: #1f2937;
+            padding: 20px 24px 40px;
+        }
+        .header {
+            max-width: 960px;
+            margin: 0 auto 20px;
+        }
+        .header h1 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header h1 i { color: #4f46e5; }
+        .header p { color: #6b7280; font-size: 0.9rem; margin-top: 6px; }
+        .panel {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .state-msg {
+            padding: 32px 24px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.95rem;
+        }
+        .state-msg.error { color: #b91c1c; background: #fef2f2; }
+        .state-msg i { display: block; font-size: 1.5rem; margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+        th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        tr:last-child td { border-bottom: none; }
+        tr.order-row { cursor: pointer; }
+        tr.order-row:hover { background: #f9fafb; }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: #eef2ff;
+            color: #4338ca;
+        }
+        .badge.paid { background: #dcfce7; color: #166534; }
+        .badge.pending { background: #fef3c7; color: #92400e; }
+        .details-row { display: none; background: #fafafa; }
+        .details-row.open { display: table-row; }
+        .details-inner { padding: 8px 0; }
+        .details-inner ul { list-style: none; }
+        .details-inner li {
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .details-inner li:last-child { border-bottom: none; }
+        .empty { padding: 40px; text-align: center; color: #9ca3af; }
+        @media (max-width: 640px) {
+            th:nth-child(3), td:nth-child(3) { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-box"></i> My Orders</h1>
+        {% if customer_email %}
+        <p>Signed in as {{ customer_email }}</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        {% if error %}
+        <div class="state-msg error">
+            <i class="fas fa-circle-exclamation"></i>
+            {{ error }}
+        </div>
+        {% elif not orders %}
+        <div class="state-msg">
+            <i class="fas fa-inbox"></i>
+            You don't have any orders yet.
+        </div>
+        {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
+                    <td><strong>{{ order.name }}</strong></td>
+                    <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
+                    <td>
+                        <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
+                            {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
+                        </span>
+                    </td>
+                    <td>{{ order.currency }} {{ order.total }}</td>
+                </tr>
+                <tr class="details-row" id="details-{{ loop.index }}">
+                    <td colspan="4">
+                        <div class="details-inner">
+                            <strong style="display:block;margin-bottom:8px;">Items</strong>
+                            <ul>
+                                {% for item in order.line_items %}
+                                <li>
+                                    <span>{{ item.quantity }} × {{ item.title }}</span>
+                                    <span>{{ item.currency }} {{ item.total }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% if order.fulfillment_status %}
+                            <p style="margin-top:10px;font-size:0.85rem;color:#6b7280;">
+                                Fulfilment: {{ order.fulfillment_status.replace('_', ' ').title() }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleDetails(id) {
+            const row = document.getElementById(id);
+            if (row) row.classList.toggle('open');
+        }
+    </script>
+    <!--
+      Shopify theme iframe (account page, customer must be logged in):
+      {% if customer %}
+      <iframe src="https://bitepromotionsportal.co.uk/client/orders?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}"
+        width="100%" height="900" style="border:none;" title="My Orders"></iframe>
+      {% endif %}
+    -->
+</body>
+</html>
