@@ -218,6 +218,16 @@ METAFIELD_PAYLOAD_KEYS = {
 }
 
 
+METAFIELDS_DELETE_MUTATION = """
+mutation MetafieldsDelete($metafields: [MetafieldIdentifierInput!]!) {
+  metafieldsDelete(metafields: $metafields) {
+    deletedMetafields { key namespace }
+    userErrors { field message }
+  }
+}
+"""
+
+
 def _graphql_metafields_set(metafields):
     data = _graphql_request(METAFIELDS_SET_MUTATION, {"metafields": metafields})
     result = (data.get("metafieldsSet") or {})
@@ -225,6 +235,17 @@ def _graphql_metafields_set(metafields):
     if errors:
         raise RuntimeError("; ".join(e.get("message", "") for e in errors if e.get("message")))
     return result.get("metafields") or []
+
+
+def _graphql_metafields_delete(identifiers):
+    """Delete metafields by ownerId + namespace + key."""
+    if not identifiers:
+        return
+    data = _graphql_request(METAFIELDS_DELETE_MUTATION, {"metafields": identifiers})
+    result = (data.get("metafieldsDelete") or {})
+    errors = result.get("userErrors") or []
+    if errors:
+        raise RuntimeError("; ".join(e.get("message", "") for e in errors if e.get("message")))
 
 
 def _fetch_single_customer(customer_id):
@@ -264,20 +285,35 @@ def update_customer_details(customer_id, payload):
     _safe_request("PUT", get_url, json={"customer": customer_body})
 
     owner_gid = f"gid://shopify/Customer/{customer_id}"
-    metafields_input = []
+    existing_mf = _fetch_customer_metafields_rest(customer_id)
+    existing_by_key = {mf.get("key"): mf for mf in existing_mf if mf.get("key")}
+
+    metafields_to_set = []
+    metafields_to_delete = []
     for api_key, (shopify_key, field_type) in METAFIELD_PAYLOAD_KEYS.items():
         if api_key not in payload:
             continue
-        metafields_input.append({
-            "ownerId": owner_gid,
-            "namespace": CUSTOMER_METAFIELD_NAMESPACE,
-            "key": shopify_key,
-            "type": field_type,
-            "value": str(payload.get(api_key) or ""),
-        })
+        value = str(payload.get(api_key) or "").strip()
+        if value:
+            metafields_to_set.append({
+                "ownerId": owner_gid,
+                "namespace": CUSTOMER_METAFIELD_NAMESPACE,
+                "key": shopify_key,
+                "type": field_type,
+                "value": value,
+            })
+        elif shopify_key in existing_by_key:
+            # Cleared field — remove metafield (Shopify rejects blank values on set)
+            metafields_to_delete.append({
+                "ownerId": owner_gid,
+                "namespace": CUSTOMER_METAFIELD_NAMESPACE,
+                "key": shopify_key,
+            })
 
-    if metafields_input:
-        _graphql_metafields_set(metafields_input)
+    if metafields_to_set:
+        _graphql_metafields_set(metafields_to_set)
+    if metafields_to_delete:
+        _graphql_metafields_delete(metafields_to_delete)
 
     return _fetch_single_customer(customer_id)
 
