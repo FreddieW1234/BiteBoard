@@ -1055,38 +1055,15 @@ def process_product(product):
         sku = get_sku(metafields)
         unit_weight = get_unit_weight_grams(metafields)
         
-        # Parse colour options - can be in format "Colour:Code" or just "Colour"
+        # product_colours is stored on the product for Product Manager display only — not used for variants
         colours = []
         colour_codes = {}
         if "product_colours" in metafields:
             colours_str = metafields["product_colours"].get("value", "").strip()
-            print(f"🔍 Raw product_colours value: '{colours_str}'", flush=True)
             if colours_str:
-                for colour_entry in colours_str.split(","):
-                    colour_entry = colour_entry.strip()
-                    if ':' in colour_entry:
-                        # Format: "Colour:Code" (e.g., "Red:r")
-                        colour_parts = colour_entry.split(':', 1)
-                        colour = colour_parts[0].strip()
-                        code = colour_parts[1].strip() if len(colour_parts) > 1 else ''
-                        colours.append(colour)
-                        colour_codes[colour] = code
-                    else:
-                        # Format: just "Colour" (no code)
-                        colours.append(colour_entry)
-                        colour_codes[colour_entry] = ''
-                print(f"🔍 Parsed colours: {colours}", flush=True)
-                if colour_codes:
-                    print(f"🔍 Colour codes: {colour_codes}", flush=True)
-        else:
-            print(f"⚠️ product_colours metafield not found in fetched metafields", flush=True)
-            print(f"🔍 Available metafields: {list(metafields.keys())}", flush=True)
+                print(f"🎨 product_colours metafield present ({colours_str!r}) — stored only, not creating colour variants", flush=True)
         
         print(f" Using Unit weight: {unit_weight}g and SKU: '{sku}'", flush=True)
-        if colours:
-            print(f" Colours found: {', '.join(colours)}", flush=True)
-        else:
-            print(f" No colours specified - using standard variants", flush=True)
 
         # Required pricing metafields
         if "pricejsontr" not in metafields or "pricejsoner" not in metafields:
@@ -1225,9 +1202,7 @@ def process_product(product):
         time.sleep(2.0)
 
         # Sync main image across variants
-        colour_images = product.get("_colour_images")  # Passed from Product_Creator
-        print(f"🔍 Received colour_images from Product_Creator: {colour_images}", flush=True)
-        attach_main_image_to_variants(product_id, product_name, colours, colour_images)
+        attach_main_image_to_variants(product_id, product_name, colours=None, colour_images=None)
 
         print(f"✅ Successfully processed product: {product_name}", flush=True)
         return True

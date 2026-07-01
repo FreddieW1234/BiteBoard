@@ -869,9 +869,8 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
     (e.g. parent_child_value "Parent - Chocolate Bar Maxi" -> find products with "Child - Chocolate Bar Maxi").
     Uses GraphQL to paginate products and filter by custom.parent_child metafield.
     """
-    if not parent_child_value or not str(parent_child_value).strip().startswith("Parent - "):
+    if not parent_child_value or not _is_parent_child_type(parent_child_value, "parent"):
         return []
-    child_value = "Child - " + str(parent_child_value).strip()[9:]
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
     headers = {
@@ -919,7 +918,7 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
             for edge in edges:
                 node = edge.get("node") or {}
                 val = _parent_child_value_from_graphql_node(node)
-                if not val or val != child_value:
+                if not val or not _child_value_matches_parent(val, parent_child_value):
                     continue
                 leg_id = node.get("legacyResourceId")
                 if leg_id:
@@ -1284,11 +1283,41 @@ def _build_filter_values(mf_map):
 PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2")
 
 
+def _normalize_parent_child_family(value):
+    """Family name after Parent/Child prefix (handles 'Child - X' and 'Child- X')."""
+    s = str(value or "").strip()
+    lower = s.lower()
+    for prefix in ("parent - ", "parent- ", "parent-", "child - ", "child- ", "child-"):
+        if lower.startswith(prefix):
+            return s[len(prefix):].strip()
+    return s
+
+
+def _is_parent_child_type(value, kind):
+    """kind is 'parent' or 'child'."""
+    lower = str(value or "").strip().lower()
+    if kind == "parent":
+        return lower.startswith("parent - ") or lower.startswith("parent-")
+    return lower.startswith("child - ") or lower.startswith("child-")
+
+
+def _child_value_matches_parent(child_value, parent_child_value):
+    """True when child_value refers to the same family as parent_child_value."""
+    if not _is_parent_child_type(parent_child_value, "parent"):
+        return False
+    if not _is_parent_child_type(child_value, "child"):
+        return False
+    cf = _normalize_parent_child_family(child_value)
+    pf = _normalize_parent_child_family(parent_child_value)
+    return bool(cf and pf and cf.lower() == pf.lower())
+
+
 def _parent_child_allocation_from_raw(raw):
     """First Parent - / Child - value in a metafield payload."""
     for val in _parse_metafield_list(raw):
         s = str(val).strip()
-        if s.lower().startswith("parent - ") or s.lower().startswith("child - "):
+        sl = s.lower()
+        if sl.startswith("parent - ") or sl.startswith("parent-") or sl.startswith("child - ") or sl.startswith("child-"):
             return s
     return ""
 
@@ -1305,8 +1334,16 @@ def _parent_child_value_from_mf_map(mf_map):
 def _metafield_raw_matches_value(raw, target_value):
     target = str(target_value).strip()
     for val in _parse_metafield_list(raw):
-        if str(val).strip() == target:
+        s = str(val).strip()
+        if s == target:
             return True
+        if _is_parent_child_type(target, "parent") and _child_value_matches_parent(s, target):
+            return True
+        if _is_parent_child_type(target, "child") and _child_value_matches_parent(target, s):
+            return True
+        if _is_parent_child_type(target, "parent") and _is_parent_child_type(s, "parent"):
+            if _normalize_parent_child_family(s).lower() == _normalize_parent_child_family(target).lower():
+                return True
     return False
 
 
@@ -1827,7 +1864,7 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "case_weight", "leadtime1", "leadtime2", "commodity_code",
     "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame",
     "egg", "cereals", "soya", "milk",
-    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "product_colours",
+    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "product_colours", "packaging_colours",
 })
 
 
@@ -1839,9 +1876,9 @@ def _get_parent_product_id_for_child(child_parent_child_value, shopify_domain=No
     to PARENT_PRODUCTS id only if API lookup returns None.
     """
     v = (child_parent_child_value or "").strip()
-    if not v.startswith("Child - "):
+    if not _is_parent_child_type(v, "child"):
         return None
-    family = v[8:].strip()  # len("Child - ") == 8
+    family = _normalize_parent_child_family(v)
     if not family:
         return None
     parent_value = "Parent - " + family
@@ -2030,6 +2067,36 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
         return None
 
 
+def _fetch_parent_propagate_metafields(parent_product_id, shopify_domain=None):
+    """Load all inheritable metafields from the parent product (source of truth for children)."""
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    metafields = []
+    try:
+        mf_r = requests.get(
+            f"{base_url}/products/{parent_product_id}/metafields.json?limit=250",
+            headers=headers,
+            timeout=15,
+        )
+        if mf_r.status_code != 200:
+            print(f"⚠️ Could not fetch parent metafields for propagation (HTTP {mf_r.status_code})", flush=True)
+            return metafields
+        for m in mf_r.json().get("metafields", []):
+            key = (m.get("key") or "").strip()
+            if key in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
+                metafields.append({
+                    "namespace": m.get("namespace") or "custom",
+                    "key": key,
+                    "value": m.get("value") or "",
+                    "type": m.get("type") or "single_line_text_field",
+                })
+        print(f"📋 Loaded {len(metafields)} inheritable metafield(s) from parent {parent_product_id}", flush=True)
+    except Exception as e:
+        print(f"⚠️ _fetch_parent_propagate_metafields: {e}", flush=True)
+    return metafields
+
+
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
     """
     After saving a parent product, push the same inherited fields to all products
@@ -2037,17 +2104,26 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
     Returns a list of saved items for UI: [{"id": ..., "title": ..., "is_parent": False}, ...] (children only).
     """
     parent_child_value = (product_data.get("parent_child") or "").strip()
-    if not parent_child_value.startswith("Parent - "):
+    if not _is_parent_child_type(parent_child_value, "parent"):
         return []
     child_ids = get_child_product_ids_by_parent_child_value(parent_child_value, shopify_domain)
     if not child_ids:
         print(f"📋 No child products found for {parent_child_value}", flush=True)
         return []
     print(f"📋 Propagating parent fields to {len(child_ids)} child product(s) for {parent_child_value}", flush=True)
-    mfs_to_propagate = [
-        m for m in (metafields_saved or [])
-        if m.get("namespace") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
-    ]
+
+    # Re-read parent after save so children always get the full current inherited state
+    time.sleep(0.5)
+    mfs_to_propagate = _fetch_parent_propagate_metafields(parent_product_id, shopify_domain)
+    if not mfs_to_propagate and metafields_saved:
+        mfs_to_propagate = [
+            m for m in (metafields_saved or [])
+            if m.get("namespace") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
+        ]
+
+    pricing_keys = {"pricejsontr", "pricejsoner"}
+    should_run_price_bandit = any(m.get("key") in pricing_keys for m in mfs_to_propagate)
+
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
     headers = {
@@ -2075,6 +2151,13 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                 put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
                 if put_resp.status_code == 200:
                     print(f"✅ Updated tags and taxable for child product {cid}", flush=True)
+                    if should_run_price_bandit:
+                        try:
+                            from Price_Bandit import process_product
+                            print(f"🔄 Running Price Bandit on child {cid} ({child_title})...", flush=True)
+                            process_product({"id": cid, "title": child_title})
+                        except Exception as pb_err:
+                            print(f"⚠️ Price Bandit failed for child {cid}: {pb_err}", flush=True)
                     saved_list.append({"id": cid, "title": child_title, "is_parent": False})
                 else:
                     print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
@@ -2429,7 +2512,7 @@ def create_product(product_data):
         did_parent_fetch = False
         try:
             parent_child_value = (product_data.get("parent_child") or "").strip()
-            if parent_child_value.startswith("Child - "):
+            if _is_parent_child_type(parent_child_value, "child"):
                 parent_inherited = get_parent_inherited_data(parent_child_value, shopify_domain=None)
                 if parent_inherited:
                     product_data["tags"] = parent_inherited.get("tags") or product_data.get("tags", "")
@@ -2454,11 +2537,6 @@ def create_product(product_data):
         
         print(f"🏷️ Tags: {tags}")
         print(f"💰 Taxable setting: {taxable}")
-        
-        # Check if colours are provided
-        product_colours_raw = product_data.get("product_colours") or ""
-        product_colours = str(product_colours_raw).strip() if product_colours_raw else ""
-        has_colours = bool(product_colours)
         
         # Store the expected title to match against response
         expected_title = product_data.get("title", "").strip()
@@ -3173,44 +3251,30 @@ def create_product(product_data):
             elif subcategories:
                 print(f"⚠️ Subcategories from form but no subcategory metafields in list: {subcategories}", flush=True)
             
-            # Add colour options metafield if provided
-            product_colours_raw = product_data.get("product_colours") or ""
-            product_colours = str(product_colours_raw).strip() if product_colours_raw else ""
-            if product_colours:
-                print(f"🎨 Colours provided: {product_colours}", flush=True)
-                metafields.append({
-                    "namespace": "custom",
-                    "key": "product_colours",
-                    "value": product_colours,  # Store comma-separated colours
-                    "type": "single_line_text_field"
-                })
-                
-                # Create default pricing metafields for colour variants if they don't exist
-                # This allows Price Bandit to create colour variants even without explicit pricing
-                has_trade_pricing = any(mf.get("key") == "pricejsontr" for mf in metafields)
-                has_endc_pricing = any(mf.get("key") == "pricejsoner" for mf in metafields)
-                
-                if not has_trade_pricing:
-                    print(f"➕ Adding default trade pricing for colour variants", flush=True)
-                    metafields.append({
-                        "namespace": "custom",
-                        "key": "pricejsontr",
-                        "value": '[{"min": 0, "max": 100, "price": 0.00}]',  # Default pricing band
-                        "type": "single_line_text_field"
-                    })
-                
-                if not has_endc_pricing:
-                    print(f"➕ Adding default end customer pricing for colour variants", flush=True)
-                    metafields.append({
-                        "namespace": "custom",
-                        "key": "pricejsoner", 
-                        "value": '[{"min": 0, "max": 100, "price": 0.00}]',  # Default pricing band
-                        "type": "single_line_text_field"
-                    })
+            # Add colour options metafield if provided (product vs packaging; parent-only for children)
+            is_parent_product = _is_parent_child_type(parent_child_value, "parent")
+            is_child_product = _is_parent_child_type(parent_child_value, "child")
+
+            if not is_child_product:
+                for colour_key in ("product_colours", "packaging_colours"):
+                    raw = product_data.get(colour_key) or ""
+                    colour_val = str(raw).strip() if raw else ""
+                    if colour_val or is_parent_product:
+                        if colour_val:
+                            print(f"🎨 {colour_key} provided: {colour_val}", flush=True)
+                        elif is_parent_product:
+                            print(f"🎨 Clearing {colour_key} on parent (will propagate to children)", flush=True)
+                        metafields = [mf for mf in metafields if mf.get("key") != colour_key]
+                        metafields.append({
+                            "namespace": "custom",
+                            "key": colour_key,
+                            "value": colour_val,
+                            "type": "single_line_text_field",
+                        })
             
             # For child products, overwrite inherited metafields with parent's values
             parent_mfs = product_data.get("_parent_metafields")
-            if isinstance(parent_mfs, list) and parent_mfs and parent_child_value and parent_child_value.startswith("Child - "):
+            if isinstance(parent_mfs, list) and parent_mfs and parent_child_value and _is_parent_child_type(parent_child_value, "child"):
                 metafields = [mf for mf in metafields if mf.get("key") not in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS]
                 for m in parent_mfs:
                     key = m.get("key") if isinstance(m, dict) else None
@@ -3278,26 +3342,6 @@ def create_product(product_data):
                     "title": product.get('title', 'Unknown Product')
                 }
                 
-                # Pass colour_images if provided
-                colour_images = product_data.get("colour_images")
-                print(f"🔍 Received colour_images from frontend: {colour_images}, type: {type(colour_images)}", flush=True)
-                if colour_images:
-                    # If it's already a dict from JSON parsing in app.py, use it directly
-                    # Otherwise convert from string
-                    if isinstance(colour_images, str):
-                        import json
-                        try:
-                            colour_images = json.loads(colour_images)
-                            print(f"🔧 Parsed colour_images from string: {colour_images}", flush=True)
-                        except Exception as e:
-                            print(f"⚠️ Failed to parse colour_images: {e}", flush=True)
-                            colour_images = None
-                    
-                    if colour_images:
-                        # Store as a custom attribute to pass to Price Bandit
-                        product_for_bandit["_colour_images"] = colour_images
-                        print(f"🔍 Storing colour_images in product_for_bandit: {product_for_bandit.get('_colour_images')}", flush=True)
-                
                 print(f"🔍 Running Price Bandit for product ID: {product_id}")
                 
                 # Run Price Bandit's process_product function
@@ -3354,20 +3398,23 @@ def create_product(product_data):
             
             # When saving a parent product, propagate inherited fields to all corresponding child products
             propagated_list = []
-            if method == "PUT":
-                parent_child_value = (product_data.get("parent_child") or "").strip()
-                if parent_child_value.startswith("Parent - "):
-                    parent_title = (product.get("title") or "").strip() or "Product"
-                    propagated_list.append({"id": product_id, "title": parent_title, "is_parent": True})
-                    child_saved = propagate_parent_to_children(
-                        product_id,
-                        product_data,
-                        metafields,
-                        tags,
-                        taxable,
-                        actual_shopify_domain,
-                    )
-                    propagated_list.extend(child_saved or [])
+            parent_child_value = (product_data.get("parent_child") or "").strip()
+            if _is_parent_child_type(parent_child_value, "parent"):
+                parent_title = (product.get("title") or "").strip() or "Product"
+                propagated_list.append({"id": product_id, "title": parent_title, "is_parent": True})
+                child_saved = propagate_parent_to_children(
+                    product_id,
+                    product_data,
+                    metafields,
+                    tags,
+                    taxable,
+                    actual_shopify_domain,
+                )
+                propagated_list.extend(child_saved or [])
+                if child_saved:
+                    print(f"✅ Propagated inherited fields to {len(child_saved)} child product(s)", flush=True)
+                else:
+                    print(f"ℹ️ No child products updated for {parent_child_value}", flush=True)
 
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available

@@ -402,7 +402,7 @@ def fetch_all_metafields(product_id):
             m['_filter_reason'] = 'shopify_chocolate'
             filtered_metafields.append(m)
         # Filter out specific custom fields that shouldn't be shown in Field Finder
-        elif namespace == 'custom' and key in ['artworkguidelines', 'artworktemplates', 'packaging if applicable', 'packaging_if_applicable', 'product_colours']:
+        elif namespace == 'custom' and key in ['artworkguidelines', 'artworktemplates', 'packaging if applicable', 'packaging_if_applicable', 'product_colours', 'packaging_colours']:
             m['_filtered'] = True
             m['_filter_reason'] = 'custom_filtered'
             filtered_metafields.append(m)
