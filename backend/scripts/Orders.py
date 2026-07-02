@@ -21,9 +21,6 @@ query StaffOrders($cursor: String) {{
         legacyResourceId
         name
         processedAt
-        totalPriceSet {{
-          shopMoney {{ amount currencyCode }}
-        }}
         customer {{
           legacyResourceId
           displayName
@@ -69,7 +66,6 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
 
 
 def _format_order_node(node: dict) -> dict:
-    money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
     customer = node.get("customer") or {}
     billing = node.get("billingAddress") or {}
     company_mf = ((customer.get("companyNameNew") or {}).get("value") or "").strip()
@@ -80,8 +76,6 @@ def _format_order_node(node: dict) -> dict:
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
-        "total": money.get("amount") or "0.00",
-        "currency": money.get("currencyCode") or "GBP",
         "customer_id": customer.get("legacyResourceId"),
         "customer_name": customer.get("displayName") or "",
         "customer_email": customer.get("email") or "",

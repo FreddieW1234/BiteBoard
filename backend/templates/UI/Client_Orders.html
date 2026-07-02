@@ -343,13 +343,46 @@
             min-height: 2.5rem;
         }
         .orders-wrap .order-info-value.empty { color: #9ca3af; font-style: italic; }
+        .orders-wrap .order-info-value.order-address-value {
+            min-height: unset;
+            height: auto;
+            overflow: visible;
+            word-break: break-word;
+        }
         .orders-wrap .order-addresses-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: 1fr 1fr;
             gap: 14px 18px;
             align-items: start;
         }
+        .orders-wrap .order-addresses-grid .order-info-field:nth-child(3) {
+            grid-column: 1 / -1;
+            max-width: 320px;
+        }
         .orders-wrap .order-addresses-grid .order-info-field { min-width: 0; }
+        .orders-wrap .order-totals-panel {
+            max-width: 360px;
+            margin-left: auto;
+            border: 1px solid var(--bite-border);
+            border-radius: 8px;
+            background: var(--bite-surface);
+            overflow: hidden;
+        }
+        .orders-wrap .order-totals-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 14px;
+            font-size: 0.86rem;
+            color: var(--bite-text);
+            border-bottom: 1px solid var(--bite-border);
+        }
+        .orders-wrap .order-totals-row:last-child { border-bottom: none; }
+        .orders-wrap .order-totals-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .orders-wrap .order-totals-row-total {
+            font-weight: 700;
+            background: #fff;
+        }
         .orders-wrap .order-info-value.payment-value {
             white-space: nowrap;
             min-height: unset;
@@ -532,6 +565,16 @@
                                     </div>
                                     {% endif %}
 
+                                    <div class="detail-section order-totals-section">
+                                        <h4>Order total</h4>
+                                        <div class="order-totals-panel">
+                                            <div class="order-totals-row"><span>Subtotal</span><span>{{ order.subtotal_display }}</span></div>
+                                            <div class="order-totals-row"><span>Shipping</span><span>{{ order.shipping_display }}</span></div>
+                                            <div class="order-totals-row"><span>Tax (VAT)</span><span>{{ order.tax_display }}</span></div>
+                                            <div class="order-totals-row order-totals-row-total"><span>Total</span><span>{{ order.total_display }}</span></div>
+                                        </div>
+                                    </div>
+
                                     <div class="detail-section order-addresses-section">
                                         <h4>Addresses &amp; payment</h4>
                                         <div class="order-info-panel order-info-readonly">
@@ -539,7 +582,7 @@
                                                 <div class="order-info-field">
                                                     <label>Shipping address</label>
                                                     {% if order.shipping_address and order.shipping_address.text %}
-                                                    <div class="order-info-value">{{ order.shipping_address.text }}</div>
+                                                    <div class="order-info-value order-address-value">{{ order.shipping_address.text }}</div>
                                                     {% else %}
                                                     <div class="order-info-value empty">—</div>
                                                     {% endif %}
@@ -547,7 +590,7 @@
                                                 <div class="order-info-field">
                                                     <label>Billing address</label>
                                                     {% if order.billing_address and order.billing_address.text %}
-                                                    <div class="order-info-value">{{ order.billing_address.text }}</div>
+                                                    <div class="order-info-value order-address-value">{{ order.billing_address.text }}</div>
                                                     {% else %}
                                                     <div class="order-info-value empty">—</div>
                                                     {% endif %}

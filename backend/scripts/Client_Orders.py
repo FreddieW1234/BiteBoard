@@ -29,9 +29,6 @@ query CustomerOrders($id: ID!, $cursor: String) {{
           processedAt
           displayFinancialStatus
           displayFulfillmentStatus
-          totalPriceSet {{
-            shopMoney {{ amount currencyCode }}
-          }}
 {ORDER_EXTRA_FIELDS}
 {ORDER_ADDRESS_PAYMENT_FIELDS}
           lineItems(first: 50) {{
@@ -184,15 +181,12 @@ def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
             block = customer.get("orders") or {}
             for edge in block.get("edges") or []:
                 node = edge.get("node") or {}
-                money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
                 base = {
                     "id": node.get("legacyResourceId"),
                     "name": node.get("name") or "",
                     "processed_at": node.get("processedAt") or "",
                     "financial_status": node.get("displayFinancialStatus") or "",
                     "fulfillment_status": node.get("displayFulfillmentStatus") or "",
-                    "total": money.get("amount") or "0.00",
-                    "currency": money.get("currencyCode") or "GBP",
                 }
                 orders.append(enrich_order(node, base))
 

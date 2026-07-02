@@ -74,6 +74,21 @@ ORDER_EXTRA_FIELDS = """
           customAttributes { key value }
 """
 
+ORDER_TOTAL_FIELDS = """
+          subtotalPriceSet {
+            shopMoney { amount currencyCode }
+          }
+          totalShippingPriceSet {
+            shopMoney { amount currencyCode }
+          }
+          totalTaxSet {
+            shopMoney { amount currencyCode }
+          }
+          totalPriceSet {
+            shopMoney { amount currencyCode }
+          }
+"""
+
 ADDRESS_FIELDS = """
             firstName
             lastName
@@ -89,6 +104,7 @@ ADDRESS_FIELDS = """
 """
 
 ORDER_ADDRESS_PAYMENT_FIELDS = f"""
+{ORDER_TOTAL_FIELDS}
           shippingAddress {{
 {ADDRESS_FIELDS}
           }}
@@ -720,6 +736,30 @@ def format_payment_method(node: dict) -> dict:
     return {"method": "unknown", "label": "—", "detail": ""}
 
 
+def _shop_money(node: dict, field: str) -> tuple[str, str]:
+    money = (node.get(field) or {}).get("shopMoney") or {}
+    return money.get("amount") or "0.00", money.get("currencyCode") or "GBP"
+
+
+def format_order_totals(node: dict) -> dict:
+    """Extract subtotal, shipping, tax, and total from a Shopify order node."""
+    subtotal, _ = _shop_money(node, "subtotalPriceSet")
+    shipping, _ = _shop_money(node, "totalShippingPriceSet")
+    tax, _ = _shop_money(node, "totalTaxSet")
+    total, currency = _shop_money(node, "totalPriceSet")
+    return {
+        "subtotal": subtotal,
+        "subtotal_display": format_gbp(subtotal),
+        "shipping": shipping,
+        "shipping_display": format_gbp(shipping),
+        "tax": tax,
+        "tax_display": format_gbp(tax),
+        "total": total,
+        "total_display": format_gbp(total),
+        "currency": currency,
+    }
+
+
 def enrich_order(node: dict, base: dict) -> dict:
     """Add items/fees split, addresses, payment, and order_info to a base order dict."""
     line_items = parse_order_line_items(node)
@@ -731,8 +771,7 @@ def enrich_order(node: dict, base: dict) -> dict:
     base["billing_address"] = format_mailing_address(node.get("billingAddress"))
     base["payment"] = format_payment_method(node)
     base["order_info"] = format_order_info(node)
-    if "total" in base:
-        base["total_display"] = format_gbp(base["total"])
+    base.update(format_order_totals(node))
     return base
 
 
@@ -743,9 +782,6 @@ query OrderById($id: ID!) {
     legacyResourceId
     name
     processedAt
-    totalPriceSet {
-      shopMoney { amount currencyCode }
-    }
     customer {
       legacyResourceId
     }
@@ -775,14 +811,11 @@ def fetch_order_by_id(order_id: str | int) -> dict | None:
     node = data.get("order")
     if not node:
         return None
-    money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
     customer = node.get("customer") or {}
     base = {
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
-        "total": money.get("amount") or "0.00",
-        "currency": money.get("currencyCode") or "GBP",
         "customer_id": customer.get("legacyResourceId"),
     }
     return enrich_order(node, base)

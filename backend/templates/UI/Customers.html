@@ -412,13 +412,47 @@
             min-height: 2.5rem;
         }
         .cu-orders-modal-body .order-info-value.empty { color: #9ca3af; font-style: italic; }
+        .cu-orders-modal-body .order-info-value.order-address-value {
+            min-height: unset;
+            height: auto;
+            overflow: visible;
+            word-break: break-word;
+        }
         .cu-orders-modal-body .order-addresses-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: 1fr 1fr;
             gap: 14px 18px;
             align-items: start;
         }
+        .cu-orders-modal-body .order-addresses-grid .order-info-field:nth-child(3) {
+            grid-column: 1 / -1;
+            max-width: 320px;
+        }
         .cu-orders-modal-body .order-addresses-grid .order-info-field { min-width: 0; }
+        .cu-orders-modal-body .order-totals-panel {
+            max-width: 360px;
+            margin-left: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+            overflow: hidden;
+        }
+        .cu-orders-modal-body .order-totals-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 14px;
+            font-size: 0.86rem;
+            color: #374151;
+            border-bottom: 1px solid #eef0f3;
+        }
+        .cu-orders-modal-body .order-totals-row:last-child { border-bottom: none; }
+        .cu-orders-modal-body .order-totals-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .cu-orders-modal-body .order-totals-row-total {
+            font-weight: 700;
+            background: #fff;
+            color: #111827;
+        }
         .cu-orders-modal-body .order-info-value.payment-value {
             white-space: nowrap;
             min-height: unset;
@@ -970,9 +1004,23 @@
         function renderAddressBlock(label, address) {
             const text = (address && address.text) ? address.text : '';
             if (!text) {
-                return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value empty">—</div></div>`;
+                return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value order-address-value empty">—</div></div>`;
             }
-            return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
+            return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value order-address-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
+        }
+
+        function renderOrderTotalsSection(o) {
+            const sub = o.subtotal_display || formatGbp(o.subtotal);
+            const ship = o.shipping_display || formatGbp(o.shipping);
+            const tax = o.tax_display || formatGbp(o.tax);
+            const total = o.total_display || formatGbp(o.total);
+            return `<div class="detail-section order-totals-section"><h4>Order total</h4>
+                <div class="order-totals-panel">
+                    <div class="order-totals-row"><span>Subtotal</span><span>${escapeHtml(sub)}</span></div>
+                    <div class="order-totals-row"><span>Shipping</span><span>${escapeHtml(ship)}</span></div>
+                    <div class="order-totals-row"><span>Tax (VAT)</span><span>${escapeHtml(tax)}</span></div>
+                    <div class="order-totals-row order-totals-row-total"><span>Total</span><span>${escapeHtml(total)}</span></div>
+                </div></div>`;
         }
 
         function renderOrderAddressesSection(o) {
@@ -1187,6 +1235,7 @@
             let html = '<div class="details-inner">';
             html += renderOrderLineSection('Items', o.order_items || [], 'No items');
             if (o.fees && o.fees.length) html += renderOrderLineSection('Fees', o.fees, '');
+            html += renderOrderTotalsSection(o);
             html += renderOrderAddressesSection(o);
             html += renderOrderInfoSection(o);
             return html + '</div>';
