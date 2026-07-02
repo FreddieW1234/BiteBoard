@@ -494,6 +494,40 @@
                                     </div>
                                     {% endif %}
 
+                                    <div class="detail-section order-addresses-section">
+                                        <h4>Addresses &amp; payment</h4>
+                                        <div class="order-info-panel order-info-readonly">
+                                            <div class="order-info-grid">
+                                                <div class="order-info-field full-width">
+                                                    <label>Shipping address</label>
+                                                    {% if order.shipping_address and order.shipping_address.text %}
+                                                    <div class="order-info-value">{{ order.shipping_address.text }}</div>
+                                                    {% else %}
+                                                    <div class="order-info-value empty">—</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="order-info-field full-width">
+                                                    <label>Billing address</label>
+                                                    {% if order.billing_address and order.billing_address.text %}
+                                                    <div class="order-info-value">{{ order.billing_address.text }}</div>
+                                                    {% else %}
+                                                    <div class="order-info-value empty">—</div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="order-info-field">
+                                                    <label>Payment method</label>
+                                                    {% set payment = order.payment or {} %}
+                                                    <div class="order-info-value{% if not payment.label or payment.label == '—' %} empty{% endif %}">
+                                                        {{ payment.label or '—' }}
+                                                        {% if payment.detail %}
+                                                        <div class="line-meta">{{ payment.detail }}</div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {% set info = order.order_info or {} %}
                                     {% set note_sections = info.note_sections if info.note_sections else [] %}
                                     {% set attr_sections = info.sections if info.sections else [] %}

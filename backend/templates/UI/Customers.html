@@ -368,6 +368,20 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
         }
+        .cu-orders-modal-body .order-info-value {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 9px 11px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.86rem;
+            line-height: 1.45;
+            background: #f9fafb;
+            color: #374151;
+            white-space: pre-wrap;
+            min-height: 2.5rem;
+        }
+        .cu-orders-modal-body .order-info-value.empty { color: #9ca3af; font-style: italic; }
         .cu-orders-modal-body .order-info-note-input,
         .cu-orders-modal-body .order-info-note-field,
         .cu-orders-modal-body .order-info-note-raw,
@@ -904,6 +918,31 @@
             return html + '</div>';
         }
 
+        function renderAddressBlock(label, address) {
+            const text = (address && address.text) ? address.text : '';
+            if (!text) {
+                return `<div class="order-info-field full-width"><label>${escapeHtml(label)}</label><div class="order-info-value empty">—</div></div>`;
+            }
+            return `<div class="order-info-field full-width"><label>${escapeHtml(label)}</label><div class="order-info-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
+        }
+
+        function renderOrderAddressesSection(o) {
+            const shipping = o.shipping_address;
+            const billing = o.billing_address;
+            const payment = o.payment || {};
+            const paymentLabel = payment.label || '—';
+            const paymentDetail = payment.detail || '';
+            if (!shipping && !billing && paymentLabel === '—') return '';
+            let html = `<div class="detail-section order-addresses-section"><h4>Addresses &amp; payment</h4>
+                <div class="order-info-panel"><div class="order-info-grid">`;
+            html += renderAddressBlock('Shipping address', shipping);
+            html += renderAddressBlock('Billing address', billing);
+            html += `<div class="order-info-field"><label>Payment method</label>
+                <div class="order-info-value">${escapeHtml(paymentLabel)}${paymentDetail ? `<div class="line-meta">${escapeHtml(paymentDetail)}</div>` : ''}</div></div>`;
+            html += '</div></div></div>';
+            return html;
+        }
+
         function groupOrderInfoAttributes(attributes) {
             const sections = [];
             let current = null;
@@ -1052,6 +1091,7 @@
             let html = '<div class="details-inner">';
             html += renderOrderLineSection('Items', o.order_items || [], 'No items');
             if (o.fees && o.fees.length) html += renderOrderLineSection('Fees', o.fees, '');
+            html += renderOrderAddressesSection(o);
             html += renderOrderInfoSection(o);
             return html + '</div>';
         }

@@ -74,6 +74,42 @@ ORDER_EXTRA_FIELDS = """
           customAttributes { key value }
 """
 
+ADDRESS_FIELDS = """
+            firstName
+            lastName
+            name
+            company
+            address1
+            address2
+            city
+            province
+            zip
+            country
+            phone
+"""
+
+ORDER_ADDRESS_PAYMENT_FIELDS = f"""
+          shippingAddress {{
+{ADDRESS_FIELDS}
+          }}
+          billingAddress {{
+{ADDRESS_FIELDS}
+          }}
+          paymentGatewayNames
+          paymentTerms {{
+            paymentTermsName
+            paymentTermsType
+            dueInDays
+          }}
+          transactions {{
+            gateway
+            formattedGateway
+            manualPaymentGateway
+            kind
+            status
+          }}
+"""
+
 
 def is_fee_item(title: str) -> bool:
     return "fee" in (title or "").lower()
@@ -407,13 +443,118 @@ def parse_order_line_items(node: dict) -> list[dict]:
     return line_items
 
 
+def format_mailing_address(addr: dict | None) -> dict | None:
+    """Format a Shopify MailingAddress into display lines."""
+    if not addr:
+        return None
+    parts: list[str] = []
+    name = (addr.get("name") or "").strip()
+    if not name:
+        first = (addr.get("firstName") or "").strip()
+        last = (addr.get("lastName") or "").strip()
+        name = " ".join(x for x in (first, last) if x)
+    if name:
+        parts.append(name)
+    company = (addr.get("company") or "").strip()
+    if company:
+        parts.append(company)
+    for key in ("address1", "address2"):
+        val = (addr.get(key) or "").strip()
+        if val:
+            parts.append(val)
+    city = (addr.get("city") or "").strip()
+    province = (addr.get("province") or "").strip()
+    zip_code = (addr.get("zip") or "").strip()
+    city_line = ", ".join(x for x in (city, province, zip_code) if x)
+    if city_line:
+        parts.append(city_line)
+    country = (addr.get("country") or "").strip()
+    if country:
+        parts.append(country)
+    phone = (addr.get("phone") or "").strip()
+    if phone:
+        parts.append(phone)
+    if not parts:
+        return None
+    return {"lines": parts, "text": "\n".join(parts)}
+
+
+_ON_ACCOUNT_GATEWAY_HINTS = (
+    "account", "invoice", "manual", "bank", "deferred", "cod", "cheque", "check", "transfer",
+)
+
+
+def format_payment_method(node: dict) -> dict:
+    """Classify payment as Card or On account using Shopify gateway / terms data."""
+    payment_terms = node.get("paymentTerms") or {}
+    terms_name = (payment_terms.get("paymentTermsName") or "").strip()
+    if terms_name:
+        return {"method": "on_account", "label": "On account", "detail": terms_name}
+
+    gateways: set[str] = set()
+    has_card = False
+    has_manual = False
+
+    for txn in node.get("transactions") or []:
+        status = (txn.get("status") or "").upper()
+        kind = (txn.get("kind") or "").upper()
+        if kind in ("REFUND", "VOID", "CHANGE"):
+            continue
+        if status and status not in ("SUCCESS", "PENDING", "AUTHORIZATION", "AWAITING_RESPONSE"):
+            continue
+        gw = (txn.get("formattedGateway") or txn.get("gateway") or "").strip()
+        if gw:
+            gateways.add(gw)
+        if txn.get("manualPaymentGateway"):
+            has_manual = True
+        else:
+            has_card = True
+
+    for gw in node.get("paymentGatewayNames") or []:
+        gw = (gw or "").strip()
+        if not gw:
+            continue
+        gateways.add(gw)
+        gw_lower = gw.lower()
+        if any(hint in gw_lower for hint in _ON_ACCOUNT_GATEWAY_HINTS):
+            has_manual = True
+        elif "shopify payments" in gw_lower or "credit" in gw_lower or "debit" in gw_lower:
+            has_card = True
+
+    detail = ", ".join(sorted(gateways)) if gateways else ""
+
+    if has_manual and not has_card:
+        return {
+            "method": "on_account",
+            "label": "On account",
+            "detail": detail or "Manual / invoice payment",
+        }
+    if has_card:
+        return {"method": "card", "label": "Card", "detail": detail or "Card payment"}
+
+    if detail:
+        gw_lower = detail.lower()
+        if any(hint in gw_lower for hint in _ON_ACCOUNT_GATEWAY_HINTS):
+            return {"method": "on_account", "label": "On account", "detail": detail}
+        return {"method": "card", "label": "Card", "detail": detail}
+
+    financial = (node.get("displayFinancialStatus") or "").replace("_", " ").strip()
+    if financial:
+        financial_title = financial.title()
+        return {"method": "unknown", "label": financial_title, "detail": ""}
+    return {"method": "unknown", "label": "—", "detail": ""}
+
+
 def enrich_order(node: dict, base: dict) -> dict:
-    """Add items/fees split and order_info to a base order dict."""
+    """Add items/fees split, addresses, payment, and order_info to a base order dict."""
     line_items = parse_order_line_items(node)
     items, fees = split_line_items(line_items)
     base["line_items"] = line_items
     base["order_items"] = items
     base["fees"] = fees
+    base["shipping_address"] = format_mailing_address(node.get("shippingAddress"))
+    base["billing_address"] = format_mailing_address(node.get("billingAddress"))
+    base["payment"] = format_payment_method(node)
     base["order_info"] = format_order_info(node)
     if "total" in base:
         base["total_display"] = format_gbp(base["total"])

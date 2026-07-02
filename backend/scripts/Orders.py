@@ -6,7 +6,7 @@ import time
 import requests
 
 from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
-from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, enrich_order  # type: ignore
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, enrich_order  # type: ignore
 
 HEADERS = {
     "Content-Type": "application/json",
@@ -32,10 +32,8 @@ query StaffOrders($cursor: String) {{
           landlinePhoneNumber: metafield(namespace: "custom_fields", key: "landline_phone_number") {{ value }}
           mobileNumber: metafield(namespace: "custom_fields", key: "mobile_number") {{ value }}
         }}
-        billingAddress {{
-          company
-        }}
 {ORDER_EXTRA_FIELDS}
+{ORDER_ADDRESS_PAYMENT_FIELDS}
         lineItems(first: 50) {{
           edges {{
             node {{

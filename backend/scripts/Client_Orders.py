@@ -12,7 +12,7 @@ HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
 }
 
-from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, enrich_order  # type: ignore
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, enrich_order  # type: ignore
 
 CUSTOMER_ORDERS_QUERY = f"""
 query CustomerOrders($id: ID!, $cursor: String) {{
@@ -33,6 +33,7 @@ query CustomerOrders($id: ID!, $cursor: String) {{
             shopMoney {{ amount currencyCode }}
           }}
 {ORDER_EXTRA_FIELDS}
+{ORDER_ADDRESS_PAYMENT_FIELDS}
           lineItems(first: 50) {{
             edges {{
               node {{
