@@ -600,7 +600,23 @@ html[data-theme="dark"] .of-order-link {
 }
 html[data-theme="dark"] .of-file-link:hover,
 html[data-theme="dark"] .of-order-link:hover { background: var(--bb-accent-soft) !important; }
+html[data-theme="dark"] .of-file-delete { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .of-file-delete:hover { background: rgba(248, 81, 73, 0.12) !important; }
+html[data-theme="dark"] .of-delete-modal-panel {
+    background: var(--bb-surface) !important;
+    color: var(--bb-text) !important;
+}
+html[data-theme="dark"] .of-delete-modal-lead { color: var(--bb-text-secondary) !important; }
+html[data-theme="dark"] .of-delete-modal-warning { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .of-btn-cancel {
+    background: var(--bb-surface-2) !important;
+    border-color: var(--bb-border) !important;
+    color: var(--bb-text-secondary) !important;
+}
 html[data-theme="dark"] .of-order { border-color: var(--bb-border) !important; }
+html[data-theme="dark"] .office-file-delete { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .office-delete-modal-warning { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .office-btn-danger { background: var(--bb-danger) !important; color: #fff !important; }
 
 /* ── Scrollbars (webkit) ── */
 html[data-theme="dark"] ::-webkit-scrollbar {

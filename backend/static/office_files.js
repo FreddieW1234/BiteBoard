@@ -43,10 +43,12 @@
         })).filter(g => g.files.length);
     }
 
-    function renderFileRow(f) {
+    function renderFileRow(f, orderId, itemId) {
         const viewUrl = f.view_url || f.download_url;
         const downloadUrl = f.download_url || f.view_url;
         const ver = f.version ? ` v${f.version}` : '';
+        const oid = orderId || f.order_id || '';
+        const iid = itemId || f.office_item_id || '';
         return `<li class="of-file-row">
             <span class="of-file-info"><i class="fas ${fileIcon(f.name)}"></i>
                 <span class="of-file-name">${escapeHtml(f.name)}${ver ? `<span class="of-file-ver">${escapeHtml(ver.trim())}</span>` : ''}</span>
@@ -54,17 +56,20 @@
             <span class="of-file-actions">
                 ${viewUrl ? `<a class="of-file-link" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener"><i class="fas fa-eye"></i> View</a>` : ''}
                 ${downloadUrl ? `<a class="of-file-link" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(f.name)}"><i class="fas fa-download"></i> Download</a>` : ''}
+                ${oid && iid ? `<button type="button" class="of-file-link of-file-delete of-delete-file-btn"
+                    data-order-id="${escapeHtml(oid)}" data-item-id="${escapeHtml(iid)}"
+                    data-filename="${escapeHtml(f.name)}" title="Delete from server"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
             </span>
         </li>`;
     }
 
-    function renderItem(item) {
+    function renderItem(item, orderId) {
         const fileCount = (item.files || []).length;
         const groups = groupFiles(item.files);
         let body = '';
         groups.forEach(g => {
             body += `<div class="of-file-group"><div class="of-file-group-title">${escapeHtml(g.label)}</div><ul class="of-file-list">`;
-            g.files.forEach(f => { body += renderFileRow(f); });
+            g.files.forEach(f => { body += renderFileRow(f, orderId, item.office_item_id); });
             body += '</ul></div>';
         });
         return `<div class="of-item">
@@ -85,7 +90,7 @@
         const itemCount = (order.items || []).length;
         const fileCount = (order.items || []).reduce((n, it) => n + (it.files || []).length, 0);
         let itemsHtml = '';
-        (order.items || []).forEach(it => { itemsHtml += renderItem(it); });
+        (order.items || []).forEach(it => { itemsHtml += renderItem(it, order.order_id); });
         const sub = [order.customer_name, formatDate(order.processed_at)].filter(Boolean).join(' · ');
         return `<div class="of-order">
             <button type="button" class="of-order-head" aria-expanded="false">
@@ -105,13 +110,99 @@
     function bindTree(root) {
         root.querySelectorAll('.of-order-head, .of-item-head').forEach(btn => {
             btn.addEventListener('click', e => {
-                if (e.target.closest('.of-order-link')) return;
+                if (e.target.closest('.of-order-link') || e.target.closest('.of-delete-file-btn')) return;
                 e.preventDefault();
                 const parent = btn.closest('.of-order, .of-item');
                 if (!parent) return;
                 const open = parent.classList.toggle('open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
             });
+        });
+    }
+
+    let deleteConfirmResolve = null;
+
+    function ensureDeleteModal() {
+        let modal = document.getElementById('of-delete-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'of-delete-modal';
+        modal.className = 'of-delete-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="of-delete-modal-backdrop" data-of-close-delete></div>
+            <div class="of-delete-modal-panel" role="dialog" aria-modal="true">
+                <button type="button" class="of-delete-modal-close" data-of-close-delete aria-label="Close">&times;</button>
+                <h3>Delete file from server?</h3>
+                <p class="of-delete-modal-lead" id="of-delete-modal-lead"></p>
+                <p class="of-delete-modal-warning">This permanently removes the file from the server and cannot be undone.</p>
+                <div class="of-delete-modal-actions">
+                    <button type="button" class="of-btn-danger of-delete-confirm-btn">Delete from server</button>
+                    <button type="button" class="of-btn-cancel" data-of-close-delete>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => {
+            if (e.target.closest('[data-of-close-delete]')) finishDeleteConfirm(false);
+            if (e.target.closest('.of-delete-confirm-btn')) finishDeleteConfirm(true);
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
+        });
+        return modal;
+    }
+
+    function finishDeleteConfirm(confirmed) {
+        const modal = document.getElementById('of-delete-modal');
+        if (modal) modal.hidden = true;
+        if (deleteConfirmResolve) {
+            const resolve = deleteConfirmResolve;
+            deleteConfirmResolve = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmDeleteFile(filename) {
+        const modal = ensureDeleteModal();
+        const lead = document.getElementById('of-delete-modal-lead');
+        if (lead) lead.textContent = `Are you sure you want to delete "${filename}" from the server?`;
+        return new Promise(resolve => {
+            deleteConfirmResolve = resolve;
+            modal.hidden = false;
+        });
+    }
+
+    async function handleDeleteFile(btn) {
+        const orderId = btn.dataset.orderId;
+        const itemId = btn.dataset.itemId;
+        const filename = btn.dataset.filename;
+        if (!orderId || !itemId || !filename) return;
+
+        const confirmed = await confirmDeleteFile(filename);
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        try {
+            const url = `/api/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
+            const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+            const searchInput = document.getElementById('of-search');
+            lastSearch = searchInput ? searchInput.value.trim() : '';
+            await loadFiles(lastSearch);
+        } catch (err) {
+            btn.disabled = false;
+            alert(err.message || 'Could not delete file.');
+        }
+    }
+
+    function bindDeleteButtons(root) {
+        root.addEventListener('click', e => {
+            const btn = e.target.closest('.of-delete-file-btn');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handleDeleteFile(btn);
         });
     }
 
@@ -157,6 +248,8 @@
     function init() {
         const searchInput = document.getElementById('of-search');
         const refreshBtn = document.getElementById('of-refresh');
+        const panel = document.getElementById('of-panel');
+        if (panel) bindDeleteButtons(panel);
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 clearTimeout(searchTimer);

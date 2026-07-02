@@ -248,6 +248,97 @@
 
 .of-file-link:hover { background: #eef2ff; }
 
+button.of-file-link {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+}
+.of-file-delete { color: #dc2626 !important; }
+.of-file-delete:hover { background: #fef2f2 !important; color: #b91c1c !important; }
+.of-file-delete:disabled { opacity: 0.5; cursor: wait; }
+
+/* Delete confirmation modal */
+.of-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.of-delete-modal[hidden] { display: none !important; }
+.of-delete-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+.of-delete-modal-panel {
+    position: relative;
+    background: #fff;
+    border-radius: 10px;
+    padding: 24px;
+    max-width: 440px;
+    width: calc(100% - 32px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+.of-delete-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    color: #9ca3af;
+    cursor: pointer;
+    line-height: 1;
+}
+.of-delete-modal-panel h3 {
+    margin: 0 0 10px;
+    font-size: 1.1rem;
+    color: #111827;
+}
+.of-delete-modal-lead {
+    margin: 0 0 8px;
+    font-size: 0.9rem;
+    color: #374151;
+    word-break: break-word;
+}
+.of-delete-modal-warning {
+    margin: 0 0 18px;
+    font-size: 0.85rem;
+    color: #dc2626;
+}
+.of-delete-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+.of-btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.of-btn-danger:hover { background: #b91c1c; }
+.of-btn-cancel {
+    background: #fff;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.of-btn-cancel:hover { background: #f9fafb; }
+
 .of-order-link {
     font-size: 0.78rem;
     font-weight: 500;

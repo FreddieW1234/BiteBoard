@@ -70,38 +70,46 @@
         return (files || []).slice().sort((a, b) => (b.version || 0) - (a.version || 0));
     }
 
-    function renderFileRow(f, orderId, itemId, apiPrefix) {
+    function renderFileRow(f, orderId, itemId, apiPrefix, staffCanDelete) {
         const viewUrl = f.download_url
             ? (f.download_url + (f.download_url.includes('?') ? '&' : '?') + 'inline=1')
             : proxyFileUrl(orderId, itemId, f.name, apiPrefix, true);
         const downloadUrl = f.download_url || proxyFileUrl(orderId, itemId, f.name, apiPrefix, false);
         const versionLabel = f.version ? ` v${f.version}` : '';
+        let deleteBtn = '';
+        if (staffCanDelete) {
+            deleteBtn = `<button type="button" class="office-file-link office-file-delete office-delete-file-btn"
+                data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                data-filename="${escapeHtml(f.name)}" data-api-prefix="${escapeHtml(apiPrefix)}"
+                title="Delete from server"><i class="fas fa-trash-alt"></i> Delete</button>`;
+        }
         return `<li class="office-file-row">
             <span class="office-file-name">${escapeHtml(f.name)}${versionLabel ? `<span class="office-file-ver">${escapeHtml(versionLabel.trim())}</span>` : ''}</span>
             <span class="office-file-actions">
                 <a class="office-file-link" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener"><i class="fas fa-eye"></i> View</a>
                 <a class="office-file-link office-file-download" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(f.name)}"><i class="fas fa-download"></i> Download</a>
+                ${deleteBtn}
             </span>
         </li>`;
     }
 
-    function renderFileSection(title, files, orderId, itemId, apiPrefix) {
+    function renderFileSection(title, files, orderId, itemId, apiPrefix, staffCanDelete) {
         if (!files || !files.length) return '';
         let html = `<div class="office-file-section"><h5 class="office-file-section-title">${escapeHtml(title)}</h5><ul class="office-file-list">`;
         sortFilesByVersion(files).forEach(f => {
-            html += renderFileRow(f, orderId, itemId, apiPrefix);
+            html += renderFileRow(f, orderId, itemId, apiPrefix, staffCanDelete);
         });
         html += '</ul></div>';
         return html;
     }
 
-    function renderFileSections(files, orderId, itemId, apiPrefix) {
+    function renderFileSections(files, orderId, itemId, apiPrefix, staffCanDelete) {
         if (!files || !files.length) return '';
         const artwork = files.filter(f => fileKind(f) === 'artwork');
         const proofs = files.filter(f => fileKind(f) === 'proof');
         let html = '<div class="office-files-wrap">';
-        html += renderFileSection('Artwork', artwork, orderId, itemId, apiPrefix);
-        html += renderFileSection('Proofs', proofs, orderId, itemId, apiPrefix);
+        html += renderFileSection('Artwork', artwork, orderId, itemId, apiPrefix, staffCanDelete);
+        html += renderFileSection('Proofs', proofs, orderId, itemId, apiPrefix, staffCanDelete);
         html += '</div>';
         return html;
     }
@@ -385,19 +393,20 @@
         }
         const itemId = item.office_item_id;
         const stage = office.current_stage || '';
+        const staffCanDelete = role === 'staff' && apiPrefix === '/api/orders';
         let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '">';
         html += renderStatusBar(normalizeStagesForDisplay(office));
 
         if (role === 'staff') {
             html += '<div class="office-tracking-body">';
-            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix, staffCanDelete);
             html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
             html += '</div>';
             html += '<div class="office-tracking-actions office-staff-actions">';
             html += renderStaffProofUpload(orderId, itemId, apiPrefix);
             html += '<span class="office-tracking-msg" hidden></span></div>';
         } else {
-            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix, false);
             html += '<div class="office-tracking-actions">';
             if (canUploadArtwork(office)) {
                 html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
@@ -656,6 +665,96 @@
         showChangesModal(orderName || fromPayload || '');
     }
 
+    let deleteConfirmResolve = null;
+
+    function ensureDeleteConfirmModal() {
+        let modal = document.getElementById('office-delete-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-delete-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-delete-modal></div>
+            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-delete-modal-title">
+                <button type="button" class="office-changes-modal-close" data-close-delete-modal aria-label="Close">&times;</button>
+                <h3 id="office-delete-modal-title">Delete file from server?</h3>
+                <p class="office-changes-modal-lead" id="office-delete-modal-lead"></p>
+                <p class="office-delete-modal-warning">This permanently removes the file from the server and cannot be undone.</p>
+                <div class="office-changes-modal-actions">
+                    <button type="button" class="office-btn office-btn-danger office-delete-confirm-btn">Delete from server</button>
+                    <button type="button" class="office-btn office-btn-changes" data-close-delete-modal>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-delete-modal]')) finishDeleteConfirm(false);
+            if (e.target.closest('.office-delete-confirm-btn')) finishDeleteConfirm(true);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
+        });
+        return modal;
+    }
+
+    function finishDeleteConfirm(confirmed) {
+        const modal = document.getElementById('office-delete-modal');
+        if (modal) modal.hidden = true;
+        if (deleteConfirmResolve) {
+            const resolve = deleteConfirmResolve;
+            deleteConfirmResolve = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmDeleteFile(filename) {
+        const modal = ensureDeleteConfirmModal();
+        const lead = document.getElementById('office-delete-modal-lead');
+        if (lead) {
+            lead.textContent = `Are you sure you want to delete "${filename}" from the server?`;
+        }
+        return new Promise(resolve => {
+            deleteConfirmResolve = resolve;
+            modal.hidden = false;
+        });
+    }
+
+    async function handleDeleteFile(btn) {
+        const orderId = btn.dataset.orderId;
+        const itemId = btn.dataset.itemId;
+        const filename = btn.dataset.filename;
+        const apiPrefix = btn.dataset.apiPrefix || '/api/orders';
+        if (!orderId || !itemId || !filename) return;
+
+        const confirmed = await confirmDeleteFile(filename);
+        if (!confirmed) return;
+
+        const tracking = btn.closest('.office-tracking');
+        const msg = tracking && tracking.querySelector('.office-tracking-msg');
+        btn.disabled = true;
+        if (msg) { msg.hidden = true; msg.textContent = ''; }
+
+        try {
+            const url = `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
+            const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
+            const data = await parseJsonResponse(res);
+            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+
+            const detailsEl = btn.closest('.details-inner') || btn.closest('td');
+            if (detailsEl) {
+                detailsEl.dataset.trackingLoaded = '0';
+                await loadOrderTracking(orderId, apiPrefix, detailsEl, 'staff');
+            }
+        } catch (err) {
+            if (msg) {
+                msg.textContent = err.message || 'Could not delete file.';
+                msg.className = 'office-tracking-msg err';
+                msg.hidden = false;
+            }
+            btn.disabled = false;
+        }
+    }
+
     const boundRoots = new WeakSet();
 
     function bindTrackingEvents(root) {
@@ -666,6 +765,8 @@
             if (e.target.classList.contains('office-proof-input')) handleProofUpload(e.target);
         });
         root.addEventListener('click', function (e) {
+            const deleteBtn = e.target.closest('.office-delete-file-btn');
+            if (deleteBtn) { e.preventDefault(); handleDeleteFile(deleteBtn); return; }
             const approve = e.target.closest('.office-approve-btn');
             if (approve) { e.preventDefault(); handleApprove(approve); return; }
             const changes = e.target.closest('.office-changes-btn');

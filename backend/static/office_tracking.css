@@ -347,6 +347,33 @@
 .office-file-link i { margin-right: 4px; font-size: 0.72rem; }
 .office-file-link:hover { text-decoration: underline; }
 .office-file-download { color: #374151; }
+button.office-file-link {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 0;
+}
+.office-file-delete { color: #dc2626; }
+.office-file-delete:hover { color: #b91c1c; text-decoration: underline; }
+.office-file-delete:disabled { opacity: 0.5; cursor: wait; }
+.office-delete-modal-warning {
+    font-size: 0.85rem;
+    color: #dc2626;
+    margin: 0 0 16px;
+}
+.office-btn-danger {
+    background: #dc2626;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.office-btn-danger:hover { background: #b91c1c; }
 .office-staff-status {
     display: flex;
     flex-direction: column;

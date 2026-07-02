@@ -2116,10 +2116,26 @@ def _office_file_download(order_id, item, filename, api_prefix):
         return jsonify({"success": False, "error": str(exc)}), 502
 
 
-@app.route("/api/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET"])
+def _office_delete_file(order_id, item, filename):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Item not found on this order"}), 404
+    try:
+        from scripts.office_api import delete_file, OfficeApiError  # type: ignore
+        delete_file(order_name, item, filename)
+        return jsonify({"success": True})
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET", "DELETE"])
 def api_order_office_file(order_id, item, filename):
     if not can_access_order(order_id):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    if request.method == "DELETE":
+        return _office_delete_file(order_id, item, filename)
     return _office_file_download(order_id, item, filename, "/api/orders")
 
 

@@ -92,6 +92,8 @@ def browse_office_files(*, search: str = "", max_orders: int = 150) -> dict:
                     "name": fname,
                     "kind": _file_kind(fname, f.get("kind")),
                     "version": f.get("version"),
+                    "order_id": order_id,
+                    "office_item_id": oid,
                     "download_url": base,
                     "view_url": f"{base}?inline=1",
                 })

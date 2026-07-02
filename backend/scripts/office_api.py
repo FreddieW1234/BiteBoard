@@ -175,3 +175,11 @@ def fetch_file(order: str, item: str, filename: str) -> requests.Response:
         logger.error("Office API file fetch HTTP %s for %s", resp.status_code, filename)
         raise OfficeApiError(f"Could not download file ({resp.status_code})")
     return resp
+
+
+def delete_file(order: str, item: str, filename: str) -> dict | None:
+    """Delete a file from the Office server."""
+    url = f"{_url(order, item, 'files', filename)}"
+    resp = _request("DELETE", url)
+    result = _handle_response(resp)
+    return result if isinstance(result, dict) else None
