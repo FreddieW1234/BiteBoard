@@ -8,6 +8,42 @@
         return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    const SALES_EMAIL = 'sales@bitepromotions.co.uk';
+    const SALES_PHONE_DISPLAY = '01792 293689';
+    const SALES_PHONE_TEL = '+441792293689';
+
+    function isPortalEmbed() {
+        return document.documentElement.classList.contains('co-embed') || window.parent !== window;
+    }
+
+    function setParentOverlayMode(active) {
+        if (window.parent === window) return;
+        try {
+            window.parent.postMessage({ source: 'bite-portal', type: 'overlay-mode', active: !!active }, '*');
+        } catch (_) { /* ignore */ }
+    }
+
+    function showOfficeModal(modal) {
+        if (!modal) return;
+        if (!modal.parentElement || modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        document.documentElement.classList.add('office-modal-open');
+        modal.hidden = false;
+        if (isPortalEmbed()) {
+            setParentOverlayMode(true);
+            window.scrollTo(0, 0);
+        }
+    }
+
+    function hideOfficeModal(modal) {
+        if (modal) modal.hidden = true;
+        if (!document.querySelector('.office-changes-modal:not([hidden])')) {
+            document.documentElement.classList.remove('office-modal-open');
+            if (isPortalEmbed()) setParentOverlayMode(false);
+        }
+    }
+
     async function parseJsonResponse(res) {
         const text = await res.text();
         if (!text) {
@@ -330,8 +366,7 @@
     }
 
     function finishSkipConfirm(confirmed) {
-        const modal = document.getElementById('office-skip-modal');
-        if (modal) modal.hidden = true;
+        hideOfficeModal(document.getElementById('office-skip-modal'));
         if (skipConfirmResolver) {
             const resolve = skipConfirmResolver;
             skipConfirmResolver = null;
@@ -349,7 +384,7 @@
         if (list) {
             list.innerHTML = (warnings || []).map(w => `<li>${escapeHtml(w)}</li>`).join('');
         }
-        modal.hidden = false;
+        showOfficeModal(modal);
         return new Promise(resolve => { skipConfirmResolver = resolve; });
     }
 
@@ -630,14 +665,19 @@
             <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-changes-modal-title">
                 <button type="button" class="office-changes-modal-close" data-close-changes-modal aria-label="Close">&times;</button>
                 <h3 id="office-changes-modal-title">Request changes</h3>
-                <p class="office-changes-modal-lead">To request changes to your proof, please email our sales team:</p>
-                <p class="office-changes-modal-email"><a href="mailto:sales@bitepromotions.co.uk" id="office-changes-mailto">sales@bitepromotions.co.uk</a></p>
+                <p class="office-changes-modal-lead">To request changes to your proof, please contact our sales team by email or phone:</p>
+                <p class="office-changes-modal-contact">
+                    <a href="mailto:${SALES_EMAIL}" class="office-changes-contact-link" id="office-changes-mailto">${SALES_EMAIL}</a>
+                    <span class="office-changes-contact-or">or</span>
+                    <a href="tel:${SALES_PHONE_TEL}" class="office-changes-contact-link" id="office-changes-phone">${SALES_PHONE_DISPLAY}</a>
+                </p>
                 <ul class="office-changes-modal-steps">
                     <li>Quote your order number: <strong id="office-changes-order-num"></strong></li>
                     <li>Explain the changes you would like made to the proof</li>
                 </ul>
                 <div class="office-changes-modal-actions">
-                    <a class="office-btn office-btn-email" id="office-changes-email-btn" href="mailto:sales@bitepromotions.co.uk">Email sales</a>
+                    <a class="office-btn office-btn-email" id="office-changes-email-btn" href="mailto:${SALES_EMAIL}">Email sales</a>
+                    <a class="office-btn office-btn-phone" id="office-changes-phone-btn" href="tel:${SALES_PHONE_TEL}">Call ${SALES_PHONE_DISPLAY}</a>
                     <button type="button" class="office-btn office-btn-changes" data-close-changes-modal>Close</button>
                 </div>
             </div>`;
@@ -655,19 +695,22 @@
         const modal = ensureChangesModal();
         const name = (orderName || '').trim() || 'your order';
         const subject = encodeURIComponent(`Order ${name} – proof change request`);
-        const mailto = `mailto:sales@bitepromotions.co.uk?subject=${subject}`;
+        const mailto = `mailto:${SALES_EMAIL}?subject=${subject}`;
         const orderEl = document.getElementById('office-changes-order-num');
         const mailLink = document.getElementById('office-changes-mailto');
         const emailBtn = document.getElementById('office-changes-email-btn');
+        const phoneLink = document.getElementById('office-changes-phone');
+        const phoneBtn = document.getElementById('office-changes-phone-btn');
         if (orderEl) orderEl.textContent = name;
         if (mailLink) mailLink.href = mailto;
         if (emailBtn) emailBtn.href = mailto;
-        modal.hidden = false;
+        if (phoneLink) phoneLink.href = `tel:${SALES_PHONE_TEL}`;
+        if (phoneBtn) phoneBtn.href = `tel:${SALES_PHONE_TEL}`;
+        showOfficeModal(modal);
     }
 
     function hideChangesModal() {
-        const modal = document.getElementById('office-changes-modal');
-        if (modal) modal.hidden = true;
+        hideOfficeModal(document.getElementById('office-changes-modal'));
     }
 
     function handleRequestChanges(btn) {
@@ -696,13 +739,13 @@
                 </div>`;
             document.body.appendChild(modal);
             modal.addEventListener('click', function (e) {
-                if (e.target.closest('[data-close-delete-modal]')) modal.hidden = true;
+                if (e.target.closest('[data-close-delete-modal]')) hideOfficeModal(modal);
             });
             document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true;
+                if (e.key === 'Escape' && modal && !modal.hidden) hideOfficeModal(modal);
             });
         }
-        modal.hidden = false;
+        showOfficeModal(modal);
     }
 
     function handleDeleteFile(btn) {

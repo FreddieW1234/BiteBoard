@@ -245,25 +245,32 @@
     align-items: center;
     gap: 6px;
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 600;
     color: #4f46e5;
     cursor: pointer;
     padding: 8px 14px;
     border: 1px solid #c7d2fe;
     border-radius: 8px;
     background: #eef2ff;
-    transition: background-color 0.15s, border-color 0.15s;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.office-tracking-actions label.office-upload-btn:hover { background: #e0e7ff; }
+.office-tracking-actions label.office-upload-btn:hover {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+}
 .office-tracking-actions label.office-upload-btn input { display: none; }
 .office-tracking-actions .office-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.8rem;
-    font-weight: 500;
-    padding: 6px 12px;
-    border-radius: 6px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
     border: 1px solid transparent;
     cursor: pointer;
     font-family: inherit;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 .office-btn-approve {
     background: #059669;
@@ -437,6 +444,13 @@ button.office-file-link {
     justify-content: center;
     padding: 20px;
 }
+html.co-embed .office-changes-modal {
+    z-index: 2147483647;
+}
+html.office-modal-open,
+html.office-modal-open body {
+    overflow: hidden;
+}
 .office-changes-modal[hidden] { display: none !important; }
 .office-changes-modal-backdrop {
     position: absolute;
@@ -482,6 +496,24 @@ button.office-file-link {
     margin: 0 0 16px;
     font-size: 0.95rem;
 }
+.office-changes-modal-contact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin: 0 0 16px;
+    font-size: 0.95rem;
+}
+.office-changes-contact-link {
+    color: #4f46e5;
+    font-weight: 600;
+    text-decoration: none;
+}
+.office-changes-contact-link:hover { text-decoration: underline; }
+.office-changes-contact-or {
+    color: #6b7280;
+    font-size: 0.88rem;
+}
 .office-changes-modal-email a {
     color: #4f46e5;
     font-weight: 600;
@@ -503,16 +535,73 @@ button.office-file-link {
     gap: 10px;
     align-items: center;
 }
-.office-changes-modal-actions .office-btn-email {
-    display: inline-block;
+.office-changes-modal-actions .office-btn,
+.office-changes-modal-actions a.office-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
     text-decoration: none;
+    box-sizing: border-box;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+.office-changes-modal-actions .office-btn-set-stage,
+.office-changes-modal-actions .office-btn-email,
+.office-changes-modal-actions .office-btn-phone {
     background: #4f46e5;
     color: #fff;
     border-color: #4f46e5;
 }
-.office-changes-modal-actions .office-btn-email:hover {
+.office-changes-modal-actions .office-btn-set-stage:hover,
+.office-changes-modal-actions .office-btn-email:hover,
+.office-changes-modal-actions .office-btn-phone:hover {
     background: #4338ca;
+    border-color: #4338ca;
     color: #fff;
+}
+.office-changes-modal-actions .office-btn-changes {
+    background: #fff;
+    color: #374151;
+    border-color: #d1d5db;
+}
+.office-changes-modal-actions .office-btn-changes:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+.office-changes-modal-actions .office-btn-email {
+    display: inline-flex;
+}
+.office-changes-modal-actions .office-btn-email:hover {
+    color: #fff;
+}
+
+html.co-embed .office-changes-modal-actions .office-btn-set-stage,
+html.co-embed .office-changes-modal-actions .office-btn-email,
+html.co-embed .office-changes-modal-actions .office-btn-phone {
+    background: #3AC9E3;
+    border-color: #2db3cc;
+    color: #fff;
+}
+html.co-embed .office-changes-modal-actions .office-btn-set-stage:hover,
+html.co-embed .office-changes-modal-actions .office-btn-email:hover,
+html.co-embed .office-changes-modal-actions .office-btn-phone:hover {
+    background: #2db3cc;
+    border-color: #259eb5;
+    color: #fff;
+}
+html.co-embed .office-changes-contact-link {
+    color: #2db3cc;
+}
+html.co-embed .office-changes-contact-link:hover {
+    color: #259eb5;
 }
 
 /* Order list status indicator (between order # and date) */

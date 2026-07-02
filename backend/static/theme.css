@@ -960,6 +960,24 @@ html[data-theme="dark"] .office-changes-modal-lead,
 html[data-theme="dark"] .office-changes-modal-steps {
     color: var(--bb-text-secondary) !important;
 }
+html[data-theme="dark"] .office-changes-contact-or {
+    color: var(--bb-text-muted) !important;
+}
+html[data-theme="dark"] .office-changes-contact-link {
+    color: var(--bb-accent) !important;
+}
+html[data-theme="dark"] .office-changes-modal-actions .office-btn-changes {
+    background: var(--bb-surface-2) !important;
+    border-color: var(--bb-border) !important;
+    color: var(--bb-text-secondary) !important;
+}
+html[data-theme="dark"] .office-changes-modal-actions .office-btn-set-stage,
+html[data-theme="dark"] .office-changes-modal-actions .office-btn-email,
+html[data-theme="dark"] .office-changes-modal-actions .office-btn-phone {
+    background: var(--bb-accent) !important;
+    border-color: var(--bb-accent) !important;
+    color: #fff !important;
+}
 
 /* ── All Products table ── */
 html[data-theme="dark"] .products-grid-wrap,
