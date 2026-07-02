@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html lang="en"{% if in_iframe %} class="co-iframe-embed"{% endif %}>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account</title>
-    <script>if(window.parent!==window)document.documentElement.classList.add('co-iframe-embed');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -20,28 +19,14 @@
             --bite-radius: 10px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: auto;
-            min-height: 0;
-        }
-        html.co-iframe-embed,
-        html.co-iframe-embed body {
-            min-height: 0 !important;
-            height: auto !important;
-            display: block !important;
-        }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #fff;
+            min-height: 100vh;
             color: var(--bite-text);
-            padding: 0 0 20px;
+            padding: 8px 0 28px;
             -webkit-font-smoothing: antialiased;
         }
-        html.co-iframe-embed body { padding-top: 0 !important; }
-        html.co-iframe-embed .co-tabs { margin-top: 0; margin-bottom: 16px; }
-        html.co-iframe-embed .wrap { padding-top: 0; }
         .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
 
         /* Tabs — scoped names to avoid Shopify theme clashes */
@@ -79,6 +64,9 @@
             margin-left: auto;
         }
         .co-tab-btn.co-logout-tab:hover { color: var(--bite-pink); }
+
+        .co-tab-panel { display: none !important; }
+        .co-tab-panel.co-tab-active { display: block !important; }
 
         /* Card container */
         .co-card {
@@ -360,7 +348,7 @@
         }
     </style>
 </head>
-<body{% if in_iframe %} class="co-iframe-embed"{% endif %}>
+<body>
     <div class="wrap">
         {% if error %}
         <div class="state-msg error">
@@ -369,54 +357,12 @@
         </div>
         {% else %}
         <nav class="co-tabs">
-            <a href="?tab=profile" class="co-tab-btn{% if active_tab == 'profile' %} co-tab-active{% endif %}">Profile</a>
-            <a href="?tab=orders" class="co-tab-btn{% if active_tab == 'orders' %} co-tab-active{% endif %}">Orders</a>
+            <button type="button" class="co-tab-btn" data-tab="profile">Profile</button>
+            <button type="button" class="co-tab-btn co-tab-active" data-tab="orders">Orders</button>
             <button type="button" class="co-tab-btn co-logout-tab" id="logout-tab">Logout</button>
         </nav>
 
-        {% if active_tab == 'profile' %}
-            {% if profile %}
-            <div class="co-card co-portal-profile">
-                <h2 class="co-section-title">Your details</h2>
-                <form id="co-profile-form" class="co-profile-form">
-                    <div class="co-field">
-                        <label for="co-first_name">First name <span class="req">*</span></label>
-                        <input type="text" id="co-first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name" required>
-                    </div>
-                    <div class="co-field">
-                        <label for="co-last_name">Last name</label>
-                        <input type="text" id="co-last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name" placeholder="Last name">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-company_name">Company (if required)</label>
-                        <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-email">Email <span class="req">*</span></label>
-                        <input type="email" id="co-email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address" required>
-                    </div>
-                    <div class="co-field">
-                        <label for="co-landline_phone">Landline</label>
-                        <input type="text" id="co-landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel" placeholder="Landline number">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-mobile_number">Mobile</label>
-                        <input type="text" id="co-mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national" placeholder="Mobile number">
-                    </div>
-                    <div class="co-field co-full">
-                        <label for="co-invoice_address">Invoice address</label>
-                        <textarea id="co-invoice_address" name="invoice_address" rows="4" placeholder="Invoice address">{{ profile.invoice_address or '' }}</textarea>
-                    </div>
-                    <div class="co-form-footer">
-                        <button type="submit" class="co-btn-save" id="co-save-btn">Save changes</button>
-                        <p class="co-save-msg" id="co-save-msg" hidden></p>
-                    </div>
-                </form>
-            </div>
-            {% else %}
-            <div class="co-card state-msg">Profile could not be loaded.</div>
-            {% endif %}
-        {% else %}
+        <div id="co-panel-orders" class="co-tab-panel co-tab-active">
             <div class="orders-wrap">
                 {% if orders %}
                 <div class="list-card-scroll">
@@ -554,7 +500,51 @@
                 </div>
                 {% endif %}
             </div>
-        {% endif %}
+        </div>
+
+        <div id="co-panel-profile" class="co-tab-panel" hidden>
+            {% if profile %}
+            <div class="co-card co-portal-profile">
+                <h2 class="co-section-title">Your details</h2>
+                <form id="co-profile-form" class="co-profile-form">
+                    <div class="co-field">
+                        <label for="co-first_name">First name <span class="req">*</span></label>
+                        <input type="text" id="co-first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name" required>
+                    </div>
+                    <div class="co-field">
+                        <label for="co-last_name">Last name</label>
+                        <input type="text" id="co-last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name" placeholder="Last name">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-company_name">Company (if required)</label>
+                        <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-email">Email <span class="req">*</span></label>
+                        <input type="email" id="co-email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address" required>
+                    </div>
+                    <div class="co-field">
+                        <label for="co-landline_phone">Landline</label>
+                        <input type="text" id="co-landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel" placeholder="Landline number">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-mobile_number">Mobile</label>
+                        <input type="text" id="co-mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national" placeholder="Mobile number">
+                    </div>
+                    <div class="co-field co-full">
+                        <label for="co-invoice_address">Invoice address</label>
+                        <textarea id="co-invoice_address" name="invoice_address" rows="4" placeholder="Invoice address">{{ profile.invoice_address or '' }}</textarea>
+                    </div>
+                    <div class="co-form-footer">
+                        <button type="submit" class="co-btn-save" id="co-save-btn">Save changes</button>
+                        <p class="co-save-msg" id="co-save-msg" hidden></p>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="co-card state-msg">Profile could not be loaded.</div>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
 
@@ -576,31 +566,22 @@
             if (!detailRow) return;
             const isOpen = detailRow.classList.toggle('open');
             row.classList.toggle('expanded', isOpen);
-            reportPortalHeight();
         }
 
-        function reportPortalHeight() {
-            if (window.parent === window) return;
-            const height = Math.max(
-                document.body.scrollHeight,
-                document.documentElement.scrollHeight,
-                document.body.offsetHeight
-            );
-            window.parent.postMessage({ source: 'bite-portal', type: 'resize', height: height }, '*');
+        function switchClientTab(tab) {
+            document.querySelectorAll('.co-tab-btn:not(.co-logout-tab)').forEach(btn => {
+                btn.classList.toggle('co-tab-active', btn.dataset.tab === tab);
+            });
+            document.getElementById('co-panel-orders').classList.toggle('co-tab-active', tab === 'orders');
+            document.getElementById('co-panel-orders').hidden = tab !== 'orders';
+            document.getElementById('co-panel-profile').classList.toggle('co-tab-active', tab === 'profile');
+            document.getElementById('co-panel-profile').hidden = tab !== 'profile';
         }
 
-        if (window.parent !== window) {
-            reportPortalHeight();
-            window.addEventListener('load', reportPortalHeight);
-            window.addEventListener('resize', reportPortalHeight);
-            if (typeof MutationObserver !== 'undefined') {
-                new MutationObserver(reportPortalHeight).observe(document.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                });
-            }
-        }
+        document.querySelectorAll('.co-tab-btn:not(.co-logout-tab)').forEach(btn => {
+            btn.addEventListener('click', () => switchClientTab(btn.dataset.tab));
+        });
+        switchClientTab('orders');
 
         const profileForm = document.getElementById('co-profile-form');
         if (profileForm) {
