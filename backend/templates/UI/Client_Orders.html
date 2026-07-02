@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=9" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=12" rel="stylesheet">
     <style>
         :root {
             --bite-cyan: #3AC9E3;
@@ -234,16 +234,10 @@
             border-bottom: 1px solid #e5e7eb;
         }
         .orders-wrap .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
-        .orders-wrap .detail-line { padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+        .orders-wrap .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .orders-wrap .detail-line:last-child { border-bottom: none; }
-        .orders-wrap .line-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
-            font-size: 0.86rem;
-        }
-        .orders-wrap .line-details { flex: 1; min-width: 0; }
+        .orders-wrap .line-main { font-size: 0.86rem; }
+        .orders-wrap .line-details { min-width: 0; }
         .orders-wrap .line-sku {
             font-size: 0.75rem;
             font-weight: 600;
@@ -252,7 +246,8 @@
             margin-bottom: 2px;
         }
         .orders-wrap .line-title { font-weight: 600; color: #111827; display: block; }
-        .orders-wrap .line-price { font-weight: 600; white-space: nowrap; color: #111827; }
+        .orders-wrap .line-price-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }
+        .orders-wrap .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; }
         .orders-wrap .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
         .orders-wrap .line-props {
             list-style: none;
@@ -476,12 +471,12 @@
                     </thead>
                     <tbody>
                         {% for order in orders %}
-                        <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ loop.index }}')">
+                        <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ order.id }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td>{{ order.total_display }}</td>
                         </tr>
-                        <tr class="details-row" id="details-{{ loop.index }}">
+                        <tr class="details-row" id="details-{{ order.id }}" data-order-id="{{ order.id }}">
                             <td colspan="3">
                                 <div class="details-inner">
                                     <div class="detail-section">
@@ -506,9 +501,9 @@
                                                         </ul>
                                                         {% endif %}
                                                     </div>
-                                                    <span class="line-price">{{ item.price_display }}</span>
                                                 </div>
-                                                <div class="office-tracking-host" data-line-number="{{ item.line_number }}"></div>
+                                                <div class="line-price-row"><span class="line-price">{{ item.price_display }}</span></div>
+                                                <div class="office-tracking-host" data-line-number="{{ item.line_number }}"><div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div></div>
                                             </div>
                                             {% endfor %}
                                         {% else %}
@@ -523,8 +518,8 @@
                                         <div class="detail-line">
                                             <div class="line-main">
                                                 <span class="line-title">{{ item.title }}</span>
-                                                <span class="line-price">{{ item.price_display }}</span>
                                             </div>
+                                            <div class="line-price-row"><span class="line-price">{{ item.price_display }}</span></div>
                                             {% if item.properties %}
                                             <ul class="line-props">
                                                 {% for prop in item.properties %}
@@ -788,6 +783,34 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=9"></script>
+    <script src="/static/office_tracking.js?v=15"></script>
+    <script>
+        (function () {
+            function prefetchClientOrderTracking() {
+                const orderIds = [];
+                document.querySelectorAll('.orders-wrap .data-row[data-order-id]').forEach(row => {
+                    if (row.dataset.orderId) orderIds.push(row.dataset.orderId);
+                });
+                if (!orderIds.length || !window.OfficeTracking) return;
+                const wrap = document.querySelector('.orders-wrap');
+                OfficeTracking.prefetchAllOrderTracking(orderIds, '/api/client/orders', 'client', function (orderId) {
+                    if (!wrap || !OfficeTracking.applyCachedTrackingIn) return;
+                    const row = document.getElementById('details-' + orderId);
+                    if (row) OfficeTracking.applyCachedTrackingIn(row, '/api/client/orders', 'client');
+                    if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+                }).then(function () {
+                    if (wrap && OfficeTracking.applyCachedTrackingIn) {
+                        OfficeTracking.applyCachedTrackingIn(wrap, '/api/client/orders', 'client');
+                    }
+                    if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', prefetchClientOrderTracking);
+            } else {
+                prefetchClientOrderTracking();
+            }
+        })();
+    </script>
 </body>
 </html>

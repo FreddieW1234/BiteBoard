@@ -248,10 +248,11 @@
     font-weight: 500;
     color: #4f46e5;
     cursor: pointer;
-    padding: 6px 12px;
+    padding: 8px 14px;
     border: 1px solid #c7d2fe;
-    border-radius: 6px;
+    border-radius: 8px;
     background: #eef2ff;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 .office-tracking-actions label.office-upload-btn:hover { background: #e0e7ff; }
 .office-tracking-actions label.office-upload-btn input { display: none; }
@@ -389,23 +390,42 @@ button.office-file-link {
 .office-stage-select {
     font-size: 0.8rem;
     font-family: inherit;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: 1px solid #d1d5db;
-    border-radius: 6px;
+    border-radius: 8px;
     background: #fff;
     color: #374151;
     width: 100%;
     box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.office-stage-select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 .office-staff-status .office-btn-set-stage {
     width: 100%;
 }
 .office-btn-set-stage {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 8px 14px;
+    border: 1px solid #4f46e5;
+    border-radius: 8px;
     background: #4f46e5;
     color: #fff;
-    border-color: #4f46e5;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.office-btn-set-stage:hover { background: #4338ca; }
+.office-btn-set-stage:hover {
+    background: #4338ca;
+    border-color: #4338ca;
+}
 .office-btn-set-stage:disabled { opacity: 0.65; cursor: wait; }
 
 .office-changes-modal {

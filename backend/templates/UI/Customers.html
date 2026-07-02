@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=4" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=11" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=12" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -315,13 +315,14 @@
             color: #9ca3af; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;
         }
         .cu-orders-modal-body .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
-        .cu-orders-modal-body .detail-line { padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+        .cu-orders-modal-body .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .cu-orders-modal-body .detail-line:last-child { border-bottom: none; }
-        .cu-orders-modal-body .line-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; font-size: 0.86rem; }
-        .cu-orders-modal-body .line-details { flex: 1; min-width: 0; }
+        .cu-orders-modal-body .line-main { font-size: 0.86rem; }
+        .cu-orders-modal-body .line-details { min-width: 0; }
         .cu-orders-modal-body .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
         .cu-orders-modal-body .line-title { font-weight: 600; color: #111827; display: block; }
-        .cu-orders-modal-body .line-price { font-weight: 600; white-space: nowrap; color: #111827; }
+        .cu-orders-modal-body .line-price-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }
+        .cu-orders-modal-body .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; }
         .cu-orders-modal-body .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
         .cu-orders-modal-body .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
         .cu-orders-modal-body .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
@@ -948,7 +949,7 @@
                 });
                 html += '</ul>';
             }
-            html += `</div><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div>`;
+            html += `</div></div><div class="line-price-row"><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div>`;
             if (li.line_number != null) {
                 html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"></div>`;
             }

@@ -443,14 +443,24 @@
     }
 
     function findTrackingHost(detailsEl, lineNumber) {
-        return detailsEl.querySelector('.office-tracking-host[data-line-number="' + lineNumber + '"]');
+        if (lineNumber == null || lineNumber === '') return null;
+        const key = String(lineNumber);
+        return detailsEl.querySelector('.office-tracking-host[data-line-number="' + key + '"]');
     }
 
     function paintTrackingHosts(detailsEl, payload, orderId, apiPrefix, role) {
+        const painted = new Set();
         (payload.items || []).forEach(item => {
             const host = findTrackingHost(detailsEl, item.line_number);
             if (!host) return;
             host.innerHTML = renderTrackingBlock(item, orderId, apiPrefix, role);
+            painted.add(host);
+        });
+        detailsEl.querySelectorAll('.office-tracking-host').forEach(host => {
+            if (painted.has(host)) return;
+            if (host.querySelector('.office-tracking-loading') || !host.querySelector('.office-tracking')) {
+                host.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">Tracking unavailable</p></div>';
+            }
         });
         bindTrackingEvents(detailsEl);
     }
