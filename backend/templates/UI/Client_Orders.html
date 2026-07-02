@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account</title>
+    <script>if(window.parent!==window)document.documentElement.classList.add('co-embed');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -19,6 +20,7 @@
             --bite-radius: 10px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: auto; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #fff;
@@ -27,7 +29,18 @@
             padding: 8px 0 28px;
             -webkit-font-smoothing: antialiased;
         }
+        html.co-embed,
+        html.co-embed body {
+            min-height: 0 !important;
+            height: auto !important;
+        }
+        html.co-embed body {
+            padding: 0 0 12px;
+            overflow: hidden;
+        }
+        #bite-client-portal { display: block; }
         .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+        html.co-embed .wrap { padding-top: 0; }
 
         /* Tabs — scoped names to avoid Shopify theme clashes */
         .co-tabs {
@@ -67,6 +80,7 @@
 
         .co-tab-panel { display: none !important; }
         .co-tab-panel.co-tab-active { display: block !important; }
+        .co-tab-panel[hidden] { display: none !important; }
 
         /* Card container */
         .co-card {
@@ -349,7 +363,7 @@
     </style>
 </head>
 <body>
-    <div class="wrap">
+    <div id="bite-client-portal" class="wrap">
         {% if error %}
         <div class="state-msg error">
             <i class="fas fa-circle-exclamation"></i>
@@ -361,6 +375,50 @@
             <button type="button" class="co-tab-btn co-tab-active" data-tab="orders">Orders</button>
             <button type="button" class="co-tab-btn co-logout-tab" id="logout-tab">Logout</button>
         </nav>
+
+        <div id="co-panel-profile" class="co-tab-panel" hidden>
+            {% if profile %}
+            <div class="co-card co-portal-profile">
+                <h2 class="co-section-title">Your details</h2>
+                <form id="co-profile-form" class="co-profile-form">
+                    <div class="co-field">
+                        <label for="co-first_name">First name <span class="req">*</span></label>
+                        <input type="text" id="co-first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name" required>
+                    </div>
+                    <div class="co-field">
+                        <label for="co-last_name">Last name</label>
+                        <input type="text" id="co-last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name" placeholder="Last name">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-company_name">Company (if required)</label>
+                        <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-email">Email <span class="req">*</span></label>
+                        <input type="email" id="co-email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address" required>
+                    </div>
+                    <div class="co-field">
+                        <label for="co-landline_phone">Landline</label>
+                        <input type="text" id="co-landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel" placeholder="Landline number">
+                    </div>
+                    <div class="co-field">
+                        <label for="co-mobile_number">Mobile</label>
+                        <input type="text" id="co-mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national" placeholder="Mobile number">
+                    </div>
+                    <div class="co-field co-full">
+                        <label for="co-invoice_address">Invoice address</label>
+                        <textarea id="co-invoice_address" name="invoice_address" rows="4" placeholder="Invoice address">{{ profile.invoice_address or '' }}</textarea>
+                    </div>
+                    <div class="co-form-footer">
+                        <button type="submit" class="co-btn-save" id="co-save-btn">Save changes</button>
+                        <p class="co-save-msg" id="co-save-msg" hidden></p>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <div class="co-card state-msg">Profile could not be loaded.</div>
+            {% endif %}
+        </div>
 
         <div id="co-panel-orders" class="co-tab-panel co-tab-active">
             <div class="orders-wrap">
@@ -501,50 +559,6 @@
                 {% endif %}
             </div>
         </div>
-
-        <div id="co-panel-profile" class="co-tab-panel" hidden>
-            {% if profile %}
-            <div class="co-card co-portal-profile">
-                <h2 class="co-section-title">Your details</h2>
-                <form id="co-profile-form" class="co-profile-form">
-                    <div class="co-field">
-                        <label for="co-first_name">First name <span class="req">*</span></label>
-                        <input type="text" id="co-first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name" required>
-                    </div>
-                    <div class="co-field">
-                        <label for="co-last_name">Last name</label>
-                        <input type="text" id="co-last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name" placeholder="Last name">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-company_name">Company (if required)</label>
-                        <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-email">Email <span class="req">*</span></label>
-                        <input type="email" id="co-email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address" required>
-                    </div>
-                    <div class="co-field">
-                        <label for="co-landline_phone">Landline</label>
-                        <input type="text" id="co-landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel" placeholder="Landline number">
-                    </div>
-                    <div class="co-field">
-                        <label for="co-mobile_number">Mobile</label>
-                        <input type="text" id="co-mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national" placeholder="Mobile number">
-                    </div>
-                    <div class="co-field co-full">
-                        <label for="co-invoice_address">Invoice address</label>
-                        <textarea id="co-invoice_address" name="invoice_address" rows="4" placeholder="Invoice address">{{ profile.invoice_address or '' }}</textarea>
-                    </div>
-                    <div class="co-form-footer">
-                        <button type="submit" class="co-btn-save" id="co-save-btn">Save changes</button>
-                        <p class="co-save-msg" id="co-save-msg" hidden></p>
-                    </div>
-                </form>
-            </div>
-            {% else %}
-            <div class="co-card state-msg">Profile could not be loaded.</div>
-            {% endif %}
-        </div>
         {% endif %}
     </div>
 
@@ -561,11 +575,23 @@
 
         document.getElementById('logout-tab')?.addEventListener('click', doLogout);
 
+        let embedHeightTimer = null;
+        function notifyEmbedHeight() {
+            if (window.parent === window) return;
+            clearTimeout(embedHeightTimer);
+            embedHeightTimer = setTimeout(() => {
+                const root = document.getElementById('bite-client-portal') || document.body;
+                const height = Math.ceil(root.getBoundingClientRect().height);
+                window.parent.postMessage({ source: 'bite-portal', type: 'resize', height }, '*');
+            }, 50);
+        }
+
         function toggleDetails(row, id) {
             const detailRow = document.getElementById(id);
             if (!detailRow) return;
             const isOpen = detailRow.classList.toggle('open');
             row.classList.toggle('expanded', isOpen);
+            notifyEmbedHeight();
         }
 
         function switchClientTab(tab) {
@@ -576,12 +602,23 @@
             document.getElementById('co-panel-orders').hidden = tab !== 'orders';
             document.getElementById('co-panel-profile').classList.toggle('co-tab-active', tab === 'profile');
             document.getElementById('co-panel-profile').hidden = tab !== 'profile';
+            notifyEmbedHeight();
         }
 
         document.querySelectorAll('.co-tab-btn:not(.co-logout-tab)').forEach(btn => {
             btn.addEventListener('click', () => switchClientTab(btn.dataset.tab));
         });
         switchClientTab('orders');
+
+        if (window.parent !== window) {
+            notifyEmbedHeight();
+            window.addEventListener('load', notifyEmbedHeight);
+            window.addEventListener('resize', notifyEmbedHeight);
+            if (typeof ResizeObserver !== 'undefined') {
+                const root = document.getElementById('bite-client-portal');
+                if (root) new ResizeObserver(notifyEmbedHeight).observe(root);
+            }
+        }
 
         const profileForm = document.getElementById('co-profile-form');
         if (profileForm) {
@@ -642,6 +679,7 @@
                     saveMsg.textContent = 'Your details have been saved.';
                     saveMsg.className = 'co-save-msg ok';
                     saveMsg.hidden = false;
+                    notifyEmbedHeight();
                 } catch (err) {
                     saveMsg.textContent = err.message || 'Could not save. Please try again.';
                     saveMsg.className = 'co-save-msg err';
