@@ -10,18 +10,17 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', sans-serif;
-            background: #f6f8fa;
+            background: #f3f4f6;
             min-height: 100vh;
-            color: #1f2937;
+            color: #111;
             padding: 16px 20px 32px;
         }
-        .wrap { max-width: 960px; margin: 0 auto; }
+        .wrap { max-width: 920px; margin: 0 auto; }
         .tabs {
             display: flex;
             gap: 8px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             border-bottom: 1px solid #e5e7eb;
-            padding-bottom: 0;
         }
         .tab-btn {
             appearance: none;
@@ -36,59 +35,93 @@
             margin-bottom: -1px;
             font-family: inherit;
         }
-        .tab-btn:hover { color: #4f46e5; }
-        .tab-btn.active {
-            color: #4f46e5;
-            border-bottom-color: #4f46e5;
-        }
+        .tab-btn:hover { color: #111; }
+        .tab-btn.active { color: #111; border-bottom-color: #111; }
         .tab-btn.logout-tab { color: #b91c1c; margin-left: auto; }
         .tab-btn.logout-tab:hover { color: #991b1b; }
-        .panel {
+        .panel { background: transparent; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .profile-heading {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #111;
+        }
+        .profile-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px 16px;
+        }
+        .field-box {
+            position: relative;
             background: #fff;
             border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            overflow: hidden;
+            border-radius: 4px;
+            padding: 22px 14px 10px;
+            min-height: 64px;
         }
-        .tab-panel { display: none; padding: 24px; }
-        .tab-panel.active { display: block; }
+        .field-box.full { grid-column: 1 / -1; }
+        .field-box.tall { min-height: 120px; }
+        .field-box label {
+            position: absolute;
+            top: 10px;
+            left: 14px;
+            font-size: 0.68rem;
+            color: #9ca3af;
+            pointer-events: none;
+        }
+        .field-box input,
+        .field-box textarea {
+            width: 100%;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.05rem;
+            color: #111;
+            padding: 0;
+            resize: vertical;
+        }
+        .field-box textarea { min-height: 72px; line-height: 1.45; }
+        .save-wrap { grid-column: 1 / 2; margin-top: 4px; }
+        .btn-save {
+            width: 100%;
+            padding: 16px 24px;
+            background: #111;
+            color: #fff;
+            border: none;
+            border-radius: 2px;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-save:hover { background: #333; }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        .save-msg {
+            grid-column: 1 / -1;
+            font-size: 0.875rem;
+            margin-top: -6px;
+        }
+        .save-msg.ok { color: #166534; }
+        .save-msg.err { color: #b91c1c; }
         .state-msg {
             padding: 32px 24px;
             text-align: center;
             color: #6b7280;
             font-size: 0.95rem;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
         }
-        .state-msg.error { color: #b91c1c; background: #fef2f2; border-radius: 12px; }
-        .state-msg i { display: block; font-size: 1.5rem; margin-bottom: 10px; }
-        .profile-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px 20px;
-        }
-        .profile-field.full { grid-column: 1 / -1; }
-        .profile-field label {
-            display: block;
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-bottom: 6px;
-        }
-        .profile-field .value {
-            font-size: 0.95rem;
-            color: #1f2937;
-            white-space: pre-wrap;
-            line-height: 1.5;
-        }
-        .profile-field .value.empty { color: #9ca3af; font-style: italic; }
-        .type-pill {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            background: #eef2ff;
-            color: #4338ca;
+        .state-msg.error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+        .orders-panel {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
         }
         table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f3f4f6; }
@@ -116,25 +149,9 @@
             justify-content: space-between;
             gap: 12px;
         }
-        .logout-panel { text-align: center; padding: 48px 24px; }
-        .logout-panel p { color: #6b7280; margin-bottom: 20px; max-width: 360px; margin-left: auto; margin-right: auto; }
-        .btn-logout {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 24px;
-            background: #b91c1c;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .btn-logout:hover { background: #991b1b; }
         @media (max-width: 640px) {
-            .profile-grid { grid-template-columns: 1fr; }
+            .profile-form { grid-template-columns: 1fr; }
+            .save-wrap { grid-column: 1 / -1; }
             th:nth-child(3), td:nth-child(3) { display: none; }
             .tabs { flex-wrap: wrap; }
             .tab-btn.logout-tab { margin-left: 0; }
@@ -144,7 +161,7 @@
 <body>
     <div class="wrap">
         {% if error %}
-        <div class="state-msg error" style="margin-bottom:16px;border:1px solid #fecaca;">
+        <div class="state-msg error">
             <i class="fas fa-circle-exclamation"></i>
             {{ error }}
         </div>
@@ -152,115 +169,100 @@
         <nav class="tabs" role="tablist">
             <button type="button" class="tab-btn active" data-tab="profile" role="tab">Profile</button>
             <button type="button" class="tab-btn" data-tab="orders" role="tab">Orders</button>
-            <button type="button" class="tab-btn logout-tab" data-tab="logout" role="tab">Logout</button>
+            <button type="button" class="tab-btn logout-tab" id="logout-tab" role="tab">Logout</button>
         </nav>
 
         <div class="panel">
-            <!-- Profile -->
             <div id="panel-profile" class="tab-panel active" role="tabpanel">
+                <h2 class="profile-heading">Profile</h2>
                 {% if profile %}
-                <div class="profile-grid">
-                    <div class="profile-field">
-                        <label>First name</label>
-                        <div class="value{% if not profile.first_name %} empty{% endif %}">{{ profile.first_name or '—' }}</div>
+                <form id="profile-form" class="profile-form">
+                    <div class="field-box">
+                        <label for="first_name">First Name</label>
+                        <input type="text" id="first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name">
                     </div>
-                    <div class="profile-field">
-                        <label>Last name</label>
-                        <div class="value{% if not profile.last_name %} empty{% endif %}">{{ profile.last_name or '—' }}</div>
+                    <div class="field-box">
+                        <label for="last_name">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name">
                     </div>
-                    <div class="profile-field">
-                        <label>Email</label>
-                        <div class="value{% if not profile.email %} empty{% endif %}">{{ profile.email or '—' }}</div>
+                    <div class="field-box">
+                        <label for="company_name">Company (if required)</label>
+                        <input type="text" id="company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization">
                     </div>
-                    <div class="profile-field">
-                        <label>Type</label>
-                        <div class="value">
-                            {% if profile.type_tag %}
-                            <span class="type-pill">{{ profile.type_tag }}</span>
-                            {% else %}
-                            <span class="empty">—</span>
-                            {% endif %}
-                        </div>
+                    <div class="field-box">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" value="{{ profile.email or '' }}" autocomplete="email">
                     </div>
-                    <div class="profile-field">
-                        <label>Company</label>
-                        <div class="value{% if not profile.company_name %} empty{% endif %}">{{ profile.company_name or '—' }}</div>
+                    <div class="field-box">
+                        <label for="landline_phone">Landline number</label>
+                        <input type="text" id="landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel">
                     </div>
-                    <div class="profile-field">
-                        <label>Landline</label>
-                        <div class="value{% if not profile.landline_phone %} empty{% endif %}">{{ profile.landline_phone or '—' }}</div>
+                    <div class="field-box">
+                        <label for="mobile_number">Mobile number</label>
+                        <input type="text" id="mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national">
                     </div>
-                    <div class="profile-field">
-                        <label>Mobile</label>
-                        <div class="value{% if not profile.mobile_number %} empty{% endif %}">{{ profile.mobile_number or '—' }}</div>
+                    <div class="field-box full tall">
+                        <label for="invoice_address">Invoice address</label>
+                        <textarea id="invoice_address" name="invoice_address" rows="4">{{ profile.invoice_address or '' }}</textarea>
                     </div>
-                    <div class="profile-field full">
-                        <label>Invoice address</label>
-                        <div class="value{% if not profile.invoice_address %} empty{% endif %}">{{ profile.invoice_address or '—' }}</div>
+                    <div class="save-wrap">
+                        <button type="submit" class="btn-save" id="save-btn">Save</button>
                     </div>
-                </div>
+                    <p class="save-msg" id="save-msg" hidden></p>
+                </form>
                 {% else %}
                 <div class="state-msg">Profile could not be loaded.</div>
                 {% endif %}
             </div>
 
-            <!-- Orders -->
             <div id="panel-orders" class="tab-panel" role="tabpanel">
-                {% if orders %}
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>Date</th>
-                            <th>Status</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for order in orders %}
-                        <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
-                            <td><strong>{{ order.name }}</strong></td>
-                            <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
-                            <td>
-                                <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
-                                    {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
-                                </span>
-                            </td>
-                            <td>{{ order.currency }} {{ order.total }}</td>
-                        </tr>
-                        <tr class="details-row" id="details-{{ loop.index }}">
-                            <td colspan="4">
-                                <div class="details-inner">
-                                    <strong style="display:block;margin-bottom:8px;">Items</strong>
-                                    <ul>
-                                        {% for item in order.line_items %}
-                                        <li>
-                                            <span>{{ item.quantity }} × {{ item.title }}</span>
-                                            <span>{{ item.currency }} {{ item.total }}</span>
-                                        </li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="state-msg">
-                    <i class="fas fa-inbox"></i>
-                    You don't have any orders yet.
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Logout -->
-            <div id="panel-logout" class="tab-panel" role="tabpanel">
-                <div class="logout-panel">
-                    <p>Sign out of your Bite Promotions account on this device.</p>
-                    <button type="button" class="btn-logout" id="logout-btn">
-                        <i class="fas fa-right-from-bracket"></i> Log out
-                    </button>
+                <div class="orders-panel">
+                    {% if orders %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
+                                <td><strong>{{ order.name }}</strong></td>
+                                <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
+                                <td>
+                                    <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
+                                        {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
+                                    </span>
+                                </td>
+                                <td>{{ order.currency }} {{ order.total }}</td>
+                            </tr>
+                            <tr class="details-row" id="details-{{ loop.index }}">
+                                <td colspan="4">
+                                    <div class="details-inner">
+                                        <strong style="display:block;margin-bottom:8px;">Items</strong>
+                                        <ul>
+                                            {% for item in order.line_items %}
+                                            <li>
+                                                <span>{{ item.quantity }} × {{ item.title }}</span>
+                                                <span>{{ item.currency }} {{ item.total }}</span>
+                                            </li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="state-msg">
+                        <i class="fas fa-inbox"></i>
+                        You don't have any orders yet.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -270,43 +272,65 @@
     <script>
         const LOGOUT_URL = {{ logout_url | tojson }};
 
+        async function doLogout() {
+            try {
+                await fetch('/api/client/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) { /* continue */ }
+            const target = window.top || window.parent || window;
+            target.location.href = LOGOUT_URL;
+        }
+
+        document.getElementById('logout-tab')?.addEventListener('click', doLogout);
+
         function toggleDetails(id) {
             const row = document.getElementById(id);
             if (row) row.classList.toggle('open');
         }
 
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.getAttribute('data-tab');
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
                 btn.classList.add('active');
                 const panel = document.getElementById('panel-' + tab);
                 if (panel) panel.classList.add('active');
-                if (tab === 'logout') {
-                    /* show logout panel; user confirms with button */
-                }
             });
         });
 
-        const logoutBtn = document.getElementById('logout-btn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', async () => {
+        const profileForm = document.getElementById('profile-form');
+        if (profileForm) {
+            profileForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const saveBtn = document.getElementById('save-btn');
+                const saveMsg = document.getElementById('save-msg');
+                const fd = new FormData(profileForm);
+                const body = Object.fromEntries(fd.entries());
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving…';
+                saveMsg.hidden = true;
                 try {
-                    await fetch('/api/client/logout', { method: 'POST', credentials: 'same-origin' });
-                } catch (e) { /* continue to shop logout */ }
-                const target = window.top || window.parent || window;
-                target.location.href = LOGOUT_URL;
+                    const res = await fetch('/api/client/profile', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(body),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                    saveMsg.textContent = 'Saved successfully.';
+                    saveMsg.className = 'save-msg ok';
+                    saveMsg.hidden = false;
+                } catch (err) {
+                    saveMsg.textContent = err.message || 'Could not save. Please try again.';
+                    saveMsg.className = 'save-msg err';
+                    saveMsg.hidden = false;
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save';
+                }
             });
         }
     </script>
-    <!--
-      Shopify Portal section — logged-in customer only:
-      {% if customer %}
-      <iframe
-        src="https://bitepromotionsportal.co.uk/client/orders?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}&shop_url={{ shop.url | url_encode }}"
-        width="100%" height="900" style="border:none;" title="My Account"></iframe>
-      {% endif %}
-    -->
 </body>
 </html>

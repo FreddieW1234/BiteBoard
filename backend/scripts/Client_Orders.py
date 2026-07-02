@@ -101,9 +101,6 @@ def get_customer_profile(customer_id: str | int) -> dict:
             sys.path.insert(0, scripts_dir)
         from Customers import _fetch_single_customer  # type: ignore
         profile = _fetch_single_customer(cid)
-        type_label = ""
-        if profile.get("matched_tags"):
-            type_label = profile["matched_tags"][0]
         return {
             "success": True,
             "profile": {
@@ -116,11 +113,34 @@ def get_customer_profile(customer_id: str | int) -> dict:
                 "invoice_address": profile.get("invoice_address") or "",
                 "landline_phone": profile.get("landline_phone") or "",
                 "mobile_number": profile.get("mobile_number") or "",
-                "type_tag": type_label,
             },
         }
     except Exception as e:
         return {"success": False, "error": str(e), "profile": None}
+
+
+CLIENT_PROFILE_KEYS = (
+    "first_name",
+    "last_name",
+    "email",
+    "company_name",
+    "invoice_address",
+    "landline_phone",
+    "mobile_number",
+)
+
+
+def update_client_profile(customer_id: str | int, payload: dict) -> dict:
+    """Update allowed profile fields for the logged-in customer (no type tag changes)."""
+    import os
+    import sys
+    scripts_dir = os.path.dirname(__file__)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from Customers import update_customer_details  # type: ignore
+    safe = {k: payload[k] for k in CLIENT_PROFILE_KEYS if k in payload}
+    update_customer_details(customer_id, safe)
+    return get_customer_profile(customer_id)
 
 
 def get_customer_orders(customer_id: str | int) -> dict:

@@ -263,8 +263,8 @@ def update_customer_details(customer_id, payload):
     raw = _safe_request("GET", get_url).json().get("customer") or {}
 
     existing_tags = _parse_tags(raw.get("tags"))
-    type_tag = payload.get("type_tag")
-    if type_tag is not None:
+    if "type_tag" in payload:
+        type_tag = payload.get("type_tag")
         if type_tag == "":
             type_tag = None
         else:
@@ -272,7 +272,9 @@ def update_customer_details(customer_id, payload):
             if key not in CUSTOMER_TYPE_TAGS:
                 raise ValueError("Invalid type tag")
             type_tag = key
-    new_tags = _apply_type_tag(existing_tags, type_tag)
+        new_tags = _apply_type_tag(existing_tags, type_tag)
+    else:
+        new_tags = existing_tags
 
     customer_body = {"id": customer_id, "tags": ", ".join(new_tags)}
     if "email" in payload:

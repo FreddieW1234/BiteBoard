@@ -149,13 +149,16 @@ def _client_logout_url() -> str:
     return f"{base.rstrip('/')}/account/logout"
 
 
-@app.route("/api/client/profile")
+@app.route("/api/client/profile", methods=["GET", "PUT"])
 def api_client_profile():
     cid = get_client_customer_id()
     if not cid:
         return jsonify({"success": False, "error": "Not signed in as a customer"}), 403
     try:
-        from scripts.Client_Orders import get_customer_profile  # type: ignore
+        from scripts.Client_Orders import get_customer_profile, update_client_profile  # type: ignore
+        if request.method == "PUT":
+            data = request.get_json(silent=True) or {}
+            return jsonify(update_client_profile(cid, data))
         return jsonify(get_customer_profile(cid))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
