@@ -37,6 +37,37 @@
         .page-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
         .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+        .toolbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+        .sort-select {
+            padding: 9px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            font-weight: 500;
+            color: #374151;
+            background: #fff;
+            cursor: pointer;
+        }
+        .sort-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .orders-section { margin-bottom: 20px; }
+        .orders-section:last-child { margin-bottom: 0; }
+        .orders-section-heading {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .orders-section-heading i { color: #059669; font-size: 0.9rem; }
+        .orders-section-heading .section-count {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #6b7280;
+        }
+        .orders-stack { display: flex; flex-direction: column; gap: 24px; }
         .search-box { position: relative; flex: 1; min-width: 240px; max-width: 460px; }
         .search-box i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
         .search-box input { width: 100%; padding: 11px 14px 11px 38px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; font-family: inherit; background: #fff; }
@@ -252,16 +283,27 @@
                     <input type="text" id="search-input" placeholder="Search order, company, customer, email…">
                 </div>
                 <span class="count-pill" id="count-pill">Loading…</span>
-                <button type="button" class="btn-ghost" id="refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
+                <div class="toolbar-actions">
+                    <select class="sort-select" id="sort-select" aria-label="Sort active orders">
+                        <option value="priority">Sort: Priority</option>
+                        <option value="recent">Sort: Most recent</option>
+                    </select>
+                    <button type="button" class="btn-ghost" id="refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
+                </div>
             </div>
-            <div class="list-card" id="content">
-                <div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div>
+            <div id="content">
+                <div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>
             </div>
         </div>
     </div>
 
     <script>
         let allOrders = [];
+        let orderIndicators = {};
+        let sortMode = localStorage.getItem('orders-sort') || 'priority';
+        const SORT_STORAGE_KEY = 'orders-sort';
+        let trackingPrefetchToken = 0;
+        let ordersRefreshTimer = null;
 
         function escapeHtml(s) {
             return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -300,7 +342,7 @@
                     <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
                 </div>`;
             if (li.line_number != null) {
-                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"></div>`;
+                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"><div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div></div>`;
             }
             html += '</div>';
             return html;
@@ -548,19 +590,74 @@
             }
         }
 
-        function renderTable(orders) {
-            const content = document.getElementById('content');
-            const pill = document.getElementById('count-pill');
-            pill.textContent = orders.length + ' order' + (orders.length === 1 ? '' : 's');
+        function getOrderIndicator(orderId) {
+            const id = String(orderId);
+            if (Object.prototype.hasOwnProperty.call(orderIndicators, id)) {
+                return orderIndicators[id];
+            }
+            if (window.OfficeTracking && typeof OfficeTracking.getCachedOrderIndicator === 'function') {
+                const cached = OfficeTracking.getCachedOrderIndicator(id);
+                if (cached !== null) return cached;
+            }
+            return 'none';
+        }
+
+        function isOrderCompleted(orderId) {
+            const id = String(orderId);
+            if (!Object.prototype.hasOwnProperty.call(orderIndicators, id)) return false;
+            return window.OfficeTracking && typeof OfficeTracking.isCompletedIndicator === 'function'
+                && OfficeTracking.isCompletedIndicator(orderIndicators[id]);
+        }
+
+        function indicatorPriority(orderId) {
+            if (window.OfficeTracking && typeof OfficeTracking.indicatorSortPriority === 'function') {
+                return OfficeTracking.indicatorSortPriority(getOrderIndicator(orderId));
+            }
+            return 99;
+        }
+
+        function partitionOrders(orders) {
+            const active = [];
+            const completed = [];
+            orders.forEach(o => {
+                if (isOrderCompleted(o.id)) completed.push(o);
+                else active.push(o);
+            });
+            return { active, completed };
+        }
+
+        function sortActiveOrders(orders) {
+            const copy = [...orders];
+            if (sortMode === 'recent') {
+                copy.sort((a, b) => (b.processed_at || '').localeCompare(a.processed_at || ''));
+                return copy;
+            }
+            copy.sort((a, b) => {
+                const diff = indicatorPriority(a.id) - indicatorPriority(b.id);
+                if (diff !== 0) return diff;
+                return (b.processed_at || '').localeCompare(a.processed_at || '');
+            });
+            return copy;
+        }
+
+        function sortCompletedOrders(orders) {
+            return [...orders].sort((a, b) => (b.processed_at || '').localeCompare(a.processed_at || ''));
+        }
+
+        function renderOrderTableHtml(orders) {
             if (!orders.length) {
-                content.innerHTML = '<div class="state-msg">No orders found.</div>';
-                return;
+                return '<div class="state-msg">No orders found.</div>';
             }
             let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
-            orders.forEach((o, i) => {
-                html += `<tr class="data-row" data-idx="${i}" data-order-id="${escapeHtml(o.id)}">
+            orders.forEach(o => {
+                const orderId = String(o.id);
+                const indicator = getOrderIndicator(orderId);
+                const indicatorHtml = (window.OfficeTracking && typeof OfficeTracking.renderOrderIndicatorHtml === 'function')
+                    ? OfficeTracking.renderOrderIndicatorHtml(indicator)
+                    : '';
+                html += `<tr class="data-row" data-order-id="${escapeHtml(orderId)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
-                    <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(o.id)}"></span></td>
+                    <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(orderId)}">${indicatorHtml}</span></td>
                     <td>${escapeHtml(formatDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.company || '—')}</td>
                     <td>${escapeHtml(o.customer_name || '—')}</td>
@@ -569,24 +666,98 @@
                     <td>${escapeHtml(o.mobile_number || '—')}</td>
                     <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="details-${i}"><td colspan="9">${renderOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="details-${escapeHtml(orderId)}"><td colspan="9">${renderOrderDetails(o)}</td></tr>`;
             });
             html += '</tbody></table></div>';
-            content.innerHTML = html;
-            if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') OfficeTracking.loadOrderIndicatorsIn(content, '/api/orders');
-            content.querySelectorAll('.data-row').forEach(row => {
+            return html;
+        }
+
+        function bindOrderRows(container) {
+            if (!container) return;
+            container.querySelectorAll('.data-row').forEach(row => {
                 row.addEventListener('click', () => {
-                    const idx = row.getAttribute('data-idx');
-                    const dr = document.getElementById('details-' + idx);
+                    const orderId = row.dataset.orderId;
+                    const dr = document.getElementById('details-' + orderId);
                     if (dr) {
                         const isOpen = dr.classList.toggle('open');
                         row.classList.toggle('expanded', isOpen);
-                        if (isOpen && row.dataset.orderId && window.OfficeTracking) {
+                        if (isOpen && orderId && window.OfficeTracking) {
                             const inner = dr.querySelector('.details-inner') || dr;
-                            OfficeTracking.loadOrderTracking(row.dataset.orderId, '/api/orders', inner, 'staff');
+                            OfficeTracking.loadOrderTracking(orderId, '/api/orders', inner, 'staff');
                         }
                     }
                 });
+            });
+        }
+
+        function renderOrdersView(orders) {
+            const content = document.getElementById('content');
+            const pill = document.getElementById('count-pill');
+            const { active, completed } = partitionOrders(orders);
+            const activeSorted = sortActiveOrders(active);
+            const completedSorted = sortCompletedOrders(completed);
+            const activeLabel = activeSorted.length + ' active';
+            const completedLabel = completedSorted.length + ' completed';
+            pill.textContent = orders.length
+                ? `${orders.length} order${orders.length === 1 ? '' : 's'} · ${activeLabel} · ${completedLabel}`
+                : '0 orders';
+
+            if (!orders.length) {
+                content.innerHTML = '<div class="list-card"><div class="state-msg">No orders found.</div></div>';
+                return;
+            }
+
+            let html = '<div class="orders-stack">';
+            const activeBody = activeSorted.length
+                ? renderOrderTableHtml(activeSorted)
+                : '<div class="state-msg">No active orders.</div>';
+            html += `<div class="orders-section orders-active-section"><div class="list-card">${activeBody}</div></div>`;
+            if (completedSorted.length) {
+                html += `<div class="orders-section orders-completed-section">
+                    <h2 class="orders-section-heading"><i class="fas fa-circle-check"></i> Completed Orders <span class="section-count">(${completedSorted.length})</span></h2>
+                    <div class="list-card">${renderOrderTableHtml(completedSorted)}</div>
+                </div>`;
+            }
+            html += '</div>';
+            content.innerHTML = html;
+            bindOrderRows(content);
+            if (window.OfficeTracking && typeof OfficeTracking.applyCachedTrackingIn === 'function') {
+                OfficeTracking.applyCachedTrackingIn(content, '/api/orders', 'staff');
+            }
+        }
+
+        function scheduleOrdersRefresh() {
+            clearTimeout(ordersRefreshTimer);
+            ordersRefreshTimer = setTimeout(() => {
+                renderOrdersView(filterOrders(document.getElementById('search-input').value));
+            }, 450);
+        }
+
+        function onTrackingSettled(orderId, entry) {
+            const id = String(orderId);
+            const prev = orderIndicators[id];
+            let indicator = 'none';
+            if (entry && entry.status === 'done') {
+                indicator = OfficeTracking.computeOrderIndicator(entry.data.items);
+            }
+            orderIndicators[id] = indicator;
+            if (window.OfficeTracking && typeof OfficeTracking.updateOrderRowIndicator === 'function') {
+                OfficeTracking.updateOrderRowIndicator(id, indicator);
+            }
+            const prevCompleted = prev === 'green';
+            const nowCompleted = indicator === 'green';
+            if (prevCompleted !== nowCompleted || sortMode === 'priority') {
+                scheduleOrdersRefresh();
+            }
+        }
+
+        function startBackgroundTrackingPrefetch(orders) {
+            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') return;
+            const token = ++trackingPrefetchToken;
+            const ids = orders.map(o => o.id);
+            OfficeTracking.prefetchAllOrderTracking(ids, '/api/orders', 'staff', (orderId, entry) => {
+                if (token !== trackingPrefetchToken) return;
+                onTrackingSettled(orderId, entry);
             });
         }
 
@@ -605,15 +776,21 @@
 
         async function loadOrders() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div>';
+            content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
             try {
                 const res = await fetch('/api/orders');
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load orders');
                 allOrders = data.orders || [];
-                renderTable(filterOrders(document.getElementById('search-input').value));
+                orderIndicators = {};
+                if (window.OfficeTracking && typeof OfficeTracking.clearOrderTrackingCache === 'function') {
+                    OfficeTracking.clearOrderTrackingCache();
+                }
+                const filtered = filterOrders(document.getElementById('search-input').value);
+                renderOrdersView(filtered);
+                startBackgroundTrackingPrefetch(filtered);
             } catch (err) {
-                content.innerHTML = `<div class="state-msg error">${escapeHtml(err.message)}</div>`;
+                content.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;
                 document.getElementById('count-pill').textContent = '0 orders';
             }
         }
@@ -626,11 +803,19 @@
             saveOrderInfoForm(form);
         });
         document.getElementById('search-input').addEventListener('input', function() {
-            renderTable(filterOrders(this.value));
+            const filtered = filterOrders(this.value);
+            renderOrdersView(filtered);
+            startBackgroundTrackingPrefetch(filtered);
+        });
+        document.getElementById('sort-select').value = sortMode;
+        document.getElementById('sort-select').addEventListener('change', function() {
+            sortMode = this.value;
+            localStorage.setItem(SORT_STORAGE_KEY, sortMode);
+            renderOrdersView(filterOrders(document.getElementById('search-input').value));
         });
         document.getElementById('refresh-btn').addEventListener('click', loadOrders);
         loadOrders();
     </script>
-    <script src="/static/office_tracking.js?v=11"></script>
+    <script src="/static/office_tracking.js?v=13"></script>
 </body>
 </html>

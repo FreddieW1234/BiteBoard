@@ -700,6 +700,131 @@
 
     const boundRoots = new WeakSet();
 
+    const TRACKING_LOADING_HTML = '<div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div>';
+    const orderTrackingCache = Object.create(null);
+
+    function trackingDetailsEl(orderId) {
+        const row = document.getElementById('details-' + String(orderId));
+        return row ? (row.querySelector('.details-inner') || row) : null;
+    }
+
+    function setTrackingLoadingHosts(detailsEl) {
+        if (!detailsEl) return;
+        detailsEl.querySelectorAll('.office-tracking-host').forEach(h => {
+            if (!h.querySelector('.office-tracking')) {
+                h.innerHTML = TRACKING_LOADING_HTML;
+            }
+        });
+    }
+
+    function applyTrackingToDetails(orderId, data, apiPrefix, role, detailsEl) {
+        const el = detailsEl || trackingDetailsEl(orderId);
+        if (!el || !data) return;
+        el._officeTracking = data;
+        el.dataset.trackingLoaded = '1';
+        paintTrackingHosts(el, data, orderId, apiPrefix, role);
+    }
+
+    function applyTrackingErrorToDetails(orderId, message, detailsEl) {
+        const el = detailsEl || trackingDetailsEl(orderId);
+        if (!el) return;
+        el.querySelectorAll('.office-tracking-host').forEach(h => {
+            h.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(message || 'Tracking unavailable') + '</p></div>';
+        });
+        el.dataset.trackingLoaded = '1';
+    }
+
+    async function fetchOrderTrackingPayload(orderId, apiPrefix) {
+        const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
+        const data = await parseJsonResponse(res);
+        if (!res.ok || !data.success) throw new Error(data.error || 'Tracking unavailable');
+        return data;
+    }
+
+    async function ensureOrderTracking(orderId, apiPrefix, detailsEl, role) {
+        const key = String(orderId);
+        const entry = orderTrackingCache[key];
+        if (entry && entry.status === 'done') {
+            applyTrackingToDetails(orderId, entry.data, apiPrefix, role, detailsEl);
+            syncOrderListBadge(orderId, entry.data.items, role);
+            return entry.data;
+        }
+        if (entry && entry.status === 'loading') {
+            if (detailsEl) setTrackingLoadingHosts(detailsEl);
+            try {
+                const data = await entry.promise;
+                if (detailsEl && orderTrackingCache[key] && orderTrackingCache[key].status === 'done') {
+                    applyTrackingToDetails(orderId, orderTrackingCache[key].data, apiPrefix, role, detailsEl);
+                }
+                return data;
+            } catch (err) {
+                if (detailsEl && orderTrackingCache[key] && orderTrackingCache[key].status === 'error') {
+                    applyTrackingErrorToDetails(orderId, orderTrackingCache[key].error, detailsEl);
+                }
+                throw err;
+            }
+        }
+        if (detailsEl) setTrackingLoadingHosts(detailsEl);
+        const promise = fetchOrderTrackingPayload(orderId, apiPrefix)
+            .then(data => {
+                orderTrackingCache[key] = { status: 'done', data };
+                applyTrackingToDetails(orderId, data, apiPrefix, role, null);
+                syncOrderListBadge(orderId, data.items, role);
+                return data;
+            })
+            .catch(err => {
+                const message = err.message || 'Tracking unavailable';
+                orderTrackingCache[key] = { status: 'error', error: message };
+                applyTrackingErrorToDetails(orderId, message, null);
+                throw err;
+            });
+        orderTrackingCache[key] = { status: 'loading', promise };
+        return promise;
+    }
+
+    function prefetchAllOrderTracking(orderIds, apiPrefix, role, onSettled, concurrency = 8) {
+        const ids = [...new Set((orderIds || []).filter(Boolean).map(String))];
+        if (!ids.length) return Promise.resolve();
+        const queue = [...ids];
+        async function worker() {
+            while (queue.length) {
+                const orderId = queue.shift();
+                try {
+                    await ensureOrderTracking(orderId, apiPrefix, null, role);
+                } catch (_) { /* cached as error */ }
+                if (onSettled) onSettled(orderId, orderTrackingCache[orderId]);
+            }
+        }
+        return Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, () => worker()));
+    }
+
+    function applyCachedTrackingIn(container, apiPrefix, role) {
+        if (!container) return;
+        container.querySelectorAll('.details-row[id^="details-"]').forEach(row => {
+            const orderId = row.id.replace(/^details-/, '');
+            const entry = orderTrackingCache[orderId];
+            const inner = row.querySelector('.details-inner') || row;
+            if (entry && entry.status === 'done') {
+                applyTrackingToDetails(orderId, entry.data, apiPrefix, role, inner);
+            } else if (entry && entry.status === 'error') {
+                applyTrackingErrorToDetails(orderId, entry.error, inner);
+            } else {
+                setTrackingLoadingHosts(inner);
+            }
+        });
+    }
+
+    function getCachedOrderIndicator(orderId) {
+        const entry = orderTrackingCache[String(orderId)];
+        if (entry && entry.status === 'done') return computeOrderIndicator(entry.data.items);
+        if (entry && entry.status === 'error') return 'none';
+        return null;
+    }
+
+    function clearOrderTrackingCache() {
+        Object.keys(orderTrackingCache).forEach(k => { delete orderTrackingCache[k]; });
+    }
+
     function bindTrackingEvents(root) {
         if (!root || boundRoots.has(root)) return;
         boundRoots.add(root);
@@ -721,29 +846,7 @@
 
     async function loadOrderTracking(orderId, apiPrefix, detailsEl, role) {
         if (!detailsEl || !orderId) return;
-        if (detailsEl.dataset.trackingLoaded === '1' && detailsEl._officeTracking) {
-            paintTrackingHosts(detailsEl, detailsEl._officeTracking, orderId, apiPrefix, role);
-            syncOrderListBadge(orderId, detailsEl._officeTracking.items, role);
-            return;
-        }
-        const hosts = detailsEl.querySelectorAll('.office-tracking-host');
-        hosts.forEach(h => {
-            h.innerHTML = '<div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div>';
-        });
-        try {
-            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
-            const data = await parseJsonResponse(res);
-            if (!res.ok || !data.success) throw new Error(data.error || 'Tracking unavailable');
-            detailsEl._officeTracking = data;
-            detailsEl.dataset.trackingLoaded = '1';
-            paintTrackingHosts(detailsEl, data, orderId, apiPrefix, role);
-            syncOrderListBadge(orderId, data.items, role);
-        } catch (err) {
-            hosts.forEach(h => {
-                h.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(err.message || 'Tracking unavailable') + '</p></div>';
-            });
-            detailsEl.dataset.trackingLoaded = '1';
-        }
+        await ensureOrderTracking(orderId, apiPrefix, detailsEl, role);
     }
 
     function syncOrderListBadge(orderId, items, role) {
@@ -826,6 +929,36 @@
         });
     }
 
+    function isCompletedIndicator(type) {
+        return type === 'green';
+    }
+
+    function indicatorSortPriority(type) {
+        return INDICATOR_PRIORITY[type] ?? INDICATOR_PRIORITY.none;
+    }
+
+    async function fetchOrderIndicators(orderIds, apiPrefix, concurrency = 12) {
+        const result = {};
+        const ids = [...new Set((orderIds || []).filter(Boolean).map(String))];
+        if (!ids.length) return result;
+        const queue = [...ids];
+        async function worker() {
+            while (queue.length) {
+                const orderId = queue.shift();
+                try {
+                    const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/indicator`, { credentials: 'same-origin' });
+                    const data = await parseJsonResponse(res);
+                    result[orderId] = (res.ok && data.success) ? computeOrderIndicator(data.items) : 'none';
+                } catch (_) {
+                    result[orderId] = 'none';
+                }
+            }
+        }
+        const workers = Array.from({ length: Math.min(concurrency, ids.length) }, () => worker());
+        await Promise.all(workers);
+        return result;
+    }
+
     global.OfficeTracking = {
         loadOrderTracking,
         renderTrackingBlock,
@@ -836,5 +969,14 @@
         loadOrderIndicatorsIn,
         updateOrderRowIndicator,
         syncOrderListBadge,
+        fetchOrderIndicators,
+        isCompletedIndicator,
+        indicatorSortPriority,
+        renderOrderIndicatorHtml,
+        prefetchAllOrderTracking,
+        applyCachedTrackingIn,
+        getCachedOrderIndicator,
+        clearOrderTrackingCache,
+        INDICATOR_PRIORITY,
     };
 })(typeof window !== 'undefined' ? window : this);
