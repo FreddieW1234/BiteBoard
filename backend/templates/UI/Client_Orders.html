@@ -253,16 +253,39 @@
         }
         .orders-wrap .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
         .orders-wrap .info-kv strong { font-weight: 600; color: #6b7280; }
-        .orders-wrap .order-info-label {
-            display: block;
-            font-size: 0.72rem;
+        .orders-wrap .order-info-panel { margin-top: 0; }
+        .orders-wrap .order-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+        .orders-wrap .order-info-group { margin-bottom: 16px; }
+        .orders-wrap .order-info-group:last-child { margin-bottom: 0; }
+        .orders-wrap .order-info-group-title {
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            color: #6b7280;
-            margin: 10px 0 6px;
+            color: #9ca3af;
+            margin: 0 0 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e5e7eb;
         }
-        .orders-wrap .order-info-section .order-info-label:first-of-type { margin-top: 0; }
+        .orders-wrap .order-info-group + .order-info-group .order-info-group-title { margin-top: 4px; }
+        .orders-wrap .order-info-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        .orders-wrap .order-info-field.full-width { grid-column: 1 / -1; }
+        .orders-wrap .order-info-field label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
         .orders-wrap .order-info-note-input,
         .orders-wrap .order-info-attr-input {
             width: 100%;
@@ -277,13 +300,15 @@
             background: #fff;
             color: #374151;
         }
+        .orders-wrap .order-info-note-input { min-height: 114px; }
+        .orders-wrap .order-info-attr-input { min-height: 72px; }
         .orders-wrap .order-info-note-input:focus,
         .orders-wrap .order-info-attr-input:focus {
             outline: none;
             border-color: var(--bite-cyan);
             box-shadow: 0 0 0 2px rgba(0, 174, 239, 0.15);
         }
-        .orders-wrap .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+        .orders-wrap .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
         .orders-wrap .btn-save-order-info {
             background: var(--bite-cyan);
             color: #fff;
@@ -333,6 +358,7 @@
             .tab-btn { padding: 12px 14px; font-size: 0.875rem; }
             .btn-save { width: 100%; }
             .form-footer { flex-direction: column; align-items: stretch; }
+            .orders-wrap .order-info-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -469,15 +495,34 @@
                                     {% endif %}
 
                                     {% set info = order.order_info or {} %}
+                                    {% set sections = info.sections if info.sections else [] %}
                                     <div class="detail-section order-info-section">
                                         <h4>Order info</h4>
                                         <form class="order-info-form" data-order-id="{{ order.id }}">
-                                            <label class="order-info-label">Notes</label>
-                                            <textarea class="order-info-note-input" name="note" rows="4">{{ info.note or '' }}</textarea>
-                                            {% for attr in info.attributes or [] %}
-                                            <label class="order-info-label">{{ attr.key }}</label>
-                                            <textarea class="order-info-attr-input" data-attr-key="{{ attr.key }}" rows="2">{{ attr.value or '' }}</textarea>
-                                            {% endfor %}
+                                            <div class="order-info-panel">
+                                                <div class="order-info-grid">
+                                                    <div class="order-info-field full-width">
+                                                        <label>Notes</label>
+                                                        <textarea class="order-info-note-input" name="note" rows="4">{{ info.note or '' }}</textarea>
+                                                    </div>
+                                                </div>
+                                                {% for sec in sections %}
+                                                <div class="order-info-group">
+                                                    {% if sec.heading %}
+                                                    <h5 class="order-info-group-title">{{ sec.heading }}</h5>
+                                                    <input type="hidden" class="order-info-attr-input" data-attr-key="{{ sec.heading }}" value="{{ sec.heading_value or '' }}">
+                                                    {% endif %}
+                                                    <div class="order-info-grid">
+                                                        {% for field in sec.fields or [] %}
+                                                        <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
+                                                            <label>{{ field.key }}</label>
+                                                            <textarea class="order-info-attr-input" data-attr-key="{{ field.key }}" rows="{{ 4 if field.full_width else 2 }}">{{ field.value or '' }}</textarea>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
                                             <div class="order-info-actions">
                                                 <button type="submit" class="btn-save-order-info">Save order info</button>
                                                 <span class="order-info-msg" hidden></span>

@@ -210,10 +210,47 @@ def split_line_items(line_items: list[dict]) -> tuple[list[dict], list[dict]]:
     return items, fees
 
 
+def _is_order_info_section_heading(key: str) -> bool:
+    """ALL CAPS keys (no trailing colon) are visual section headings in order info."""
+    k = (key or "").strip()
+    if not k or k.endswith(":"):
+        return False
+    letters = [c for c in k if c.isalpha()]
+    return bool(letters) and k.upper() == k
+
+
+def _order_info_field_full_width(key: str) -> bool:
+    return bool(re.search(r"address|notes|comments|instructions|details", key or "", re.I))
+
+
+def group_order_info_attributes(attributes: list[dict]) -> list[dict]:
+    """Group flat customAttributes into titled sections for display."""
+    sections: list[dict] = []
+    current: dict | None = None
+
+    for attr in attributes or []:
+        key = (attr.get("key") or "").strip()
+        value = attr.get("value") or ""
+        if _is_order_info_section_heading(key):
+            current = {"heading": key, "heading_value": value, "fields": []}
+            sections.append(current)
+            continue
+        if current is None:
+            current = {"heading": None, "heading_value": "", "fields": []}
+            sections.append(current)
+        current["fields"].append({"key": key, "value": value, "full_width": _order_info_field_full_width(key)})
+
+    return sections
+
+
 def format_order_info(node: dict) -> dict:
     note = (node.get("note") or "").strip()
     attributes = _parse_attributes(node.get("customAttributes"))
-    return {"note": note, "attributes": attributes}
+    return {
+        "note": note,
+        "attributes": attributes,
+        "sections": group_order_info_attributes(attributes),
+    }
 
 
 def parse_order_line_items(node: dict) -> list[dict]:

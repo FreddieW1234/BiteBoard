@@ -325,16 +325,39 @@
         .cu-orders-modal-body .order-info-note { font-size: 0.86rem; line-height: 1.55; color: #374151; white-space: pre-wrap; margin-bottom: 8px; }
         .cu-orders-modal-body .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
         .cu-orders-modal-body .info-kv strong { font-weight: 600; color: #6b7280; }
-        .cu-orders-modal-body .order-info-label {
-            display: block;
-            font-size: 0.72rem;
+        .cu-orders-modal-body .order-info-panel { margin-top: 0; }
+        .cu-orders-modal-body .order-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+        .cu-orders-modal-body .order-info-group { margin-bottom: 16px; }
+        .cu-orders-modal-body .order-info-group:last-child { margin-bottom: 0; }
+        .cu-orders-modal-body .order-info-group-title {
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            color: #6b7280;
-            margin: 10px 0 6px;
+            color: #9ca3af;
+            margin: 0 0 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e5e7eb;
         }
-        .cu-orders-modal-body .order-info-section .order-info-label:first-of-type { margin-top: 0; }
+        .cu-orders-modal-body .order-info-group + .order-info-group .order-info-group-title { margin-top: 4px; }
+        .cu-orders-modal-body .order-info-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        .cu-orders-modal-body .order-info-field.full-width { grid-column: 1 / -1; }
+        .cu-orders-modal-body .order-info-field label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
         .cu-orders-modal-body .order-info-note-input,
         .cu-orders-modal-body .order-info-attr-input {
             width: 100%;
@@ -349,13 +372,15 @@
             background: #fff;
             color: #374151;
         }
+        .cu-orders-modal-body .order-info-note-input { min-height: 114px; }
+        .cu-orders-modal-body .order-info-attr-input { min-height: 72px; }
         .cu-orders-modal-body .order-info-note-input:focus,
         .cu-orders-modal-body .order-info-attr-input:focus {
             outline: none;
             border-color: #4f46e5;
             box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
         }
-        .cu-orders-modal-body .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+        .cu-orders-modal-body .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
         .cu-orders-modal-body .btn-save-order-info {
             background: #4f46e5;
             color: #fff;
@@ -865,18 +890,65 @@
             return html + '</div>';
         }
 
+        function groupOrderInfoAttributes(attributes) {
+            const sections = [];
+            let current = null;
+            attributes.forEach(attr => {
+                const key = (attr.key || '').trim();
+                const value = attr.value || '';
+                const isHeading = key && !key.endsWith(':') && key === key.toUpperCase() && /[A-Z]/.test(key);
+                if (isHeading) {
+                    current = { heading: key, heading_value: value, fields: [] };
+                    sections.push(current);
+                    return;
+                }
+                if (!current) {
+                    current = { heading: null, heading_value: '', fields: [] };
+                    sections.push(current);
+                }
+                current.fields.push({
+                    key,
+                    value,
+                    full_width: /address|notes|comments|instructions|details/i.test(key),
+                });
+            });
+            return sections;
+        }
+
+        function renderOrderInfoField(f) {
+            const fw = f.full_width ? ' full-width' : '';
+            const rows = f.full_width ? 4 : 2;
+            return `<div class="order-info-field${fw}">
+                <label>${escapeHtml(f.key)}</label>
+                <textarea class="order-info-attr-input" data-attr-key="${escapeHtml(f.key)}" rows="${rows}">${escapeHtml(f.value || '')}</textarea>
+            </div>`;
+        }
+
         function renderOrderInfoSection(o) {
-            const info = o.order_info || { note: '', attributes: [] };
-            const attrs = info.attributes || [];
+            const info = o.order_info || { note: '', attributes: [], sections: [] };
+            const sections = (info.sections && info.sections.length)
+                ? info.sections
+                : groupOrderInfoAttributes(info.attributes || []);
             let html = `<div class="detail-section order-info-section"><h4>Order info</h4>
                 <form class="order-info-form" data-order-id="${escapeHtml(o.id)}">
-                <label class="order-info-label">Notes</label>
-                <textarea class="order-info-note-input" name="note" rows="4">${escapeHtml(info.note || '')}</textarea>`;
-            attrs.forEach(a => {
-                html += `<label class="order-info-label">${escapeHtml(a.key)}</label>
-                    <textarea class="order-info-attr-input" data-attr-key="${escapeHtml(a.key)}" rows="2">${escapeHtml(a.value || '')}</textarea>`;
+                <div class="order-info-panel">
+                <div class="order-info-grid">
+                <div class="order-info-field full-width">
+                    <label>Notes</label>
+                    <textarea class="order-info-note-input" name="note" rows="4">${escapeHtml(info.note || '')}</textarea>
+                </div>
+                </div>`;
+            sections.forEach(sec => {
+                html += '<div class="order-info-group">';
+                if (sec.heading) {
+                    html += `<h5 class="order-info-group-title">${escapeHtml(sec.heading)}</h5>`;
+                    html += `<input type="hidden" class="order-info-attr-input" data-attr-key="${escapeHtml(sec.heading)}" value="${escapeHtml(sec.heading_value || '')}">`;
+                }
+                html += '<div class="order-info-grid">';
+                (sec.fields || []).forEach(f => { html += renderOrderInfoField(f); });
+                html += '</div></div>';
             });
-            html += `<div class="order-info-actions">
+            html += `</div><div class="order-info-actions">
                     <button type="submit" class="btn-save-order-info">Save order info</button>
                     <span class="order-info-msg" hidden></span>
                 </div></form></div>`;
