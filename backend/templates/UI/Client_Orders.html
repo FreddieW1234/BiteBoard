@@ -4,157 +4,270 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --bite-cyan: #3AC9E3;
+            --bite-cyan-dark: #2db3cc;
+            --bite-pink: #E67EAD;
+            --bite-text: #162447;
+            --bite-muted: #6b7280;
+            --bite-label: #9ca3af;
+            --bite-border: #e5e7eb;
+            --bite-surface: #f8f9fa;
+            --bite-radius: 10px;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: #f3f4f6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fff;
             min-height: 100vh;
-            color: #111;
-            padding: 16px 20px 32px;
+            color: var(--bite-text);
+            padding: 8px 0 28px;
+            -webkit-font-smoothing: antialiased;
         }
-        .wrap { max-width: 920px; margin: 0 auto; }
+        .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+
+        /* Tabs — match store account nav */
         .tabs {
             display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #e5e7eb;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--bite-border);
         }
         .tab-btn {
             appearance: none;
             border: none;
             background: transparent;
-            padding: 12px 18px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #6b7280;
+            padding: 14px 20px;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: var(--bite-muted);
             cursor: pointer;
-            border-bottom: 2px solid transparent;
+            border-bottom: 3px solid transparent;
             margin-bottom: -1px;
             font-family: inherit;
+            transition: color 0.15s, border-color 0.15s;
         }
-        .tab-btn:hover { color: #111; }
-        .tab-btn.active { color: #111; border-bottom-color: #111; }
-        .tab-btn.logout-tab { color: #b91c1c; margin-left: auto; }
-        .tab-btn.logout-tab:hover { color: #991b1b; }
-        .panel { background: transparent; }
+        .tab-btn:hover { color: var(--bite-text); }
+        .tab-btn.active {
+            color: var(--bite-text);
+            font-weight: 600;
+            border-bottom-color: var(--bite-cyan);
+        }
+        .tab-btn.logout-tab {
+            color: #c45c7a;
+            margin-left: auto;
+        }
+        .tab-btn.logout-tab:hover { color: var(--bite-pink); }
+
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
-        .profile-heading {
-            font-family: Georgia, 'Times New Roman', serif;
-            font-size: 1.75rem;
-            font-weight: 700;
+
+        /* Card container */
+        .card {
+            background: #fff;
+            border: 1px solid var(--bite-border);
+            border-radius: var(--bite-radius);
+            box-shadow: 0 1px 4px rgba(22, 36, 71, 0.06);
+            overflow: hidden;
+        }
+
+        /* Profile */
+        .profile-card { padding: 24px 28px 28px; }
+        .section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--bite-text);
             margin-bottom: 20px;
-            color: #111;
         }
         .profile-form {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 14px 16px;
+            gap: 18px 20px;
         }
-        .field-box {
-            position: relative;
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        .field.full { grid-column: 1 / -1; }
+        .field label {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: var(--bite-label);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .field input,
+        .field textarea {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--bite-border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: var(--bite-text);
             background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            padding: 22px 14px 10px;
-            min-height: 64px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .field-box.full { grid-column: 1 / -1; }
-        .field-box.tall { min-height: 120px; }
-        .field-box label {
-            position: absolute;
-            top: 10px;
-            left: 14px;
-            font-size: 0.68rem;
-            color: #9ca3af;
-            pointer-events: none;
-        }
-        .field-box input,
-        .field-box textarea {
-            width: 100%;
-            border: none;
+        .field input::placeholder,
+        .field textarea::placeholder { color: #c4c9d4; font-weight: 400; }
+        .field input:focus,
+        .field textarea:focus {
             outline: none;
-            background: transparent;
-            font-family: Georgia, 'Times New Roman', serif;
-            font-size: 1.05rem;
-            color: #111;
-            padding: 0;
-            resize: vertical;
+            border-color: var(--bite-cyan);
+            box-shadow: 0 0 0 3px rgba(58, 201, 227, 0.18);
         }
-        .field-box textarea { min-height: 72px; line-height: 1.45; }
-        .save-wrap { grid-column: 1 / 2; margin-top: 4px; }
+        .field textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+
+        .form-footer {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 6px;
+            padding-top: 8px;
+        }
         .btn-save {
-            width: 100%;
-            padding: 16px 24px;
-            background: #111;
+            padding: 13px 32px;
+            background: var(--bite-cyan);
             color: #fff;
             border: none;
-            border-radius: 2px;
-            font-family: Georgia, 'Times New Roman', serif;
-            font-size: 1.05rem;
-            font-weight: 700;
+            border-radius: var(--bite-radius);
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 600;
             cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
         }
-        .btn-save:hover { background: #333; }
-        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
-        .save-msg {
-            grid-column: 1 / -1;
-            font-size: 0.875rem;
-            margin-top: -6px;
+        .btn-save:hover { background: var(--bite-cyan-dark); }
+        .btn-save:active { transform: scale(0.98); }
+        .btn-save:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+        .save-msg { font-size: 0.875rem; font-weight: 500; }
+        .save-msg.ok { color: #059669; }
+        .save-msg.err { color: #dc2626; }
+
+        /* Orders table — cyan header like product pricing */
+        .orders-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        .orders-table thead th {
+            background: var(--bite-cyan);
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 13px 18px;
+            text-align: left;
+            white-space: nowrap;
         }
-        .save-msg.ok { color: #166534; }
-        .save-msg.err { color: #b91c1c; }
-        .state-msg {
-            padding: 32px 24px;
-            text-align: center;
-            color: #6b7280;
-            font-size: 0.95rem;
-            background: #fff;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
+        .orders-table thead th:last-child { text-align: right; }
+        .orders-table tbody td {
+            padding: 14px 18px;
+            border-bottom: 1px solid #eef0f3;
+            color: var(--bite-text);
+            vertical-align: middle;
         }
-        .state-msg.error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
-        .orders-panel {
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
+        .orders-table tbody td:last-child {
+            text-align: right;
+            font-weight: 600;
+            white-space: nowrap;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f3f4f6; }
-        th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 0.8rem; text-transform: uppercase; }
-        tr.order-row { cursor: pointer; }
-        tr.order-row:hover { background: #f9fafb; }
+        .orders-table tbody tr.order-row { cursor: pointer; transition: background 0.12s; }
+        .orders-table tbody tr.order-row:nth-child(4n+1) { background: #fff; }
+        .orders-table tbody tr.order-row:nth-child(4n+3) { background: var(--bite-surface); }
+        .orders-table tbody tr.order-row:hover { background: #eef9fc !important; }
+        .order-name { font-weight: 600; color: var(--bite-text); }
+        .order-name i {
+            font-size: 0.7rem;
+            color: var(--bite-cyan);
+            margin-left: 6px;
+            transition: transform 0.2s;
+        }
+        tr.order-row.expanded .order-name i { transform: rotate(180deg); }
+        .order-date { color: var(--bite-muted); }
+
         .badge {
             display: inline-block;
-            padding: 3px 10px;
+            padding: 4px 11px;
             border-radius: 999px;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 600;
-            background: #eef2ff;
-            color: #4338ca;
+            letter-spacing: 0.02em;
         }
-        .badge.paid { background: #dcfce7; color: #166534; }
+        .badge.paid { background: #d1fae5; color: #065f46; }
         .badge.pending { background: #fef3c7; color: #92400e; }
-        .details-row { display: none; background: #fafafa; }
+        .badge.default { background: #e0f7fb; color: #0e7490; }
+
+        .details-row { display: none; }
         .details-row.open { display: table-row; }
-        .details-inner ul { list-style: none; }
-        .details-inner li {
-            padding: 6px 0;
-            border-bottom: 1px solid #eee;
+        .details-row td {
+            padding: 0 !important;
+            background: var(--bite-surface) !important;
+            border-bottom: 1px solid var(--bite-border);
+        }
+        .details-inner {
+            padding: 16px 18px 18px;
+        }
+        .details-inner h4 {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--bite-label);
+            margin-bottom: 10px;
+        }
+        .item-list { list-style: none; }
+        .item-list li {
             display: flex;
             justify-content: space-between;
-            gap: 12px;
+            align-items: baseline;
+            gap: 16px;
+            padding: 9px 0;
+            border-bottom: 1px solid #e8ecef;
+            font-size: 0.875rem;
         }
+        .item-list li:last-child { border-bottom: none; }
+        .item-list .item-qty { color: var(--bite-muted); }
+        .item-list .item-price { font-weight: 600; white-space: nowrap; }
+
+        /* Empty / error states */
+        .state-msg {
+            padding: 40px 24px;
+            text-align: center;
+            color: var(--bite-muted);
+            font-size: 0.9375rem;
+            line-height: 1.5;
+        }
+        .state-msg i {
+            display: block;
+            font-size: 2rem;
+            color: var(--bite-cyan);
+            margin-bottom: 12px;
+            opacity: 0.7;
+        }
+        .state-msg.error {
+            color: #991b1b;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: var(--bite-radius);
+        }
+        .state-msg.error i { color: #dc2626; opacity: 1; }
+
         @media (max-width: 640px) {
             .profile-form { grid-template-columns: 1fr; }
-            .save-wrap { grid-column: 1 / -1; }
-            th:nth-child(3), td:nth-child(3) { display: none; }
+            .profile-card { padding: 18px 16px 22px; }
+            .orders-table thead th:nth-child(3),
+            .orders-table tbody td:nth-child(3) { display: none; }
             .tabs { flex-wrap: wrap; }
             .tab-btn.logout-tab { margin-left: 0; }
+            .tab-btn { padding: 12px 14px; font-size: 0.875rem; }
+            .btn-save { width: 100%; }
+            .form-footer { flex-direction: column; align-items: stretch; }
         }
     </style>
 </head>
@@ -172,98 +285,100 @@
             <button type="button" class="tab-btn logout-tab" id="logout-tab" role="tab">Logout</button>
         </nav>
 
-        <div class="panel">
-            <div id="panel-profile" class="tab-panel active" role="tabpanel">
-                <h2 class="profile-heading">Profile</h2>
-                {% if profile %}
+        <div id="panel-profile" class="tab-panel active" role="tabpanel">
+            {% if profile %}
+            <div class="card profile-card">
+                <h2 class="section-title">Your details</h2>
                 <form id="profile-form" class="profile-form">
-                    <div class="field-box">
-                        <label for="first_name">First Name</label>
-                        <input type="text" id="first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name">
+                    <div class="field">
+                        <label for="first_name">First name</label>
+                        <input type="text" id="first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name">
                     </div>
-                    <div class="field-box">
-                        <label for="last_name">Last Name</label>
-                        <input type="text" id="last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name">
+                    <div class="field">
+                        <label for="last_name">Last name</label>
+                        <input type="text" id="last_name" name="last_name" value="{{ profile.last_name or '' }}" autocomplete="family-name" placeholder="Last name">
                     </div>
-                    <div class="field-box">
+                    <div class="field">
                         <label for="company_name">Company (if required)</label>
-                        <input type="text" id="company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization">
+                        <input type="text" id="company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
                     </div>
-                    <div class="field-box">
+                    <div class="field">
                         <label for="email">Email</label>
-                        <input type="email" id="email" name="email" value="{{ profile.email or '' }}" autocomplete="email">
+                        <input type="email" id="email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address">
                     </div>
-                    <div class="field-box">
-                        <label for="landline_phone">Landline number</label>
-                        <input type="text" id="landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel">
+                    <div class="field">
+                        <label for="landline_phone">Landline</label>
+                        <input type="text" id="landline_phone" name="landline_phone" value="{{ profile.landline_phone or '' }}" autocomplete="tel" placeholder="Landline number">
                     </div>
-                    <div class="field-box">
-                        <label for="mobile_number">Mobile number</label>
-                        <input type="text" id="mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national">
+                    <div class="field">
+                        <label for="mobile_number">Mobile</label>
+                        <input type="text" id="mobile_number" name="mobile_number" value="{{ profile.mobile_number or '' }}" autocomplete="tel-national" placeholder="Mobile number">
                     </div>
-                    <div class="field-box full tall">
+                    <div class="field full">
                         <label for="invoice_address">Invoice address</label>
-                        <textarea id="invoice_address" name="invoice_address" rows="4">{{ profile.invoice_address or '' }}</textarea>
+                        <textarea id="invoice_address" name="invoice_address" rows="4" placeholder="Invoice address">{{ profile.invoice_address or '' }}</textarea>
                     </div>
-                    <div class="save-wrap">
-                        <button type="submit" class="btn-save" id="save-btn">Save</button>
+                    <div class="form-footer">
+                        <button type="submit" class="btn-save" id="save-btn">Save changes</button>
+                        <p class="save-msg" id="save-msg" hidden></p>
                     </div>
-                    <p class="save-msg" id="save-msg" hidden></p>
                 </form>
-                {% else %}
-                <div class="state-msg">Profile could not be loaded.</div>
-                {% endif %}
             </div>
+            {% else %}
+            <div class="card state-msg">Profile could not be loaded.</div>
+            {% endif %}
+        </div>
 
-            <div id="panel-orders" class="tab-panel" role="tabpanel">
-                <div class="orders-panel">
-                    {% if orders %}
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Order</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                                <th>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for order in orders %}
-                            <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
-                                <td><strong>{{ order.name }}</strong></td>
-                                <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
-                                <td>
-                                    <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
-                                        {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
-                                    </span>
-                                </td>
-                                <td>{{ order.currency }} {{ order.total }}</td>
-                            </tr>
-                            <tr class="details-row" id="details-{{ loop.index }}">
-                                <td colspan="4">
-                                    <div class="details-inner">
-                                        <strong style="display:block;margin-bottom:8px;">Items</strong>
-                                        <ul>
-                                            {% for item in order.line_items %}
-                                            <li>
-                                                <span>{{ item.quantity }} × {{ item.title }}</span>
-                                                <span>{{ item.currency }} {{ item.total }}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    {% else %}
-                    <div class="state-msg">
-                        <i class="fas fa-inbox"></i>
-                        You don't have any orders yet.
-                    </div>
-                    {% endif %}
+        <div id="panel-orders" class="tab-panel" role="tabpanel">
+            <div class="card">
+                {% if orders %}
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr class="order-row" onclick="toggleDetails(this, 'details-{{ loop.index }}')">
+                            <td>
+                                <span class="order-name">{{ order.name }} <i class="fas fa-chevron-down"></i></span>
+                            </td>
+                            <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
+                            <td>
+                                <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% else %}default{% endif %}">
+                                    {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
+                                </span>
+                            </td>
+                            <td>{{ order.currency }} {{ order.total }}</td>
+                        </tr>
+                        <tr class="details-row" id="details-{{ loop.index }}">
+                            <td colspan="4">
+                                <div class="details-inner">
+                                    <h4>Items in this order</h4>
+                                    <ul class="item-list">
+                                        {% for item in order.line_items %}
+                                        <li>
+                                            <span><span class="item-qty">{{ item.quantity }} ×</span> {{ item.title }}</span>
+                                            <span class="item-price">{{ item.currency }} {{ item.total }}</span>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="state-msg">
+                    <i class="fas fa-inbox"></i>
+                    You don't have any orders yet.
                 </div>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -282,9 +397,11 @@
 
         document.getElementById('logout-tab')?.addEventListener('click', doLogout);
 
-        function toggleDetails(id) {
-            const row = document.getElementById(id);
-            if (row) row.classList.toggle('open');
+        function toggleDetails(row, id) {
+            const detailRow = document.getElementById(id);
+            if (!detailRow) return;
+            const isOpen = detailRow.classList.toggle('open');
+            row.classList.toggle('expanded', isOpen);
         }
 
         document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(btn => {
@@ -318,7 +435,7 @@
                     });
                     const data = await res.json();
                     if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
-                    saveMsg.textContent = 'Saved successfully.';
+                    saveMsg.textContent = 'Your details have been saved.';
                     saveMsg.className = 'save-msg ok';
                     saveMsg.hidden = false;
                 } catch (err) {
@@ -327,7 +444,7 @@
                     saveMsg.hidden = false;
                 } finally {
                     saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save';
+                    saveBtn.textContent = 'Save changes';
                 }
             });
         }
