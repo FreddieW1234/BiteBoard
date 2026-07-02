@@ -360,28 +360,20 @@
             max-width: 320px;
         }
         .orders-wrap .order-addresses-grid .order-info-field { min-width: 0; }
-        .orders-wrap .order-totals-panel {
-            max-width: 360px;
-            margin-left: auto;
-            border: 1px solid var(--bite-border);
-            border-radius: 8px;
-            background: var(--bite-surface);
-            overflow: hidden;
-        }
-        .orders-wrap .order-totals-row {
+        .orders-wrap .order-grand-total {
             display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 10px 14px;
+            justify-content: flex-end;
+            align-items: baseline;
+            gap: 12px;
+            padding: 10px 0 2px;
+            margin-top: 2px;
             font-size: 0.86rem;
-            color: var(--bite-text);
-            border-bottom: 1px solid var(--bite-border);
+            color: var(--bite-muted);
         }
-        .orders-wrap .order-totals-row:last-child { border-bottom: none; }
-        .orders-wrap .order-totals-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
-        .orders-wrap .order-totals-row-total {
-            font-weight: 700;
-            background: #fff;
+        .orders-wrap .order-grand-total-amount {
+            font-weight: 600;
+            color: var(--bite-text);
+            font-variant-numeric: tabular-nums;
         }
         .orders-wrap .order-info-value.payment-value {
             white-space: nowrap;
@@ -565,14 +557,29 @@
                                     </div>
                                     {% endif %}
 
-                                    <div class="detail-section order-totals-section">
-                                        <h4>Order total</h4>
-                                        <div class="order-totals-panel">
-                                            <div class="order-totals-row"><span>Subtotal</span><span>{{ order.subtotal_display }}</span></div>
-                                            <div class="order-totals-row"><span>Shipping</span><span>{{ order.shipping_display }}</span></div>
-                                            <div class="order-totals-row"><span>Tax (VAT)</span><span>{{ order.tax_display }}</span></div>
-                                            <div class="order-totals-row order-totals-row-total"><span>Total</span><span>{{ order.total_display }}</span></div>
+                                    {% if order.shipping and (order.shipping | float) > 0 %}
+                                    <div class="detail-section">
+                                        <h4>Shipping</h4>
+                                        <div class="detail-line">
+                                            <div class="line-main"><span class="line-title">Shipping</span></div>
+                                            <div class="line-price-row"><span class="line-price">{{ order.shipping_display }}</span></div>
                                         </div>
+                                    </div>
+                                    {% endif %}
+
+                                    {% if order.tax and (order.tax | float) > 0 %}
+                                    <div class="detail-section">
+                                        <h4>Tax</h4>
+                                        <div class="detail-line">
+                                            <div class="line-main"><span class="line-title">VAT</span></div>
+                                            <div class="line-price-row"><span class="line-price">{{ order.tax_display }}</span></div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+
+                                    <div class="order-grand-total">
+                                        <span class="order-grand-total-label">Total</span>
+                                        <span class="order-grand-total-amount">{{ order.total_display }}</span>
                                     </div>
 
                                     <div class="detail-section order-addresses-section">
