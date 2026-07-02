@@ -336,6 +336,30 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 14px 18px;
         }
+        .cu-orders-modal-body .order-info-top-dates {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 14px 18px;
+            align-items: stretch;
+        }
+        .cu-orders-modal-body .order-info-top-dates .top-date-po {
+            flex: 0 0 50%;
+            max-width: 50%;
+            min-width: 0;
+        }
+        .cu-orders-modal-body .order-info-top-dates .top-date-field {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .cu-orders-modal-body .order-info-top-dates.po-only .top-date-po {
+            flex: 1 1 100%;
+            max-width: 100%;
+        }
+        @media (max-width: 768px) {
+            .cu-orders-modal-body .order-info-top-dates { flex-wrap: wrap; }
+            .cu-orders-modal-body .order-info-top-dates .top-date-po,
+            .cu-orders-modal-body .order-info-top-dates .top-date-field { flex: 1 1 100%; max-width: 100%; }
+        }
         .cu-orders-modal-body .order-info-group { margin-bottom: 16px; }
         .cu-orders-modal-body .order-info-group:last-child { margin-bottom: 0; }
         .cu-orders-modal-body .order-info-group-title {
@@ -386,8 +410,16 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px 18px;
+            align-items: start;
         }
         .cu-orders-modal-body .order-addresses-grid .order-info-field { min-width: 0; }
+        .cu-orders-modal-body .order-info-value.payment-value {
+            white-space: nowrap;
+            min-height: unset;
+            width: fit-content;
+            max-width: 100%;
+            font-weight: 600;
+        }
         .cu-orders-modal-body .order-info-note-input,
         .cu-orders-modal-body .order-info-note-field,
         .cu-orders-modal-body .order-info-note-raw,
@@ -944,15 +976,15 @@
             html += renderAddressBlock('Shipping address', shipping);
             html += renderAddressBlock('Billing address', billing);
             html += `<div class="order-info-field"><label>Payment method</label>
-                <div class="order-info-value${paymentLabel === '—' ? ' empty' : ''}">${escapeHtml(paymentLabel)}${paymentDetail ? `<div class="line-meta">${escapeHtml(paymentDetail)}</div>` : ''}</div></div>`;
+                <div class="order-info-value payment-value${paymentLabel === '—' ? ' empty' : ''}">${escapeHtml(paymentLabel)}${paymentDetail ? `<div class="line-meta">${escapeHtml(paymentDetail)}</div>` : ''}</div></div>`;
             html += '</div></div></div>';
             return html;
         }
 
         function orderInfoFieldFullWidth(key, value) {
-            if ((value || '').includes('\n')) return true;
             const k = (key || '').replace(/:$/, '').trim().toLowerCase();
             if (k === 'name' || k === 'address') return false;
+            if ((value || '').includes('\n')) return true;
             return /address|notes|comments|instructions|details/i.test(key);
         }
 
@@ -985,18 +1017,55 @@
             return f.display_label || f.key || '';
         }
 
-        function renderOrderInfoField(f, inputClass, keyAttr) {
+        function renderOrderInfoField(f, inputClass, keyAttr, hideLabel) {
             const fw = f.full_width ? ' full-width' : '';
             const rows = f.full_width ? 4 : 2;
+            const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
+            const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
             return `<div class="order-info-field${fw}">
-                <label>${escapeHtml(orderInfoFieldLabel(f))}</label>
-                <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="${rows}">${escapeHtml(f.value || '')}</textarea>
+                ${hideLabel ? '' : `<label>${escapeHtml(orderInfoFieldLabel(f))}</label>`}
+                <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="${rows}"${restore}${role}>${escapeHtml(f.value || '')}</textarea>
             </div>`;
+        }
+
+        function isAdditionalNotesHeading(heading) {
+            return (heading || '').replace(/:$/, '').trim().toLowerCase() === 'additional notes';
+        }
+
+        function renderDateTopRow(sec, inputClass, keyAttr) {
+            const fields = sec.fields || [];
+            const dateCount = sec.date_count || fields.filter(f => f.field_role === 'date').length;
+            const poOnly = dateCount === 0;
+            let html = `<div class="order-info-group order-info-note-group" data-layout="date-top-row"><div class="order-info-top-dates${poOnly ? ' po-only' : ''}">`;
+            fields.forEach(f => {
+                const roleClass = f.field_role === 'po' ? ' top-date-po' : ' top-date-field';
+                const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
+                const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
+                html += `<div class="order-info-field${roleClass}">
+                    <label>${escapeHtml(orderInfoFieldLabel(f))}</label>
+                    <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="2"${restore}${role}>${escapeHtml(f.value || '')}</textarea>
+                </div>`;
+            });
+            html += '</div></div>';
+            return html;
         }
 
         function collectNoteSectionsFromForm(form) {
             const sections = [];
             form.querySelectorAll('.order-info-note-group').forEach(group => {
+                if (group.dataset.layout === 'date-top-row') {
+                    const fields = [];
+                    group.querySelectorAll('.order-info-note-field').forEach(el => {
+                        fields.push({
+                            key: el.dataset.noteKey,
+                            value: el.value,
+                            restore_heading: el.dataset.restoreHeading || null,
+                            field_role: el.dataset.fieldRole || null,
+                        });
+                    });
+                    sections.push({ layout: 'date_top_row', heading: null, fields });
+                    return;
+                }
                 const heading = group.dataset.heading || null;
                 const fields = [];
                 group.querySelectorAll('.order-info-note-field').forEach(el => {
@@ -1018,12 +1087,17 @@
                 <div class="order-info-panel">`;
             if (noteSections) {
                 noteSections.forEach(sec => {
+                    if (sec.layout === 'date_top_row') {
+                        html += renderDateTopRow(sec, 'order-info-note-field', 'data-note-key');
+                        return;
+                    }
                     const headingAttr = sec.heading ? ` data-heading="${escapeHtml(sec.heading)}"` : '';
                     const sepClass = sec.separator_before ? ' has-separator' : '';
+                    const hideFieldLabel = isAdditionalNotesHeading(sec.heading) && (sec.fields || []).length === 1;
                     html += `<div class="order-info-group order-info-note-group${sepClass}"${headingAttr}>`;
                     if (sec.heading) html += `<h5 class="order-info-group-title">${escapeHtml(sec.heading)}</h5>`;
                     html += '<div class="order-info-grid">';
-                    (sec.fields || []).forEach(f => { html += renderOrderInfoField(f, 'order-info-note-field', 'data-note-key'); });
+                    (sec.fields || []).forEach(f => { html += renderOrderInfoField(f, 'order-info-note-field', 'data-note-key', hideFieldLabel); });
                     html += '</div></div>';
                 });
             } else {

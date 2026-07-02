@@ -279,6 +279,25 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 14px 18px;
         }
+        .orders-wrap .order-info-top-dates {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 14px 18px;
+            align-items: stretch;
+        }
+        .orders-wrap .order-info-top-dates .top-date-po {
+            flex: 0 0 50%;
+            max-width: 50%;
+            min-width: 0;
+        }
+        .orders-wrap .order-info-top-dates .top-date-field {
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        .orders-wrap .order-info-top-dates.po-only .top-date-po {
+            flex: 1 1 100%;
+            max-width: 100%;
+        }
         .orders-wrap .order-info-group { margin-bottom: 16px; }
         .orders-wrap .order-info-group:last-child { margin-bottom: 0; }
         .orders-wrap .order-info-group-title {
@@ -329,8 +348,16 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px 18px;
+            align-items: start;
         }
         .orders-wrap .order-addresses-grid .order-info-field { min-width: 0; }
+        .orders-wrap .order-info-value.payment-value {
+            white-space: nowrap;
+            min-height: unset;
+            width: fit-content;
+            max-width: 100%;
+            font-weight: 600;
+        }
 
         /* Empty / error states */
         .state-msg {
@@ -366,6 +393,9 @@
             .co-portal-profile .co-form-footer { flex-direction: column; align-items: stretch; }
             .orders-wrap .order-info-grid { grid-template-columns: 1fr; }
             .orders-wrap .order-addresses-grid { grid-template-columns: 1fr; }
+            .orders-wrap .order-info-top-dates { flex-wrap: wrap; }
+            .orders-wrap .order-info-top-dates .top-date-po,
+            .orders-wrap .order-info-top-dates .top-date-field { flex: 1 1 100%; max-width: 100%; }
         }
     </style>
 </head>
@@ -524,7 +554,7 @@
                                                 <div class="order-info-field">
                                                     <label>Payment method</label>
                                                     {% set payment = order.payment or {} %}
-                                                    <div class="order-info-value{% if not payment.label or payment.label == '—' %} empty{% endif %}">
+                                                    <div class="order-info-value payment-value{% if not payment.label or payment.label == '—' %} empty{% endif %}">
                                                         {{ payment.label or '—' }}
                                                         {% if payment.detail %}
                                                         <div class="line-meta">{{ payment.detail }}</div>
@@ -543,19 +573,35 @@
                                         <div class="order-info-panel order-info-readonly">
                                             {% if note_sections %}
                                                 {% for sec in note_sections %}
-                                                <div class="order-info-group{% if sec.separator_before %} has-separator{% endif %}">
-                                                    {% if sec.heading %}
-                                                    <h5 class="order-info-group-title">{{ sec.heading }}</h5>
-                                                    {% endif %}
-                                                    <div class="order-info-grid">
+                                                {% if sec.layout == 'date_top_row' %}
+                                                <div class="order-info-group">
+                                                    <div class="order-info-top-dates{% if not sec.date_count %} po-only{% endif %}">
                                                         {% for field in sec.fields or [] %}
-                                                        <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
+                                                        <div class="order-info-field {% if field.field_role == 'po' %}top-date-po{% else %}top-date-field{% endif %}">
                                                             <label>{{ field.display_label or field.key }}</label>
                                                             <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
                                                         </div>
                                                         {% endfor %}
                                                     </div>
                                                 </div>
+                                                {% else %}
+                                                <div class="order-info-group{% if sec.separator_before %} has-separator{% endif %}">
+                                                    {% if sec.heading %}
+                                                    <h5 class="order-info-group-title">{{ sec.heading }}</h5>
+                                                    {% endif %}
+                                                    <div class="order-info-grid">
+                                                        {% for field in sec.fields or [] %}
+                                                        {% set hide_label = sec.heading and (sec.fields | length == 1) and ((sec.heading | lower | replace(':', '') | replace(' ', '')) == 'additionalnotes') %}
+                                                        <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
+                                                            {% if not hide_label %}
+                                                            <label>{{ field.display_label or field.key }}</label>
+                                                            {% endif %}
+                                                            <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endif %}
                                                 {% endfor %}
                                             {% elif (info.note or '').strip() %}
                                                 <div class="order-info-grid">

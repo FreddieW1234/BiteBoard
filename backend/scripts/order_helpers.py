@@ -259,17 +259,55 @@ _PRODUCT_PAIR_FIELD_KEYS = frozenset({"name", "address"})
 
 
 def _order_info_field_full_width(key: str, value: str = "") -> bool:
-    if "\n" in (value or ""):
-        return True
     k_norm = (key or "").strip().rstrip(":").lower()
     if k_norm in _PRODUCT_PAIR_FIELD_KEYS:
         return False
+    if k_norm in _ADDITIONAL_NOTES_HEADINGS:
+        return True
+    if "\n" in (value or ""):
+        return True
     return bool(re.search(r"address|notes|comments|instructions|details", key or "", re.I))
 
 
 _NOTE_LINE = re.compile(r"^(.+?):\s*(.*)$")
 
 _DELIVERY_DATE_KEY_NAMES = frozenset({"delivery date", "requested delivery date"})
+_REQUEST_DELIVERY_DATES_HEADINGS = frozenset({"request delivery dates", "requested delivery dates"})
+_ADDITIONAL_NOTES_HEADINGS = frozenset({"additional notes"})
+
+
+def _section_heading_norm(heading: str | None) -> str:
+    return (heading or "").strip().rstrip(":").lower()
+
+
+def _is_request_delivery_dates_heading(heading: str | None) -> bool:
+    return _section_heading_norm(heading) in _REQUEST_DELIVERY_DATES_HEADINGS
+
+
+def _is_additional_notes_section(heading: str | None) -> bool:
+    return _section_heading_norm(heading) in _ADDITIONAL_NOTES_HEADINGS
+
+
+def _is_po_key(key: str) -> bool:
+    return (key or "").upper().startswith("PO NUMBER")
+
+
+def _is_single_delivery_date_key(key: str) -> bool:
+    return (key or "").upper().startswith("REQUESTED DELIVERY DATE")
+
+
+def _append_note_field_lines(out_lines: list[str], field: dict) -> None:
+    key = (field.get("key") or "").strip()
+    if key and not key.endswith(":"):
+        key += ":"
+    value = str(field.get("value") or "").replace("\r\n", "\n").replace("\r", "\n")
+    if "\n" in value:
+        out_lines.append(key)
+        out_lines.extend(value.split("\n"))
+    elif value:
+        out_lines.append(f"{key} {value}")
+    elif key:
+        out_lines.append(key)
 
 
 def _order_info_field_meta(key: str, value: str = "") -> dict:
@@ -290,38 +328,67 @@ def _order_info_field_meta(key: str, value: str = "") -> dict:
 
 
 def _finalize_order_note_sections(sections: list[dict]) -> list[dict]:
-    """Place requested delivery date beside PO NUMBER; drop the extra separator."""
-    po_prefix = "PO NUMBER"
-    delivery_prefix = "REQUESTED DELIVERY DATE"
+    """Build PO + delivery dates top row; ensure additional notes have a field."""
+    po_field: dict | None = None
+    date_fields: list[dict] = []
 
-    po_loc: tuple[int, int] | None = None
-    delivery_loc: tuple[int, int] | None = None
+    si = 0
+    while si < len(sections):
+        sec = sections[si]
+        heading = sec.get("heading")
+        fi = 0
+        while fi < len(sec.get("fields") or []):
+            field = sec["fields"][fi]
+            key = field.get("key") or ""
+            if _is_po_key(key):
+                po_field = sec["fields"].pop(fi)
+                continue
+            if _is_single_delivery_date_key(key):
+                moved = sec["fields"].pop(fi)
+                moved["restore_heading"] = None
+                moved["field_role"] = "date"
+                moved["full_width"] = False
+                date_fields.append(moved)
+                continue
+            if _is_request_delivery_dates_heading(heading):
+                moved = sec["fields"].pop(fi)
+                moved["restore_heading"] = heading
+                moved["field_role"] = "date"
+                moved["full_width"] = False
+                date_fields.append(moved)
+                continue
+            fi += 1
 
-    for si, sec in enumerate(sections):
-        for fi, field in enumerate(sec.get("fields") or []):
-            key = (field.get("key") or "").upper()
-            if key.startswith(po_prefix):
-                po_loc = (si, fi)
-            if key.startswith(delivery_prefix):
-                delivery_loc = (si, fi)
+        if _is_request_delivery_dates_heading(heading) and not sec.get("fields"):
+            sections.pop(si)
+            continue
 
-    if delivery_loc and po_loc:
-        dsi, dfi = delivery_loc
-        delivery_field = sections[dsi]["fields"].pop(dfi)
-        if not sections[dsi].get("fields") and not sections[dsi].get("heading"):
-            sections.pop(dsi)
-            if dsi < po_loc[0]:
-                po_loc = (po_loc[0] - 1, po_loc[1])
+        if _is_additional_notes_section(heading) and not sec.get("fields"):
+            sec["fields"] = [{
+                "key": "ADDITIONAL NOTES:",
+                "display_label": "Additional notes:",
+                "full_width": True,
+                "value": "",
+            }]
 
-        psi, pfi = po_loc
-        sections[psi]["fields"].insert(pfi + 1, delivery_field)
-        sections[psi].pop("separator_before", None)
-    else:
-        for sec in sections:
-            for field in sec.get("fields") or []:
-                if (field.get("key") or "").upper().startswith(delivery_prefix):
-                    sec.pop("separator_before", None)
-                    break
+        sec.pop("separator_before", None)
+        si += 1
+
+    sections[:] = [s for s in sections if s.get("layout") or s.get("heading") or s.get("fields")]
+
+    if po_field or date_fields:
+        top_fields: list[dict] = []
+        if po_field:
+            po_field["field_role"] = "po"
+            po_field["full_width"] = False
+            top_fields.append(po_field)
+        top_fields.extend(date_fields)
+        sections.insert(0, {
+            "layout": "date_top_row",
+            "heading": None,
+            "fields": top_fields,
+            "date_count": len(date_fields),
+        })
 
     return sections
 
@@ -359,6 +426,24 @@ def parse_order_note(note: str) -> list[dict]:
 
         m = _NOTE_LINE.match(stripped)
         if not m:
+            if current and _is_additional_notes_section(current.get("heading")):
+                if not current.get("fields"):
+                    current["fields"].append({
+                        "key": "ADDITIONAL NOTES:",
+                        "display_label": "Additional notes:",
+                        "full_width": True,
+                        "value": "",
+                    })
+                notes_field = current["fields"][-1]
+                if not stripped:
+                    if notes_field["value"]:
+                        notes_field["value"] += "\n"
+                else:
+                    notes_field["value"] = (
+                        f"{notes_field['value']}\n{stripped}" if notes_field["value"] else stripped
+                    )
+                i += 1
+                continue
             i += 1
             continue
 
@@ -410,6 +495,26 @@ def serialize_order_note(sections: list[dict]) -> str:
     """Rebuild Shopify order note text from structured sections."""
     out_lines: list[str] = []
     for si, sec in enumerate(sections or []):
+        if sec.get("layout") == "date_top_row":
+            if si > 0 and out_lines and out_lines[-1] != "":
+                out_lines.append("")
+            grouped: dict[str | None, list[dict]] = {}
+            for field in sec.get("fields") or []:
+                rh = field.get("restore_heading")
+                grouped.setdefault(rh, []).append(field)
+            for field in grouped.get(None, []):
+                _append_note_field_lines(out_lines, field)
+            for rh, fields in grouped.items():
+                if rh is None:
+                    continue
+                if out_lines and out_lines[-1] != "":
+                    out_lines.append("")
+                heading = rh if rh.endswith(":") else f"{rh}:"
+                out_lines.append(heading)
+                for field in fields:
+                    _append_note_field_lines(out_lines, field)
+            continue
+
         if si > 0 and out_lines and out_lines[-1] != "":
             out_lines.append("")
         heading = (sec.get("heading") or "").strip()
@@ -418,17 +523,7 @@ def serialize_order_note(sections: list[dict]) -> str:
                 heading += ":"
             out_lines.append(heading)
         for field in sec.get("fields") or []:
-            key = (field.get("key") or "").strip()
-            if key and not key.endswith(":"):
-                key += ":"
-            value = str(field.get("value") or "").replace("\r\n", "\n").replace("\r", "\n")
-            if "\n" in value:
-                out_lines.append(key)
-                out_lines.extend(value.split("\n"))
-            elif value:
-                out_lines.append(f"{key} {value}")
-            else:
-                out_lines.append(key)
+            _append_note_field_lines(out_lines, field)
     return "\n".join(out_lines).strip()
 
 
