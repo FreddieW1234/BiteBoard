@@ -155,37 +155,58 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     return get_customer_profile(customer_id)
 
 
-def get_customer_orders(customer_id: str | int) -> dict:
-    """Return orders for one customer only."""
+def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
+    """Return orders for one customer (paginated when fetch_all=True)."""
     cid = str(customer_id).strip()
     gid = f"gid://shopify/Customer/{cid}"
-    data = _graphql(CUSTOMER_ORDERS_QUERY, {"id": gid, "cursor": None})
-    customer = data.get("customer")
-    if not customer:
-        return {"success": False, "error": "Customer not found", "orders": []}
-
     orders = []
-    for edge in (customer.get("orders") or {}).get("edges") or []:
-        node = edge.get("node") or {}
-        money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
-        base = {
-            "id": node.get("legacyResourceId"),
-            "name": node.get("name") or "",
-            "processed_at": node.get("processedAt") or "",
-            "financial_status": node.get("displayFinancialStatus") or "",
-            "fulfillment_status": node.get("displayFulfillmentStatus") or "",
-            "total": money.get("amount") or "0.00",
-            "currency": money.get("currencyCode") or "GBP",
-        }
-        orders.append(enrich_order(node, base))
+    cursor = None
+    customer_info = None
 
-    return {
-        "success": True,
-        "customer": {
-            "id": customer.get("legacyResourceId"),
-            "email": customer.get("email") or "",
-            "first_name": customer.get("firstName") or "",
-            "last_name": customer.get("lastName") or "",
-        },
-        "orders": orders,
-    }
+    try:
+        while True:
+            data = _graphql(CUSTOMER_ORDERS_QUERY, {"id": gid, "cursor": cursor})
+            customer = data.get("customer")
+            if not customer:
+                if not orders:
+                    return {"success": False, "error": "Customer not found", "orders": []}
+                break
+
+            if customer_info is None:
+                customer_info = {
+                    "id": customer.get("legacyResourceId"),
+                    "email": customer.get("email") or "",
+                    "first_name": customer.get("firstName") or "",
+                    "last_name": customer.get("lastName") or "",
+                }
+
+            block = customer.get("orders") or {}
+            for edge in block.get("edges") or []:
+                node = edge.get("node") or {}
+                money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
+                base = {
+                    "id": node.get("legacyResourceId"),
+                    "name": node.get("name") or "",
+                    "processed_at": node.get("processedAt") or "",
+                    "financial_status": node.get("displayFinancialStatus") or "",
+                    "fulfillment_status": node.get("displayFulfillmentStatus") or "",
+                    "total": money.get("amount") or "0.00",
+                    "currency": money.get("currencyCode") or "GBP",
+                }
+                orders.append(enrich_order(node, base))
+
+            page_info = block.get("pageInfo") or {}
+            if not fetch_all or not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor:
+                break
+
+        return {
+            "success": True,
+            "customer": customer_info or {},
+            "orders": orders,
+            "total": len(orders),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "orders": [], "total": 0}

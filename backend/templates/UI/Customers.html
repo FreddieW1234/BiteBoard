@@ -224,6 +224,109 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .error-msg { color: #b91c1c; }
 
+        .spent-cell { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .cu-view-orders-btn {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .cu-view-orders-btn:hover { background: #eef2ff; border-color: #c7d2fe; color: #4f46e5; }
+
+        .cu-orders-modal { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 24px; }
+        .cu-orders-modal.open { display: flex; }
+        .cu-orders-modal-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, 0.45); }
+        .cu-orders-modal-panel {
+            position: relative;
+            width: min(960px, 100%);
+            max-height: min(88vh, 900px);
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .cu-orders-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fafc;
+        }
+        .cu-orders-modal-header h2 { font-size: 1.05rem; font-weight: 600; color: #111827; margin: 0; }
+        .cu-orders-modal-close {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
+            border-radius: 8px;
+            width: 34px;
+            height: 34px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cu-orders-modal-close:hover { background: #f3f4f6; color: #111827; }
+        .cu-orders-modal-body { flex: 1; overflow: auto; padding: 0; }
+        .cu-orders-modal-body .list-card-scroll { overflow-x: auto; }
+        .cu-orders-modal-body table { width: 100%; border-collapse: collapse; min-width: 480px; }
+        .cu-orders-modal-body th {
+            text-align: left;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 12px 16px;
+            border-bottom: 1px solid #eef0f3;
+            background: #f8fafc;
+            white-space: nowrap;
+        }
+        .cu-orders-modal-body td { font-size: 0.86rem; padding: 11px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; color: #1f2937; }
+        .cu-orders-modal-body tbody tr.data-row { cursor: pointer; }
+        .cu-orders-modal-body tbody tr.data-row:hover { background: #f9fafb; }
+        .cu-orders-modal-body tbody tr.data-row.expanded { background: #eef2ff; }
+        .cu-orders-modal-body tr.details-row { display: none; }
+        .cu-orders-modal-body tr.details-row.open { display: table-row; }
+        .cu-orders-modal-body tr.details-row td { padding: 0 !important; background: #f8fafc !important; border-bottom: 1px solid #e5e7eb; }
+        .cu-orders-modal-body .order-chevron { font-size: 0.65rem; color: #6b7280; margin-left: 6px; transition: transform 0.2s; }
+        .cu-orders-modal-body tr.data-row.expanded .order-chevron { transform: rotate(180deg); }
+        .cu-orders-modal-body .details-inner { padding: 16px 18px 18px; }
+        .cu-orders-modal-body .detail-section { margin-bottom: 16px; }
+        .cu-orders-modal-body .detail-section:last-child { margin-bottom: 0; }
+        .cu-orders-modal-body .detail-section h4 {
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+            color: #9ca3af; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;
+        }
+        .cu-orders-modal-body .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
+        .cu-orders-modal-body .detail-line { padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+        .cu-orders-modal-body .detail-line:last-child { border-bottom: none; }
+        .cu-orders-modal-body .line-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; font-size: 0.86rem; }
+        .cu-orders-modal-body .line-details { flex: 1; min-width: 0; }
+        .cu-orders-modal-body .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
+        .cu-orders-modal-body .line-title { font-weight: 600; color: #111827; display: block; }
+        .cu-orders-modal-body .line-price { font-weight: 600; white-space: nowrap; color: #111827; }
+        .cu-orders-modal-body .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
+        .cu-orders-modal-body .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
+        .cu-orders-modal-body .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
+        .cu-orders-modal-body .line-props li strong { font-weight: 600; color: #6b7280; }
+        .cu-orders-modal-body .order-info-note { font-size: 0.86rem; line-height: 1.55; color: #374151; white-space: pre-wrap; margin-bottom: 8px; }
+        .cu-orders-modal-body .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
+        .cu-orders-modal-body .info-kv strong { font-weight: 600; color: #6b7280; }
+        .cu-orders-modal-body .state-msg { padding: 40px 20px; text-align: center; color: #6b7280; }
+
         @media (max-width: 1400px) {
             .main-wrap { padding: 18px; }
             .list-card .cust-table { min-width: 820px; }
@@ -341,6 +444,21 @@
         </div>
     </div>
 
+    <div id="cu-orders-modal" class="cu-orders-modal" aria-hidden="true">
+        <div class="cu-orders-modal-backdrop" data-close-orders-modal></div>
+        <div class="cu-orders-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cu-orders-modal-title">
+            <div class="cu-orders-modal-header">
+                <h2 id="cu-orders-modal-title">Customer orders</h2>
+                <button type="button" class="cu-orders-modal-close" data-close-orders-modal aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="cu-orders-modal-body" class="cu-orders-modal-body">
+                <div class="state-msg"><div class="spinner"></div>Loading orders…</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let CU_DATA = { customers: [], total: 0, conflict_count: 0 };
         let CU_SEARCH = '';
@@ -397,9 +515,9 @@
         }
 
         const TYPE_TAG_OPTIONS = [
-            { value: 'trade', label: 'trade' },
-            { value: 'end-customer', label: 'end-customer' },
-            { value: 'pending', label: 'Pending' },
+            { value: 'trade', label: 'Trade Customer', shopifyTag: 'trade' },
+            { value: 'end-customer', label: 'End Customer', shopifyTag: 'end-customer' },
+            { value: 'pending', label: 'Pending Decision', shopifyTag: 'Pending' },
         ];
 
         function getCurrentTypeTagKey(c) {
@@ -440,7 +558,7 @@
                 ? `<div class="other-tags">${others.map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div>`
                 : '';
             return `<div class="tag-cell">
-                <select class="${selectClass}" data-customer-id="${escapeHtml(c.id)}" aria-label="Customer type tag">${options}</select>
+                <select class="${selectClass}" data-customer-id="${escapeHtml(c.id)}" aria-label="Customer Type">${options}</select>
                 ${otherHtml}
             </div>`;
         }
@@ -459,11 +577,12 @@
                 : '';
 
             const kept = otherTags(snapshot.tags);
-            const label = TYPE_TAG_OPTIONS.find(o => o.value === typeKey)?.label;
-            const optimisticTags = label ? [...kept, label] : kept;
+            const opt = TYPE_TAG_OPTIONS.find(o => o.value === typeKey);
+            const shopifyTag = opt ? opt.shopifyTag : null;
+            const optimisticTags = shopifyTag ? [...kept, shopifyTag] : kept;
             mergeCustomerUpdate(customerId, {
                 tags: optimisticTags,
-                matched_tags: label ? [label] : [],
+                matched_tags: shopifyTag ? [shopifyTag] : [],
                 tag_conflict: false,
             });
             render();
@@ -515,7 +634,7 @@
                     `<option value="${escapeHtml(opt.value)}"${current === opt.value ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
                 ),
             ].join('');
-            return `<select name="type_tag" class="${fieldClass}" aria-label="Customer type tag">${options}</select>`;
+            return `<select name="type_tag" class="${fieldClass}" aria-label="Customer Type">${options}</select>`;
         }
 
         function customerDetailRowHtml(c) {
@@ -556,7 +675,7 @@
                                     <input class="cu-edit-input" id="cu-email-${escapeHtml(c.id)}" name="email" type="email" value="${escapeHtml(c.email || '')}">
                                 </div>
                                 <div class="cu-edit-field">
-                                    <label for="cu-type-${escapeHtml(c.id)}">Type tag</label>
+                                    <label for="cu-type-${escapeHtml(c.id)}">Customer Type</label>
                                     ${typeTagSelectFieldHtml(c, 'cu-edit-select')}
                                 </div>
                                 <div class="cu-edit-field">
@@ -651,6 +770,120 @@
             );
         }
 
+        function formatOrderDate(iso) {
+            if (!iso) return '—';
+            return iso.slice(0, 10);
+        }
+
+        function formatGbp(amount) {
+            const val = parseFloat(String(amount ?? '').replace(/,/g, '')) || 0;
+            return '£' + val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatLinePrice(li) {
+            if (li.price_display) return li.price_display;
+            return `${formatGbp(li.unit_price)} × ${li.quantity} = ${formatGbp(li.total)}`;
+        }
+
+        function renderOrderLineItem(li) {
+            let html = `<div class="detail-line"><div class="line-main"><div class="line-details">`;
+            if (li.sku) html += `<div class="line-sku">${escapeHtml(li.sku)}</div>`;
+            html += `<span class="line-title">${escapeHtml(li.title)}</span>`;
+            if (li.meta_line) html += `<div class="line-meta">${escapeHtml(li.meta_line)}</div>`;
+            if (li.properties && li.properties.length) {
+                html += '<ul class="line-props">';
+                li.properties.forEach(p => {
+                    html += `<li><strong>${escapeHtml(p.key)}:</strong> ${escapeHtml(p.value)}</li>`;
+                });
+                html += '</ul>';
+            }
+            html += `</div><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div></div>`;
+            return html;
+        }
+
+        function renderOrderLineSection(title, items, emptyText) {
+            let html = `<div class="detail-section"><h4>${escapeHtml(title)}</h4>`;
+            if (items && items.length) {
+                items.forEach(li => { html += renderOrderLineItem(li); });
+            } else {
+                html += `<p class="detail-empty">${escapeHtml(emptyText)}</p>`;
+            }
+            return html + '</div>';
+        }
+
+        function renderCustomerOrderDetails(o) {
+            let html = '<div class="details-inner">';
+            html += renderOrderLineSection('Items', o.order_items || [], 'No items');
+            if (o.fees && o.fees.length) html += renderOrderLineSection('Fees', o.fees, '');
+            const info = o.order_info || {};
+            const hasNote = !!(info.note || '').trim();
+            const attrs = info.attributes || [];
+            if (hasNote || attrs.length) {
+                html += '<div class="detail-section"><h4>Order info</h4>';
+                if (hasNote) html += `<div class="order-info-note">${escapeHtml(info.note)}</div>`;
+                attrs.forEach(a => {
+                    html += `<div class="info-kv"><strong>${escapeHtml(a.key)}:</strong> ${escapeHtml(a.value)}</div>`;
+                });
+                html += '</div>';
+            }
+            return html + '</div>';
+        }
+
+        function renderCustomerOrdersTable(orders) {
+            if (!orders.length) {
+                return '<div class="state-msg">This customer has no orders yet.</div>';
+            }
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th></tr></thead><tbody>';
+            orders.forEach((o, i) => {
+                html += `<tr class="data-row" data-order-idx="${i}">
+                    <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
+                    <td>${escapeHtml(formatOrderDate(o.processed_at))}</td>
+                    <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
+                </tr>
+                <tr class="details-row" id="cu-order-details-${i}"><td colspan="3">${renderCustomerOrderDetails(o)}</td></tr>`;
+            });
+            return html + '</tbody></table></div>';
+        }
+
+        function closeCustomerOrdersModal() {
+            const modal = document.getElementById('cu-orders-modal');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
+        async function openCustomerOrdersModal(customerId, customerName) {
+            const modal = document.getElementById('cu-orders-modal');
+            const body = document.getElementById('cu-orders-modal-body');
+            const title = document.getElementById('cu-orders-modal-title');
+            title.textContent = customerName ? `Orders — ${customerName}` : 'Customer orders';
+            body.innerHTML = '<div class="state-msg"><div class="spinner"></div>Loading orders…</div>';
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+
+            try {
+                const resp = await fetch(`/api/customers/${encodeURIComponent(customerId)}/orders`);
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.success) {
+                    throw new Error((data && data.error) ? data.error : 'Failed to load orders');
+                }
+                body.innerHTML = renderCustomerOrdersTable(data.orders || []);
+                body.querySelectorAll('.data-row').forEach(row => {
+                    row.addEventListener('click', () => {
+                        const idx = row.getAttribute('data-order-idx');
+                        const dr = document.getElementById('cu-order-details-' + idx);
+                        if (dr) {
+                            const isOpen = dr.classList.toggle('open');
+                            row.classList.toggle('expanded', isOpen);
+                        }
+                    });
+                });
+            } catch (err) {
+                body.innerHTML = `<div class="state-msg error-msg">${escapeHtml(err.message || 'Failed to load orders')}</div>`;
+            }
+        }
+
         function customerRowHtml(c) {
             const expanded = String(CU_EXPANDED_ID) === String(c.id);
             if (expanded) {
@@ -673,7 +906,14 @@
                 <td class="col-tag">${typeTagSelectHtml(c)}</td>
                 <td class="col-created">${formatCreatedAt(c.created_at)}</td>
                 <td class="col-orders">${c.orders_count || 0}</td>
-                <td class="col-spent">£${escapeHtml(c.total_spent || '0.00')}</td>
+                <td class="col-spent">
+                    <div class="spent-cell">
+                        <span class="spent-amount">£${escapeHtml(c.total_spent || '0.00')}</span>
+                        <button type="button" class="cu-view-orders-btn" data-customer-id="${escapeHtml(c.id)}" data-customer-name="${escapeHtml(c.name || '')}" title="View all orders" aria-label="View all orders for ${escapeHtml(c.name || 'customer')}">
+                            <i class="fas fa-box"></i>
+                        </button>
+                    </div>
+                </td>
                 <td class="cu-expand-cell col-expand">
                     <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="false" aria-label="Expand customer">
                         <i class="fas fa-chevron-down"></i>
@@ -716,7 +956,7 @@
                             <th class="col-company">Company</th>
                             <th class="col-landline">Landline</th>
                             <th class="col-mobile">Mobile</th>
-                            <th class="col-tag">Type tag</th>
+                            <th class="col-tag">Customer Type</th>
                             <th class="col-created">Created</th>
                             <th class="col-orders">Orders</th>
                             <th class="col-spent">Total spent</th>
@@ -785,6 +1025,12 @@
                 updateCustomerTypeTag(sel.dataset.customerId, sel.value);
             });
             document.getElementById('cu-content').addEventListener('click', function(e) {
+                const ordersBtn = e.target.closest('.cu-view-orders-btn');
+                if (ordersBtn) {
+                    e.stopPropagation();
+                    openCustomerOrdersModal(ordersBtn.dataset.customerId, ordersBtn.dataset.customerName);
+                    return;
+                }
                 const expandBtn = e.target.closest('.cu-expand-btn');
                 if (expandBtn) {
                     toggleExpand(expandBtn.dataset.customerId);
@@ -794,6 +1040,14 @@
                 if (cancelBtn) {
                     CU_EXPANDED_ID = null;
                     render();
+                }
+            });
+            document.getElementById('cu-orders-modal').addEventListener('click', function(e) {
+                if (e.target.closest('[data-close-orders-modal]')) closeCustomerOrdersModal();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && document.getElementById('cu-orders-modal').classList.contains('open')) {
+                    closeCustomerOrdersModal();
                 }
             });
             document.getElementById('cu-content').addEventListener('submit', function(e) {

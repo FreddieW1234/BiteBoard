@@ -1932,6 +1932,19 @@ def api_customers():
         }), 500
 
 
+@app.route('/api/customers/<customer_id>/orders', methods=['GET'])
+def api_customer_orders(customer_id):
+    """Return all orders for one customer (staff Customers page)."""
+    try:
+        from scripts.Client_Orders import get_customer_orders  # type: ignore
+        result = get_customer_orders(customer_id, fetch_all=True)
+        if not result.get("success"):
+            return jsonify(result), 404
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'orders': [], 'total': 0, 'error': str(e)}), 500
+
+
 @app.route('/api/customers/<customer_id>/type-tag', methods=['POST'])
 def api_customer_type_tag(customer_id):
     """Replace a customer's type tag (trade / end-customer / Pending) on Shopify."""
