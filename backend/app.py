@@ -1922,24 +1922,8 @@ def api_order_info_update(order_id):
 
 @app.route("/api/client/orders/<order_id>/order-info", methods=["PUT"])
 def api_client_order_info_update(order_id):
-    """Update order note / custom attributes for the logged-in customer's order."""
-    cid = get_client_customer_id()
-    if not cid:
-        return jsonify({"success": False, "error": "Not signed in as a customer"}), 403
-    try:
-        from scripts.order_helpers import get_order_customer_id, update_order_info  # type: ignore
-        owner = get_order_customer_id(order_id)
-        if not owner:
-            return jsonify({"success": False, "error": "Order not found"}), 404
-        if str(owner) != str(cid):
-            return jsonify({"success": False, "error": "Not allowed to edit this order"}), 403
-        data = request.get_json(silent=True) or {}
-        note = data.get("note", "")
-        attributes = data.get("attributes") or []
-        note_sections = data.get("note_sections")
-        return jsonify(update_order_info(order_id, note, attributes, note_sections=note_sections))
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+    """Order info editing is staff-only."""
+    return jsonify({"success": False, "error": "Order info can only be edited by staff"}), 403
 
 
 @app.route('/api/orders', methods=['GET'])

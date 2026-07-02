@@ -277,6 +277,11 @@
             border-bottom: 1px solid #e5e7eb;
         }
         .orders-wrap .order-info-group + .order-info-group .order-info-group-title { margin-top: 4px; }
+        .orders-wrap .order-info-group.has-separator {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
         .orders-wrap .order-info-field {
             display: flex;
             flex-direction: column;
@@ -291,49 +296,20 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
         }
-        .orders-wrap .order-info-note-input,
-        .orders-wrap .order-info-note-field,
-        .orders-wrap .order-info-note-raw,
-        .orders-wrap .order-info-attr-input {
+        .orders-wrap .order-info-value {
             width: 100%;
             box-sizing: border-box;
             padding: 9px 11px;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
-            font-family: inherit;
             font-size: 0.86rem;
             line-height: 1.45;
-            resize: vertical;
-            background: #fff;
+            background: #f9fafb;
             color: #374151;
+            white-space: pre-wrap;
+            min-height: 2.5rem;
         }
-        .orders-wrap .order-info-note-input { min-height: 114px; }
-        .orders-wrap .order-info-attr-input { min-height: 72px; }
-        .orders-wrap .order-info-note-input:focus,
-        .orders-wrap .order-info-note-field:focus,
-        .orders-wrap .order-info-note-raw:focus,
-        .orders-wrap .order-info-attr-input:focus {
-            outline: none;
-            border-color: var(--bite-cyan);
-            box-shadow: 0 0 0 2px rgba(0, 174, 239, 0.15);
-        }
-        .orders-wrap .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-        .orders-wrap .btn-save-order-info {
-            background: var(--bite-cyan);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 14px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .orders-wrap .btn-save-order-info:hover { filter: brightness(0.95); }
-        .orders-wrap .btn-save-order-info:disabled { opacity: 0.65; cursor: wait; }
-        .orders-wrap .order-info-msg { font-size: 0.82rem; font-weight: 500; }
-        .orders-wrap .order-info-msg.ok { color: #059669; }
-        .orders-wrap .order-info-msg.err { color: #dc2626; }
+        .orders-wrap .order-info-value.empty { color: #9ca3af; font-style: italic; }
 
         /* Empty / error states */
         .state-msg {
@@ -508,54 +484,50 @@
                                     {% set attr_sections = info.sections if info.sections else [] %}
                                     <div class="detail-section order-info-section">
                                         <h4>Order info</h4>
-                                        <form class="order-info-form" data-order-id="{{ order.id }}">
-                                            <div class="order-info-panel">
-                                                {% if note_sections %}
-                                                    {% for sec in note_sections %}
-                                                    <div class="order-info-group order-info-note-group"{% if sec.heading %} data-heading="{{ sec.heading }}"{% endif %}>
-                                                        {% if sec.heading %}
-                                                        <h5 class="order-info-group-title">{{ sec.heading }}</h5>
-                                                        {% endif %}
-                                                        <div class="order-info-grid">
-                                                            {% for field in sec.fields or [] %}
-                                                            <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
-                                                                <label>{{ field.key }}</label>
-                                                                <textarea class="order-info-note-field" data-note-key="{{ field.key }}" rows="{{ 4 if field.full_width else 2 }}">{{ field.value or '' }}</textarea>
-                                                            </div>
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                    {% endfor %}
-                                                {% else %}
-                                                <div class="order-info-grid">
-                                                    <div class="order-info-field full-width">
-                                                        <label>Notes</label>
-                                                        <textarea class="order-info-note-raw" name="note" rows="8">{{ info.note or '' }}</textarea>
-                                                    </div>
-                                                </div>
-                                                {% endif %}
-                                                {% for sec in attr_sections %}
-                                                <div class="order-info-group order-info-attr-group">
+                                        <div class="order-info-panel order-info-readonly">
+                                            {% if note_sections %}
+                                                {% for sec in note_sections %}
+                                                <div class="order-info-group{% if sec.separator_before %} has-separator{% endif %}">
                                                     {% if sec.heading %}
                                                     <h5 class="order-info-group-title">{{ sec.heading }}</h5>
-                                                    <input type="hidden" class="order-info-attr-input" data-attr-key="{{ sec.heading }}" value="{{ sec.heading_value or '' }}">
                                                     {% endif %}
                                                     <div class="order-info-grid">
                                                         {% for field in sec.fields or [] %}
                                                         <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
-                                                            <label>{{ field.key }}</label>
-                                                            <textarea class="order-info-attr-input" data-attr-key="{{ field.key }}" rows="{{ 4 if field.full_width else 2 }}">{{ field.value or '' }}</textarea>
+                                                            <label>{{ field.display_label or field.key }}</label>
+                                                            <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
                                                         </div>
                                                         {% endfor %}
                                                     </div>
                                                 </div>
                                                 {% endfor %}
-                                            </div>
-                                            <div class="order-info-actions">
-                                                <button type="submit" class="btn-save-order-info">Save order info</button>
-                                                <span class="order-info-msg" hidden></span>
-                                            </div>
-                                        </form>
+                                            {% elif (info.note or '').strip() %}
+                                                <div class="order-info-grid">
+                                                    <div class="order-info-field full-width">
+                                                        <label>Notes</label>
+                                                        <div class="order-info-value">{{ info.note }}</div>
+                                                    </div>
+                                                </div>
+                                            {% elif attr_sections %}
+                                                {% for sec in attr_sections %}
+                                                <div class="order-info-group">
+                                                    {% if sec.heading %}
+                                                    <h5 class="order-info-group-title">{{ sec.heading }}</h5>
+                                                    {% endif %}
+                                                    <div class="order-info-grid">
+                                                        {% for field in sec.fields or [] %}
+                                                        <div class="order-info-field{% if field.full_width %} full-width{% endif %}">
+                                                            <label>{{ field.key }}</label>
+                                                            <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            {% else %}
+                                                <p class="detail-empty">No order info</p>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -675,67 +647,6 @@
                 }
             });
         }
-
-        document.querySelector('.orders-wrap')?.addEventListener('submit', async function(e) {
-            const form = e.target.closest('.order-info-form');
-            if (!form) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const orderId = form.dataset.orderId;
-            const btn = form.querySelector('.btn-save-order-info');
-            const msg = form.querySelector('.order-info-msg');
-            const noteGroups = form.querySelectorAll('.order-info-note-group');
-            const rawNote = form.querySelector('.order-info-note-raw');
-            const attributes = [];
-            form.querySelectorAll('.order-info-attr-input').forEach(el => {
-                attributes.push({ key: el.dataset.attrKey, value: el.value });
-            });
-            const payload = { attributes };
-            if (noteGroups.length) {
-                const sections = [];
-                noteGroups.forEach(group => {
-                    const fields = [];
-                    group.querySelectorAll('.order-info-note-field').forEach(el => {
-                        fields.push({ key: el.dataset.noteKey, value: el.value });
-                    });
-                    sections.push({ heading: group.dataset.heading || null, fields });
-                });
-                payload.note_sections = sections;
-            } else {
-                payload.note = rawNote?.value ?? '';
-            }
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Saving…';
-            }
-            if (msg) msg.hidden = true;
-            try {
-                const res = await fetch(`/api/client/orders/${encodeURIComponent(orderId)}/order-info`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify(payload),
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
-                if (msg) {
-                    msg.textContent = 'Order info saved.';
-                    msg.className = 'order-info-msg ok';
-                    msg.hidden = false;
-                }
-            } catch (err) {
-                if (msg) {
-                    msg.textContent = err.message || 'Could not save order info.';
-                    msg.className = 'order-info-msg err';
-                    msg.hidden = false;
-                }
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.textContent = 'Save order info';
-                }
-            }
-        });
     </script>
 </body>
 </html>

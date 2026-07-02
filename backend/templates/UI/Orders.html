@@ -106,6 +106,11 @@
             border-bottom: 1px solid #e5e7eb;
         }
         .order-info-group + .order-info-group .order-info-group-title { margin-top: 4px; }
+        .order-info-group.has-separator {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
         .order-info-field {
             display: flex;
             flex-direction: column;
@@ -277,11 +282,15 @@
             return sections;
         }
 
+        function orderInfoFieldLabel(f) {
+            return f.display_label || f.key || '';
+        }
+
         function renderOrderInfoField(f, inputClass, keyAttr) {
             const fw = f.full_width ? ' full-width' : '';
             const rows = f.full_width ? 4 : 2;
             return `<div class="order-info-field${fw}">
-                <label>${escapeHtml(f.key)}</label>
+                <label>${escapeHtml(orderInfoFieldLabel(f))}</label>
                 <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="${rows}">${escapeHtml(f.value || '')}</textarea>
             </div>`;
         }
@@ -313,7 +322,8 @@
             if (noteSections) {
                 noteSections.forEach(sec => {
                     const headingAttr = sec.heading ? ` data-heading="${escapeHtml(sec.heading)}"` : '';
-                    html += `<div class="order-info-group order-info-note-group"${headingAttr}>`;
+                    const sepClass = sec.separator_before ? ' has-separator' : '';
+                    html += `<div class="order-info-group order-info-note-group${sepClass}"${headingAttr}>`;
                     if (sec.heading) html += `<h5 class="order-info-group-title">${escapeHtml(sec.heading)}</h5>`;
                     html += '<div class="order-info-grid">';
                     (sec.fields || []).forEach(f => { html += renderOrderInfoField(f, 'order-info-note-field', 'data-note-key'); });

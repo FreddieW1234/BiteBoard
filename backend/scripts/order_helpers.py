@@ -227,6 +227,34 @@ def _order_info_field_full_width(key: str, value: str = "") -> bool:
 
 _NOTE_LINE = re.compile(r"^(.+?):\s*(.*)$")
 
+_DELIVERY_DATE_KEY_NAMES = frozenset({"delivery date", "requested delivery date"})
+
+
+def _order_info_field_meta(key: str, value: str = "") -> dict:
+    """Canonical Shopify key + UI label for a parsed note field."""
+    k_norm = (key or "").strip().rstrip(":").lower()
+    if k_norm in _DELIVERY_DATE_KEY_NAMES:
+        return {
+            "key": "REQUESTED DELIVERY DATE:",
+            "display_label": "Requested delivery date:",
+            "full_width": False,
+        }
+    canonical = key if key.endswith(":") else f"{key}:"
+    return {
+        "key": canonical,
+        "display_label": canonical,
+        "full_width": _order_info_field_full_width(key, value),
+    }
+
+
+def _finalize_order_note_sections(sections: list[dict]) -> list[dict]:
+    for sec in sections:
+        for field in sec.get("fields") or []:
+            if (field.get("key") or "").upper().startswith("REQUESTED DELIVERY DATE"):
+                sec["separator_before"] = True
+                break
+    return sections
+
 
 def parse_order_note(note: str) -> list[dict]:
     """Parse Shopify order note text into titled sections and labelled fields."""
@@ -302,13 +330,10 @@ def parse_order_note(note: str) -> list[dict]:
             value = "\n".join(val_lines)
 
         sec = ensure_section()
-        sec["fields"].append({
-            "key": key,
-            "value": value,
-            "full_width": _order_info_field_full_width(key, value),
-        })
+        meta = _order_info_field_meta(key, value)
+        sec["fields"].append({**meta, "value": value})
 
-    return sections
+    return _finalize_order_note_sections(sections)
 
 
 def serialize_order_note(sections: list[dict]) -> str:
