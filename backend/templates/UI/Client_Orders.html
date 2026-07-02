@@ -52,7 +52,7 @@
             transition: color 0.15s, border-color 0.15s;
         }
         .tab-btn:hover { color: var(--bite-text); }
-        .tab-btn.active {
+        .tab-btn.co-tab-active {
             color: var(--bite-text);
             font-weight: 600;
             border-bottom-color: var(--bite-cyan);
@@ -63,8 +63,8 @@
         }
         .tab-btn.logout-tab:hover { color: var(--bite-pink); }
 
-        .tab-panel { display: none; }
-        .tab-panel.active { display: block; }
+        .co-tab-panel { display: none !important; }
+        .co-tab-panel.co-tab-active { display: block !important; }
 
         /* Card container */
         .card {
@@ -356,12 +356,12 @@
         </div>
         {% else %}
         <nav class="tabs" role="tablist">
-            <button type="button" class="tab-btn active" data-tab="profile" role="tab">Profile</button>
-            <button type="button" class="tab-btn" data-tab="orders" role="tab">Orders</button>
+            <button type="button" class="tab-btn" data-tab="profile" role="tab" aria-selected="false" aria-controls="panel-profile">Profile</button>
+            <button type="button" class="tab-btn co-tab-active" data-tab="orders" role="tab" aria-selected="true" aria-controls="panel-orders">Orders</button>
             <button type="button" class="tab-btn logout-tab" id="logout-tab" role="tab">Logout</button>
         </nav>
 
-        <div id="panel-profile" class="tab-panel active" role="tabpanel">
+        <div id="panel-profile" class="co-tab-panel" role="tabpanel" hidden>
             {% if profile %}
             <div class="card profile-card">
                 <h2 class="section-title">Your details</h2>
@@ -405,7 +405,7 @@
             {% endif %}
         </div>
 
-        <div id="panel-orders" class="tab-panel" role="tabpanel">
+        <div id="panel-orders" class="co-tab-panel co-tab-active" role="tabpanel">
             <div class="orders-wrap">
                 {% if orders %}
                 <div class="list-card-scroll">
@@ -419,7 +419,7 @@
                     </thead>
                     <tbody>
                         {% for order in orders %}
-                        <tr class="data-row" onclick="toggleDetails(this, 'details-{{ loop.index }}')">
+                        <tr class="data-row" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ loop.index }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td>{{ order.total_display }}</td>
@@ -567,16 +567,27 @@
             row.classList.toggle('expanded', isOpen);
         }
 
+        function switchClientTab(tab) {
+            document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tab;
+                btn.classList.toggle('co-tab-active', isActive);
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+            document.querySelectorAll('.co-tab-panel').forEach(panel => {
+                const isActive = panel.id === 'panel-' + tab;
+                panel.classList.toggle('co-tab-active', isActive);
+                panel.hidden = !isActive;
+            });
+        }
+
         document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(btn => {
             btn.addEventListener('click', () => {
-                const tab = btn.getAttribute('data-tab');
-                document.querySelectorAll('.tab-btn:not(.logout-tab)').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-                btn.classList.add('active');
-                const panel = document.getElementById('panel-' + tab);
-                if (panel) panel.classList.add('active');
+                switchClientTab(btn.getAttribute('data-tab'));
             });
         });
+
+        switchClientTab('orders');
 
         const profileForm = document.getElementById('profile-form');
         if (profileForm) {
