@@ -302,6 +302,13 @@
             return html;
         }
 
+        function orderInfoFieldFullWidth(key, value) {
+            if ((value || '').includes('\n')) return true;
+            const k = (key || '').replace(/:$/, '').trim().toLowerCase();
+            if (k === 'name' || k === 'address') return false;
+            return /address|notes|comments|instructions|details/i.test(key);
+        }
+
         function groupOrderInfoAttributes(attributes) {
             const sections = [];
             let current = null;
@@ -321,7 +328,7 @@
                 current.fields.push({
                     key,
                     value,
-                    full_width: /address|notes|comments|instructions|details/i.test(key),
+                    full_width: orderInfoFieldFullWidth(key, value),
                 });
             });
             return sections;

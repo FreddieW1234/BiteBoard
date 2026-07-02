@@ -255,9 +255,15 @@ def _is_order_info_section_heading(key: str, inline_value: str = "") -> bool:
     return bool(letters) and k.upper() == k
 
 
+_PRODUCT_PAIR_FIELD_KEYS = frozenset({"name", "address"})
+
+
 def _order_info_field_full_width(key: str, value: str = "") -> bool:
     if "\n" in (value or ""):
         return True
+    k_norm = (key or "").strip().rstrip(":").lower()
+    if k_norm in _PRODUCT_PAIR_FIELD_KEYS:
+        return False
     return bool(re.search(r"address|notes|comments|instructions|details", key or "", re.I))
 
 
@@ -272,7 +278,7 @@ def _order_info_field_meta(key: str, value: str = "") -> dict:
     if k_norm in _DELIVERY_DATE_KEY_NAMES:
         return {
             "key": "REQUESTED DELIVERY DATE:",
-            "display_label": "Requested delivery date (XX.XX.XXXX ONLY):",
+            "display_label": "Requested delivery date (DD.MM.YYYY ONLY):",
             "full_width": False,
         }
     canonical = key if key.endswith(":") else f"{key}:"
@@ -284,11 +290,39 @@ def _order_info_field_meta(key: str, value: str = "") -> dict:
 
 
 def _finalize_order_note_sections(sections: list[dict]) -> list[dict]:
-    for sec in sections:
-        for field in sec.get("fields") or []:
-            if (field.get("key") or "").upper().startswith("REQUESTED DELIVERY DATE"):
-                sec["separator_before"] = True
-                break
+    """Place requested delivery date beside PO NUMBER; drop the extra separator."""
+    po_prefix = "PO NUMBER"
+    delivery_prefix = "REQUESTED DELIVERY DATE"
+
+    po_loc: tuple[int, int] | None = None
+    delivery_loc: tuple[int, int] | None = None
+
+    for si, sec in enumerate(sections):
+        for fi, field in enumerate(sec.get("fields") or []):
+            key = (field.get("key") or "").upper()
+            if key.startswith(po_prefix):
+                po_loc = (si, fi)
+            if key.startswith(delivery_prefix):
+                delivery_loc = (si, fi)
+
+    if delivery_loc and po_loc:
+        dsi, dfi = delivery_loc
+        delivery_field = sections[dsi]["fields"].pop(dfi)
+        if not sections[dsi].get("fields") and not sections[dsi].get("heading"):
+            sections.pop(dsi)
+            if dsi < po_loc[0]:
+                po_loc = (po_loc[0] - 1, po_loc[1])
+
+        psi, pfi = po_loc
+        sections[psi]["fields"].insert(pfi + 1, delivery_field)
+        sections[psi].pop("separator_before", None)
+    else:
+        for sec in sections:
+            for field in sec.get("fields") or []:
+                if (field.get("key") or "").upper().startswith(delivery_prefix):
+                    sec.pop("separator_before", None)
+                    break
+
     return sections
 
 
