@@ -398,15 +398,15 @@
                                 <div class="details-inner">
                                     <div class="detail-section">
                                         <h4>Items</h4>
-                                        {% if order.items %}
-                                            {% for item in order.items %}
+                                        {% if order.order_items %}
+                                            {% for item in order.order_items %}
                                             <div class="detail-line">
                                                 <div class="line-main">
                                                     <span class="line-title">{{ item.title }}</span>
                                                     <span class="line-price">{{ item.currency }} {{ item.unit_price }} × {{ item.quantity }} = {{ item.currency }} {{ item.total }}</span>
                                                 </div>
-                                                {% if item.variant_title or item.sku %}
-                                                <div class="line-meta">{% if item.variant_title %}{{ item.variant_title }}{% endif %}{% if item.sku %}{% if item.variant_title %} · {% endif %}{{ item.sku }}{% endif %}</div>
+                                                {% if item.meta_line %}
+                                                <div class="line-meta">{{ item.meta_line }}</div>
                                                 {% endif %}
                                                 {% if item.properties %}
                                                 <ul class="line-props">

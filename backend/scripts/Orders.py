@@ -21,8 +21,6 @@ query StaffOrders($cursor: String) {{
         legacyResourceId
         name
         processedAt
-        displayFinancialStatus
-        displayFulfillmentStatus
         totalPriceSet {{
           shopMoney {{ amount currencyCode }}
         }}
@@ -30,6 +28,10 @@ query StaffOrders($cursor: String) {{
           legacyResourceId
           displayName
           email
+          companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") {{ value }}
+        }}
+        billingAddress {{
+          company
         }}
 {ORDER_EXTRA_FIELDS}
         lineItems(first: 50) {{
@@ -69,17 +71,19 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
 def _format_order_node(node: dict) -> dict:
     money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
     customer = node.get("customer") or {}
+    billing = node.get("billingAddress") or {}
+    company_mf = ((customer.get("companyNameNew") or {}).get("value") or "").strip()
+    company = company_mf or (billing.get("company") or "").strip()
     base = {
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
-        "financial_status": node.get("displayFinancialStatus") or "",
-        "fulfillment_status": node.get("displayFulfillmentStatus") or "",
         "total": money.get("amount") or "0.00",
         "currency": money.get("currencyCode") or "GBP",
         "customer_id": customer.get("legacyResourceId"),
         "customer_name": customer.get("displayName") or "",
         "customer_email": customer.get("email") or "",
+        "company": company,
     }
     return enrich_order(node, base)
 

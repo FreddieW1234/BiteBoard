@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 LINE_ITEM_FIELDS = """
               title
               quantity
@@ -36,22 +38,87 @@ def _parse_attributes(raw: list | None) -> list[dict]:
     return out
 
 
+def _merge_property_pairs(properties: list[dict]) -> tuple[list[str], list[dict]]:
+    """Merge label + _label Code pairs into 'Label - value:code' strings."""
+    if not properties:
+        return [], []
+    by_key = {p["key"]: p["value"] for p in properties}
+    consumed: set[str] = set()
+    merged: list[str] = []
+
+    for prop in properties:
+        key = prop["key"]
+        if key in consumed or key.startswith("_"):
+            continue
+        code_key = f"_{key} Code"
+        if code_key in by_key:
+            merged.append(f"{key} - {prop['value']}:{by_key[code_key]}")
+            consumed.add(key)
+            consumed.add(code_key)
+
+    remaining = [p for p in properties if p["key"] not in consumed]
+    return merged, remaining
+
+
+def _build_meta_line(sku: str, variant_title: str, merged_variants: list[str]) -> str:
+    """SKU · colour/variant pairs · qty band / customer type."""
+    parts: list[str] = []
+    if sku:
+        parts.append(sku)
+    parts.extend(merged_variants)
+    if variant_title:
+        parts.append(variant_title)
+    return " · ".join(parts)
+
+
+def _clean_fee_title(title: str) -> str:
+    """Remove trailing variant marker e.g. 'Origination Fee (50)' → 'Origination Fee'."""
+    return re.sub(r"\s*\(\d+\)\s*$", "", (title or "").strip()).strip()
+
+
+def _is_hidden_fee_property(key: str) -> bool:
+    k = (key or "").strip()
+    return k in ("_for_product", "_pl") or k.startswith("_pl")
+
+
+def _format_fee_item(item: dict) -> dict:
+    """Fees: '{name} - {product}', hide _pl / _for_product and variant suffix."""
+    properties = item.get("properties") or []
+    by_key = {p["key"]: p["value"] for p in properties}
+    fee_name = _clean_fee_title(item.get("title") or "")
+    for_product = (by_key.get("_for_product") or "").strip()
+    item["title"] = f"{fee_name} - {for_product}" if for_product else fee_name
+    item["meta_line"] = ""
+    item["variant_title"] = ""
+    item["properties"] = [p for p in properties if not _is_hidden_fee_property(p["key"])]
+    return item
+
+
 def format_line_item(li: dict) -> dict:
     li_money = (li.get("originalTotalSet") or {}).get("shopMoney") or {}
     unit_money = (li.get("originalUnitPriceSet") or {}).get("shopMoney") or {}
     title = li.get("title") or ""
     currency = li_money.get("currencyCode") or unit_money.get("currencyCode") or "GBP"
-    return {
+    sku = (li.get("sku") or "").strip()
+    variant_title = (li.get("variantTitle") or "").strip()
+    properties = _parse_attributes(li.get("customAttributes"))
+    merged_variants, remaining = _merge_property_pairs(properties)
+    is_fee = is_fee_item(title)
+    item = {
         "title": title,
         "quantity": li.get("quantity") or 0,
-        "sku": li.get("sku") or "",
-        "variant_title": li.get("variantTitle") or "",
+        "sku": sku,
+        "variant_title": variant_title,
+        "meta_line": _build_meta_line(sku, variant_title, merged_variants),
         "unit_price": unit_money.get("amount") or "0.00",
         "total": li_money.get("amount") or "0.00",
         "currency": currency,
-        "properties": _parse_attributes(li.get("customAttributes")),
-        "is_fee": is_fee_item(title),
+        "properties": remaining,
+        "is_fee": is_fee,
     }
+    if is_fee:
+        item = _format_fee_item(item)
+    return item
 
 
 def split_line_items(line_items: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -79,7 +146,7 @@ def enrich_order(node: dict, base: dict) -> dict:
     line_items = parse_order_line_items(node)
     items, fees = split_line_items(line_items)
     base["line_items"] = line_items
-    base["items"] = items
+    base["order_items"] = items
     base["fees"] = fees
     base["order_info"] = format_order_info(node)
     return base
