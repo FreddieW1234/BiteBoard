@@ -86,6 +86,120 @@
 }
 .office-status-step.done .office-status-connector { background: #4f46e5; }
 
+.office-tracking-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 0;
+}
+.office-tracking-tab {
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 12px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+}
+.office-tracking-tab:hover { color: #374151; background: #f9fafb; }
+.office-tracking-tab.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+    font-weight: 600;
+}
+.office-tracking-tab-panels { margin-top: 4px; }
+.office-tracking-tab-panel[hidden] { display: none !important; }
+.office-tracking-panel-body { margin-top: 0; }
+.office-artwork-editor-actions { margin-bottom: 10px; }
+.office-fe-panel-empty {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    font-style: italic;
+    margin: 8px 0;
+}
+
+.office-file-explorer-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+.office-fe-refresh-btn {
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #4f46e5;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+.office-fe-refresh-btn:hover { background: #e0e7ff; }
+.office-file-explorer {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fafafa;
+    overflow: hidden;
+}
+.office-fe-folder + .office-fe-folder { border-top: 1px solid #e5e7eb; }
+.office-fe-folder-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #374151;
+    background: #f3f4f6;
+}
+.office-fe-folder-head i { color: #6b7280; width: 16px; text-align: center; }
+.office-fe-count {
+    font-weight: 500;
+    color: #9ca3af;
+    font-size: 0.72rem;
+}
+.office-fe-list { padding: 4px 8px 8px; }
+.office-fe-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 8px;
+    margin-bottom: 4px;
+    background: #fff;
+    border: 1px solid #eef0f3;
+    border-radius: 6px;
+}
+.office-fe-row:last-child { margin-bottom: 0; }
+.office-fe-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 140px;
+}
+.office-fe-file > i { color: #6b7280; flex-shrink: 0; }
+.office-fe-name {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #374151;
+    word-break: break-all;
+}
+.office-fe-empty {
+    padding: 8px 12px 12px;
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-style: italic;
+}
+
 .office-tracking-body {
     display: flex;
     flex-wrap: wrap;
@@ -334,6 +448,7 @@
     line-height: 1.55;
 }
 .office-changes-modal-steps li { margin-bottom: 6px; }
+.office-skip-warnings { color: #b45309; }
 .office-changes-modal-actions {
     display: flex;
     flex-wrap: wrap;

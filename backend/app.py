@@ -2130,6 +2130,44 @@ def api_client_order_office_file(order_id, item, filename):
     return _office_file_download(order_id, item, filename, "/api/client/orders")
 
 
+def _office_list_files(order_id, item, api_prefix):
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Item not found on this order"}), 404
+    try:
+        from scripts.office_api import list_files, OfficeApiError  # type: ignore
+        from urllib.parse import quote
+        data = list_files(order_name, item)
+        files_out = []
+        for f in data.get("files") or []:
+            fname = f.get("name")
+            if fname:
+                f = dict(f)
+                f["download_url"] = (
+                    f"{api_prefix}/{quote(str(order_id), safe='')}"
+                    f"/items/{quote(item, safe='')}"
+                    f"/files/{quote(fname, safe='')}"
+                )
+            files_out.append(f)
+        return jsonify({"success": True, "files": files_out})
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/files", methods=["GET"])
+def api_order_office_files_list(order_id, item):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_list_files(order_id, item, "/api/orders")
+
+
+@app.route("/api/client/orders/<order_id>/items/<path:item>/files", methods=["GET"])
+def api_client_order_office_files_list(order_id, item):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_list_files(order_id, item, "/api/client/orders")
+
+
 def _office_upload_artwork(order_id, item):
     cid = get_client_customer_id()
     if not cid:
