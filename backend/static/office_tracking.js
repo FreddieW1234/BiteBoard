@@ -675,11 +675,6 @@
                     <li>Quote your order number: <strong id="office-changes-order-num"></strong></li>
                     <li>Explain the changes you would like made to the proof</li>
                 </ul>
-                <div class="office-changes-modal-actions">
-                    <a class="office-btn office-btn-email" id="office-changes-email-btn" href="mailto:${SALES_EMAIL}">Email sales</a>
-                    <a class="office-btn office-btn-phone" id="office-changes-phone-btn" href="tel:${SALES_PHONE_TEL}">Call ${SALES_PHONE_DISPLAY}</a>
-                    <button type="button" class="office-btn office-btn-changes" data-close-changes-modal>Close</button>
-                </div>
             </div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', function (e) {
@@ -698,14 +693,10 @@
         const mailto = `mailto:${SALES_EMAIL}?subject=${subject}`;
         const orderEl = document.getElementById('office-changes-order-num');
         const mailLink = document.getElementById('office-changes-mailto');
-        const emailBtn = document.getElementById('office-changes-email-btn');
         const phoneLink = document.getElementById('office-changes-phone');
-        const phoneBtn = document.getElementById('office-changes-phone-btn');
         if (orderEl) orderEl.textContent = name;
         if (mailLink) mailLink.href = mailto;
-        if (emailBtn) emailBtn.href = mailto;
         if (phoneLink) phoneLink.href = `tel:${SALES_PHONE_TEL}`;
-        if (phoneBtn) phoneBtn.href = `tel:${SALES_PHONE_TEL}`;
         showOfficeModal(modal);
     }
 
