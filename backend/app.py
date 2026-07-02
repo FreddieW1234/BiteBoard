@@ -158,7 +158,10 @@ def api_client_profile():
         from scripts.Client_Orders import get_customer_profile, update_client_profile  # type: ignore
         if request.method == "PUT":
             data = request.get_json(silent=True) or {}
-            return jsonify(update_client_profile(cid, data))
+            result = update_client_profile(cid, data)
+            if not result.get("success"):
+                return jsonify(result), 400
+            return jsonify(result)
         return jsonify(get_customer_profile(cid))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

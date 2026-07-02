@@ -6,46 +6,44 @@ import time
 import requests
 
 from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, enrich_order  # type: ignore
 
 HEADERS = {
     "Content-Type": "application/json",
     "X-Shopify-Access-Token": ACCESS_TOKEN,
 }
 
-ORDERS_QUERY = """
-query StaffOrders($cursor: String) {
-  orders(first: 50, after: $cursor, sortKey: PROCESSED_AT, reverse: true) {
-    edges {
-      node {
+ORDERS_QUERY = f"""
+query StaffOrders($cursor: String) {{
+  orders(first: 50, after: $cursor, sortKey: PROCESSED_AT, reverse: true) {{
+    edges {{
+      node {{
         legacyResourceId
         name
         processedAt
         displayFinancialStatus
         displayFulfillmentStatus
-        totalPriceSet {
-          shopMoney { amount currencyCode }
-        }
-        customer {
+        totalPriceSet {{
+          shopMoney {{ amount currencyCode }}
+        }}
+        customer {{
           legacyResourceId
           displayName
           email
-        }
-        lineItems(first: 20) {
-          edges {
-            node {
-              title
-              quantity
-              originalTotalSet {
-                shopMoney { amount currencyCode }
-              }
-            }
-          }
-        }
-      }
-    }
-    pageInfo { hasNextPage endCursor }
-  }
-}
+        }}
+{ORDER_EXTRA_FIELDS}
+        lineItems(first: 50) {{
+          edges {{
+            node {{
+{LINE_ITEM_FIELDS}
+            }}
+          }}
+        }}
+      }}
+    }}
+    pageInfo {{ hasNextPage endCursor }}
+  }}
+}}
 """
 
 
@@ -71,17 +69,7 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
 def _format_order_node(node: dict) -> dict:
     money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
     customer = node.get("customer") or {}
-    line_items = []
-    for li_edge in (node.get("lineItems") or {}).get("edges") or []:
-        li = li_edge.get("node") or {}
-        li_money = (li.get("originalTotalSet") or {}).get("shopMoney") or {}
-        line_items.append({
-            "title": li.get("title") or "",
-            "quantity": li.get("quantity") or 0,
-            "total": li_money.get("amount") or "0.00",
-            "currency": li_money.get("currencyCode") or "GBP",
-        })
-    return {
+    base = {
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
@@ -92,8 +80,8 @@ def _format_order_node(node: dict) -> dict:
         "customer_id": customer.get("legacyResourceId"),
         "customer_name": customer.get("displayName") or "",
         "customer_email": customer.get("email") or "",
-        "line_items": line_items,
     }
+    return enrich_order(node, base)
 
 
 def get_orders_overview(max_orders: int = 250) -> dict:

@@ -102,6 +102,11 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
+        .field label .req { color: #dc2626; margin-left: 2px; }
+        .field input.field-invalid {
+            border-color: #fca5a5;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
         .field input,
         .field textarea {
             width: 100%;
@@ -166,6 +171,7 @@
             white-space: nowrap;
         }
         .orders-table thead th:last-child { text-align: right; }
+        .orders-table thead th:nth-child(2) { text-align: left; }
         .orders-table tbody td {
             padding: 14px 18px;
             border-bottom: 1px solid #eef0f3;
@@ -211,29 +217,67 @@
             border-bottom: 1px solid var(--bite-border);
         }
         .details-inner {
-            padding: 16px 18px 18px;
+            padding: 18px 20px 20px;
         }
-        .details-inner h4 {
+        .detail-section { margin-bottom: 18px; }
+        .detail-section:last-child { margin-bottom: 0; }
+        .detail-section h4 {
             font-size: 0.72rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--bite-label);
             margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e8ecef;
         }
-        .item-list { list-style: none; }
-        .item-list li {
+        .detail-empty { font-size: 0.875rem; color: var(--bite-muted); font-style: italic; }
+        .detail-line {
+            padding: 12px 0;
+            border-bottom: 1px solid #e8ecef;
+        }
+        .detail-line:last-child { border-bottom: none; }
+        .line-main {
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
+            align-items: flex-start;
             gap: 16px;
-            padding: 9px 0;
-            border-bottom: 1px solid #e8ecef;
             font-size: 0.875rem;
         }
-        .item-list li:last-child { border-bottom: none; }
-        .item-list .item-qty { color: var(--bite-muted); }
-        .item-list .item-price { font-weight: 600; white-space: nowrap; }
+        .line-title { font-weight: 600; color: var(--bite-text); flex: 1; min-width: 0; }
+        .line-price { font-weight: 600; white-space: nowrap; color: var(--bite-text); }
+        .line-meta {
+            font-size: 0.8125rem;
+            color: var(--bite-muted);
+            margin-top: 4px;
+        }
+        .line-props {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 8px 0 0;
+            border-top: 1px dashed #e8ecef;
+        }
+        .line-props li {
+            font-size: 0.8125rem;
+            color: #374151;
+            padding: 3px 0;
+            line-height: 1.4;
+        }
+        .line-props li strong { font-weight: 600; color: var(--bite-muted); }
+        .order-info-note {
+            font-size: 0.875rem;
+            line-height: 1.55;
+            color: var(--bite-text);
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+        .info-kv {
+            font-size: 0.8125rem;
+            color: #374151;
+            padding: 4px 0;
+            line-height: 1.45;
+        }
+        .info-kv strong { font-weight: 600; color: var(--bite-muted); }
 
         /* Empty / error states */
         .state-msg {
@@ -261,8 +305,8 @@
         @media (max-width: 640px) {
             .profile-form { grid-template-columns: 1fr; }
             .profile-card { padding: 18px 16px 22px; }
-            .orders-table thead th:nth-child(3),
-            .orders-table tbody td:nth-child(3) { display: none; }
+            .orders-table thead th:nth-child(2),
+            .orders-table tbody td:nth-child(2) { display: table-cell; }
             .tabs { flex-wrap: wrap; }
             .tab-btn.logout-tab { margin-left: 0; }
             .tab-btn { padding: 12px 14px; font-size: 0.875rem; }
@@ -291,8 +335,8 @@
                 <h2 class="section-title">Your details</h2>
                 <form id="profile-form" class="profile-form">
                     <div class="field">
-                        <label for="first_name">First name</label>
-                        <input type="text" id="first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name">
+                        <label for="first_name">First name <span class="req">*</span></label>
+                        <input type="text" id="first_name" name="first_name" value="{{ profile.first_name or '' }}" autocomplete="given-name" placeholder="First name" required>
                     </div>
                     <div class="field">
                         <label for="last_name">Last name</label>
@@ -303,8 +347,8 @@
                         <input type="text" id="company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
                     </div>
                     <div class="field">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address">
+                        <label for="email">Email <span class="req">*</span></label>
+                        <input type="email" id="email" name="email" value="{{ profile.email or '' }}" autocomplete="email" placeholder="Email address" required>
                     </div>
                     <div class="field">
                         <label for="landline_phone">Landline</label>
@@ -337,7 +381,6 @@
                         <tr>
                             <th>Order</th>
                             <th>Date</th>
-                            <th>Status</th>
                             <th>Total</th>
                         </tr>
                     </thead>
@@ -348,25 +391,70 @@
                                 <span class="order-name">{{ order.name }} <i class="fas fa-chevron-down"></i></span>
                             </td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
-                            <td>
-                                <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% else %}default{% endif %}">
-                                    {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
-                                </span>
-                            </td>
                             <td>{{ order.currency }} {{ order.total }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ loop.index }}">
-                            <td colspan="4">
+                            <td colspan="3">
                                 <div class="details-inner">
-                                    <h4>Items in this order</h4>
-                                    <ul class="item-list">
-                                        {% for item in order.line_items %}
-                                        <li>
-                                            <span><span class="item-qty">{{ item.quantity }} ×</span> {{ item.title }}</span>
-                                            <span class="item-price">{{ item.currency }} {{ item.total }}</span>
-                                        </li>
+                                    <div class="detail-section">
+                                        <h4>Items</h4>
+                                        {% if order.items %}
+                                            {% for item in order.items %}
+                                            <div class="detail-line">
+                                                <div class="line-main">
+                                                    <span class="line-title">{{ item.title }}</span>
+                                                    <span class="line-price">{{ item.currency }} {{ item.unit_price }} × {{ item.quantity }} = {{ item.currency }} {{ item.total }}</span>
+                                                </div>
+                                                {% if item.variant_title or item.sku %}
+                                                <div class="line-meta">{% if item.variant_title %}{{ item.variant_title }}{% endif %}{% if item.sku %}{% if item.variant_title %} · {% endif %}{{ item.sku }}{% endif %}</div>
+                                                {% endif %}
+                                                {% if item.properties %}
+                                                <ul class="line-props">
+                                                    {% for prop in item.properties %}
+                                                    <li><strong>{{ prop.key }}:</strong> {{ prop.value }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                                {% endif %}
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                        <p class="detail-empty">No items</p>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if order.fees %}
+                                    <div class="detail-section">
+                                        <h4>Fees</h4>
+                                        {% for item in order.fees %}
+                                        <div class="detail-line">
+                                            <div class="line-main">
+                                                <span class="line-title">{{ item.title }}</span>
+                                                <span class="line-price">{{ item.currency }} {{ item.unit_price }} × {{ item.quantity }} = {{ item.currency }} {{ item.total }}</span>
+                                            </div>
+                                            {% if item.properties %}
+                                            <ul class="line-props">
+                                                {% for prop in item.properties %}
+                                                <li><strong>{{ prop.key }}:</strong> {{ prop.value }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
                                         {% endfor %}
-                                    </ul>
+                                    </div>
+                                    {% endif %}
+
+                                    {% set info = order.order_info or {} %}
+                                    {% if info.note or info.attributes %}
+                                    <div class="detail-section">
+                                        <h4>Order info</h4>
+                                        {% if info.note %}
+                                        <div class="order-info-note">{{ info.note }}</div>
+                                        {% endif %}
+                                        {% for attr in info.attributes %}
+                                        <div class="info-kv"><strong>{{ attr.key }}:</strong> {{ attr.value }}</div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -417,15 +505,51 @@
 
         const profileForm = document.getElementById('profile-form');
         if (profileForm) {
+            const firstNameInput = document.getElementById('first_name');
+            const emailInput = document.getElementById('email');
+
+            function validateProfile() {
+                let ok = true;
+                const firstName = (firstNameInput?.value || '').trim();
+                const email = (emailInput?.value || '').trim();
+                firstNameInput?.classList.remove('field-invalid');
+                emailInput?.classList.remove('field-invalid');
+                if (!firstName) {
+                    firstNameInput?.classList.add('field-invalid');
+                    ok = false;
+                }
+                if (!email) {
+                    emailInput?.classList.add('field-invalid');
+                    ok = false;
+                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    emailInput?.classList.add('field-invalid');
+                    ok = false;
+                }
+                return ok;
+            }
+
+            [firstNameInput, emailInput].forEach(el => {
+                el?.addEventListener('input', () => el.classList.remove('field-invalid'));
+            });
+
             profileForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const saveBtn = document.getElementById('save-btn');
                 const saveMsg = document.getElementById('save-msg');
+                saveMsg.hidden = true;
+
+                if (!validateProfile()) {
+                    saveMsg.textContent = 'First name and a valid email are required.';
+                    saveMsg.className = 'save-msg err';
+                    saveMsg.hidden = false;
+                    (firstNameInput?.value.trim() ? emailInput : firstNameInput)?.focus();
+                    return;
+                }
+
                 const fd = new FormData(profileForm);
                 const body = Object.fromEntries(fd.entries());
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Saving…';
-                saveMsg.hidden = true;
                 try {
                     const res = await fetch('/api/client/profile', {
                         method: 'PUT',

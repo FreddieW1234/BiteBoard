@@ -12,41 +12,40 @@ HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
 }
 
-CUSTOMER_ORDERS_QUERY = """
-query CustomerOrders($id: ID!, $cursor: String) {
-  customer(id: $id) {
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, enrich_order  # type: ignore
+
+CUSTOMER_ORDERS_QUERY = f"""
+query CustomerOrders($id: ID!, $cursor: String) {{
+  customer(id: $id) {{
     legacyResourceId
     email
     firstName
     lastName
-    orders(first: 50, after: $cursor, sortKey: PROCESSED_AT, reverse: true) {
-      edges {
-        node {
+    orders(first: 50, after: $cursor, sortKey: PROCESSED_AT, reverse: true) {{
+      edges {{
+        node {{
           legacyResourceId
           name
           processedAt
           displayFinancialStatus
           displayFulfillmentStatus
-          totalPriceSet {
-            shopMoney { amount currencyCode }
-          }
-          lineItems(first: 25) {
-            edges {
-              node {
-                title
-                quantity
-                originalTotalSet {
-                  shopMoney { amount currencyCode }
-                }
-              }
-            }
-          }
-        }
-      }
-      pageInfo { hasNextPage endCursor }
-    }
-  }
-}
+          totalPriceSet {{
+            shopMoney {{ amount currencyCode }}
+          }}
+{ORDER_EXTRA_FIELDS}
+          lineItems(first: 50) {{
+            edges {{
+              node {{
+{LINE_ITEM_FIELDS}
+              }}
+            }}
+          }}
+        }}
+      }}
+      pageInfo {{ hasNextPage endCursor }}
+    }}
+  }}
+}}
 """
 
 
@@ -134,11 +133,24 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     """Update allowed profile fields for the logged-in customer (no type tag changes)."""
     import os
     import sys
+    import re
     scripts_dir = os.path.dirname(__file__)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
     from Customers import update_customer_details  # type: ignore
+
+    first_name = str(payload.get("first_name") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    if not first_name:
+        return {"success": False, "error": "First name is required."}
+    if not email:
+        return {"success": False, "error": "Email is required."}
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        return {"success": False, "error": "Please enter a valid email address."}
+
     safe = {k: payload[k] for k in CLIENT_PROFILE_KEYS if k in payload}
+    safe["first_name"] = first_name
+    safe["email"] = email
     update_customer_details(customer_id, safe)
     return get_customer_profile(customer_id)
 
@@ -156,17 +168,7 @@ def get_customer_orders(customer_id: str | int) -> dict:
     for edge in (customer.get("orders") or {}).get("edges") or []:
         node = edge.get("node") or {}
         money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
-        line_items = []
-        for li_edge in (node.get("lineItems") or {}).get("edges") or []:
-            li = li_edge.get("node") or {}
-            li_money = (li.get("originalTotalSet") or {}).get("shopMoney") or {}
-            line_items.append({
-                "title": li.get("title") or "",
-                "quantity": li.get("quantity") or 0,
-                "total": li_money.get("amount") or "0.00",
-                "currency": li_money.get("currencyCode") or "GBP",
-            })
-        orders.append({
+        base = {
             "id": node.get("legacyResourceId"),
             "name": node.get("name") or "",
             "processed_at": node.get("processedAt") or "",
@@ -174,8 +176,8 @@ def get_customer_orders(customer_id: str | int) -> dict:
             "fulfillment_status": node.get("displayFulfillmentStatus") or "",
             "total": money.get("amount") or "0.00",
             "currency": money.get("currencyCode") or "GBP",
-            "line_items": line_items,
-        })
+        }
+        orders.append(enrich_order(node, base))
 
     return {
         "success": True,
