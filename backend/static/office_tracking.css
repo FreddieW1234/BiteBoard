@@ -451,6 +451,22 @@ html.office-modal-open,
 html.office-modal-open body {
     overflow: hidden;
 }
+.office-changes-modal.office-changes-popover {
+    display: block;
+    padding: 0;
+    pointer-events: none;
+}
+.office-changes-modal.office-changes-popover .office-changes-modal-backdrop {
+    background: transparent;
+    pointer-events: auto;
+}
+.office-changes-modal.office-changes-popover .office-changes-modal-panel {
+    position: fixed;
+    pointer-events: auto;
+    width: min(420px, calc(100vw - 24px));
+    max-width: 420px;
+    margin: 0;
+}
 .office-changes-modal[hidden] { display: none !important; }
 .office-changes-modal-backdrop {
     position: absolute;

@@ -38,9 +38,85 @@
 
     function hideOfficeModal(modal) {
         if (modal) modal.hidden = true;
-        if (!document.querySelector('.office-changes-modal:not([hidden])')) {
+        const openModals = document.querySelectorAll('.office-changes-modal:not([hidden]):not(.office-changes-popover)');
+        if (!openModals.length) {
             document.documentElement.classList.remove('office-modal-open');
             if (isPortalEmbed()) setParentOverlayMode(false);
+        }
+    }
+
+    function positionChangesPopover(modal, anchorBtn) {
+        const panel = modal && modal.querySelector('.office-changes-modal-panel');
+        if (!panel || !anchorBtn) return;
+
+        panel.style.visibility = 'hidden';
+        panel.style.position = 'fixed';
+        panel.style.top = '0';
+        panel.style.left = '0';
+
+        const btnRect = anchorBtn.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const gap = 10;
+        const margin = 12;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        let top = btnRect.bottom + gap;
+        if (top + panelRect.height > vh - margin && btnRect.top - panelRect.height - gap >= margin) {
+            top = btnRect.top - panelRect.height - gap;
+        }
+        top = Math.max(margin, Math.min(top, vh - panelRect.height - margin));
+
+        let left = btnRect.left;
+        left = Math.max(margin, Math.min(left, vw - panelRect.width - margin));
+
+        panel.style.top = `${Math.round(top)}px`;
+        panel.style.left = `${Math.round(left)}px`;
+        panel.style.visibility = '';
+    }
+
+    function bindChangesPopoverReposition(modal) {
+        if (modal._repositionHandler) return;
+        modal._repositionHandler = function () {
+            if (!modal.hidden && modal._anchorBtn) positionChangesPopover(modal, modal._anchorBtn);
+        };
+        window.addEventListener('resize', modal._repositionHandler);
+        window.addEventListener('scroll', modal._repositionHandler, true);
+    }
+
+    function unbindChangesPopoverReposition(modal) {
+        if (!modal || !modal._repositionHandler) return;
+        window.removeEventListener('resize', modal._repositionHandler);
+        window.removeEventListener('scroll', modal._repositionHandler, true);
+        modal._repositionHandler = null;
+    }
+
+    function showChangesPopover(modal, anchorBtn) {
+        if (!modal || !anchorBtn) return;
+        if (!modal.parentElement || modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        modal._anchorBtn = anchorBtn;
+        modal.classList.add('office-changes-popover');
+        modal.hidden = false;
+        bindChangesPopoverReposition(modal);
+        requestAnimationFrame(function () {
+            positionChangesPopover(modal, anchorBtn);
+        });
+    }
+
+    function hideChangesPopover(modal) {
+        if (!modal) return;
+        modal.hidden = true;
+        modal.classList.remove('office-changes-popover');
+        modal._anchorBtn = null;
+        unbindChangesPopoverReposition(modal);
+        const panel = modal.querySelector('.office-changes-modal-panel');
+        if (panel) {
+            panel.style.top = '';
+            panel.style.left = '';
+            panel.style.position = '';
+            panel.style.visibility = '';
         }
     }
 
@@ -686,7 +762,7 @@
         return modal;
     }
 
-    function showChangesModal(orderName) {
+    function showChangesModal(orderName, anchorBtn) {
         const modal = ensureChangesModal();
         const name = (orderName || '').trim() || 'your order';
         const subject = encodeURIComponent(`Order ${name} – proof change request`);
@@ -697,18 +773,23 @@
         if (orderEl) orderEl.textContent = name;
         if (mailLink) mailLink.href = mailto;
         if (phoneLink) phoneLink.href = `tel:${SALES_PHONE_TEL}`;
-        showOfficeModal(modal);
+        showChangesPopover(modal, anchorBtn);
     }
 
     function hideChangesModal() {
-        hideOfficeModal(document.getElementById('office-changes-modal'));
+        hideChangesPopover(document.getElementById('office-changes-modal'));
     }
 
     function handleRequestChanges(btn) {
+        const modal = document.getElementById('office-changes-modal');
+        if (modal && !modal.hidden && modal._anchorBtn === btn) {
+            hideChangesModal();
+            return;
+        }
         const orderName = btn.dataset.orderName;
         const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
         const fromPayload = detailsEl._officeTracking && detailsEl._officeTracking.order;
-        showChangesModal(orderName || fromPayload || '');
+        showChangesModal(orderName || fromPayload || '', btn);
     }
 
     function showDeleteUnavailableModal() {
