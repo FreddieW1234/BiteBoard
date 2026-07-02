@@ -62,6 +62,14 @@ def _url(order: str, *parts: str) -> str:
     return f"{base}/orders/{'/'.join(segments)}"
 
 
+def _request(method: str, url: str, **kwargs) -> requests.Response:
+    try:
+        return _session_get().request(method, url, timeout=_TIMEOUT, **kwargs)
+    except requests.RequestException as exc:
+        logger.error("Office API request failed: %s", exc)
+        raise OfficeApiError("Order tracking service unavailable") from exc
+
+
 def _handle_response(resp: requests.Response, *, allow_404: bool = False):
     if resp.status_code == 404 and allow_404:
         return None
@@ -88,7 +96,7 @@ def _handle_response(resp: requests.Response, *, allow_404: bool = False):
 def ensure_item(order: str, item: str, label: str) -> dict:
     """Create-or-touch an item; returns status view."""
     url = _url(order, item)
-    resp = _session_get().post(url, json={"label": label}, timeout=_TIMEOUT)
+    resp = _request("POST", url, json={"label": label})
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from order tracking")
@@ -97,20 +105,20 @@ def ensure_item(order: str, item: str, label: str) -> dict:
 
 def get_item(order: str, item: str) -> dict | None:
     url = _url(order, item)
-    resp = _session_get().get(url, timeout=_TIMEOUT)
+    resp = _request("GET", url)
     return _handle_response(resp, allow_404=True)
 
 
 def get_order(order: str) -> dict | None:
     url = f"{OFFICE_API_URL.rstrip('/')}/orders/{_path(order)}"
-    resp = _session_get().get(url, timeout=_TIMEOUT)
+    resp = _request("GET", url)
     return _handle_response(resp, allow_404=True)
 
 
 def set_status(order: str, item: str, stage: str, note: str = "", by: str = "") -> dict:
     url = f"{_url(order, item)}/status"
     payload = {"stage": stage, "note": note or "", "by": by or ""}
-    resp = _session_get().post(url, json=payload, timeout=_TIMEOUT)
+    resp = _request("POST", url, json=payload)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from order tracking")
@@ -119,10 +127,10 @@ def set_status(order: str, item: str, stage: str, note: str = "", by: str = "") 
 
 def upload_artwork(order: str, item: str, file_stream, filename: str) -> dict:
     url = f"{_url(order, item)}/artwork"
-    resp = _session_get().post(
+    resp = _request(
+        "POST",
         url,
         files={"file": (filename, file_stream, "application/octet-stream")},
-        timeout=_TIMEOUT,
     )
     result = _handle_response(resp)
     if not isinstance(result, dict):
@@ -132,10 +140,10 @@ def upload_artwork(order: str, item: str, file_stream, filename: str) -> dict:
 
 def upload_proof(order: str, item: str, file_stream, filename: str) -> dict:
     url = f"{_url(order, item)}/proof"
-    resp = _session_get().post(
+    resp = _request(
+        "POST",
         url,
         files={"file": (filename, file_stream, "application/octet-stream")},
-        timeout=_TIMEOUT,
     )
     result = _handle_response(resp)
     if not isinstance(result, dict):
@@ -145,14 +153,14 @@ def upload_proof(order: str, item: str, file_stream, filename: str) -> dict:
 
 def list_files(order: str, item: str) -> dict:
     url = f"{_url(order, item)}/files"
-    resp = _session_get().get(url, timeout=_TIMEOUT)
+    resp = _request("GET", url)
     result = _handle_response(resp)
     return result if isinstance(result, dict) else {"files": []}
 
 
 def fetch_file(order: str, item: str, filename: str) -> requests.Response:
     url = f"{_url(order, item, 'files', filename)}"
-    resp = _session_get().get(url, stream=True, timeout=_TIMEOUT)
+    resp = _request("GET", url, stream=True)
     if resp.status_code == 401:
         raise OfficeApiError("Order tracking authentication failed")
     if not resp.ok:

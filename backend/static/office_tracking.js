@@ -8,6 +8,27 @@
         return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    async function parseJsonResponse(res) {
+        const text = await res.text();
+        if (!text) {
+            if (!res.ok) throw new Error('Request failed (' + res.status + ')');
+            return {};
+        }
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (text.trim().startsWith('<') && !ct.includes('json')) {
+            throw new Error(
+                res.ok
+                    ? 'Unexpected server response. Please refresh the page.'
+                    : 'Request failed (' + res.status + '). Please refresh and try again.'
+            );
+        }
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            throw new Error('Invalid server response');
+        }
+    }
+
     function latestProofFile(files) {
         const proofs = (files || []).filter(f => f.kind === 'proof');
         if (!proofs.length) return null;
@@ -298,7 +319,7 @@
 
     async function refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, role, lineNumber) {
         const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || !data.success) throw new Error(data.error || 'Could not refresh tracking');
         const item = (data.items || []).find(i => i.office_item_id === itemId || i.line_number === lineNumber);
         if (!item) throw new Error('Item not found');
@@ -331,7 +352,7 @@
                 body: fd,
                 credentials: 'same-origin',
             });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
             const role = apiPrefix.indexOf('/client/') >= 0 ? 'client' : 'staff';
             const lineNumber = trackingLineNumber(input);
@@ -362,7 +383,7 @@
                 body: fd,
                 credentials: 'same-origin',
             });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
             const lineNumber = trackingLineNumber(input);
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'staff', lineNumber);
@@ -387,7 +408,7 @@
                 credentials: 'same-origin',
                 body: JSON.stringify({ stage: 'approved', note: 'Proof approved by customer', by: 'customer' }),
             });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not approve');
             const lineNumber = trackingLineNumber(btn);
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'client', lineNumber);
@@ -415,7 +436,7 @@
                 credentials: 'same-origin',
                 body: JSON.stringify({ stage: stage, note: 'Status updated by staff', by: 'staff' }),
             });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not update status');
             const lineNumber = trackingLineNumber(btn);
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'staff', lineNumber);
@@ -518,7 +539,7 @@
         });
         try {
             const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Tracking unavailable');
             detailsEl._officeTracking = data;
             detailsEl.dataset.trackingLoaded = '1';
@@ -591,7 +612,7 @@
         if (!slotEl || !orderId) return;
         try {
             const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/indicator`, { credentials: 'same-origin' });
-            const data = await res.json();
+            const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) return;
             slotEl.innerHTML = renderOrderIndicatorHtml(computeOrderIndicator(data.items));
         } catch (_) { /* ignore */ }

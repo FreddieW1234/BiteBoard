@@ -7,7 +7,7 @@
     <script>if(window.parent!==window)document.documentElement.classList.add('co-embed');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/office_tracking.css" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=4" rel="stylesheet">
     <style>
         :root {
             --bite-cyan: #3AC9E3;
@@ -708,7 +708,7 @@
         switchClientTab('orders');
 
         const ordersWrap = document.querySelector('.orders-wrap');
-        if (ordersWrap && window.OfficeTracking) {
+        if (ordersWrap && window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') {
             OfficeTracking.loadOrderIndicatorsIn(ordersWrap, '/api/client/orders');
         }
 
@@ -793,6 +793,6 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js"></script>
+    <script src="/static/office_tracking.js?v=4"></script>
 </body>
 </html>

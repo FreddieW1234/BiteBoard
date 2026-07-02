@@ -6,7 +6,7 @@
     <title>Customers - Shopify Tools</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/office_tracking.css" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=4" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -1232,7 +1232,7 @@
                 }
                 customerModalOrders = data.orders || [];
                 body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
-                if (window.OfficeTracking) OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
+                if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');
@@ -1431,6 +1431,6 @@
             });
         });
     </script>
-    <script src="/static/office_tracking.js"></script>
+    <script src="/static/office_tracking.js?v=4"></script>
 </body>
 </html>

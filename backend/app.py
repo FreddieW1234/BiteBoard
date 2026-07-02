@@ -58,6 +58,20 @@ def request_entity_too_large(_e):
     return make_response("File too large", 413)
 
 
+@app.errorhandler(404)
+def api_not_found(_e):
+    if (request.path or "").startswith("/api/"):
+        return jsonify({"success": False, "error": "Not found"}), 404
+    return make_response("Not Found", 404)
+
+
+@app.errorhandler(500)
+def api_internal_error(_e):
+    if (request.path or "").startswith("/api/"):
+        return jsonify({"success": False, "error": "Internal server error"}), 500
+    return make_response("Internal Server Error", 500)
+
+
 @app.before_request
 def portal_auth_gate():
     path = request.path or ""
@@ -1973,11 +1987,15 @@ def _office_tracking_response(order_id, entry, api_prefix):
     from scripts.order_helpers import attach_office_tracking  # type: ignore
     from scripts.office_api import OfficeApiError  # type: ignore
 
-    order = entry["order"]
+    order = entry.get("order")
+    if not order:
+        return jsonify({"success": False, "error": "Order data unavailable"}), 500
     try:
         attach_office_tracking(order, seed=True)
     except OfficeApiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 503
+    except Exception as exc:
+        return jsonify({"success": False, "error": "Order tracking unavailable"}), 503
 
     items_out = []
     for item in order.get("order_items") or []:
