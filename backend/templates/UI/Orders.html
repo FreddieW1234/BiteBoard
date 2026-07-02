@@ -139,6 +139,12 @@
             min-height: 2.5rem;
         }
         .order-info-value.empty { color: #9ca3af; font-style: italic; }
+        .order-addresses-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+        .order-addresses-grid .order-info-field { min-width: 0; }
         .order-info-note-input,
         .order-info-note-field,
         .order-info-note-raw,
@@ -274,9 +280,9 @@
         function renderAddressBlock(label, address) {
             const text = (address && address.text) ? address.text : '';
             if (!text) {
-                return `<div class="order-info-field full-width"><label>${escapeHtml(label)}</label><div class="order-info-value empty">—</div></div>`;
+                return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value empty">—</div></div>`;
             }
-            return `<div class="order-info-field full-width"><label>${escapeHtml(label)}</label><div class="order-info-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
+            return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
         }
 
         function renderOrderAddressesSection(o) {
@@ -287,11 +293,11 @@
             const paymentDetail = payment.detail || '';
             if (!shipping && !billing && paymentLabel === '—') return '';
             let html = `<div class="detail-section order-addresses-section"><h4>Addresses &amp; payment</h4>
-                <div class="order-info-panel"><div class="order-info-grid">`;
+                <div class="order-info-panel"><div class="order-addresses-grid">`;
             html += renderAddressBlock('Shipping address', shipping);
             html += renderAddressBlock('Billing address', billing);
             html += `<div class="order-info-field"><label>Payment method</label>
-                <div class="order-info-value">${escapeHtml(paymentLabel)}${paymentDetail ? `<div class="line-meta">${escapeHtml(paymentDetail)}</div>` : ''}</div></div>`;
+                <div class="order-info-value${paymentLabel === '—' ? ' empty' : ''}">${escapeHtml(paymentLabel)}${paymentDetail ? `<div class="line-meta">${escapeHtml(paymentDetail)}</div>` : ''}</div></div>`;
             html += '</div></div></div>';
             return html;
         }

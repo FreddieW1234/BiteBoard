@@ -325,6 +325,12 @@
             min-height: 2.5rem;
         }
         .orders-wrap .order-info-value.empty { color: #9ca3af; font-style: italic; }
+        .orders-wrap .order-addresses-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px 18px;
+        }
+        .orders-wrap .order-addresses-grid .order-info-field { min-width: 0; }
 
         /* Empty / error states */
         .state-msg {
@@ -359,6 +365,7 @@
             .co-portal-profile .co-btn-save { width: 100%; }
             .co-portal-profile .co-form-footer { flex-direction: column; align-items: stretch; }
             .orders-wrap .order-info-grid { grid-template-columns: 1fr; }
+            .orders-wrap .order-addresses-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -497,8 +504,8 @@
                                     <div class="detail-section order-addresses-section">
                                         <h4>Addresses &amp; payment</h4>
                                         <div class="order-info-panel order-info-readonly">
-                                            <div class="order-info-grid">
-                                                <div class="order-info-field full-width">
+                                            <div class="order-addresses-grid">
+                                                <div class="order-info-field">
                                                     <label>Shipping address</label>
                                                     {% if order.shipping_address and order.shipping_address.text %}
                                                     <div class="order-info-value">{{ order.shipping_address.text }}</div>
@@ -506,7 +513,7 @@
                                                     <div class="order-info-value empty">—</div>
                                                     {% endif %}
                                                 </div>
-                                                <div class="order-info-field full-width">
+                                                <div class="order-info-field">
                                                     <label>Billing address</label>
                                                     {% if order.billing_address and order.billing_address.text %}
                                                     <div class="order-info-value">{{ order.billing_address.text }}</div>

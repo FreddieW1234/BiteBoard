@@ -272,7 +272,7 @@ def _order_info_field_meta(key: str, value: str = "") -> dict:
     if k_norm in _DELIVERY_DATE_KEY_NAMES:
         return {
             "key": "REQUESTED DELIVERY DATE:",
-            "display_label": "Requested delivery date:",
+            "display_label": "Requested delivery date (XX.XX.XXXX ONLY):",
             "full_width": False,
         }
     canonical = key if key.endswith(":") else f"{key}:"
@@ -484,12 +484,40 @@ _ON_ACCOUNT_GATEWAY_HINTS = (
 )
 
 
+def _is_on_account_phrase(text: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9 ]", " ", (text or "").lower())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return False
+    if normalized in ("on account", "pay on account"):
+        return True
+    return "pay" in normalized and "account" in normalized and len(normalized.split()) <= 4
+
+
+def _payment_display_detail(label: str, detail: str) -> str:
+    """Drop gateway detail when it repeats the payment label (e.g. 'On account' ×3)."""
+    detail = (detail or "").strip()
+    if not detail:
+        return ""
+    label_l = label.lower().strip()
+    parts = [p.strip() for p in re.split(r",\s*", detail) if p.strip()]
+    if label_l == "on account" and parts and all(_is_on_account_phrase(p) for p in parts):
+        return ""
+    if label_l == "card" and len(parts) == 1 and parts[0].lower() in ("card", "card payment"):
+        return ""
+    if detail.lower().strip(".") == label_l:
+        return ""
+    return detail
+
+
 def format_payment_method(node: dict) -> dict:
     """Classify payment as Card or On account using Shopify gateway / terms data."""
     payment_terms = node.get("paymentTerms") or {}
     terms_name = (payment_terms.get("paymentTermsName") or "").strip()
     if terms_name:
-        return {"method": "on_account", "label": "On account", "detail": terms_name}
+        label = "On account"
+        detail = "" if _is_on_account_phrase(terms_name) else terms_name
+        return {"method": "on_account", "label": label, "detail": detail}
 
     gateways: set[str] = set()
     has_card = False
@@ -527,16 +555,28 @@ def format_payment_method(node: dict) -> dict:
         return {
             "method": "on_account",
             "label": "On account",
-            "detail": detail or "Manual / invoice payment",
+            "detail": _payment_display_detail("On account", detail or "Manual / invoice payment"),
         }
     if has_card:
-        return {"method": "card", "label": "Card", "detail": detail or "Card payment"}
+        return {
+            "method": "card",
+            "label": "Card",
+            "detail": _payment_display_detail("Card", detail or "Card payment"),
+        }
 
     if detail:
         gw_lower = detail.lower()
         if any(hint in gw_lower for hint in _ON_ACCOUNT_GATEWAY_HINTS):
-            return {"method": "on_account", "label": "On account", "detail": detail}
-        return {"method": "card", "label": "Card", "detail": detail}
+            return {
+                "method": "on_account",
+                "label": "On account",
+                "detail": _payment_display_detail("On account", detail),
+            }
+        return {
+            "method": "card",
+            "label": "Card",
+            "detail": _payment_display_detail("Card", detail),
+        }
 
     financial = (node.get("displayFinancialStatus") or "").replace("_", " ").strip()
     if financial:
