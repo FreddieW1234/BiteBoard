@@ -56,8 +56,9 @@ def _path(*segments: str) -> str:
 
 
 def _url(order: str, *parts: str) -> str:
+    """Build /orders/{order}/items/{item}/... paths per Office API spec."""
     base = OFFICE_API_URL.rstrip("/")
-    segments = [_path(order)] + [_path(p) for p in parts]
+    segments = [_path(order), "items"] + [_path(p) for p in parts]
     return f"{base}/orders/{'/'.join(segments)}"
 
 
