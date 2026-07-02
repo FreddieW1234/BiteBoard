@@ -73,6 +73,15 @@
         .cust-table tbody tr.row-conflict td.col-expand { background: #fff5f5; }
         .cust-table tbody tr.cu-row:hover td.col-name,
         .cust-table tbody tr.cu-row:hover td.col-expand { background: #f9fafb; }
+        .cust-table tbody tr.cu-row.expanded td,
+        .cust-table tbody tr.cu-row.expanded td.col-name,
+        .cust-table tbody tr.cu-row.expanded td.col-expand { background: #eef2ff !important; }
+        .cust-table tbody tr.cu-row.expanded.row-conflict td,
+        .cust-table tbody tr.cu-row.expanded.row-conflict td.col-name,
+        .cust-table tbody tr.cu-row.expanded.row-conflict td.col-expand { background: #eef2ff !important; }
+        .cust-table tbody tr.cu-row.expanded:hover td,
+        .cust-table tbody tr.cu-row.expanded:hover td.col-name,
+        .cust-table tbody tr.cu-row.expanded:hover td.col-expand { background: #eef2ff !important; }
         .cust-table tbody tr.row-conflict:hover td.col-name,
         .cust-table tbody tr.row-conflict:hover td.col-expand { background: #fee2e2; }
         .cust-table th.col-name,
@@ -137,7 +146,8 @@
         .other-tags { display: flex; flex-wrap: wrap; gap: 3px; }
         .type-tag-display { display: inline-flex; align-items: center; min-height: 24px; }
         .type-tag-display .muted-tag { color: #9ca3af; font-size: 0.82rem; }
-        .cu-expand-cell { width: 44px; text-align: right; padding-right: 12px !important; }
+        .cu-expand-cell { width: auto; min-width: 72px; text-align: right; padding-right: 12px !important; }
+        .cu-row-actions { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
         .cu-expand-btn {
             background: #fff;
             border: 1px solid #e5e7eb;
@@ -153,22 +163,9 @@
         }
         .cu-expand-btn:hover { background: #f3f4f6; border-color: #d1d5db; color: #4f46e5; }
         .cu-expand-btn[aria-expanded="true"] { background: #eef2ff; border-color: #c7d2fe; color: #4f46e5; }
-        .cu-detail-row td { padding: 0 !important; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+        .cu-detail-row td { padding: 0 !important; background: #f8fafc !important; border-bottom: 1px solid #e5e7eb; }
         .cu-detail-row[hidden] { display: none; }
         .cu-edit-panel { padding: 16px 18px 18px; }
-        .cu-edit-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 14px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .cu-edit-header-title { font-size: 0.95rem; font-weight: 600; color: #111827; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cu-edit-header-sub { font-size: 0.8rem; font-weight: 400; color: #6b7280; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .cust-table thead.is-hidden { display: none; }
-        .cu-detail-row-expanded td { background: #fff; }
         .cu-edit-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -224,7 +221,6 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .error-msg { color: #b91c1c; }
 
-        .spent-cell { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
         .cu-view-orders-btn {
             background: #fff;
             border: 1px solid #e5e7eb;
@@ -637,29 +633,28 @@
             return `<select name="type_tag" class="${fieldClass}" aria-label="Customer Type">${options}</select>`;
         }
 
+        function customerRowActionsHtml(c, expanded) {
+            const chevron = expanded ? 'fa-chevron-up' : 'fa-chevron-down';
+            const expandLabel = expanded ? 'Collapse customer' : 'Expand customer';
+            const expandedAttr = expanded ? 'true' : 'false';
+            return `<div class="cu-row-actions">
+                <button type="button" class="cu-view-orders-btn" data-customer-id="${escapeHtml(c.id)}" data-customer-name="${escapeHtml(c.name || '')}" title="View all orders" aria-label="View all orders for ${escapeHtml(c.name || 'customer')}">
+                    <i class="fas fa-box"></i>
+                </button>
+                <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="${expandedAttr}" aria-label="${expandLabel}">
+                    <i class="fas ${chevron}"></i>
+                </button>
+            </div>`;
+        }
+
         function customerDetailRowHtml(c) {
             const others = otherTags(c.tags);
             const otherHtml = others.length
                 ? `<div class="cu-edit-field full-width"><label>Other tags</label><div class="other-tags">${others.map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div></div>`
                 : '';
-            const conflictIcon = c.tag_conflict
-                ? `<i class="fas fa-triangle-exclamation conflict-icon" title="Multiple type tags"></i>`
-                : '';
-            const emailSub = c.email
-                ? `<div class="cu-edit-header-sub">${escapeHtml(c.email)}</div>`
-                : '';
-            return `<tr class="cu-detail-row cu-detail-row-expanded${c.tag_conflict ? ' row-conflict' : ''}" data-customer-id="${escapeHtml(c.id)}">
+            return `<tr class="cu-detail-row${c.tag_conflict ? ' row-conflict' : ''}" data-customer-id="${escapeHtml(c.id)}">
                 <td colspan="10">
                     <div class="cu-edit-panel">
-                        <div class="cu-edit-header">
-                            <div class="cu-edit-header-title">
-                                <div>${conflictIcon}${escapeHtml(c.name)}</div>
-                                ${emailSub}
-                            </div>
-                            <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="true" aria-label="Collapse customer">
-                                <i class="fas fa-chevron-up"></i>
-                            </button>
-                        </div>
                         <form class="cu-edit-form" data-customer-id="${escapeHtml(c.id)}">
                             <div class="cu-edit-grid">
                                 <div class="cu-edit-field">
@@ -884,19 +879,14 @@
             }
         }
 
-        function customerRowHtml(c) {
-            const expanded = String(CU_EXPANDED_ID) === String(c.id);
-            if (expanded) {
-                return customerDetailRowHtml(c);
-            }
-
+        function customerSummaryRowHtml(c, expanded) {
             const email = c.email
                 ? `<a class="cust-email" href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>`
                 : '—';
             const conflictIcon = c.tag_conflict
                 ? `<i class="fas fa-triangle-exclamation conflict-icon" title="Multiple type tags"></i>`
                 : '';
-            const rowClass = ['cu-row', c.tag_conflict ? 'row-conflict' : ''].filter(Boolean).join(' ');
+            const rowClass = ['cu-row', expanded ? 'expanded' : '', c.tag_conflict ? 'row-conflict' : ''].filter(Boolean).join(' ');
             return `<tr class="${rowClass}" data-customer-id="${escapeHtml(c.id)}">
                 <td class="col-name"><span class="cust-name">${conflictIcon}${escapeHtml(c.name)}</span></td>
                 <td class="col-email">${email}</td>
@@ -906,20 +896,19 @@
                 <td class="col-tag">${typeTagSelectHtml(c)}</td>
                 <td class="col-created">${formatCreatedAt(c.created_at)}</td>
                 <td class="col-orders">${c.orders_count || 0}</td>
-                <td class="col-spent">
-                    <div class="spent-cell">
-                        <span class="spent-amount">£${escapeHtml(c.total_spent || '0.00')}</span>
-                        <button type="button" class="cu-view-orders-btn" data-customer-id="${escapeHtml(c.id)}" data-customer-name="${escapeHtml(c.name || '')}" title="View all orders" aria-label="View all orders for ${escapeHtml(c.name || 'customer')}">
-                            <i class="fas fa-box"></i>
-                        </button>
-                    </div>
-                </td>
+                <td class="col-spent">£${escapeHtml(c.total_spent || '0.00')}</td>
                 <td class="cu-expand-cell col-expand">
-                    <button type="button" class="cu-expand-btn" data-customer-id="${escapeHtml(c.id)}" aria-expanded="false" aria-label="Expand customer">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
+                    ${customerRowActionsHtml(c, expanded)}
                 </td>
             </tr>`;
+        }
+
+        function customerRowHtml(c) {
+            const expanded = String(CU_EXPANDED_ID) === String(c.id);
+            if (expanded) {
+                return customerSummaryRowHtml(c, true) + customerDetailRowHtml(c);
+            }
+            return customerSummaryRowHtml(c, false);
         }
 
         function render() {
@@ -931,7 +920,6 @@
             }
             const conflictCount = CU_DATA.conflict_count || 0;
             const filtersActive = activeFilters().length > 0;
-            const hideTableHead = !!CU_EXPANDED_ID;
 
             if (conflictCount > 0 && !CU_EXPANDED_ID) {
                 flaggedEl.innerHTML = `<div class="alert-banner">
@@ -949,7 +937,7 @@
             content.innerHTML = `<div class="list-card">
                 <div class="list-card-scroll">
                 <table class="cust-table">
-                    <thead${hideTableHead ? ' class="is-hidden"' : ''}>
+                    <thead>
                         <tr>
                             <th class="col-name">Name</th>
                             <th class="col-email">Email</th>
