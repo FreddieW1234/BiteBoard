@@ -2032,6 +2032,8 @@ def _office_file_download(order_id, item, filename, api_prefix):
         import mimetypes
         resp = fetch_file(order_name, item, filename)
         content_type = resp.headers.get("Content-Type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        inline = request.args.get("inline", "").lower() in ("1", "true", "yes")
+        disposition = "inline" if inline else "attachment"
 
         def generate():
             for chunk in resp.iter_content(chunk_size=8192):
@@ -2041,7 +2043,7 @@ def _office_file_download(order_id, item, filename, api_prefix):
         return Response(
             generate(),
             content_type=content_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
         )
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 502

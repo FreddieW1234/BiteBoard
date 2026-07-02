@@ -141,15 +141,65 @@
 }
 .office-tracking-msg.ok { color: #059669; }
 .office-tracking-msg.err { color: #dc2626; }
+.office-files-wrap {
+    margin: 10px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.office-file-section-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin: 0 0 6px;
+}
 .office-file-list {
     list-style: none;
-    margin: 6px 0 0;
+    margin: 0;
     padding: 0;
     font-size: 0.78rem;
 }
-.office-file-list li { padding: 2px 0; }
-.office-file-list a { color: #4f46e5; text-decoration: none; }
-.office-file-list a:hover { text-decoration: underline; }
+.office-file-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    background: #f9fafb;
+    border: 1px solid #eef0f3;
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+.office-file-row:last-child { margin-bottom: 0; }
+.office-file-name {
+    font-weight: 500;
+    color: #374151;
+    word-break: break-all;
+}
+.office-file-ver {
+    font-weight: 400;
+    color: #6b7280;
+    margin-left: 4px;
+}
+.office-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.office-file-link {
+    font-size: 0.78rem;
+    color: #4f46e5;
+    text-decoration: none;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.office-file-link i { margin-right: 4px; font-size: 0.72rem; }
+.office-file-link:hover { text-decoration: underline; }
+.office-file-download { color: #374151; }
 .office-staff-status {
     display: flex;
     flex-wrap: wrap;

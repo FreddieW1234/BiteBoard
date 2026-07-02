@@ -32,20 +32,72 @@
         return html;
     }
 
-    function renderFileList(files, orderId, itemId, apiPrefix) {
+    function proxyFileUrl(orderId, itemId, filename, apiPrefix, inline) {
+        const base = `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
+        return inline ? `${base}?inline=1` : base;
+    }
+
+    function fileKind(f) {
+        if (f.kind === 'artwork' || f.kind === 'proof') return f.kind;
+        const name = (f.name || '').toLowerCase();
+        if (name.startsWith('customer-artwork') || name.includes('artwork')) return 'artwork';
+        if (name.startsWith('proof')) return 'proof';
+        return 'other';
+    }
+
+    function sortFilesByVersion(files) {
+        return (files || []).slice().sort((a, b) => (b.version || 0) - (a.version || 0));
+    }
+
+    function renderFileRow(f, orderId, itemId, apiPrefix) {
+        const viewUrl = f.download_url
+            ? (f.download_url + (f.download_url.includes('?') ? '&' : '?') + 'inline=1')
+            : proxyFileUrl(orderId, itemId, f.name, apiPrefix, true);
+        const downloadUrl = f.download_url || proxyFileUrl(orderId, itemId, f.name, apiPrefix, false);
+        const versionLabel = f.version ? ` v${f.version}` : '';
+        return `<li class="office-file-row">
+            <span class="office-file-name">${escapeHtml(f.name)}${versionLabel ? `<span class="office-file-ver">${escapeHtml(versionLabel.trim())}</span>` : ''}</span>
+            <span class="office-file-actions">
+                <a class="office-file-link" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener"><i class="fas fa-eye"></i> View</a>
+                <a class="office-file-link office-file-download" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(f.name)}"><i class="fas fa-download"></i> Download</a>
+            </span>
+        </li>`;
+    }
+
+    function renderFileSection(title, files, orderId, itemId, apiPrefix) {
         if (!files || !files.length) return '';
-        let html = '<ul class="office-file-list">';
-        files.forEach(f => {
-            const url = f.download_url || proxyFileUrl(orderId, itemId, f.name, apiPrefix);
-            html += `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(f.name)}</a></li>`;
+        let html = `<div class="office-file-section"><h5 class="office-file-section-title">${escapeHtml(title)}</h5><ul class="office-file-list">`;
+        sortFilesByVersion(files).forEach(f => {
+            html += renderFileRow(f, orderId, itemId, apiPrefix);
         });
-        html += '</ul>';
+        html += '</ul></div>';
         return html;
     }
 
-    function proxyFileUrl(orderId, itemId, filename, apiPrefix) {
-        return `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
+    function renderFileSections(files, orderId, itemId, apiPrefix) {
+        if (!files || !files.length) return '';
+        const artwork = files.filter(f => fileKind(f) === 'artwork');
+        const proofs = files.filter(f => fileKind(f) === 'proof');
+        let html = '<div class="office-files-wrap">';
+        html += renderFileSection('Artwork', artwork, orderId, itemId, apiPrefix);
+        html += renderFileSection('Proofs', proofs, orderId, itemId, apiPrefix);
+        html += '</div>';
+        return html;
     }
+
+    function proofNum(key) {
+        const m = /^proof_(\d+)$/.exec(key || '');
+        return m ? parseInt(m[1], 10) : 0;
+    }
+
+    const STAGE_LABELS = {
+        received: 'Order Received',
+        artwork: 'Artwork Received',
+        approved: 'Proof Approved',
+        printing: 'Printing',
+        in_production: 'In Production',
+        shipped: 'Shipped',
+    };
 
     const ALL_STAGE_OPTIONS = [
         { key: 'received', label: 'Order Received' },
@@ -59,17 +111,67 @@
         { key: 'proof_7', label: 'Proof 7' },
         { key: 'proof_8', label: 'Proof 8' },
         { key: 'approved', label: 'Proof Approved' },
-        { key: 'printing', label: 'In Production' },
+        { key: 'printing', label: 'Printing' },
+        { key: 'in_production', label: 'In Production' },
         { key: 'shipped', label: 'Shipped' },
     ];
 
-    function stageOptionsForSelect(office) {
-        const fromApi = (office.stages || []).map(s => ({ key: s.key, label: s.label || s.key }));
-        const seen = new Set(fromApi.map(s => s.key));
-        ALL_STAGE_OPTIONS.forEach(s => {
-            if (!seen.has(s.key)) fromApi.push(s);
+    function labelForStage(key, apiStage) {
+        if (apiStage && apiStage.label) {
+            if (key === 'printing' && apiStage.label === 'In Production') return STAGE_LABELS.printing;
+            return apiStage.label;
+        }
+        if (STAGE_LABELS[key]) return STAGE_LABELS[key];
+        const n = proofNum(key);
+        return n ? `Proof ${n}` : key;
+    }
+
+    function maxProofReached(office) {
+        let max = 0;
+        (office.stages || []).forEach(s => { max = Math.max(max, proofNum(s.key)); });
+        (office.files || []).forEach(f => {
+            if (f.kind === 'proof' && f.version) max = Math.max(max, f.version);
         });
-        return fromApi;
+        max = Math.max(max, proofNum(office.current_stage));
+        return max;
+    }
+
+    function buildPipelineKeys(maxProof) {
+        const keys = ['received', 'artwork'];
+        for (let i = 1; i <= maxProof; i++) keys.push(`proof_${i}`);
+        keys.push('approved', 'printing', 'in_production', 'shipped');
+        return keys;
+    }
+
+    /** Expand proof_1..proof_N and add Printing before In Production for display. */
+    function normalizeStagesForDisplay(office) {
+        const current = office.current_stage || '';
+        const maxProof = maxProofReached(office);
+        const keys = buildPipelineKeys(maxProof);
+        const apiByKey = {};
+        (office.stages || []).forEach(s => { apiByKey[s.key] = s; });
+
+        let currentIdx = keys.indexOf(current);
+        if (currentIdx < 0) {
+            const apiCurrent = (office.stages || []).find(s => s.state === 'current');
+            if (apiCurrent) currentIdx = keys.indexOf(apiCurrent.key);
+        }
+
+        return keys.map((key, idx) => {
+            const fromApi = apiByKey[key];
+            let state = 'pending';
+            if (currentIdx >= 0) {
+                if (idx < currentIdx) state = 'done';
+                else if (idx === currentIdx) state = 'current';
+            } else if (fromApi && fromApi.state) {
+                state = fromApi.state;
+            }
+            return { key, label: labelForStage(key, fromApi), state };
+        });
+    }
+
+    function stageOptionsForSelect(_office) {
+        return ALL_STAGE_OPTIONS.slice();
     }
 
     function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
@@ -108,8 +210,8 @@
         const itemId = item.office_item_id;
         const stage = office.current_stage || '';
         let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '">';
-        html += renderStatusBar(office.stages);
-        html += renderFileList(office.files, orderId, itemId, apiPrefix);
+        html += renderStatusBar(normalizeStagesForDisplay(office));
+        html += renderFileSections(office.files, orderId, itemId, apiPrefix);
 
         html += '<div class="office-tracking-actions">';
         if (role === 'client' && canUploadArtwork(office)) {
@@ -126,9 +228,6 @@
         if (role === 'client' && isProofStage(stage)) {
             const proof = latestProofFile(office.files);
             if (proof) {
-                const proofUrl = proof.download_url || proxyFileUrl(orderId, itemId, proof.name, apiPrefix);
-                html += `<a class="office-proof-link" href="${escapeHtml(proofUrl)}" target="_blank" rel="noopener">
-                    <i class="fas fa-eye"></i> View proof${proof.version ? ' v' + proof.version : ''}</a>`;
                 html += `<button type="button" class="office-btn office-btn-approve office-approve-btn"
                     data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
                     data-api-prefix="${escapeHtml(apiPrefix)}">Approve proof</button>`;
