@@ -30,10 +30,17 @@ def logout_staff() -> None:
     session.pop(STAFF_SESSION_KEY, None)
 
 
-def establish_client_session(customer_id: str | int, email: str) -> None:
+def establish_client_session(customer_id: str | int, email: str, shop_url: str | None = None) -> None:
     session[CLIENT_ID_SESSION_KEY] = str(customer_id).strip()
     session[CLIENT_EMAIL_SESSION_KEY] = (email or "").strip().lower()
+    if shop_url:
+        session["client_shop_url"] = shop_url.rstrip("/")
     session.permanent = True
+
+
+def get_client_shop_url() -> str | None:
+    url = session.get("client_shop_url")
+    return url.rstrip("/") if url else None
 
 
 def get_client_customer_id() -> str | None:
@@ -49,6 +56,7 @@ def get_client_email() -> str | None:
 def clear_client_session() -> None:
     session.pop(CLIENT_ID_SESSION_KEY, None)
     session.pop(CLIENT_EMAIL_SESSION_KEY, None)
+    session.pop("client_shop_url", None)
 
 
 def is_client_path(path: str) -> bool:

@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL  # type: ignore
 from portal_auth import (  # type: ignore
     check_staff_credentials,
     is_staff_authenticated,
@@ -15,6 +15,8 @@ from portal_auth import (  # type: ignore
     establish_client_session,
     get_client_customer_id,
     get_client_email,
+    get_client_shop_url,
+    clear_client_session,
     is_client_path,
     is_staff_public_path,
 )
@@ -96,45 +98,73 @@ def staff_logout():
 def client_orders_page():
     customer_id = request.args.get("customer_id")
     email = request.args.get("email")
+    shop_url = (request.args.get("shop_url") or "").strip()
     if customer_id and email:
         from scripts.Client_Orders import verify_customer  # type: ignore
         if verify_customer(customer_id, email):
-            establish_client_session(customer_id, email)
+            establish_client_session(customer_id, email, shop_url=shop_url or None)
         else:
             return render_template(
                 "UI/Client_Orders.html",
                 error="We couldn't verify your account. Please open this page from your profile on the store.",
+                profile=None,
                 orders=[],
-                customer_email=None,
+                logout_url=_client_logout_url(),
             )
     cid = get_client_customer_id()
     if not cid:
         return render_template(
             "UI/Client_Orders.html",
-            error="Please open this page from your account on the store (Orders link on your profile).",
+            error="Please open this page from your account on the store.",
+            profile=None,
             orders=[],
-            customer_email=None,
+            logout_url=_client_logout_url(),
         )
     try:
-        from scripts.Client_Orders import get_customer_orders  # type: ignore
-        result = get_customer_orders(cid)
-        orders = result.get("orders") or []
-        customer = result.get("customer") or {}
-        display_email = get_client_email() or customer.get("email")
+        from scripts.Client_Orders import get_customer_orders, get_customer_profile  # type: ignore
+        profile_result = get_customer_profile(cid)
+        profile = profile_result.get("profile") if profile_result.get("success") else None
+        orders_result = get_customer_orders(cid)
+        orders = orders_result.get("orders") or [] if orders_result.get("success") else []
     except Exception as e:
-        print(f"Client orders error: {e}", flush=True)
+        print(f"Client portal error: {e}", flush=True)
         return render_template(
             "UI/Client_Orders.html",
-            error="Sorry, we couldn't load your orders right now. Please try again later.",
+            error="Sorry, we couldn't load your account right now. Please try again later.",
+            profile=None,
             orders=[],
-            customer_email=get_client_email(),
+            logout_url=_client_logout_url(),
         )
     return render_template(
         "UI/Client_Orders.html",
+        profile=profile,
         orders=orders,
-        customer_email=display_email,
         error=None,
+        logout_url=_client_logout_url(),
     )
+
+
+def _client_logout_url() -> str:
+    base = get_client_shop_url() or STOREFRONT_URL
+    return f"{base.rstrip('/')}/account/logout"
+
+
+@app.route("/api/client/profile")
+def api_client_profile():
+    cid = get_client_customer_id()
+    if not cid:
+        return jsonify({"success": False, "error": "Not signed in as a customer"}), 403
+    try:
+        from scripts.Client_Orders import get_customer_profile  # type: ignore
+        return jsonify(get_customer_profile(cid))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/client/logout", methods=["POST"])
+def api_client_logout():
+    clear_client_session()
+    return jsonify({"success": True, "logout_url": _client_logout_url()})
 
 
 @app.route("/api/client/orders")

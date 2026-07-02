@@ -32,6 +32,8 @@ STAFF_PASSWORD = "Chocolate2!"
 FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "biteboard-portal-session-key")
 # Set to "false" for local HTTP dev so session cookies work without HTTPS
 FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in ("1", "true", "yes")
+# Customer-facing shop URL (for logout links from the client portal iframe)
+STOREFRONT_URL = (os.environ.get("SHOPIFY_STOREFRONT_URL") or "https://bitepromotions.uk").rstrip("/")
 
 # Common headers for API requests
 SHOPIFY_HEADERS = {

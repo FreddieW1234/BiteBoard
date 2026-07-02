@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Orders</title>
+    <title>My Account</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -13,41 +13,86 @@
             background: #f6f8fa;
             min-height: 100vh;
             color: #1f2937;
-            padding: 20px 24px 40px;
+            padding: 16px 20px 32px;
         }
-        .header {
-            max-width: 960px;
-            margin: 0 auto 20px;
-        }
-        .header h1 {
-            font-size: 1.35rem;
-            font-weight: 600;
+        .wrap { max-width: 960px; margin: 0 auto; }
+        .tabs {
             display: flex;
-            align-items: center;
-            gap: 10px;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 0;
         }
-        .header h1 i { color: #4f46e5; }
-        .header p { color: #6b7280; font-size: 0.9rem; margin-top: 6px; }
+        .tab-btn {
+            appearance: none;
+            border: none;
+            background: transparent;
+            padding: 12px 18px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #6b7280;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            font-family: inherit;
+        }
+        .tab-btn:hover { color: #4f46e5; }
+        .tab-btn.active {
+            color: #4f46e5;
+            border-bottom-color: #4f46e5;
+        }
+        .tab-btn.logout-tab { color: #b91c1c; margin-left: auto; }
+        .tab-btn.logout-tab:hover { color: #991b1b; }
         .panel {
-            max-width: 960px;
-            margin: 0 auto;
             background: #fff;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             overflow: hidden;
         }
+        .tab-panel { display: none; padding: 24px; }
+        .tab-panel.active { display: block; }
         .state-msg {
             padding: 32px 24px;
             text-align: center;
             color: #6b7280;
             font-size: 0.95rem;
         }
-        .state-msg.error { color: #b91c1c; background: #fef2f2; }
+        .state-msg.error { color: #b91c1c; background: #fef2f2; border-radius: 12px; }
         .state-msg i { display: block; font-size: 1.5rem; margin-bottom: 10px; }
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px 20px;
+        }
+        .profile-field.full { grid-column: 1 / -1; }
+        .profile-field label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 6px;
+        }
+        .profile-field .value {
+            font-size: 0.95rem;
+            color: #1f2937;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .profile-field .value.empty { color: #9ca3af; font-style: italic; }
+        .type-pill {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #eef2ff;
+            color: #4338ca;
+        }
         table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f3f4f6; }
-        th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
-        tr:last-child td { border-bottom: none; }
+        th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 0.8rem; text-transform: uppercase; }
         tr.order-row { cursor: pointer; }
         tr.order-row:hover { background: #f9fafb; }
         .badge {
@@ -63,7 +108,6 @@
         .badge.pending { background: #fef3c7; color: #92400e; }
         .details-row { display: none; background: #fafafa; }
         .details-row.open { display: table-row; }
-        .details-inner { padding: 8px 0; }
         .details-inner ul { list-style: none; }
         .details-inner li {
             padding: 6px 0;
@@ -72,98 +116,196 @@
             justify-content: space-between;
             gap: 12px;
         }
-        .details-inner li:last-child { border-bottom: none; }
-        .empty { padding: 40px; text-align: center; color: #9ca3af; }
+        .logout-panel { text-align: center; padding: 48px 24px; }
+        .logout-panel p { color: #6b7280; margin-bottom: 20px; max-width: 360px; margin-left: auto; margin-right: auto; }
+        .btn-logout {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: #b91c1c;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn-logout:hover { background: #991b1b; }
         @media (max-width: 640px) {
+            .profile-grid { grid-template-columns: 1fr; }
             th:nth-child(3), td:nth-child(3) { display: none; }
+            .tabs { flex-wrap: wrap; }
+            .tab-btn.logout-tab { margin-left: 0; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1><i class="fas fa-box"></i> My Orders</h1>
-        {% if customer_email %}
-        <p>Signed in as {{ customer_email }}</p>
-        {% endif %}
-    </div>
-
-    <div class="panel">
+    <div class="wrap">
         {% if error %}
-        <div class="state-msg error">
+        <div class="state-msg error" style="margin-bottom:16px;border:1px solid #fecaca;">
             <i class="fas fa-circle-exclamation"></i>
             {{ error }}
         </div>
-        {% elif not orders %}
-        <div class="state-msg">
-            <i class="fas fa-inbox"></i>
-            You don't have any orders yet.
-        </div>
         {% else %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Order</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for order in orders %}
-                <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
-                    <td><strong>{{ order.name }}</strong></td>
-                    <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
-                    <td>
-                        <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
-                            {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
-                        </span>
-                    </td>
-                    <td>{{ order.currency }} {{ order.total }}</td>
-                </tr>
-                <tr class="details-row" id="details-{{ loop.index }}">
-                    <td colspan="4">
-                        <div class="details-inner">
-                            <strong style="display:block;margin-bottom:8px;">Items</strong>
-                            <ul>
-                                {% for item in order.line_items %}
-                                <li>
-                                    <span>{{ item.quantity }} × {{ item.title }}</span>
-                                    <span>{{ item.currency }} {{ item.total }}</span>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                            {% if order.fulfillment_status %}
-                            <p style="margin-top:10px;font-size:0.85rem;color:#6b7280;">
-                                Fulfilment: {{ order.fulfillment_status.replace('_', ' ').title() }}
-                            </p>
+        <nav class="tabs" role="tablist">
+            <button type="button" class="tab-btn active" data-tab="profile" role="tab">Profile</button>
+            <button type="button" class="tab-btn" data-tab="orders" role="tab">Orders</button>
+            <button type="button" class="tab-btn logout-tab" data-tab="logout" role="tab">Logout</button>
+        </nav>
+
+        <div class="panel">
+            <!-- Profile -->
+            <div id="panel-profile" class="tab-panel active" role="tabpanel">
+                {% if profile %}
+                <div class="profile-grid">
+                    <div class="profile-field">
+                        <label>First name</label>
+                        <div class="value{% if not profile.first_name %} empty{% endif %}">{{ profile.first_name or '—' }}</div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Last name</label>
+                        <div class="value{% if not profile.last_name %} empty{% endif %}">{{ profile.last_name or '—' }}</div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Email</label>
+                        <div class="value{% if not profile.email %} empty{% endif %}">{{ profile.email or '—' }}</div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Type</label>
+                        <div class="value">
+                            {% if profile.type_tag %}
+                            <span class="type-pill">{{ profile.type_tag }}</span>
+                            {% else %}
+                            <span class="empty">—</span>
                             {% endif %}
                         </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+                    <div class="profile-field">
+                        <label>Company</label>
+                        <div class="value{% if not profile.company_name %} empty{% endif %}">{{ profile.company_name or '—' }}</div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Landline</label>
+                        <div class="value{% if not profile.landline_phone %} empty{% endif %}">{{ profile.landline_phone or '—' }}</div>
+                    </div>
+                    <div class="profile-field">
+                        <label>Mobile</label>
+                        <div class="value{% if not profile.mobile_number %} empty{% endif %}">{{ profile.mobile_number or '—' }}</div>
+                    </div>
+                    <div class="profile-field full">
+                        <label>Invoice address</label>
+                        <div class="value{% if not profile.invoice_address %} empty{% endif %}">{{ profile.invoice_address or '—' }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="state-msg">Profile could not be loaded.</div>
+                {% endif %}
+            </div>
+
+            <!-- Orders -->
+            <div id="panel-orders" class="tab-panel" role="tabpanel">
+                {% if orders %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr class="order-row" onclick="toggleDetails('details-{{ loop.index }}')">
+                            <td><strong>{{ order.name }}</strong></td>
+                            <td>{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
+                            <td>
+                                <span class="badge {% if order.financial_status and 'PAID' in order.financial_status %}paid{% elif order.financial_status and 'PENDING' in order.financial_status %}pending{% endif %}">
+                                    {{ order.financial_status.replace('_', ' ').title() if order.financial_status else '—' }}
+                                </span>
+                            </td>
+                            <td>{{ order.currency }} {{ order.total }}</td>
+                        </tr>
+                        <tr class="details-row" id="details-{{ loop.index }}">
+                            <td colspan="4">
+                                <div class="details-inner">
+                                    <strong style="display:block;margin-bottom:8px;">Items</strong>
+                                    <ul>
+                                        {% for item in order.line_items %}
+                                        <li>
+                                            <span>{{ item.quantity }} × {{ item.title }}</span>
+                                            <span>{{ item.currency }} {{ item.total }}</span>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="state-msg">
+                    <i class="fas fa-inbox"></i>
+                    You don't have any orders yet.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Logout -->
+            <div id="panel-logout" class="tab-panel" role="tabpanel">
+                <div class="logout-panel">
+                    <p>Sign out of your Bite Promotions account on this device.</p>
+                    <button type="button" class="btn-logout" id="logout-btn">
+                        <i class="fas fa-right-from-bracket"></i> Log out
+                    </button>
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
 
     <script>
+        const LOGOUT_URL = {{ logout_url | tojson }};
+
         function toggleDetails(id) {
             const row = document.getElementById(id);
             if (row) row.classList.toggle('open');
         }
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                const panel = document.getElementById('panel-' + tab);
+                if (panel) panel.classList.add('active');
+                if (tab === 'logout') {
+                    /* show logout panel; user confirms with button */
+                }
+            });
+        });
+
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/client/logout', { method: 'POST', credentials: 'same-origin' });
+                } catch (e) { /* continue to shop logout */ }
+                const target = window.top || window.parent || window;
+                target.location.href = LOGOUT_URL;
+            });
+        }
     </script>
     <!--
-      Shopify Portal page (HTML editor) — customer must be logged in:
+      Shopify Portal section — logged-in customer only:
       {% if customer %}
       <iframe
-        src="https://bitepromotionsportal.co.uk/portal?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}"
-        width="100%"
-        height="900"
-        style="border:none;"
-        title="My Orders">
-      </iframe>
-      {% else %}
-      <p>Please <a href="/account/login">log in</a> to view your orders.</p>
+        src="https://bitepromotionsportal.co.uk/client/orders?customer_id={{ customer.id }}&email={{ customer.email | url_encode }}&shop_url={{ shop.url | url_encode }}"
+        width="100%" height="900" style="border:none;" title="My Account"></iframe>
       {% endif %}
     -->
 </body>

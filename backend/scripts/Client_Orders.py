@@ -90,6 +90,39 @@ def verify_customer(customer_id: str | int, email: str) -> bool:
     return shopify_email == expected_email
 
 
+def get_customer_profile(customer_id: str | int) -> dict:
+    """Return profile fields for one customer (same data as staff Customers expand panel)."""
+    cid = str(customer_id).strip()
+    try:
+        import os
+        import sys
+        scripts_dir = os.path.dirname(__file__)
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from Customers import _fetch_single_customer  # type: ignore
+        profile = _fetch_single_customer(cid)
+        type_label = ""
+        if profile.get("matched_tags"):
+            type_label = profile["matched_tags"][0]
+        return {
+            "success": True,
+            "profile": {
+                "id": profile.get("id"),
+                "name": profile.get("name") or "",
+                "first_name": profile.get("first_name") or "",
+                "last_name": profile.get("last_name") or "",
+                "email": profile.get("email") or "",
+                "company_name": profile.get("company_name") or "",
+                "invoice_address": profile.get("invoice_address") or "",
+                "landline_phone": profile.get("landline_phone") or "",
+                "mobile_number": profile.get("mobile_number") or "",
+                "type_tag": type_label,
+            },
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "profile": None}
+
+
 def get_customer_orders(customer_id: str | int) -> dict:
     """Return orders for one customer only."""
     cid = str(customer_id).strip()
