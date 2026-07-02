@@ -467,18 +467,20 @@
         const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
         const data = await parseJsonResponse(res);
         if (!res.ok || !data.success) throw new Error(data.error || 'Could not refresh tracking');
+        const key = String(orderId);
+        orderTrackingCache[key] = { status: 'done', data };
+        if (detailsEl) {
+            detailsEl._officeTracking = data;
+            detailsEl.dataset.trackingLoaded = '1';
+        }
         const item = (data.items || []).find(i => i.office_item_id === itemId || i.line_number === lineNumber);
         if (!item) throw new Error('Item not found');
-        const host = findTrackingHost(detailsEl, item.line_number);
+        const host = detailsEl ? findTrackingHost(detailsEl, item.line_number) : null;
         if (host) {
             host.innerHTML = renderTrackingBlock(item, orderId, apiPrefix, role);
             bindTrackingEvents(detailsEl);
         }
-        if (detailsEl._officeTracking) {
-            const idx = (detailsEl._officeTracking.items || []).findIndex(i => i.line_number === item.line_number);
-            if (idx >= 0) detailsEl._officeTracking.items[idx] = item;
-            syncOrderListBadge(orderId, detailsEl._officeTracking.items, role);
-        }
+        syncOrderListBadge(orderId, data.items, role, true);
     }
 
     async function handleArtworkUpload(input) {
@@ -849,9 +851,15 @@
         await ensureOrderTracking(orderId, apiPrefix, detailsEl, role);
     }
 
-    function syncOrderListBadge(orderId, items, role) {
+    function syncOrderListBadge(orderId, items, role, immediate) {
+        const indicator = computeOrderIndicator(items);
         if (role !== 'client') {
-            updateOrderRowIndicator(orderId, computeOrderIndicator(items));
+            updateOrderRowIndicator(orderId, indicator);
+        }
+        if (typeof document !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('office-order-tracking-changed', {
+                detail: { orderId: String(orderId), items, indicator, role, immediate: !!immediate },
+            }));
         }
     }
 

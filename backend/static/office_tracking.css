@@ -223,6 +223,7 @@
     flex: 0 0 auto;
     min-width: 160px;
     max-width: 200px;
+    margin-left: auto;
 }
 
 .office-tracking-actions {

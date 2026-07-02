@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=10" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=11" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -302,8 +302,10 @@
         let orderIndicators = {};
         let sortMode = localStorage.getItem('orders-sort') || 'priority';
         const SORT_STORAGE_KEY = 'orders-sort';
+        const INITIAL_LOAD_BUFFER_MS = 2500;
         let trackingPrefetchToken = 0;
         let ordersRefreshTimer = null;
+        let suppressOrdersRefresh = false;
 
         function escapeHtml(s) {
             return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -693,6 +695,11 @@
         function renderOrdersView(orders) {
             const content = document.getElementById('content');
             const pill = document.getElementById('count-pill');
+            const expandedIds = new Set();
+            document.querySelectorAll('.details-row.open').forEach(row => {
+                const id = row.id.replace(/^details-/, '');
+                if (id) expandedIds.add(id);
+            });
             const { active, completed } = partitionOrders(orders);
             const activeSorted = sortActiveOrders(active);
             const completedSorted = sortCompletedOrders(completed);
@@ -724,16 +731,27 @@
             if (window.OfficeTracking && typeof OfficeTracking.applyCachedTrackingIn === 'function') {
                 OfficeTracking.applyCachedTrackingIn(content, '/api/orders', 'staff');
             }
+            expandedIds.forEach(orderId => {
+                const dr = document.getElementById('details-' + orderId);
+                const dataRow = content.querySelector('.data-row[data-order-id="' + CSS.escape(orderId) + '"]');
+                if (dr && dataRow) {
+                    dr.classList.add('open');
+                    dataRow.classList.add('expanded');
+                }
+            });
         }
 
-        function scheduleOrdersRefresh() {
+        function scheduleOrdersRefresh(immediate) {
             clearTimeout(ordersRefreshTimer);
-            ordersRefreshTimer = setTimeout(() => {
-                renderOrdersView(filterOrders(document.getElementById('search-input').value));
-            }, 450);
+            const run = () => renderOrdersView(filterOrders(document.getElementById('search-input').value));
+            if (immediate) {
+                run();
+                return;
+            }
+            ordersRefreshTimer = setTimeout(run, 450);
         }
 
-        function onTrackingSettled(orderId, entry) {
+        function onTrackingSettled(orderId, entry, immediate) {
             const id = String(orderId);
             const prev = orderIndicators[id];
             let indicator = 'none';
@@ -746,19 +764,28 @@
             }
             const prevCompleted = prev === 'green';
             const nowCompleted = indicator === 'green';
+            if (suppressOrdersRefresh) return;
             if (prevCompleted !== nowCompleted || sortMode === 'priority') {
-                scheduleOrdersRefresh();
+                scheduleOrdersRefresh(!!immediate);
             }
         }
 
-        function startBackgroundTrackingPrefetch(orders) {
-            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') return;
+        function prefetchTrackingForOrders(orders) {
+            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') {
+                return Promise.resolve();
+            }
             const token = ++trackingPrefetchToken;
             const ids = orders.map(o => o.id);
-            OfficeTracking.prefetchAllOrderTracking(ids, '/api/orders', 'staff', (orderId, entry) => {
+            return OfficeTracking.prefetchAllOrderTracking(ids, '/api/orders', 'staff', (orderId, entry) => {
                 if (token !== trackingPrefetchToken) return;
-                onTrackingSettled(orderId, entry);
+                if (entry && entry.status === 'error') {
+                    onTrackingSettled(orderId, entry, false);
+                }
             });
+        }
+
+        function startBackgroundTrackingPrefetch(orders) {
+            void prefetchTrackingForOrders(orders);
         }
 
         function filterOrders(q) {
@@ -777,6 +804,7 @@
         async function loadOrders() {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
+            suppressOrdersRefresh = true;
             try {
                 const res = await fetch('/api/orders');
                 const data = await res.json();
@@ -787,11 +815,17 @@
                     OfficeTracking.clearOrderTrackingCache();
                 }
                 const filtered = filterOrders(document.getElementById('search-input').value);
+                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
+                await Promise.all([
+                    new Promise(resolve => setTimeout(resolve, INITIAL_LOAD_BUFFER_MS)),
+                    prefetchTrackingForOrders(filtered),
+                ]);
                 renderOrdersView(filtered);
-                startBackgroundTrackingPrefetch(filtered);
             } catch (err) {
                 content.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;
                 document.getElementById('count-pill').textContent = '0 orders';
+            } finally {
+                suppressOrdersRefresh = false;
             }
         }
 
@@ -814,8 +848,16 @@
             renderOrdersView(filterOrders(document.getElementById('search-input').value));
         });
         document.getElementById('refresh-btn').addEventListener('click', loadOrders);
+        document.addEventListener('office-order-tracking-changed', function(e) {
+            const detail = e.detail || {};
+            if (detail.role === 'client') return;
+            onTrackingSettled(detail.orderId, {
+                status: 'done',
+                data: { items: detail.items || [] },
+            }, !!detail.immediate);
+        });
         loadOrders();
     </script>
-    <script src="/static/office_tracking.js?v=13"></script>
+    <script src="/static/office_tracking.js?v=14"></script>
 </body>
 </html>
