@@ -157,127 +157,102 @@
         .save-msg.ok { color: #059669; }
         .save-msg.err { color: #dc2626; }
 
-        /* Orders table — cyan header like product pricing */
-        .orders-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-        .orders-table thead th {
-            background: var(--bite-cyan);
-            color: #fff;
-            font-size: 0.75rem;
+        /* Orders — match staff Orders page */
+        .orders-wrap {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .orders-wrap .list-card-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .orders-wrap table { width: 100%; border-collapse: collapse; min-width: 520px; font-size: 0.86rem; }
+        .orders-wrap th {
+            text-align: left;
+            font-size: 0.7rem;
             font-weight: 700;
+            color: #9ca3af;
             text-transform: uppercase;
             letter-spacing: 0.04em;
-            padding: 13px 18px;
-            text-align: left;
-            white-space: nowrap;
-        }
-        .orders-table thead th:last-child { text-align: right; }
-        .orders-table thead th:nth-child(2) { text-align: left; }
-        .orders-table tbody td {
-            padding: 14px 18px;
+            padding: 12px 16px;
             border-bottom: 1px solid #eef0f3;
-            color: var(--bite-text);
-            vertical-align: middle;
-        }
-        .orders-table tbody td:last-child {
-            text-align: right;
-            font-weight: 600;
+            background: #f8fafc;
             white-space: nowrap;
         }
-        .orders-table tbody tr.order-row { cursor: pointer; transition: background 0.12s; }
-        .orders-table tbody tr.order-row:nth-child(4n+1) { background: #fff; }
-        .orders-table tbody tr.order-row:nth-child(4n+3) { background: var(--bite-surface); }
-        .orders-table tbody tr.order-row:hover { background: #eef9fc !important; }
-        .order-name { font-weight: 600; color: var(--bite-text); }
-        .order-name i {
-            font-size: 0.7rem;
-            color: var(--bite-cyan);
+        .orders-wrap td {
+            padding: 11px 16px;
+            border-bottom: 1px solid #f3f4f6;
+            vertical-align: middle;
+            color: #1f2937;
+        }
+        .orders-wrap tbody tr.data-row { cursor: pointer; }
+        .orders-wrap tbody tr.data-row:hover { background: #f9fafb; }
+        .orders-wrap tbody tr.data-row.expanded { background: #eef2ff; }
+        .orders-wrap tr.details-row { display: none; }
+        .orders-wrap tr.details-row.open { display: table-row; }
+        .orders-wrap tr.details-row td {
+            padding: 0 !important;
+            background: #f8fafc !important;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .orders-wrap .order-chevron {
+            font-size: 0.65rem;
+            color: #6b7280;
             margin-left: 6px;
             transition: transform 0.2s;
         }
-        tr.order-row.expanded .order-name i { transform: rotate(180deg); }
-        .order-date { color: var(--bite-muted); }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 11px;
-            border-radius: 999px;
-            font-size: 0.72rem;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-        }
-        .badge.paid { background: #d1fae5; color: #065f46; }
-        .badge.pending { background: #fef3c7; color: #92400e; }
-        .badge.default { background: #e0f7fb; color: #0e7490; }
-
-        .details-row { display: none; }
-        .details-row.open { display: table-row; }
-        .details-row td {
-            padding: 0 !important;
-            background: var(--bite-surface) !important;
-            border-bottom: 1px solid var(--bite-border);
-        }
-        .details-inner {
-            padding: 18px 20px 20px;
-        }
-        .detail-section { margin-bottom: 18px; }
-        .detail-section:last-child { margin-bottom: 0; }
-        .detail-section h4 {
-            font-size: 0.72rem;
+        .orders-wrap tr.data-row.expanded .order-chevron { transform: rotate(180deg); }
+        .orders-wrap .order-date { color: #6b7280; }
+        .orders-wrap .details-inner { padding: 16px 18px 18px; }
+        .orders-wrap .detail-section { margin-bottom: 16px; }
+        .orders-wrap .detail-section:last-child { margin-bottom: 0; }
+        .orders-wrap .detail-section h4 {
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--bite-label);
-            margin-bottom: 10px;
+            letter-spacing: 0.04em;
+            color: #9ca3af;
+            margin-bottom: 8px;
             padding-bottom: 6px;
-            border-bottom: 1px solid #e8ecef;
+            border-bottom: 1px solid #e5e7eb;
         }
-        .detail-empty { font-size: 0.875rem; color: var(--bite-muted); font-style: italic; }
-        .detail-line {
-            padding: 12px 0;
-            border-bottom: 1px solid #e8ecef;
-        }
-        .detail-line:last-child { border-bottom: none; }
-        .line-main {
+        .orders-wrap .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
+        .orders-wrap .detail-line { padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+        .orders-wrap .detail-line:last-child { border-bottom: none; }
+        .orders-wrap .line-main {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             gap: 16px;
-            font-size: 0.875rem;
+            font-size: 0.86rem;
         }
-        .line-title { font-weight: 600; color: var(--bite-text); flex: 1; min-width: 0; }
-        .line-price { font-weight: 600; white-space: nowrap; color: var(--bite-text); }
-        .line-meta {
-            font-size: 0.8125rem;
-            color: var(--bite-muted);
-            margin-top: 4px;
+        .orders-wrap .line-details { flex: 1; min-width: 0; }
+        .orders-wrap .line-sku {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #6b7280;
+            letter-spacing: 0.02em;
+            margin-bottom: 2px;
         }
-        .line-props {
+        .orders-wrap .line-title { font-weight: 600; color: #111827; display: block; }
+        .orders-wrap .line-price { font-weight: 600; white-space: nowrap; color: #111827; }
+        .orders-wrap .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
+        .orders-wrap .line-props {
             list-style: none;
             margin: 8px 0 0;
             padding: 8px 0 0;
-            border-top: 1px dashed #e8ecef;
+            border-top: 1px dashed #e5e7eb;
         }
-        .line-props li {
-            font-size: 0.8125rem;
-            color: #374151;
-            padding: 3px 0;
-            line-height: 1.4;
-        }
-        .line-props li strong { font-weight: 600; color: var(--bite-muted); }
-        .order-info-note {
-            font-size: 0.875rem;
+        .orders-wrap .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
+        .orders-wrap .line-props li strong { font-weight: 600; color: #6b7280; }
+        .orders-wrap .order-info-note {
+            font-size: 0.86rem;
             line-height: 1.55;
-            color: var(--bite-text);
-            white-space: pre-wrap;
-            margin-bottom: 10px;
-        }
-        .info-kv {
-            font-size: 0.8125rem;
             color: #374151;
-            padding: 4px 0;
-            line-height: 1.45;
+            white-space: pre-wrap;
+            margin-bottom: 8px;
         }
-        .info-kv strong { font-weight: 600; color: var(--bite-muted); }
+        .orders-wrap .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
+        .orders-wrap .info-kv strong { font-weight: 600; color: #6b7280; }
 
         /* Empty / error states */
         .state-msg {
@@ -305,8 +280,7 @@
         @media (max-width: 640px) {
             .profile-form { grid-template-columns: 1fr; }
             .profile-card { padding: 18px 16px 22px; }
-            .orders-table thead th:nth-child(2),
-            .orders-table tbody td:nth-child(2) { display: table-cell; }
+            .orders-wrap table { min-width: 100%; }
             .tabs { flex-wrap: wrap; }
             .tab-btn.logout-tab { margin-left: 0; }
             .tab-btn { padding: 12px 14px; font-size: 0.875rem; }
@@ -374,9 +348,10 @@
         </div>
 
         <div id="panel-orders" class="tab-panel" role="tabpanel">
-            <div class="card">
+            <div class="orders-wrap">
                 {% if orders %}
-                <table class="orders-table">
+                <div class="list-card-scroll">
+                <table>
                     <thead>
                         <tr>
                             <th>Order</th>
@@ -386,12 +361,10 @@
                     </thead>
                     <tbody>
                         {% for order in orders %}
-                        <tr class="order-row" onclick="toggleDetails(this, 'details-{{ loop.index }}')">
-                            <td>
-                                <span class="order-name">{{ order.name }} <i class="fas fa-chevron-down"></i></span>
-                            </td>
+                        <tr class="data-row" onclick="toggleDetails(this, 'details-{{ loop.index }}')">
+                            <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
-                            <td>{{ order.currency }} {{ order.total }}</td>
+                            <td>{{ order.total_display }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ loop.index }}">
                             <td colspan="3">
@@ -402,19 +375,24 @@
                                             {% for item in order.order_items %}
                                             <div class="detail-line">
                                                 <div class="line-main">
-                                                    <span class="line-title">{{ item.title }}</span>
-                                                    <span class="line-price">{{ item.currency }} {{ item.unit_price }} × {{ item.quantity }} = {{ item.currency }} {{ item.total }}</span>
+                                                    <div class="line-details">
+                                                        {% if item.sku %}
+                                                        <div class="line-sku">{{ item.sku }}</div>
+                                                        {% endif %}
+                                                        <span class="line-title">{{ item.title }}</span>
+                                                        {% if item.meta_line %}
+                                                        <div class="line-meta">{{ item.meta_line }}</div>
+                                                        {% endif %}
+                                                        {% if item.properties %}
+                                                        <ul class="line-props">
+                                                            {% for prop in item.properties %}
+                                                            <li><strong>{{ prop.key }}:</strong> {{ prop.value }}</li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                        {% endif %}
+                                                    </div>
+                                                    <span class="line-price">{{ item.price_display }}</span>
                                                 </div>
-                                                {% if item.meta_line %}
-                                                <div class="line-meta">{{ item.meta_line }}</div>
-                                                {% endif %}
-                                                {% if item.properties %}
-                                                <ul class="line-props">
-                                                    {% for prop in item.properties %}
-                                                    <li><strong>{{ prop.key }}:</strong> {{ prop.value }}</li>
-                                                    {% endfor %}
-                                                </ul>
-                                                {% endif %}
                                             </div>
                                             {% endfor %}
                                         {% else %}
@@ -429,7 +407,7 @@
                                         <div class="detail-line">
                                             <div class="line-main">
                                                 <span class="line-title">{{ item.title }}</span>
-                                                <span class="line-price">{{ item.currency }} {{ item.unit_price }} × {{ item.quantity }} = {{ item.currency }} {{ item.total }}</span>
+                                                <span class="line-price">{{ item.price_display }}</span>
                                             </div>
                                             {% if item.properties %}
                                             <ul class="line-props">
@@ -461,6 +439,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
                 {% else %}
                 <div class="state-msg">
                     <i class="fas fa-inbox"></i>

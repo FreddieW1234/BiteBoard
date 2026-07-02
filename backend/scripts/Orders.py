@@ -29,6 +29,8 @@ query StaffOrders($cursor: String) {{
           displayName
           email
           companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") {{ value }}
+          landlinePhoneNumber: metafield(namespace: "custom_fields", key: "landline_phone_number") {{ value }}
+          mobileNumber: metafield(namespace: "custom_fields", key: "mobile_number") {{ value }}
         }}
         billingAddress {{
           company
@@ -74,6 +76,8 @@ def _format_order_node(node: dict) -> dict:
     billing = node.get("billingAddress") or {}
     company_mf = ((customer.get("companyNameNew") or {}).get("value") or "").strip()
     company = company_mf or (billing.get("company") or "").strip()
+    landline = ((customer.get("landlinePhoneNumber") or {}).get("value") or "").strip()
+    mobile = ((customer.get("mobileNumber") or {}).get("value") or "").strip()
     base = {
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
@@ -84,6 +88,8 @@ def _format_order_node(node: dict) -> dict:
         "customer_name": customer.get("displayName") or "",
         "customer_email": customer.get("email") or "",
         "company": company,
+        "landline_phone": landline,
+        "mobile_number": mobile,
     }
     return enrich_order(node, base)
 

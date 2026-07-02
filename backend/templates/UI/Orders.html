@@ -43,7 +43,7 @@
         .btn-ghost:hover { background: #f9fafb; }
         .list-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
         .list-card-scroll { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 780px; }
+        table { width: 100%; border-collapse: collapse; min-width: 980px; }
         th { text-align: left; font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; padding: 12px 16px; border-bottom: 1px solid #eef0f3; background: #f8fafc; white-space: nowrap; }
         td { font-size: 0.86rem; padding: 11px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
         tbody tr.data-row { cursor: pointer; }
@@ -68,7 +68,9 @@
         .detail-line { padding: 10px 0; border-bottom: 1px solid #eef0f3; }
         .detail-line:last-child { border-bottom: none; }
         .line-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; font-size: 0.86rem; }
-        .line-title { font-weight: 600; color: #111827; flex: 1; min-width: 0; }
+        .line-details { flex: 1; min-width: 0; }
+        .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
+        .line-title { font-weight: 600; color: #111827; display: block; }
         .line-price { font-weight: 600; white-space: nowrap; color: #111827; }
         .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
         .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
@@ -127,12 +129,22 @@
             return iso.slice(0, 10);
         }
 
+        function formatGbp(amount) {
+            const val = parseFloat(String(amount ?? '').replace(/,/g, '')) || 0;
+            return '£' + val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function formatLinePrice(li) {
+            if (li.price_display) return li.price_display;
+            return `${formatGbp(li.unit_price)} × ${li.quantity} = ${formatGbp(li.total)}`;
+        }
+
         function renderLineItem(li) {
             let html = `<div class="detail-line">
                 <div class="line-main">
-                    <span class="line-title">${escapeHtml(li.title)}</span>
-                    <span class="line-price">${escapeHtml(li.currency)} ${escapeHtml(li.unit_price)} × ${escapeHtml(li.quantity)} = ${escapeHtml(li.currency)} ${escapeHtml(li.total)}</span>
-                </div>`;
+                    <div class="line-details">`;
+            if (li.sku) html += `<div class="line-sku">${escapeHtml(li.sku)}</div>`;
+            html += `<span class="line-title">${escapeHtml(li.title)}</span>`;
             if (li.meta_line) html += `<div class="line-meta">${escapeHtml(li.meta_line)}</div>`;
             if (li.properties && li.properties.length) {
                 html += '<ul class="line-props">';
@@ -141,6 +153,9 @@
                 });
                 html += '</ul>';
             }
+            html += `</div>
+                    <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
+                </div>`;
             html += '</div>';
             return html;
         }
@@ -185,7 +200,7 @@
                 content.innerHTML = '<div class="state-msg">No orders found.</div>';
                 return;
             }
-            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Total</th></tr></thead><tbody>';
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
                 html += `<tr class="data-row" data-idx="${i}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
@@ -193,9 +208,11 @@
                     <td>${escapeHtml(o.company || '—')}</td>
                     <td>${escapeHtml(o.customer_name || '—')}</td>
                     <td>${escapeHtml(o.customer_email || '—')}</td>
-                    <td>${escapeHtml(o.currency)} ${escapeHtml(o.total)}</td>
+                    <td>${escapeHtml(o.landline_phone || '—')}</td>
+                    <td>${escapeHtml(o.mobile_number || '—')}</td>
+                    <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="details-${i}"><td colspan="6">${renderOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="details-${i}"><td colspan="8">${renderOrderDetails(o)}</td></tr>`;
             });
             html += '</tbody></table></div>';
             content.innerHTML = html;
@@ -218,7 +235,9 @@
                 (o.name || '').toLowerCase().includes(term) ||
                 (o.company || '').toLowerCase().includes(term) ||
                 (o.customer_name || '').toLowerCase().includes(term) ||
-                (o.customer_email || '').toLowerCase().includes(term)
+                (o.customer_email || '').toLowerCase().includes(term) ||
+                (o.landline_phone || '').toLowerCase().includes(term) ||
+                (o.mobile_number || '').toLowerCase().includes(term)
             );
         }
 
