@@ -2211,13 +2211,23 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
             return jsonify({"success": False, "error": "Invalid status update"}), 400
     elif not by:
         by = "staff"
+    if stage == "in_production" and not note:
+        note = "In Production"
     try:
-        from scripts.office_api import set_status, OfficeApiError  # type: ignore
+        from scripts.office_api import set_status, get_item, OfficeApiError  # type: ignore
         office = set_status(order_name, item, stage, note=note, by=by)
-        _rewrite_office_files(office, order_id, item, api_prefix)
-        return jsonify({"success": True, "office": office})
     except OfficeApiError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 502
+        if stage != "in_production":
+            return jsonify({"success": False, "error": str(exc)}), 502
+        current = get_item(order_name, item)
+        if not current or current.get("current_stage") != "printing":
+            return jsonify({"success": False, "error": str(exc)}), 502
+        try:
+            office = set_status(order_name, item, "printing", note=note or "In Production", by=by)
+        except OfficeApiError:
+            office = current
+    _rewrite_office_files(office, order_id, item, api_prefix)
+    return jsonify({"success": True, "office": office})
 
 
 @app.route("/api/client/orders/<order_id>/items/<path:item>/status", methods=["POST"])

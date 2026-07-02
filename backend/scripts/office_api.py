@@ -115,9 +115,17 @@ def get_order(order: str) -> dict | None:
     return _handle_response(resp, allow_404=True)
 
 
+def normalize_stage_for_api(stage: str) -> str:
+    """Map portal stage keys to Office API valid stages."""
+    if stage == "in_production":
+        return "printing"
+    return stage
+
+
 def set_status(order: str, item: str, stage: str, note: str = "", by: str = "") -> dict:
     url = f"{_url(order, item)}/status"
-    payload = {"stage": stage, "note": note or "", "by": by or ""}
+    api_stage = normalize_stage_for_api(stage)
+    payload = {"stage": api_stage, "note": note or "", "by": by or ""}
     resp = _request("POST", url, json=payload)
     result = _handle_response(resp)
     if not isinstance(result, dict):

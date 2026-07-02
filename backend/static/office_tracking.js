@@ -177,9 +177,35 @@
         return keys;
     }
 
+    /** Office API uses stage key `printing` only; distinguish Printing vs In Production via history notes. */
+    function displayPhaseForPrinting(office) {
+        const history = office.history || [];
+        for (let i = history.length - 1; i >= 0; i--) {
+            const h = history[i];
+            const st = h.stage || h.key || '';
+            if (st !== 'printing') continue;
+            const note = (h.note || '').toLowerCase();
+            if (note.includes('in production')) return 'in_production';
+            if (note.includes('printing')) return 'printing';
+        }
+        return 'printing';
+    }
+
+    function effectiveDisplayStage(office) {
+        const current = office.current_stage || '';
+        if (current === 'printing' && displayPhaseForPrinting(office) === 'in_production') {
+            return 'in_production';
+        }
+        return current;
+    }
+
+    function staffSelectStageKey(office) {
+        return effectiveDisplayStage(office);
+    }
+
     /** Expand proof_1..proof_N and add Printing before In Production for display. */
     function normalizeStagesForDisplay(office) {
-        const current = office.current_stage || '';
+        const current = effectiveDisplayStage(office);
         const maxProof = maxProofReached(office);
         const keys = buildPipelineKeys(maxProof);
         const apiByKey = {};
@@ -215,7 +241,7 @@
     }
 
     function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
-        const current = office.current_stage || '';
+        const current = staffSelectStageKey(office);
         const options = stageOptionsForSelect(office);
         let html = '<div class="office-staff-status">';
         html += '<label class="office-staff-status-label">Move to stage</label>';
@@ -429,12 +455,15 @@
         if (!stage) return;
         btn.disabled = true;
         showTrackingMsg(host, 'Updating status…', true);
+        let note = 'Status updated by staff';
+        if (stage === 'printing') note = 'Printing';
+        else if (stage === 'in_production') note = 'In Production';
         try {
             const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/status`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ stage: stage, note: 'Status updated by staff', by: 'staff' }),
+                body: JSON.stringify({ stage: stage, note: note, by: 'staff' }),
             });
             const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not update status');
@@ -574,7 +603,9 @@
         const stage = office.current_stage || '';
         if (stage === 'shipped') return 'green';
         if (stage === 'in_production') return 'production';
-        if (stage === 'printing') return 'printing';
+        if (stage === 'printing') {
+            return displayPhaseForPrinting(office) === 'in_production' ? 'production' : 'printing';
+        }
         if (stage === 'received') return 'yellow';
         if (/^proof_/.test(stage)) return 'yellow';
         if (stage === 'artwork') return 'red';
