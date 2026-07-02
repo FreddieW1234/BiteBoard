@@ -387,6 +387,7 @@ def _finalize_order_note_sections(sections: list[dict]) -> list[dict]:
             "layout": "date_top_row",
             "heading": None,
             "fields": top_fields,
+            "field_count": len(top_fields),
             "date_count": len(date_fields),
         })
 

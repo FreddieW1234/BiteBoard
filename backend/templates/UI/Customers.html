@@ -337,28 +337,29 @@
             gap: 14px 18px;
         }
         .cu-orders-modal-body .order-info-top-dates {
-            display: flex;
-            flex-wrap: nowrap;
+            display: grid;
+            grid-template-columns: repeat(var(--top-date-cols, 2), minmax(0, 1fr));
             gap: 14px 18px;
-            align-items: stretch;
+            align-items: start;
         }
-        .cu-orders-modal-body .order-info-top-dates .top-date-po {
-            flex: 0 0 50%;
-            max-width: 50%;
+        .cu-orders-modal-body .order-info-top-dates .order-info-field {
             min-width: 0;
         }
-        .cu-orders-modal-body .order-info-top-dates .top-date-field {
-            flex: 1 1 0;
-            min-width: 0;
+        .cu-orders-modal-body .order-info-top-dates .order-info-field label {
+            font-size: 0.65rem;
+            line-height: 1.35;
+            word-break: break-word;
         }
-        .cu-orders-modal-body .order-info-top-dates.po-only .top-date-po {
-            flex: 1 1 100%;
-            max-width: 100%;
+        .cu-orders-modal-body .order-info-top-dates textarea {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
         }
         @media (max-width: 768px) {
-            .cu-orders-modal-body .order-info-top-dates { flex-wrap: wrap; }
-            .cu-orders-modal-body .order-info-top-dates .top-date-po,
-            .cu-orders-modal-body .order-info-top-dates .top-date-field { flex: 1 1 100%; max-width: 100%; }
+            .cu-orders-modal-body .order-info-top-dates {
+                grid-template-columns: repeat(var(--top-date-cols, 2), minmax(88px, 1fr));
+                overflow-x: auto;
+            }
         }
         .cu-orders-modal-body .order-info-group { margin-bottom: 16px; }
         .cu-orders-modal-body .order-info-group:last-child { margin-bottom: 0; }
@@ -1034,14 +1035,12 @@
 
         function renderDateTopRow(sec, inputClass, keyAttr) {
             const fields = sec.fields || [];
-            const dateCount = sec.date_count || fields.filter(f => f.field_role === 'date').length;
-            const poOnly = dateCount === 0;
-            let html = `<div class="order-info-group order-info-note-group" data-layout="date-top-row"><div class="order-info-top-dates${poOnly ? ' po-only' : ''}">`;
+            const cols = sec.field_count || fields.length || 1;
+            let html = `<div class="order-info-group order-info-note-group" data-layout="date-top-row"><div class="order-info-top-dates" style="--top-date-cols: ${cols}">`;
             fields.forEach(f => {
-                const roleClass = f.field_role === 'po' ? ' top-date-po' : ' top-date-field';
                 const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
                 const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
-                html += `<div class="order-info-field${roleClass}">
+                html += `<div class="order-info-field">
                     <label>${escapeHtml(orderInfoFieldLabel(f))}</label>
                     <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="2"${restore}${role}>${escapeHtml(f.value || '')}</textarea>
                 </div>`;
@@ -1063,7 +1062,7 @@
                             field_role: el.dataset.fieldRole || null,
                         });
                     });
-                    sections.push({ layout: 'date_top_row', heading: null, fields });
+                    sections.push({ layout: 'date_top_row', heading: null, fields, field_count: fields.length });
                     return;
                 }
                 const heading = group.dataset.heading || null;

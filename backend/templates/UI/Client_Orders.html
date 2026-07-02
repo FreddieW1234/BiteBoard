@@ -280,23 +280,24 @@
             gap: 14px 18px;
         }
         .orders-wrap .order-info-top-dates {
-            display: flex;
-            flex-wrap: nowrap;
+            display: grid;
+            grid-template-columns: repeat(var(--top-date-cols, 2), minmax(0, 1fr));
             gap: 14px 18px;
-            align-items: stretch;
+            align-items: start;
         }
-        .orders-wrap .order-info-top-dates .top-date-po {
-            flex: 0 0 50%;
-            max-width: 50%;
+        .orders-wrap .order-info-top-dates .order-info-field {
             min-width: 0;
         }
-        .orders-wrap .order-info-top-dates .top-date-field {
-            flex: 1 1 0;
-            min-width: 0;
+        .orders-wrap .order-info-top-dates .order-info-field label {
+            font-size: 0.65rem;
+            line-height: 1.35;
+            word-break: break-word;
         }
-        .orders-wrap .order-info-top-dates.po-only .top-date-po {
-            flex: 1 1 100%;
-            max-width: 100%;
+        .orders-wrap .order-info-top-dates .order-info-value,
+        .orders-wrap .order-info-top-dates textarea {
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
         }
         .orders-wrap .order-info-group { margin-bottom: 16px; }
         .orders-wrap .order-info-group:last-child { margin-bottom: 0; }
@@ -393,9 +394,10 @@
             .co-portal-profile .co-form-footer { flex-direction: column; align-items: stretch; }
             .orders-wrap .order-info-grid { grid-template-columns: 1fr; }
             .orders-wrap .order-addresses-grid { grid-template-columns: 1fr; }
-            .orders-wrap .order-info-top-dates { flex-wrap: wrap; }
-            .orders-wrap .order-info-top-dates .top-date-po,
-            .orders-wrap .order-info-top-dates .top-date-field { flex: 1 1 100%; max-width: 100%; }
+            .orders-wrap .order-info-top-dates {
+                grid-template-columns: repeat(var(--top-date-cols, 2), minmax(88px, 1fr));
+                overflow-x: auto;
+            }
         }
     </style>
 </head>
@@ -575,9 +577,9 @@
                                                 {% for sec in note_sections %}
                                                 {% if sec.layout == 'date_top_row' %}
                                                 <div class="order-info-group">
-                                                    <div class="order-info-top-dates{% if not sec.date_count %} po-only{% endif %}">
+                                                    <div class="order-info-top-dates" style="--top-date-cols: {{ sec.field_count or (sec.fields | length) or 1 }};">
                                                         {% for field in sec.fields or [] %}
-                                                        <div class="order-info-field {% if field.field_role == 'po' %}top-date-po{% else %}top-date-field{% endif %}">
+                                                        <div class="order-info-field">
                                                             <label>{{ field.display_label or field.key }}</label>
                                                             <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
                                                         </div>
