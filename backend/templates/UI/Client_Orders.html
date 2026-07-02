@@ -236,6 +236,45 @@
         .orders-wrap .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
         .orders-wrap .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .orders-wrap .detail-line:last-child { border-bottom: none; }
+        .orders-wrap .detail-section-fees .detail-line-fee,
+        .orders-wrap .detail-section-cost .detail-line-cost {
+            padding: 3px 0;
+            border-bottom: none;
+        }
+        .orders-wrap .detail-section-fees h4,
+        .orders-wrap .detail-section-cost h4 {
+            margin-bottom: 6px;
+        }
+        .orders-wrap .line-fee-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            font-size: 0.86rem;
+        }
+        .orders-wrap .line-fee-row .line-title {
+            font-weight: 600;
+            color: #111827;
+            min-width: 0;
+        }
+        .orders-wrap .line-fee-row .line-price {
+            font-weight: 600;
+            white-space: nowrap;
+            color: #111827;
+            flex-shrink: 0;
+        }
+        .orders-wrap .order-summary-total {
+            padding-top: 12px;
+            margin-top: 6px;
+            border-top: 1px solid var(--bite-border);
+        }
+        .orders-wrap .order-summary-total .line-fee-row .line-title {
+            font-weight: 700;
+        }
+        .orders-wrap .order-summary-total .line-price {
+            font-weight: 700;
+            font-size: 0.92rem;
+        }
         .orders-wrap .line-main { font-size: 0.86rem; }
         .orders-wrap .line-details { min-width: 0; }
         .orders-wrap .line-sku {
@@ -360,21 +399,6 @@
             max-width: 320px;
         }
         .orders-wrap .order-addresses-grid .order-info-field { min-width: 0; }
-        .orders-wrap .order-grand-total {
-            display: flex;
-            justify-content: flex-end;
-            align-items: baseline;
-            gap: 12px;
-            padding: 10px 0 2px;
-            margin-top: 2px;
-            font-size: 0.86rem;
-            color: var(--bite-muted);
-        }
-        .orders-wrap .order-grand-total-amount {
-            font-weight: 600;
-            color: var(--bite-text);
-            font-variant-numeric: tabular-nums;
-        }
         .orders-wrap .order-info-value.payment-value {
             white-space: nowrap;
             min-height: unset;
@@ -537,14 +561,14 @@
                                     </div>
 
                                     {% if order.fees %}
-                                    <div class="detail-section">
+                                    <div class="detail-section detail-section-fees">
                                         <h4>Fees</h4>
                                         {% for item in order.fees %}
-                                        <div class="detail-line">
-                                            <div class="line-main">
+                                        <div class="detail-line detail-line-fee">
+                                            <div class="line-fee-row">
                                                 <span class="line-title">{{ item.title }}</span>
+                                                <span class="line-price">{{ item.total_display }}</span>
                                             </div>
-                                            <div class="line-price-row"><span class="line-price">{{ item.price_display }}</span></div>
                                             {% if item.properties %}
                                             <ul class="line-props">
                                                 {% for prop in item.properties %}
@@ -558,28 +582,34 @@
                                     {% endif %}
 
                                     {% if order.shipping and (order.shipping | float) > 0 %}
-                                    <div class="detail-section">
+                                    <div class="detail-section detail-section-cost">
                                         <h4>Shipping</h4>
-                                        <div class="detail-line">
-                                            <div class="line-main"><span class="line-title">Shipping</span></div>
-                                            <div class="line-price-row"><span class="line-price">{{ order.shipping_display }}</span></div>
+                                        <div class="detail-line detail-line-cost">
+                                            <div class="line-fee-row">
+                                                <span class="line-title">Shipping</span>
+                                                <span class="line-price">{{ order.shipping_display }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     {% endif %}
 
                                     {% if order.tax and (order.tax | float) > 0 %}
-                                    <div class="detail-section">
+                                    <div class="detail-section detail-section-cost">
                                         <h4>Tax</h4>
-                                        <div class="detail-line">
-                                            <div class="line-main"><span class="line-title">VAT</span></div>
-                                            <div class="line-price-row"><span class="line-price">{{ order.tax_display }}</span></div>
+                                        <div class="detail-line detail-line-cost">
+                                            <div class="line-fee-row">
+                                                <span class="line-title">VAT</span>
+                                                <span class="line-price">{{ order.tax_display }}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     {% endif %}
 
-                                    <div class="order-grand-total">
-                                        <span class="order-grand-total-label">Total</span>
-                                        <span class="order-grand-total-amount">{{ order.total_display }}</span>
+                                    <div class="order-summary-total">
+                                        <div class="line-fee-row">
+                                            <span class="line-title">Total</span>
+                                            <span class="line-price">{{ order.total_display }}</span>
+                                        </div>
                                     </div>
 
                                     <div class="detail-section order-addresses-section">

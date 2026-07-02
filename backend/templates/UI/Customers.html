@@ -317,6 +317,45 @@
         .cu-orders-modal-body .detail-empty { font-size: 0.85rem; color: #9ca3af; font-style: italic; }
         .cu-orders-modal-body .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .cu-orders-modal-body .detail-line:last-child { border-bottom: none; }
+        .cu-orders-modal-body .detail-section-fees .detail-line-fee,
+        .cu-orders-modal-body .detail-section-cost .detail-line-cost {
+            padding: 3px 0;
+            border-bottom: none;
+        }
+        .cu-orders-modal-body .detail-section-fees h4,
+        .cu-orders-modal-body .detail-section-cost h4 {
+            margin-bottom: 6px;
+        }
+        .cu-orders-modal-body .line-fee-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 16px;
+            font-size: 0.86rem;
+        }
+        .cu-orders-modal-body .line-fee-row .line-title {
+            font-weight: 600;
+            color: #111827;
+            min-width: 0;
+        }
+        .cu-orders-modal-body .line-fee-row .line-price {
+            font-weight: 600;
+            white-space: nowrap;
+            color: #111827;
+            flex-shrink: 0;
+        }
+        .cu-orders-modal-body .order-summary-total {
+            padding-top: 12px;
+            margin-top: 6px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .cu-orders-modal-body .order-summary-total .line-fee-row .line-title {
+            font-weight: 700;
+        }
+        .cu-orders-modal-body .order-summary-total .line-price {
+            font-weight: 700;
+            font-size: 0.92rem;
+        }
         .cu-orders-modal-body .line-main { font-size: 0.86rem; }
         .cu-orders-modal-body .line-details { min-width: 0; }
         .cu-orders-modal-body .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
@@ -429,21 +468,6 @@
             max-width: 320px;
         }
         .cu-orders-modal-body .order-addresses-grid .order-info-field { min-width: 0; }
-        .cu-orders-modal-body .order-grand-total {
-            display: flex;
-            justify-content: flex-end;
-            align-items: baseline;
-            gap: 12px;
-            padding: 10px 0 2px;
-            margin-top: 2px;
-            font-size: 0.86rem;
-            color: #6b7280;
-        }
-        .cu-orders-modal-body .order-grand-total-amount {
-            font-weight: 600;
-            color: #111827;
-            font-variant-numeric: tabular-nums;
-        }
         .cu-orders-modal-body .order-info-value.payment-value {
             white-space: nowrap;
             min-height: unset;
@@ -992,6 +1016,31 @@
             return html + '</div>';
         }
 
+        function renderFeeItem(li) {
+            const price = li.total_display || formatGbp(li.total);
+            let html = `<div class="detail-line detail-line-fee"><div class="line-fee-row">
+                <span class="line-title">${escapeHtml(li.title)}</span>
+                <span class="line-price">${escapeHtml(price)}</span>
+            </div>`;
+            if (li.properties && li.properties.length) {
+                html += '<ul class="line-props">';
+                li.properties.forEach(p => {
+                    html += `<li><strong>${escapeHtml(p.key)}:</strong> ${escapeHtml(p.value)}</li>`;
+                });
+                html += '</ul>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderFeesSection(fees) {
+            if (!fees || !fees.length) return '';
+            let html = '<div class="detail-section detail-section-fees"><h4>Fees</h4>';
+            fees.forEach(li => { html += renderFeeItem(li); });
+            html += '</div>';
+            return html;
+        }
+
         function renderAddressBlock(label, address) {
             const text = (address && address.text) ? address.text : '';
             if (!text) {
@@ -1001,17 +1050,21 @@
         }
 
         function renderCostLineSection(title, label, priceDisplay) {
-            let html = `<div class="detail-section"><h4>${escapeHtml(title)}</h4>`;
-            html += `<div class="detail-line">
-                <div class="line-main"><span class="line-title">${escapeHtml(label)}</span></div>
-                <div class="line-price-row"><span class="line-price">${escapeHtml(priceDisplay)}</span></div>
-            </div></div>`;
-            return html;
+            return `<div class="detail-section detail-section-cost"><h4>${escapeHtml(title)}</h4>
+                <div class="detail-line detail-line-cost">
+                    <div class="line-fee-row">
+                        <span class="line-title">${escapeHtml(label)}</span>
+                        <span class="line-price">${escapeHtml(priceDisplay)}</span>
+                    </div>
+                </div></div>`;
         }
 
         function renderOrderGrandTotal(o) {
             const total = o.total_display || formatGbp(o.total);
-            return `<div class="order-grand-total"><span class="order-grand-total-label">Total</span><span class="order-grand-total-amount">${escapeHtml(total)}</span></div>`;
+            return `<div class="order-summary-total"><div class="line-fee-row">
+                <span class="line-title">Total</span>
+                <span class="line-price">${escapeHtml(total)}</span>
+            </div></div>`;
         }
 
         function renderOrderCostSections(o) {
@@ -1237,7 +1290,7 @@
         function renderCustomerOrderDetails(o) {
             let html = '<div class="details-inner">';
             html += renderOrderLineSection('Items', o.order_items || [], 'No items');
-            if (o.fees && o.fees.length) html += renderOrderLineSection('Fees', o.fees, '');
+            html += renderFeesSection(o.fees);
             html += renderOrderCostSections(o);
             html += renderOrderAddressesSection(o);
             html += renderOrderInfoSection(o);
