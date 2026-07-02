@@ -1194,14 +1194,15 @@
             if (!orders.length) {
                 return '<div class="state-msg">This customer has no orders yet.</div>';
             }
-            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th></tr></thead><tbody>';
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
                 html += `<tr class="data-row" data-order-idx="${i}" data-order-id="${escapeHtml(o.id)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
+                    <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(o.id)}"></span></td>
                     <td>${escapeHtml(formatOrderDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="cu-order-details-${i}"><td colspan="3">${renderCustomerOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="cu-order-details-${i}"><td colspan="4">${renderCustomerOrderDetails(o)}</td></tr>`;
             });
             return html + '</tbody></table></div>';
         }
@@ -1231,6 +1232,7 @@
                 }
                 customerModalOrders = data.orders || [];
                 body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
+                if (window.OfficeTracking) OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');

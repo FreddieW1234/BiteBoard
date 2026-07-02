@@ -468,6 +468,7 @@
                     <thead>
                         <tr>
                             <th>Order</th>
+                            <th class="order-status-indicator-cell" aria-hidden="true"></th>
                             <th>Date</th>
                             <th>Total</th>
                         </tr>
@@ -476,11 +477,12 @@
                         {% for order in orders %}
                         <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ loop.index }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
+                            <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="{{ order.id }}"></span></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td>{{ order.total_display }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ loop.index }}">
-                            <td colspan="3">
+                            <td colspan="4">
                                 <div class="details-inner">
                                     <div class="detail-section">
                                         <h4>Items</h4>
@@ -704,6 +706,11 @@
             btn.addEventListener('click', () => switchClientTab(btn.dataset.tab));
         });
         switchClientTab('orders');
+
+        const ordersWrap = document.querySelector('.orders-wrap');
+        if (ordersWrap && window.OfficeTracking) {
+            OfficeTracking.loadOrderIndicatorsIn(ordersWrap, '/api/client/orders');
+        }
 
         if (window.parent !== window) {
             notifyEmbedHeight();

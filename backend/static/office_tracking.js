@@ -116,14 +116,27 @@
         { key: 'shipped', label: 'Shipped' },
     ];
 
-    function labelForStage(key, apiStage) {
+    function proofLabel(n, maxProof) {
+        if (maxProof <= 1) return 'Proof';
+        return `Proof ${n}`;
+    }
+
+    function labelForStage(key, apiStage, maxProof) {
+        const n = proofNum(key);
+        if (n) {
+            if (apiStage && apiStage.label) {
+                if (maxProof <= 1) return 'Proof';
+                if (/^Proof \d+$/i.test(apiStage.label)) return proofLabel(n, maxProof);
+                return apiStage.label;
+            }
+            return proofLabel(n, maxProof);
+        }
         if (apiStage && apiStage.label) {
             if (key === 'printing' && apiStage.label === 'In Production') return STAGE_LABELS.printing;
             return apiStage.label;
         }
         if (STAGE_LABELS[key]) return STAGE_LABELS[key];
-        const n = proofNum(key);
-        return n ? `Proof ${n}` : key;
+        return key;
     }
 
     function maxProofReached(office) {
@@ -166,12 +179,18 @@
             } else if (fromApi && fromApi.state) {
                 state = fromApi.state;
             }
-            return { key, label: labelForStage(key, fromApi), state };
+            return { key, label: labelForStage(key, fromApi, maxProof), state };
         });
     }
 
     function stageOptionsForSelect(_office) {
         return ALL_STAGE_OPTIONS.slice();
+    }
+
+    function renderStaffProofUpload(orderId, itemId, apiPrefix) {
+        return `<label class="office-upload-btn office-upload-proof"><i class="fas fa-file-image"></i> Upload proof
+            <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
+                data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
     }
 
     function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
@@ -185,7 +204,6 @@
             html += `<option value="${escapeHtml(opt.key)}"${sel}>${escapeHtml(opt.label)}</option>`;
         });
         html += '</select>';
-        html += `<input type="text" class="office-stage-note" placeholder="Note (optional)" data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}">`;
         html += `<button type="button" class="office-btn office-btn-set-stage office-set-stage-btn"
             data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
             data-api-prefix="${escapeHtml(apiPrefix)}">Update status</button>`;
@@ -211,32 +229,38 @@
         const stage = office.current_stage || '';
         let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '">';
         html += renderStatusBar(normalizeStagesForDisplay(office));
-        html += renderFileSections(office.files, orderId, itemId, apiPrefix);
 
-        html += '<div class="office-tracking-actions">';
-        if (role === 'client' && canUploadArtwork(office)) {
-            html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
-                <input type="file" class="office-artwork-input" data-order-id="${escapeHtml(orderId)}"
-                    data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
-        }
         if (role === 'staff') {
-            html += `<label class="office-upload-btn"><i class="fas fa-file-image"></i> Upload proof
-                <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
-                    data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
+            html += '<div class="office-tracking-body">';
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
             html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
-        }
-        if (role === 'client' && isProofStage(stage)) {
-            const proof = latestProofFile(office.files);
-            if (proof) {
-                html += `<button type="button" class="office-btn office-btn-approve office-approve-btn"
-                    data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
-                    data-api-prefix="${escapeHtml(apiPrefix)}">Approve proof</button>`;
-                html += `<button type="button" class="office-btn office-btn-changes office-changes-btn"
-                    data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
-                    data-stage="${escapeHtml(stage)}" data-api-prefix="${escapeHtml(apiPrefix)}">Request changes</button>`;
+            html += '</div>';
+            html += '<div class="office-tracking-actions office-staff-actions">';
+            html += renderStaffProofUpload(orderId, itemId, apiPrefix);
+            html += '<span class="office-tracking-msg" hidden></span></div>';
+        } else {
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
+            html += '<div class="office-tracking-actions">';
+            if (canUploadArtwork(office)) {
+                html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
+                    <input type="file" class="office-artwork-input" data-order-id="${escapeHtml(orderId)}"
+                        data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
             }
+            if (isProofStage(stage)) {
+                const proof = latestProofFile(office.files);
+                if (proof) {
+                    html += `<button type="button" class="office-btn office-btn-approve office-approve-btn"
+                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                        data-api-prefix="${escapeHtml(apiPrefix)}">Approve proof</button>`;
+                    html += `<button type="button" class="office-btn office-btn-changes office-changes-btn"
+                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                        data-order-name="${escapeHtml(office.order || '')}"
+                        data-stage="${escapeHtml(stage)}" data-api-prefix="${escapeHtml(apiPrefix)}">Request changes</button>`;
+                }
+            }
+            html += '<span class="office-tracking-msg" hidden></span></div>';
         }
-        html += '<span class="office-tracking-msg" hidden></span></div></div>';
+        html += '</div>';
         return html;
     }
 
@@ -286,6 +310,7 @@
         if (detailsEl._officeTracking) {
             const idx = (detailsEl._officeTracking.items || []).findIndex(i => i.line_number === item.line_number);
             if (idx >= 0) detailsEl._officeTracking.items[idx] = item;
+            updateOrderRowIndicator(orderId, computeOrderIndicator(detailsEl._officeTracking.items));
         }
     }
 
@@ -379,9 +404,7 @@
         const host = btn.closest('.office-tracking');
         const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
         const select = host && host.querySelector('.office-stage-select');
-        const noteInput = host && host.querySelector('.office-stage-note');
         const stage = select && select.value;
-        const note = (noteInput && noteInput.value) ? noteInput.value.trim() : '';
         if (!stage) return;
         btn.disabled = true;
         showTrackingMsg(host, 'Updating status…', true);
@@ -390,7 +413,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ stage: stage, note: note || 'Status updated by staff', by: 'staff' }),
+                body: JSON.stringify({ stage: stage, note: 'Status updated by staff', by: 'staff' }),
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not update status');
@@ -404,35 +427,63 @@
         }
     }
 
-    async function handleRequestChanges(btn) {
-        const orderId = btn.dataset.orderId;
-        const itemId = btn.dataset.itemId;
-        const stage = btn.dataset.stage;
-        const apiPrefix = btn.dataset.apiPrefix;
-        const note = window.prompt('What changes would you like?');
-        if (note === null) return;
-        if (!note.trim()) {
-            alert('Please describe the changes you need.');
-            return;
-        }
-        const host = btn.closest('.office-tracking');
+    function ensureChangesModal() {
+        let modal = document.getElementById('office-changes-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-changes-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-changes-modal></div>
+            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-changes-modal-title">
+                <button type="button" class="office-changes-modal-close" data-close-changes-modal aria-label="Close">&times;</button>
+                <h3 id="office-changes-modal-title">Request changes</h3>
+                <p class="office-changes-modal-lead">To request changes to your proof, please email our sales team:</p>
+                <p class="office-changes-modal-email"><a href="mailto:sales@bitepromotions.co.uk" id="office-changes-mailto">sales@bitepromotions.co.uk</a></p>
+                <ul class="office-changes-modal-steps">
+                    <li>Quote your order number: <strong id="office-changes-order-num"></strong></li>
+                    <li>Explain the changes you would like made to the proof</li>
+                </ul>
+                <div class="office-changes-modal-actions">
+                    <a class="office-btn office-btn-email" id="office-changes-email-btn" href="mailto:sales@bitepromotions.co.uk">Email sales</a>
+                    <button type="button" class="office-btn office-btn-changes" data-close-changes-modal>Close</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-changes-modal]')) hideChangesModal();
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) hideChangesModal();
+        });
+        return modal;
+    }
+
+    function showChangesModal(orderName) {
+        const modal = ensureChangesModal();
+        const name = (orderName || '').trim() || 'your order';
+        const subject = encodeURIComponent(`Order ${name} – proof change request`);
+        const mailto = `mailto:sales@bitepromotions.co.uk?subject=${subject}`;
+        const orderEl = document.getElementById('office-changes-order-num');
+        const mailLink = document.getElementById('office-changes-mailto');
+        const emailBtn = document.getElementById('office-changes-email-btn');
+        if (orderEl) orderEl.textContent = name;
+        if (mailLink) mailLink.href = mailto;
+        if (emailBtn) emailBtn.href = mailto;
+        modal.hidden = false;
+    }
+
+    function hideChangesModal() {
+        const modal = document.getElementById('office-changes-modal');
+        if (modal) modal.hidden = true;
+    }
+
+    function handleRequestChanges(btn) {
+        const orderName = btn.dataset.orderName;
         const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
-        btn.disabled = true;
-        try {
-            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/status`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ stage: stage, note: note.trim(), by: 'customer' }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Could not send request');
-            showTrackingMsg(host, 'Change request sent to our team.', true);
-        } catch (err) {
-            showTrackingMsg(host, err.message || 'Could not send request', false);
-        } finally {
-            btn.disabled = false;
-        }
+        const fromPayload = detailsEl._officeTracking && detailsEl._officeTracking.order;
+        showChangesModal(orderName || fromPayload || '');
     }
 
     const boundRoots = new WeakSet();
@@ -458,6 +509,7 @@
         if (!detailsEl || !orderId) return;
         if (detailsEl.dataset.trackingLoaded === '1' && detailsEl._officeTracking) {
             paintTrackingHosts(detailsEl, detailsEl._officeTracking, orderId, apiPrefix, role);
+            updateOrderRowIndicator(orderId, computeOrderIndicator(detailsEl._officeTracking.items));
             return;
         }
         const hosts = detailsEl.querySelectorAll('.office-tracking-host');
@@ -471,6 +523,7 @@
             detailsEl._officeTracking = data;
             detailsEl.dataset.trackingLoaded = '1';
             paintTrackingHosts(detailsEl, data, orderId, apiPrefix, role);
+            updateOrderRowIndicator(orderId, computeOrderIndicator(data.items));
         } catch (err) {
             hosts.forEach(h => {
                 h.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(err.message || 'Tracking unavailable') + '</p></div>';
@@ -479,11 +532,86 @@
         }
     }
 
+    const INDICATOR_PRIORITY = { red: 1, yellow: 2, printing: 3, production: 4, green: 5, none: 99 };
+
+    const INDICATOR_TITLES = {
+        green: 'Shipped — order complete',
+        yellow: 'Waiting on customer (artwork or proof approval)',
+        red: 'Customer waiting on us (proof upload needed)',
+        printing: 'Printing',
+        production: 'In production',
+    };
+
+    function computeItemIndicator(office) {
+        if (!office) return 'none';
+        const stage = office.current_stage || '';
+        if (stage === 'shipped') return 'green';
+        if (stage === 'in_production') return 'production';
+        if (stage === 'printing') return 'printing';
+        if (stage === 'received') return 'yellow';
+        if (/^proof_/.test(stage)) return 'yellow';
+        if (stage === 'artwork') return 'red';
+        if (stage === 'approved') return 'red';
+        return 'yellow';
+    }
+
+    function computeOrderIndicator(items) {
+        let worst = 'none';
+        let worstP = INDICATOR_PRIORITY.none;
+        (items || []).forEach(item => {
+            const t = computeItemIndicator(item.office);
+            const p = INDICATOR_PRIORITY[t] ?? INDICATOR_PRIORITY.none;
+            if (p < worstP) {
+                worst = t;
+                worstP = p;
+            }
+        });
+        return worst;
+    }
+
+    function renderOrderIndicatorHtml(type) {
+        if (!type || type === 'none') return '';
+        const title = INDICATOR_TITLES[type] || '';
+        if (type === 'printing') {
+            return `<span class="order-status-indicator printing" title="${escapeHtml(title)}"><i class="fas fa-print"></i></span>`;
+        }
+        if (type === 'production') {
+            return `<span class="order-status-indicator production" title="${escapeHtml(title)}"><i class="fas fa-industry"></i></span>`;
+        }
+        return `<span class="order-status-indicator ${escapeHtml(type)}" title="${escapeHtml(title)}"><span class="order-status-dot"></span></span>`;
+    }
+
+    function updateOrderRowIndicator(orderId, type) {
+        document.querySelectorAll(`.order-status-indicator-slot[data-order-id="${CSS.escape(String(orderId))}"]`).forEach(slot => {
+            slot.innerHTML = renderOrderIndicatorHtml(type);
+        });
+    }
+
+    async function loadOrderIndicator(orderId, apiPrefix, slotEl) {
+        if (!slotEl || !orderId) return;
+        try {
+            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/indicator`, { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!res.ok || !data.success) return;
+            slotEl.innerHTML = renderOrderIndicatorHtml(computeOrderIndicator(data.items));
+        } catch (_) { /* ignore */ }
+    }
+
+    function loadOrderIndicatorsIn(container, apiPrefix) {
+        if (!container) return;
+        container.querySelectorAll('.order-status-indicator-slot[data-order-id]').forEach(slot => {
+            loadOrderIndicator(slot.dataset.orderId, apiPrefix, slot);
+        });
+    }
+
     global.OfficeTracking = {
         loadOrderTracking,
         renderTrackingBlock,
         renderStatusBar,
         proxyFileUrl,
         bindTrackingEvents,
+        computeOrderIndicator,
+        loadOrderIndicatorsIn,
+        updateOrderRowIndicator,
     };
 })(typeof window !== 'undefined' ? window : this);

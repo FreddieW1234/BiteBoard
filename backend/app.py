@@ -2023,6 +2023,55 @@ def api_client_order_tracking(order_id):
     return _office_tracking_response(order_id, entry, "/api/client/orders")
 
 
+def _fetch_office_items_for_indicator(entry):
+    """One get_order call when possible; fall back to ensure_item per product line."""
+    from scripts.office_api import get_order, ensure_item, item_key, OfficeApiError  # type: ignore
+
+    order_name = entry.get("name") or ""
+    order = entry.get("order") or {}
+    items_out = []
+    try:
+        data = get_order(order_name)
+        if data and data.get("items"):
+            for view in data["items"]:
+                items_out.append({"office": view})
+            return items_out
+    except OfficeApiError:
+        pass
+
+    for item in order.get("order_items") or []:
+        ln = item.get("line_number")
+        if ln is None:
+            continue
+        oid = item.get("office_item_id") or item_key(ln, item.get("title") or "")
+        try:
+            items_out.append({"office": ensure_item(order_name, oid, item.get("title") or "")})
+        except OfficeApiError:
+            items_out.append({"office": None})
+    return items_out
+
+
+def _office_indicator_response(order_id):
+    entry = _office_access(order_id)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    return jsonify({"success": True, "items": _fetch_office_items_for_indicator(entry)})
+
+
+@app.route("/api/orders/<order_id>/indicator", methods=["GET"])
+def api_order_indicator(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_indicator_response(order_id)
+
+
+@app.route("/api/client/orders/<order_id>/indicator", methods=["GET"])
+def api_client_order_indicator(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_indicator_response(order_id)
+
+
 def _office_file_download(order_id, item, filename, api_prefix):
     entry, order_name = _office_item_context(order_id, item)
     if not entry:

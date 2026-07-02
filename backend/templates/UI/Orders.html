@@ -553,10 +553,11 @@
                 content.innerHTML = '<div class="state-msg">No orders found.</div>';
                 return;
             }
-            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
                 html += `<tr class="data-row" data-idx="${i}" data-order-id="${escapeHtml(o.id)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
+                    <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(o.id)}"></span></td>
                     <td>${escapeHtml(formatDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.company || '—')}</td>
                     <td>${escapeHtml(o.customer_name || '—')}</td>
@@ -565,10 +566,11 @@
                     <td>${escapeHtml(o.mobile_number || '—')}</td>
                     <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="details-${i}"><td colspan="8">${renderOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="details-${i}"><td colspan="9">${renderOrderDetails(o)}</td></tr>`;
             });
             html += '</tbody></table></div>';
             content.innerHTML = html;
+            if (window.OfficeTracking) OfficeTracking.loadOrderIndicatorsIn(content, '/api/orders');
             content.querySelectorAll('.data-row').forEach(row => {
                 row.addEventListener('click', () => {
                     const idx = row.getAttribute('data-idx');
