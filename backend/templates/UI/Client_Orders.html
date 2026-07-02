@@ -253,6 +253,53 @@
         }
         .orders-wrap .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
         .orders-wrap .info-kv strong { font-weight: 600; color: #6b7280; }
+        .orders-wrap .order-info-label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+            margin: 10px 0 6px;
+        }
+        .orders-wrap .order-info-section .order-info-label:first-of-type { margin-top: 0; }
+        .orders-wrap .order-info-note-input,
+        .orders-wrap .order-info-attr-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 9px 11px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.86rem;
+            line-height: 1.45;
+            resize: vertical;
+            background: #fff;
+            color: #374151;
+        }
+        .orders-wrap .order-info-note-input:focus,
+        .orders-wrap .order-info-attr-input:focus {
+            outline: none;
+            border-color: var(--bite-cyan);
+            box-shadow: 0 0 0 2px rgba(0, 174, 239, 0.15);
+        }
+        .orders-wrap .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+        .orders-wrap .btn-save-order-info {
+            background: var(--bite-cyan);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .orders-wrap .btn-save-order-info:hover { filter: brightness(0.95); }
+        .orders-wrap .btn-save-order-info:disabled { opacity: 0.65; cursor: wait; }
+        .orders-wrap .order-info-msg { font-size: 0.82rem; font-weight: 500; }
+        .orders-wrap .order-info-msg.ok { color: #059669; }
+        .orders-wrap .order-info-msg.err { color: #dc2626; }
 
         /* Empty / error states */
         .state-msg {
@@ -422,17 +469,21 @@
                                     {% endif %}
 
                                     {% set info = order.order_info or {} %}
-                                    {% if info.note or info.attributes %}
-                                    <div class="detail-section">
+                                    <div class="detail-section order-info-section">
                                         <h4>Order info</h4>
-                                        {% if info.note %}
-                                        <div class="order-info-note">{{ info.note }}</div>
-                                        {% endif %}
-                                        {% for attr in info.attributes %}
-                                        <div class="info-kv"><strong>{{ attr.key }}:</strong> {{ attr.value }}</div>
-                                        {% endfor %}
+                                        <form class="order-info-form" data-order-id="{{ order.id }}">
+                                            <label class="order-info-label">Notes</label>
+                                            <textarea class="order-info-note-input" name="note" rows="4">{{ info.note or '' }}</textarea>
+                                            {% for attr in info.attributes or [] %}
+                                            <label class="order-info-label">{{ attr.key }}</label>
+                                            <textarea class="order-info-attr-input" data-attr-key="{{ attr.key }}" rows="2">{{ attr.value or '' }}</textarea>
+                                            {% endfor %}
+                                            <div class="order-info-actions">
+                                                <button type="submit" class="btn-save-order-info">Save order info</button>
+                                                <span class="order-info-msg" hidden></span>
+                                            </div>
+                                        </form>
                                     </div>
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -551,6 +602,52 @@
                 }
             });
         }
+
+        document.querySelector('.orders-wrap')?.addEventListener('submit', async function(e) {
+            const form = e.target.closest('.order-info-form');
+            if (!form) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const orderId = form.dataset.orderId;
+            const btn = form.querySelector('.btn-save-order-info');
+            const msg = form.querySelector('.order-info-msg');
+            const note = form.querySelector('.order-info-note-input')?.value ?? '';
+            const attributes = [];
+            form.querySelectorAll('.order-info-attr-input').forEach(el => {
+                attributes.push({ key: el.dataset.attrKey, value: el.value });
+            });
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Saving…';
+            }
+            if (msg) msg.hidden = true;
+            try {
+                const res = await fetch(`/api/client/orders/${encodeURIComponent(orderId)}/order-info`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ note, attributes }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                if (msg) {
+                    msg.textContent = 'Order info saved.';
+                    msg.className = 'order-info-msg ok';
+                    msg.hidden = false;
+                }
+            } catch (err) {
+                if (msg) {
+                    msg.textContent = err.message || 'Could not save order info.';
+                    msg.className = 'order-info-msg err';
+                    msg.hidden = false;
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save order info';
+                }
+            }
+        });
     </script>
 </body>
 </html>

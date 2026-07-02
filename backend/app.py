@@ -1906,6 +1906,40 @@ def api_all_products():
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
 
 
+@app.route('/api/orders/<order_id>/order-info', methods=['PUT'])
+def api_order_info_update(order_id):
+    """Update order note / custom attributes (staff Orders page)."""
+    try:
+        from scripts.order_helpers import update_order_info  # type: ignore
+        data = request.get_json(silent=True) or {}
+        note = data.get("note", "")
+        attributes = data.get("attributes") or []
+        return jsonify(update_order_info(order_id, note, attributes))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route("/api/client/orders/<order_id>/order-info", methods=["PUT"])
+def api_client_order_info_update(order_id):
+    """Update order note / custom attributes for the logged-in customer's order."""
+    cid = get_client_customer_id()
+    if not cid:
+        return jsonify({"success": False, "error": "Not signed in as a customer"}), 403
+    try:
+        from scripts.order_helpers import get_order_customer_id, update_order_info  # type: ignore
+        owner = get_order_customer_id(order_id)
+        if not owner:
+            return jsonify({"success": False, "error": "Order not found"}), 404
+        if str(owner) != str(cid):
+            return jsonify({"success": False, "error": "Not allowed to edit this order"}), 403
+        data = request.get_json(silent=True) or {}
+        note = data.get("note", "")
+        attributes = data.get("attributes") or []
+        return jsonify(update_order_info(order_id, note, attributes))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     """Return recent Shopify orders for the staff Orders page."""

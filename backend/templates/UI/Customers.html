@@ -141,6 +141,8 @@
         }
         .cu-type-tag-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.12); }
         .cu-type-tag-select:disabled { opacity: 0.6; cursor: wait; }
+        .cu-type-tag-select.pending { border-color: #fcd34d; background: #fef3c7; color: #92400e; font-weight: 600; }
+        .cu-type-tag-select.pending:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
         .cu-type-tag-select.conflict { border-color: #fca5a5; background: #fff5f5; }
         .cu-type-tag-select.saving { border-color: #c7d2fe; background: #eef2ff; }
         .other-tags { display: flex; flex-wrap: wrap; gap: 3px; }
@@ -197,6 +199,8 @@
             border-color: #4f46e5;
             box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
         }
+        .cu-edit-select.pending { border-color: #fcd34d; background: #fef3c7; color: #92400e; font-weight: 600; }
+        .cu-edit-select.pending:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); }
         .cu-edit-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
         .btn-primary {
             background: #4f46e5;
@@ -321,6 +325,53 @@
         .cu-orders-modal-body .order-info-note { font-size: 0.86rem; line-height: 1.55; color: #374151; white-space: pre-wrap; margin-bottom: 8px; }
         .cu-orders-modal-body .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
         .cu-orders-modal-body .info-kv strong { font-weight: 600; color: #6b7280; }
+        .cu-orders-modal-body .order-info-label {
+            display: block;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7280;
+            margin: 10px 0 6px;
+        }
+        .cu-orders-modal-body .order-info-section .order-info-label:first-of-type { margin-top: 0; }
+        .cu-orders-modal-body .order-info-note-input,
+        .cu-orders-modal-body .order-info-attr-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 9px 11px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.86rem;
+            line-height: 1.45;
+            resize: vertical;
+            background: #fff;
+            color: #374151;
+        }
+        .cu-orders-modal-body .order-info-note-input:focus,
+        .cu-orders-modal-body .order-info-attr-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+        }
+        .cu-orders-modal-body .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+        .cu-orders-modal-body .btn-save-order-info {
+            background: #4f46e5;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .cu-orders-modal-body .btn-save-order-info:hover { background: #4338ca; }
+        .cu-orders-modal-body .btn-save-order-info:disabled { opacity: 0.65; cursor: wait; }
+        .cu-orders-modal-body .order-info-msg { font-size: 0.82rem; font-weight: 500; }
+        .cu-orders-modal-body .order-info-msg.ok { color: #059669; }
+        .cu-orders-modal-body .order-info-msg.err { color: #dc2626; }
         .cu-orders-modal-body .state-msg { padding: 40px 20px; text-align: center; color: #6b7280; }
 
         @media (max-width: 1400px) {
@@ -542,7 +593,11 @@
         function typeTagSelectHtml(c) {
             const current = getCurrentTypeTagKey(c);
             const conflict = c.tag_conflict;
-            const selectClass = ['cu-type-tag-select', conflict ? 'conflict' : ''].filter(Boolean).join(' ');
+            const selectClass = [
+                'cu-type-tag-select',
+                conflict ? 'conflict' : '',
+                !conflict && current === 'pending' ? 'pending' : '',
+            ].filter(Boolean).join(' ');
             const options = [
                 `<option value=""${current ? '' : ' selected'}>${conflict ? 'Fix conflict…' : '—'}</option>`,
                 ...TYPE_TAG_OPTIONS.map(opt =>
@@ -624,13 +679,17 @@
         function typeTagSelectFieldHtml(c, fieldClass) {
             const current = getCurrentTypeTagKey(c);
             const conflict = c.tag_conflict;
+            const classes = [
+                fieldClass,
+                !conflict && current === 'pending' ? 'pending' : '',
+            ].filter(Boolean).join(' ');
             const options = [
                 `<option value=""${current ? '' : ' selected'}>${conflict ? 'Fix conflict…' : '—'}</option>`,
                 ...TYPE_TAG_OPTIONS.map(opt =>
                     `<option value="${escapeHtml(opt.value)}"${current === opt.value ? ' selected' : ''}>${escapeHtml(opt.label)}</option>`
                 ),
             ].join('');
-            return `<select name="type_tag" class="${fieldClass}" aria-label="Customer Type">${options}</select>`;
+            return `<select name="type_tag" class="${classes}" aria-label="Customer Type">${options}</select>`;
         }
 
         function customerRowActionsHtml(c, expanded) {
@@ -806,21 +865,71 @@
             return html + '</div>';
         }
 
+        function renderOrderInfoSection(o) {
+            const info = o.order_info || { note: '', attributes: [] };
+            const attrs = info.attributes || [];
+            let html = `<div class="detail-section order-info-section"><h4>Order info</h4>
+                <form class="order-info-form" data-order-id="${escapeHtml(o.id)}">
+                <label class="order-info-label">Notes</label>
+                <textarea class="order-info-note-input" name="note" rows="4">${escapeHtml(info.note || '')}</textarea>`;
+            attrs.forEach(a => {
+                html += `<label class="order-info-label">${escapeHtml(a.key)}</label>
+                    <textarea class="order-info-attr-input" data-attr-key="${escapeHtml(a.key)}" rows="2">${escapeHtml(a.value || '')}</textarea>`;
+            });
+            html += `<div class="order-info-actions">
+                    <button type="submit" class="btn-save-order-info">Save order info</button>
+                    <span class="order-info-msg" hidden></span>
+                </div></form></div>`;
+            return html;
+        }
+
+        async function saveOrderInfoForm(form) {
+            const orderId = form.dataset.orderId;
+            const btn = form.querySelector('.btn-save-order-info');
+            const msg = form.querySelector('.order-info-msg');
+            const note = form.querySelector('.order-info-note-input')?.value ?? '';
+            const attributes = [];
+            form.querySelectorAll('.order-info-attr-input').forEach(el => {
+                attributes.push({ key: el.dataset.attrKey, value: el.value });
+            });
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Saving…';
+            }
+            if (msg) msg.hidden = true;
+            try {
+                const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/order-info`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ note, attributes }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                if (msg) {
+                    msg.textContent = 'Order info saved.';
+                    msg.className = 'order-info-msg ok';
+                    msg.hidden = false;
+                }
+            } catch (err) {
+                if (msg) {
+                    msg.textContent = err.message || 'Could not save order info.';
+                    msg.className = 'order-info-msg err';
+                    msg.hidden = false;
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Save order info';
+                }
+            }
+        }
+
         function renderCustomerOrderDetails(o) {
             let html = '<div class="details-inner">';
             html += renderOrderLineSection('Items', o.order_items || [], 'No items');
             if (o.fees && o.fees.length) html += renderOrderLineSection('Fees', o.fees, '');
-            const info = o.order_info || {};
-            const hasNote = !!(info.note || '').trim();
-            const attrs = info.attributes || [];
-            if (hasNote || attrs.length) {
-                html += '<div class="detail-section"><h4>Order info</h4>';
-                if (hasNote) html += `<div class="order-info-note">${escapeHtml(info.note)}</div>`;
-                attrs.forEach(a => {
-                    html += `<div class="info-kv"><strong>${escapeHtml(a.key)}:</strong> ${escapeHtml(a.value)}</div>`;
-                });
-                html += '</div>';
-            }
+            html += renderOrderInfoSection(o);
             return html + '</div>';
         }
 
@@ -1032,6 +1141,13 @@
             });
             document.getElementById('cu-orders-modal').addEventListener('click', function(e) {
                 if (e.target.closest('[data-close-orders-modal]')) closeCustomerOrdersModal();
+            });
+            document.getElementById('cu-orders-modal-body').addEventListener('submit', function(e) {
+                const form = e.target.closest('.order-info-form');
+                if (!form) return;
+                e.preventDefault();
+                e.stopPropagation();
+                saveOrderInfoForm(form);
             });
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && document.getElementById('cu-orders-modal').classList.contains('open')) {

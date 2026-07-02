@@ -3,6 +3,57 @@
 from __future__ import annotations
 
 import re
+import time
+
+import requests
+
+from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
+
+HEADERS = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": ACCESS_TOKEN,
+}
+
+ORDER_UPDATE_MUTATION = """
+mutation OrderUpdate($input: OrderInput!) {
+  orderUpdate(input: $input) {
+    order {
+      legacyResourceId
+      note
+      customAttributes { key value }
+    }
+    userErrors { field message }
+  }
+}
+"""
+
+ORDER_CUSTOMER_QUERY = """
+query OrderCustomer($id: ID!) {
+  order(id: $id) {
+    legacyResourceId
+    customer { legacyResourceId }
+  }
+}
+"""
+
+
+def _graphql(query: str, variables: dict | None = None) -> dict:
+    url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
+    while True:
+        resp = requests.post(
+            url,
+            json={"query": query, "variables": variables or {}},
+            headers=HEADERS,
+            timeout=30,
+        )
+        if resp.status_code == 429:
+            time.sleep(2)
+            continue
+        resp.raise_for_status()
+        payload = resp.json()
+        if payload.get("errors"):
+            raise RuntimeError(str(payload["errors"]))
+        return payload.get("data") or {}
 
 LINE_ITEM_FIELDS = """
               title
@@ -184,3 +235,43 @@ def enrich_order(node: dict, base: dict) -> dict:
     if "total" in base:
         base["total_display"] = format_gbp(base["total"])
     return base
+
+
+def get_order_customer_id(order_id: str | int) -> str | None:
+    gid = f"gid://shopify/Order/{order_id}"
+    data = _graphql(ORDER_CUSTOMER_QUERY, {"id": gid})
+    order = data.get("order")
+    if not order:
+        return None
+    customer = order.get("customer") or {}
+    cid = customer.get("legacyResourceId")
+    return str(cid) if cid else None
+
+
+def update_order_info(order_id: str | int, note: str, attributes: list[dict]) -> dict:
+    """Update order note and customAttributes (full attribute list required by Shopify)."""
+    gid = f"gid://shopify/Order/{order_id}"
+    custom_attributes = [
+        {"key": str(a.get("key") or "").strip(), "value": str(a.get("value") or "").strip()}
+        for a in (attributes or [])
+        if str(a.get("key") or "").strip()
+    ]
+    data = _graphql(ORDER_UPDATE_MUTATION, {
+        "input": {
+            "id": gid,
+            "note": str(note or "").strip(),
+            "customAttributes": custom_attributes,
+        },
+    })
+    result = data.get("orderUpdate") or {}
+    errors = result.get("userErrors") or []
+    if errors:
+        msg = "; ".join(
+            (e.get("message") or "Unknown error") for e in errors if e.get("message")
+        )
+        raise RuntimeError(msg or "Order update failed")
+    order = result.get("order") or {}
+    return {
+        "success": True,
+        "order_info": format_order_info(order),
+    }
