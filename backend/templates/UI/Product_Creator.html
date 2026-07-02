@@ -8,7 +8,7 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/theme.css?v=1" rel="stylesheet">
+    <link href="/static/theme.css?v=4" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
     
     <style>
@@ -1403,6 +1403,48 @@
         }
         .parent-child-diagram .diagram-parent-card .children-list li:last-child::before { content: '└'; }
         .parent-child-diagram .no-children { font-size: 0.85rem; color: #94a3b8; font-style: italic; }
+
+        .pc-image-picker-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 10000;
+            max-width: 600px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .pc-image-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .pc-image-picker-option {
+            cursor: pointer;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .pc-image-picker-option img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            display: block;
+        }
+        .pc-image-picker-cancel {
+            margin-top: 15px;
+            padding: 8px 15px;
+            background: #e5e7eb;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #374151;
+        }
 
         .metafield-container {
             display: flex;
@@ -7887,10 +7929,10 @@ Dietary</textarea>
                 
                 // Create popup to select image
                 const popup = document.createElement('div');
-                popup.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; max-width: 600px; max-height: 70vh; overflow-y: auto;';
+                popup.className = 'pc-image-picker-popup';
                 popup.innerHTML = `
                     <h3 style="margin-top: 0;">Select image for "${colourName || 'Colour ' + colourIndex}"</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 15px;">
+                    <div class="pc-image-picker-grid">
                         ${allMediaItems.map((media, idx) => {
                             // Handle both selectedShopifyMedia (has url property) and selectedMediaFiles (has File object)
                             let imageUrl = '';
@@ -7905,13 +7947,13 @@ Dietary</textarea>
                                 imageUrl = media.src;
                             }
                             return `
-                            <div style="cursor: pointer; border: 2px solid #ddd; border-radius: 4px; overflow: hidden;" onclick="selectColourImage(${idx}, ${colourIndex})">
-                                <img src="${imageUrl}" style="width: 100%; height: 100px; object-fit: cover;" onerror="this.style.background='#f0f0f0'; this.innerHTML='❌'">
+                            <div class="pc-image-picker-option" onclick="selectColourImage(${idx}, ${colourIndex})">
+                                <img src="${imageUrl}" onerror="this.style.background='#f0f0f0'; this.innerHTML='❌'">
                             </div>
                         `;
                         }).join('')}
                     </div>
-                    <button onclick="this.closest('div').remove()" style="margin-top: 15px; padding: 8px 15px; background: #ccc; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    <button type="button" class="pc-image-picker-cancel" onclick="this.closest('.pc-image-picker-popup').remove()">Cancel</button>
                 `;
                 document.body.appendChild(popup);
             }
@@ -7953,7 +7995,7 @@ Dietary</textarea>
             }
             
             // Close popup
-            document.querySelectorAll('div[style*="position: fixed"]').forEach(p => p.remove());
+            document.querySelectorAll('.pc-image-picker-popup').forEach(p => p.remove());
         };
 
         // Hook into metafield loading to populate colour inputs when editing products

@@ -76,6 +76,11 @@ def _handle_response(resp: requests.Response, *, allow_404: bool = False):
     if resp.status_code == 401:
         logger.error("Office API rejected API key")
         raise OfficeApiError("Order tracking authentication failed")
+    if resp.status_code == 405:
+        raise OfficeApiError(
+            "File deletion is not enabled on the Office Order API. "
+            "Add DELETE /orders/{order}/items/{item}/files/{filename} on the office server."
+        )
     if not resp.ok:
         detail = ""
         try:

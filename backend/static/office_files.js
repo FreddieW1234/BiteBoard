@@ -120,80 +120,37 @@
         });
     }
 
-    let deleteConfirmResolve = null;
-
-    function ensureDeleteModal() {
+    function showDeleteUnavailableModal() {
         let modal = document.getElementById('of-delete-modal');
-        if (modal) return modal;
-        modal = document.createElement('div');
-        modal.id = 'of-delete-modal';
-        modal.className = 'of-delete-modal';
-        modal.hidden = true;
-        modal.innerHTML = `
-            <div class="of-delete-modal-backdrop" data-of-close-delete></div>
-            <div class="of-delete-modal-panel" role="dialog" aria-modal="true">
-                <button type="button" class="of-delete-modal-close" data-of-close-delete aria-label="Close">&times;</button>
-                <h3>Delete file from server?</h3>
-                <p class="of-delete-modal-lead" id="of-delete-modal-lead"></p>
-                <p class="of-delete-modal-warning">This permanently removes the file from the server and cannot be undone.</p>
-                <div class="of-delete-modal-actions">
-                    <button type="button" class="of-btn-danger of-delete-confirm-btn">Delete from server</button>
-                    <button type="button" class="of-btn-cancel" data-of-close-delete>Cancel</button>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-        modal.addEventListener('click', e => {
-            if (e.target.closest('[data-of-close-delete]')) finishDeleteConfirm(false);
-            if (e.target.closest('.of-delete-confirm-btn')) finishDeleteConfirm(true);
-        });
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
-        });
-        return modal;
-    }
-
-    function finishDeleteConfirm(confirmed) {
-        const modal = document.getElementById('of-delete-modal');
-        if (modal) modal.hidden = true;
-        if (deleteConfirmResolve) {
-            const resolve = deleteConfirmResolve;
-            deleteConfirmResolve = null;
-            resolve(confirmed);
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'of-delete-modal';
+            modal.className = 'of-delete-modal';
+            modal.hidden = true;
+            modal.innerHTML = `
+                <div class="of-delete-modal-backdrop" data-of-close-delete></div>
+                <div class="of-delete-modal-panel" role="dialog" aria-modal="true">
+                    <button type="button" class="of-delete-modal-close" data-of-close-delete aria-label="Close">&times;</button>
+                    <h3>File deletion not available</h3>
+                    <p class="of-delete-modal-lead">File deletion is not set up yet. The Office Order API on the server needs a DELETE endpoint configured before files can be removed.</p>
+                    <div class="of-delete-modal-actions">
+                        <button type="button" class="of-btn-cancel" data-of-close-delete>OK</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', e => {
+                if (e.target.closest('[data-of-close-delete]')) modal.hidden = true;
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true;
+            });
         }
+        modal.hidden = false;
     }
 
-    function confirmDeleteFile(filename) {
-        const modal = ensureDeleteModal();
-        const lead = document.getElementById('of-delete-modal-lead');
-        if (lead) lead.textContent = `Are you sure you want to delete "${filename}" from the server?`;
-        return new Promise(resolve => {
-            deleteConfirmResolve = resolve;
-            modal.hidden = false;
-        });
-    }
-
-    async function handleDeleteFile(btn) {
-        const orderId = btn.dataset.orderId;
-        const itemId = btn.dataset.itemId;
-        const filename = btn.dataset.filename;
-        if (!orderId || !itemId || !filename) return;
-
-        const confirmed = await confirmDeleteFile(filename);
-        if (!confirmed) return;
-
-        btn.disabled = true;
-        try {
-            const url = `/api/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
-            const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
-            const searchInput = document.getElementById('of-search');
-            lastSearch = searchInput ? searchInput.value.trim() : '';
-            await loadFiles(lastSearch);
-        } catch (err) {
-            btn.disabled = false;
-            alert(err.message || 'Could not delete file.');
-        }
+    function handleDeleteFile(btn) {
+        if (btn) btn.blur();
+        showDeleteUnavailableModal();
     }
 
     function bindDeleteButtons(root) {

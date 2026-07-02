@@ -2127,7 +2127,9 @@ def _office_delete_file(order_id, item, filename):
         delete_file(order_name, item, filename)
         return jsonify({"success": True})
     except OfficeApiError as exc:
-        return jsonify({"success": False, "error": str(exc)}), 502
+        msg = str(exc)
+        status = 501 if "not enabled on the Office Order API" in msg else 502
+        return jsonify({"success": False, "error": msg}), status
 
 
 @app.route("/api/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET", "DELETE"])

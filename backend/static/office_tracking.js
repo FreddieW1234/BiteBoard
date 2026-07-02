@@ -665,94 +665,37 @@
         showChangesModal(orderName || fromPayload || '');
     }
 
-    let deleteConfirmResolve = null;
-
-    function ensureDeleteConfirmModal() {
+    function showDeleteUnavailableModal() {
         let modal = document.getElementById('office-delete-modal');
-        if (modal) return modal;
-        modal = document.createElement('div');
-        modal.id = 'office-delete-modal';
-        modal.className = 'office-changes-modal';
-        modal.hidden = true;
-        modal.innerHTML = `
-            <div class="office-changes-modal-backdrop" data-close-delete-modal></div>
-            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-delete-modal-title">
-                <button type="button" class="office-changes-modal-close" data-close-delete-modal aria-label="Close">&times;</button>
-                <h3 id="office-delete-modal-title">Delete file from server?</h3>
-                <p class="office-changes-modal-lead" id="office-delete-modal-lead"></p>
-                <p class="office-delete-modal-warning">This permanently removes the file from the server and cannot be undone.</p>
-                <div class="office-changes-modal-actions">
-                    <button type="button" class="office-btn office-btn-danger office-delete-confirm-btn">Delete from server</button>
-                    <button type="button" class="office-btn office-btn-changes" data-close-delete-modal>Cancel</button>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-        modal.addEventListener('click', function (e) {
-            if (e.target.closest('[data-close-delete-modal]')) finishDeleteConfirm(false);
-            if (e.target.closest('.office-delete-confirm-btn')) finishDeleteConfirm(true);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
-        });
-        return modal;
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'office-delete-modal';
+            modal.className = 'office-changes-modal';
+            modal.hidden = true;
+            modal.innerHTML = `
+                <div class="office-changes-modal-backdrop" data-close-delete-modal></div>
+                <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-delete-modal-title">
+                    <button type="button" class="office-changes-modal-close" data-close-delete-modal aria-label="Close">&times;</button>
+                    <h3 id="office-delete-modal-title">File deletion not available</h3>
+                    <p class="office-changes-modal-lead">File deletion is not set up yet. The Office Order API on the server needs a DELETE endpoint configured before files can be removed.</p>
+                    <div class="office-changes-modal-actions">
+                        <button type="button" class="office-btn office-btn-changes" data-close-delete-modal>OK</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', function (e) {
+                if (e.target.closest('[data-close-delete-modal]')) modal.hidden = true;
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true;
+            });
+        }
+        modal.hidden = false;
     }
 
-    function finishDeleteConfirm(confirmed) {
-        const modal = document.getElementById('office-delete-modal');
-        if (modal) modal.hidden = true;
-        if (deleteConfirmResolve) {
-            const resolve = deleteConfirmResolve;
-            deleteConfirmResolve = null;
-            resolve(confirmed);
-        }
-    }
-
-    function confirmDeleteFile(filename) {
-        const modal = ensureDeleteConfirmModal();
-        const lead = document.getElementById('office-delete-modal-lead');
-        if (lead) {
-            lead.textContent = `Are you sure you want to delete "${filename}" from the server?`;
-        }
-        return new Promise(resolve => {
-            deleteConfirmResolve = resolve;
-            modal.hidden = false;
-        });
-    }
-
-    async function handleDeleteFile(btn) {
-        const orderId = btn.dataset.orderId;
-        const itemId = btn.dataset.itemId;
-        const filename = btn.dataset.filename;
-        const apiPrefix = btn.dataset.apiPrefix || '/api/orders';
-        if (!orderId || !itemId || !filename) return;
-
-        const confirmed = await confirmDeleteFile(filename);
-        if (!confirmed) return;
-
-        const tracking = btn.closest('.office-tracking');
-        const msg = tracking && tracking.querySelector('.office-tracking-msg');
-        btn.disabled = true;
-        if (msg) { msg.hidden = true; msg.textContent = ''; }
-
-        try {
-            const url = `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
-            const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
-            const data = await parseJsonResponse(res);
-            if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
-
-            const detailsEl = btn.closest('.details-inner') || btn.closest('td');
-            if (detailsEl) {
-                detailsEl.dataset.trackingLoaded = '0';
-                await loadOrderTracking(orderId, apiPrefix, detailsEl, 'staff');
-            }
-        } catch (err) {
-            if (msg) {
-                msg.textContent = err.message || 'Could not delete file.';
-                msg.className = 'office-tracking-msg err';
-                msg.hidden = false;
-            }
-            btn.disabled = false;
-        }
+    function handleDeleteFile(btn) {
+        if (btn) btn.blur();
+        showDeleteUnavailableModal();
     }
 
     const boundRoots = new WeakSet();
