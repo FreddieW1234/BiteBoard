@@ -25,6 +25,13 @@ Fill in `.env` with the following keys:
 - `SHOPIFY_STORE_DOMAIN` – e.g. `acme-shop.myshopify.com`
 - `SHOPIFY_API_VERSION` – defaults to `2025-07` if omitted
 - `SHOPIFY_ACCESS_TOKEN` – Admin API access token (never commit this)
+- `OFFICE_API_URL` – base URL of the Office Order API (e.g. `https://orders-api.bitepromotionsportal.co.uk`)
+- `OFFICE_API_KEY` – secret API key for the Office Order API (server-side only; never expose to the browser)
+
+Optional:
+
+- `MAX_UPLOAD_MB` – max artwork/proof upload size in MB (default `500`, matches Office API cap)
+- `ORDER_ACCESS_CACHE_TTL_SEC` – seconds to cache order ownership/name for file proxy routes (default `300`)
 
 > **Tip:** In Render, define the same variables under **Service → Environment → Environment Variables**.
 

@@ -35,6 +35,12 @@ FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in
 # Customer-facing shop URL (for logout links from the client portal iframe)
 STOREFRONT_URL = (os.environ.get("SHOPIFY_STOREFRONT_URL") or "https://bitepromotions.uk").rstrip("/")
 
+# Office Order API (status pipeline + artwork/proof files on office server)
+OFFICE_API_URL = (os.environ.get("OFFICE_API_URL") or "").rstrip("/")
+OFFICE_API_KEY = os.environ.get("OFFICE_API_KEY") or ""
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+ORDER_ACCESS_CACHE_TTL_SEC = int(os.environ.get("ORDER_ACCESS_CACHE_TTL_SEC", "300"))
+
 # Common headers for API requests
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN or "",

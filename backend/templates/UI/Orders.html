@@ -6,6 +6,7 @@
     <title>Orders - BiteBoard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/office_tracking.css" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -295,6 +296,9 @@
             html += `</div>
                     <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
                 </div>`;
+            if (li.line_number != null) {
+                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"></div>`;
+            }
             html += '</div>';
             return html;
         }
@@ -551,7 +555,7 @@
             }
             let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
-                html += `<tr class="data-row" data-idx="${i}">
+                html += `<tr class="data-row" data-idx="${i}" data-order-id="${escapeHtml(o.id)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                     <td>${escapeHtml(formatDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.company || '—')}</td>
@@ -572,6 +576,10 @@
                     if (dr) {
                         const isOpen = dr.classList.toggle('open');
                         row.classList.toggle('expanded', isOpen);
+                        if (isOpen && row.dataset.orderId && window.OfficeTracking) {
+                            const inner = dr.querySelector('.details-inner') || dr;
+                            OfficeTracking.loadOrderTracking(row.dataset.orderId, '/api/orders', inner, 'staff');
+                        }
                     }
                 });
             });
@@ -618,5 +626,6 @@
         document.getElementById('refresh-btn').addEventListener('click', loadOrders);
         loadOrders();
     </script>
+    <script src="/static/office_tracking.js"></script>
 </body>
 </html>

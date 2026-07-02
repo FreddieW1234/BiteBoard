@@ -71,3 +71,14 @@ def is_client_path(path: str) -> bool:
 def is_staff_public_path(path: str) -> bool:
     public = {"/staff/login", "/api/health", "/test"}
     return path in public
+
+
+def can_access_order(order_id: str | int) -> bool:
+    """Staff may access any order; clients only their own."""
+    if is_staff_authenticated():
+        return True
+    cid = get_client_customer_id()
+    if not cid:
+        return False
+    from scripts.order_helpers import resolve_order_access  # type: ignore
+    return resolve_order_access(order_id, client_customer_id=cid) is not None

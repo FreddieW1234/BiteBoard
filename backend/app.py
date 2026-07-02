@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB  # type: ignore
 from portal_auth import (  # type: ignore
     check_staff_credentials,
     is_staff_authenticated,
@@ -19,6 +19,7 @@ from portal_auth import (  # type: ignore
     clear_client_session,
     is_client_path,
     is_staff_public_path,
+    can_access_order,
 )
 
 print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
@@ -30,8 +31,8 @@ app = Flask(
     static_folder=os.path.join(os.path.dirname(__file__), "static"),
 )
 
-# Increase maximum file size to 100MB
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
+# Max upload size (artwork/proof files); matches Office API default cap
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_MB * 1024 * 1024
 
 # Re-read HTML templates from disk on each request so UI edits show up on a refresh
 # (Flask caches compiled templates when debug is off). Negligible overhead for this app.
@@ -45,6 +46,16 @@ app.config['SESSION_COOKIE_SECURE'] = FLASK_SESSION_SECURE
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
 
 print("🔐 Staff login enabled", flush=True)
+
+
+@app.errorhandler(413)
+def request_entity_too_large(_e):
+    if (request.path or "").startswith("/api/"):
+        return jsonify({
+            "success": False,
+            "error": f"File too large (max {MAX_UPLOAD_MB} MB)",
+        }), 413
+    return make_response("File too large", 413)
 
 
 @app.before_request
@@ -1924,6 +1935,216 @@ def api_order_info_update(order_id):
 def api_client_order_info_update(order_id):
     """Order info editing is staff-only."""
     return jsonify({"success": False, "error": "Order info can only be edited by staff"}), 403
+
+
+def _office_client_id():
+    return get_client_customer_id() if not is_staff_authenticated() else None
+
+
+def _office_access(order_id, *, refresh=False):
+    from scripts.order_helpers import resolve_order_access  # type: ignore
+    return resolve_order_access(
+        order_id,
+        refresh=refresh,
+        client_customer_id=_office_client_id(),
+    )
+
+
+def _rewrite_office_files(office_view, order_id, item_id, api_prefix):
+    if not office_view:
+        return
+    from urllib.parse import quote
+    for f in office_view.get("files") or []:
+        fname = f.get("name")
+        if fname:
+            f["download_url"] = (
+                f"{api_prefix}/{quote(str(order_id), safe='')}"
+                f"/items/{quote(item_id, safe='')}"
+                f"/files/{quote(fname, safe='')}"
+            )
+
+
+def _office_tracking_response(order_id, entry, api_prefix):
+    from scripts.order_helpers import attach_office_tracking  # type: ignore
+    from scripts.office_api import OfficeApiError  # type: ignore
+
+    order = entry["order"]
+    try:
+        attach_office_tracking(order, seed=True)
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+    items_out = []
+    for item in order.get("order_items") or []:
+        office = item.get("office")
+        if office:
+            _rewrite_office_files(office, order_id, item.get("office_item_id"), api_prefix)
+        items_out.append({
+            "line_number": item.get("line_number"),
+            "office_item_id": item.get("office_item_id"),
+            "title": item.get("title"),
+            "office": office,
+        })
+    return jsonify({"success": True, "order": order.get("name"), "items": items_out})
+
+
+def _office_item_context(order_id, item):
+    entry = _office_access(order_id)
+    if not entry:
+        return None, None
+    from scripts.order_helpers import validate_office_item  # type: ignore
+    if not validate_office_item(entry, item):
+        return None, None
+    return entry, entry.get("name") or ""
+
+
+@app.route("/api/orders/<order_id>/tracking", methods=["GET"])
+def api_order_tracking(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    entry = _office_access(order_id, refresh=True)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    return _office_tracking_response(order_id, entry, "/api/orders")
+
+
+@app.route("/api/client/orders/<order_id>/tracking", methods=["GET"])
+def api_client_order_tracking(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    entry = _office_access(order_id, refresh=True)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    return _office_tracking_response(order_id, entry, "/api/client/orders")
+
+
+def _office_file_download(order_id, item, filename, api_prefix):
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Not authorised or item not found"}), 403
+    try:
+        from scripts.office_api import fetch_file, OfficeApiError  # type: ignore
+        import mimetypes
+        resp = fetch_file(order_name, item, filename)
+        content_type = resp.headers.get("Content-Type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+        def generate():
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+
+        return Response(
+            generate(),
+            content_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET"])
+def api_order_office_file(order_id, item, filename):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_file_download(order_id, item, filename, "/api/orders")
+
+
+@app.route("/api/client/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET"])
+def api_client_order_office_file(order_id, item, filename):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    return _office_file_download(order_id, item, filename, "/api/client/orders")
+
+
+def _office_upload_artwork(order_id, item):
+    if is_staff_authenticated():
+        return jsonify({"success": False, "error": "Artwork upload is for customers only"}), 403
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Item not found on this order"}), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+    try:
+        from scripts.office_api import upload_artwork, OfficeApiError  # type: ignore
+        office = upload_artwork(order_name, item, f.stream, f.filename)
+        _rewrite_office_files(office, order_id, item, "/api/client/orders")
+        return jsonify({"success": True, "office": office})
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+def _office_upload_proof(order_id, item, api_prefix):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Proof upload is for staff only"}), 403
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Item not found on this order"}), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+    try:
+        from scripts.office_api import upload_proof, OfficeApiError  # type: ignore
+        office = upload_proof(order_name, item, f.stream, f.filename)
+        _rewrite_office_files(office, order_id, item, api_prefix)
+        return jsonify({"success": True, "office": office})
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+@app.route("/api/client/orders/<order_id>/items/<path:item>/artwork", methods=["POST"])
+def api_client_order_artwork(order_id, item):
+    return _office_upload_artwork(order_id, item)
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/proof", methods=["POST"])
+def api_order_proof(order_id, item):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    return _office_upload_proof(order_id, item, "/api/orders")
+
+
+def _office_set_status(order_id, item, api_prefix):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    entry, order_name = _office_item_context(order_id, item)
+    if not entry:
+        return jsonify({"success": False, "error": "Item not found on this order"}), 404
+    data = request.get_json(silent=True) or {}
+    stage = (data.get("stage") or "").strip()
+    note = (data.get("note") or "").strip()
+    by = (data.get("by") or "").strip()
+    if not stage:
+        return jsonify({"success": False, "error": "stage is required"}), 400
+    if not is_staff_authenticated():
+        by = "customer"
+        if stage == "approved":
+            pass
+        elif note and stage.startswith("proof_"):
+            pass  # request changes — same stage, note in history
+        else:
+            return jsonify({"success": False, "error": "Invalid status update"}), 400
+    try:
+        from scripts.office_api import set_status, OfficeApiError  # type: ignore
+        office = set_status(order_name, item, stage, note=note, by=by)
+        _rewrite_office_files(office, order_id, item, api_prefix)
+        return jsonify({"success": True, "office": office})
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+@app.route("/api/client/orders/<order_id>/items/<path:item>/status", methods=["POST"])
+def api_client_order_status(order_id, item):
+    return _office_set_status(order_id, item, "/api/client/orders")
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/status", methods=["POST"])
+def api_order_status(order_id, item):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    return _office_set_status(order_id, item, "/api/orders")
 
 
 @app.route('/api/orders', methods=['GET'])

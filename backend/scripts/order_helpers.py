@@ -567,9 +567,14 @@ def format_order_info(node: dict) -> dict:
 
 def parse_order_line_items(node: dict) -> list[dict]:
     line_items = []
+    product_line_num = 0
     for li_edge in (node.get("lineItems") or {}).get("edges") or []:
         li = li_edge.get("node") or {}
-        line_items.append(format_line_item(li))
+        item = format_line_item(li)
+        if not item.get("is_fee"):
+            product_line_num += 1
+            item["line_number"] = product_line_num
+        line_items.append(item)
     return line_items
 
 
@@ -729,6 +734,151 @@ def enrich_order(node: dict, base: dict) -> dict:
     if "total" in base:
         base["total_display"] = format_gbp(base["total"])
     return base
+
+
+ORDER_BY_ID_QUERY = (
+    """
+query OrderById($id: ID!) {
+  order(id: $id) {
+    legacyResourceId
+    name
+    processedAt
+    totalPriceSet {
+      shopMoney { amount currencyCode }
+    }
+    customer {
+      legacyResourceId
+    }
+"""
+    + ORDER_EXTRA_FIELDS
+    + ORDER_ADDRESS_PAYMENT_FIELDS
+    + """
+    lineItems(first: 50) {
+      edges {
+        node {
+"""
+    + LINE_ITEM_FIELDS
+    + """
+        }
+      }
+    }
+  }
+}
+"""
+)
+
+
+def fetch_order_by_id(order_id: str | int) -> dict | None:
+    """Fetch a single order from Shopify and enrich it."""
+    gid = f"gid://shopify/Order/{order_id}"
+    data = _graphql(ORDER_BY_ID_QUERY, {"id": gid})
+    node = data.get("order")
+    if not node:
+        return None
+    money = (node.get("totalPriceSet") or {}).get("shopMoney") or {}
+    customer = node.get("customer") or {}
+    base = {
+        "id": node.get("legacyResourceId"),
+        "name": node.get("name") or "",
+        "processed_at": node.get("processedAt") or "",
+        "total": money.get("amount") or "0.00",
+        "currency": money.get("currencyCode") or "GBP",
+        "customer_id": customer.get("legacyResourceId"),
+    }
+    return enrich_order(node, base)
+
+
+_order_access_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _build_access_entry(order: dict) -> dict:
+    from scripts.office_api import item_key  # type: ignore
+
+    line_items = []
+    for item in order.get("order_items") or []:
+        ln = item.get("line_number")
+        title = item.get("title") or ""
+        if ln is None:
+            continue
+        oid = item_key(ln, title)
+        item["office_item_id"] = oid
+        line_items.append({
+            "line_number": ln,
+            "title": title,
+            "office_item_id": oid,
+        })
+    cid = order.get("customer_id")
+    return {
+        "order_id": str(order.get("id")),
+        "name": order.get("name") or "",
+        "customer_id": str(cid) if cid else None,
+        "line_items": line_items,
+        "order": order,
+    }
+
+
+def resolve_order_access(
+    order_id: str | int,
+    *,
+    refresh: bool = False,
+    client_customer_id: str | None = None,
+) -> dict | None:
+    """Return cached order name, customer, and line items for auth; None if denied."""
+    from config import ORDER_ACCESS_CACHE_TTL_SEC  # type: ignore
+
+    oid = str(order_id).strip()
+    now = time.time()
+    if not refresh:
+        cached = _order_access_cache.get(oid)
+        if cached and cached[0] > now:
+            entry = cached[1]
+            if client_customer_id is not None:
+                owner = entry.get("customer_id")
+                if not owner or str(owner) != str(client_customer_id):
+                    return None
+            return entry
+
+    order = fetch_order_by_id(order_id)
+    if not order:
+        return None
+    entry = _build_access_entry(order)
+    if client_customer_id is not None:
+        owner = entry.get("customer_id")
+        if not owner or str(owner) != str(client_customer_id):
+            return None
+    _order_access_cache[oid] = (now + ORDER_ACCESS_CACHE_TTL_SEC, entry)
+    return entry
+
+
+def validate_office_item(entry: dict, item: str) -> bool:
+    return any(li.get("office_item_id") == item for li in (entry.get("line_items") or []))
+
+
+def attach_office_tracking(order: dict, *, seed: bool = True) -> dict:
+    """Attach Office API status views to each product line item."""
+    import logging
+
+    from scripts.office_api import ensure_item, item_key, OfficeApiError  # type: ignore
+
+    log = logging.getLogger(__name__)
+    order_name = order.get("name") or ""
+    for item in order.get("order_items") or []:
+        ln = item.get("line_number")
+        if ln is None:
+            continue
+        if not item.get("office_item_id"):
+            item["office_item_id"] = item_key(ln, item.get("title") or "")
+        if seed:
+            try:
+                item["office"] = ensure_item(
+                    order_name,
+                    item["office_item_id"],
+                    item.get("title") or "",
+                )
+            except OfficeApiError as exc:
+                log.warning("Office ensure_item failed for %s: %s", item["office_item_id"], exc)
+                item["office"] = None
+    return order
 
 
 def get_order_customer_id(order_id: str | int) -> str | None:

@@ -7,6 +7,7 @@
     <script>if(window.parent!==window)document.documentElement.classList.add('co-embed');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/office_tracking.css" rel="stylesheet">
     <style>
         :root {
             --bite-cyan: #3AC9E3;
@@ -473,7 +474,7 @@
                     </thead>
                     <tbody>
                         {% for order in orders %}
-                        <tr class="data-row" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ loop.index }}')">
+                        <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ loop.index }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td>{{ order.total_display }}</td>
@@ -505,6 +506,7 @@
                                                     </div>
                                                     <span class="line-price">{{ item.price_display }}</span>
                                                 </div>
+                                                <div class="office-tracking-host" data-line-number="{{ item.line_number }}"></div>
                                             </div>
                                             {% endfor %}
                                         {% else %}
@@ -681,6 +683,10 @@
             const isOpen = detailRow.classList.toggle('open');
             row.classList.toggle('expanded', isOpen);
             notifyEmbedHeight();
+            if (isOpen && row.dataset.orderId && window.OfficeTracking) {
+                const inner = detailRow.querySelector('.details-inner') || detailRow;
+                OfficeTracking.loadOrderTracking(row.dataset.orderId, '/api/client/orders', inner, 'client');
+            }
         }
 
         function switchClientTab(tab) {
@@ -780,5 +786,6 @@
             });
         }
     </script>
+    <script src="/static/office_tracking.js"></script>
 </body>
 </html>

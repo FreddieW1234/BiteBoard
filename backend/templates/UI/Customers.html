@@ -6,6 +6,7 @@
     <title>Customers - Shopify Tools</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/office_tracking.css" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -71,6 +72,7 @@
         .cust-table td.col-expand { background: #fff; }
         .cust-table tbody tr.row-conflict td.col-name,
         .cust-table tbody tr.row-conflict td.col-expand { background: #fff5f5; }
+        .cust-table tbody tr.cu-row { cursor: pointer; }
         .cust-table tbody tr.cu-row:hover td.col-name,
         .cust-table tbody tr.cu-row:hover td.col-expand { background: #f9fafb; }
         .cust-table tbody tr.cu-row.expanded td,
@@ -943,7 +945,11 @@
                 });
                 html += '</ul>';
             }
-            html += `</div><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div></div>`;
+            html += `</div><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div>`;
+            if (li.line_number != null) {
+                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"></div>`;
+            }
+            html += '</div>';
             return html;
         }
 
@@ -1182,13 +1188,15 @@
             return html + '</div>';
         }
 
+        let customerModalOrders = [];
+
         function renderCustomerOrdersTable(orders) {
             if (!orders.length) {
                 return '<div class="state-msg">This customer has no orders yet.</div>';
             }
             let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
-                html += `<tr class="data-row" data-order-idx="${i}">
+                html += `<tr class="data-row" data-order-idx="${i}" data-order-id="${escapeHtml(o.id)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                     <td>${escapeHtml(formatOrderDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
@@ -1221,7 +1229,8 @@
                 if (!resp.ok || !data.success) {
                     throw new Error((data && data.error) ? data.error : 'Failed to load orders');
                 }
-                body.innerHTML = renderCustomerOrdersTable(data.orders || []);
+                customerModalOrders = data.orders || [];
+                body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');
@@ -1229,6 +1238,10 @@
                         if (dr) {
                             const isOpen = dr.classList.toggle('open');
                             row.classList.toggle('expanded', isOpen);
+                            if (isOpen && row.dataset.orderId && window.OfficeTracking) {
+                                const inner = dr.querySelector('.details-inner') || dr;
+                                OfficeTracking.loadOrderTracking(row.dataset.orderId, '/api/orders', inner, 'staff');
+                            }
                         }
                     });
                 });
@@ -1371,21 +1384,26 @@
                 updateCustomerTypeTag(sel.dataset.customerId, sel.value);
             });
             document.getElementById('cu-content').addEventListener('click', function(e) {
+                if (e.target.closest('.cu-type-tag-select')) {
+                    e.stopPropagation();
+                    return;
+                }
                 const ordersBtn = e.target.closest('.cu-view-orders-btn');
                 if (ordersBtn) {
                     e.stopPropagation();
                     openCustomerOrdersModal(ordersBtn.dataset.customerId, ordersBtn.dataset.customerName);
                     return;
                 }
-                const expandBtn = e.target.closest('.cu-expand-btn');
-                if (expandBtn) {
-                    toggleExpand(expandBtn.dataset.customerId);
-                    return;
-                }
                 const cancelBtn = e.target.closest('.cu-edit-cancel');
                 if (cancelBtn) {
                     CU_EXPANDED_ID = null;
                     render();
+                    return;
+                }
+                const row = e.target.closest('tr.cu-row');
+                if (row) {
+                    if (e.target.closest('a')) return;
+                    toggleExpand(row.dataset.customerId);
                 }
             });
             document.getElementById('cu-orders-modal').addEventListener('click', function(e) {
@@ -1411,5 +1429,6 @@
             });
         });
     </script>
+    <script src="/static/office_tracking.js"></script>
 </body>
 </html>
