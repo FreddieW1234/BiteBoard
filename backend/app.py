@@ -1938,6 +1938,11 @@ def api_client_order_info_update(order_id):
 
 
 def _office_client_id():
+    """Prefer client session on /api/client/* routes even if staff is also logged in."""
+    if (request.path or "").startswith("/api/client/"):
+        cid = get_client_customer_id()
+        if cid:
+            return cid
     return get_client_customer_id() if not is_staff_authenticated() else None
 
 
@@ -2057,9 +2062,11 @@ def api_client_order_office_file(order_id, item, filename):
 
 
 def _office_upload_artwork(order_id, item):
-    if is_staff_authenticated():
-        return jsonify({"success": False, "error": "Artwork upload is for customers only"}), 403
-    if not can_access_order(order_id):
+    cid = get_client_customer_id()
+    if not cid:
+        return jsonify({"success": False, "error": "Customer login required"}), 403
+    from scripts.order_helpers import resolve_order_access  # type: ignore
+    if not resolve_order_access(order_id, client_customer_id=cid):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
     entry, order_name = _office_item_context(order_id, item)
     if not entry:
@@ -2106,8 +2113,15 @@ def api_order_proof(order_id, item):
     return _office_upload_proof(order_id, item, "/api/orders")
 
 
-def _office_set_status(order_id, item, api_prefix):
-    if not can_access_order(order_id):
+def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
+    if client_mode:
+        cid = get_client_customer_id()
+        if not cid:
+            return jsonify({"success": False, "error": "Customer login required"}), 403
+        from scripts.order_helpers import resolve_order_access  # type: ignore
+        if not resolve_order_access(order_id, client_customer_id=cid):
+            return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    elif not can_access_order(order_id):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
     entry, order_name = _office_item_context(order_id, item)
     if not entry:
@@ -2118,7 +2132,7 @@ def _office_set_status(order_id, item, api_prefix):
     by = (data.get("by") or "").strip()
     if not stage:
         return jsonify({"success": False, "error": "stage is required"}), 400
-    if not is_staff_authenticated():
+    if client_mode or not is_staff_authenticated():
         by = "customer"
         if stage == "approved":
             pass
@@ -2126,6 +2140,8 @@ def _office_set_status(order_id, item, api_prefix):
             pass  # request changes — same stage, note in history
         else:
             return jsonify({"success": False, "error": "Invalid status update"}), 400
+    elif not by:
+        by = "staff"
     try:
         from scripts.office_api import set_status, OfficeApiError  # type: ignore
         office = set_status(order_name, item, stage, note=note, by=by)
@@ -2137,7 +2153,7 @@ def _office_set_status(order_id, item, api_prefix):
 
 @app.route("/api/client/orders/<order_id>/items/<path:item>/status", methods=["POST"])
 def api_client_order_status(order_id, item):
-    return _office_set_status(order_id, item, "/api/client/orders")
+    return _office_set_status(order_id, item, "/api/client/orders", client_mode=True)
 
 
 @app.route("/api/orders/<order_id>/items/<path:item>/status", methods=["POST"])

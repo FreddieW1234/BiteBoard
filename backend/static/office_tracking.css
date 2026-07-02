@@ -150,6 +150,40 @@
 .office-file-list li { padding: 2px 0; }
 .office-file-list a { color: #4f46e5; text-decoration: none; }
 .office-file-list a:hover { text-decoration: underline; }
+.office-staff-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px dashed #e5e7eb;
+}
+.office-staff-status-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6b7280;
+}
+.office-stage-select,
+.office-stage-note {
+    font-size: 0.8rem;
+    font-family: inherit;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #374151;
+}
+.office-stage-select { min-width: 140px; }
+.office-stage-note { flex: 1; min-width: 120px; }
+.office-btn-set-stage {
+    background: #4f46e5;
+    color: #fff;
+    border-color: #4f46e5;
+}
+.office-btn-set-stage:hover { background: #4338ca; }
+.office-btn-set-stage:disabled { opacity: 0.65; cursor: wait; }
 @media (max-width: 640px) {
     .office-status-bar { gap: 8px 4px; }
     .office-status-step { flex: 1 1 45%; }

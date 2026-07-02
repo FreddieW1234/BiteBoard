@@ -47,6 +47,50 @@
         return `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
     }
 
+    const ALL_STAGE_OPTIONS = [
+        { key: 'received', label: 'Order Received' },
+        { key: 'artwork', label: 'Artwork Received' },
+        { key: 'proof_1', label: 'Proof 1' },
+        { key: 'proof_2', label: 'Proof 2' },
+        { key: 'proof_3', label: 'Proof 3' },
+        { key: 'proof_4', label: 'Proof 4' },
+        { key: 'proof_5', label: 'Proof 5' },
+        { key: 'proof_6', label: 'Proof 6' },
+        { key: 'proof_7', label: 'Proof 7' },
+        { key: 'proof_8', label: 'Proof 8' },
+        { key: 'approved', label: 'Proof Approved' },
+        { key: 'printing', label: 'In Production' },
+        { key: 'shipped', label: 'Shipped' },
+    ];
+
+    function stageOptionsForSelect(office) {
+        const fromApi = (office.stages || []).map(s => ({ key: s.key, label: s.label || s.key }));
+        const seen = new Set(fromApi.map(s => s.key));
+        ALL_STAGE_OPTIONS.forEach(s => {
+            if (!seen.has(s.key)) fromApi.push(s);
+        });
+        return fromApi;
+    }
+
+    function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
+        const current = office.current_stage || '';
+        const options = stageOptionsForSelect(office);
+        let html = '<div class="office-staff-status">';
+        html += '<label class="office-staff-status-label">Move to stage</label>';
+        html += `<select class="office-stage-select" data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}">`;
+        options.forEach(opt => {
+            const sel = opt.key === current ? ' selected' : '';
+            html += `<option value="${escapeHtml(opt.key)}"${sel}>${escapeHtml(opt.label)}</option>`;
+        });
+        html += '</select>';
+        html += `<input type="text" class="office-stage-note" placeholder="Note (optional)" data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}">`;
+        html += `<button type="button" class="office-btn office-btn-set-stage office-set-stage-btn"
+            data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+            data-api-prefix="${escapeHtml(apiPrefix)}">Update status</button>`;
+        html += '</div>';
+        return html;
+    }
+
     function canUploadArtwork(office) {
         const stage = office && office.current_stage;
         return stage === 'received' || stage === 'artwork';
@@ -77,6 +121,7 @@
             html += `<label class="office-upload-btn"><i class="fas fa-file-image"></i> Upload proof
                 <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
                     data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
+            html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
         }
         if (role === 'client' && isProofStage(stage)) {
             const proof = latestProofFile(office.files);
@@ -228,6 +273,38 @@
         }
     }
 
+    async function handleSetStage(btn) {
+        const orderId = btn.dataset.orderId;
+        const itemId = btn.dataset.itemId;
+        const apiPrefix = btn.dataset.apiPrefix;
+        const host = btn.closest('.office-tracking');
+        const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
+        const select = host && host.querySelector('.office-stage-select');
+        const noteInput = host && host.querySelector('.office-stage-note');
+        const stage = select && select.value;
+        const note = (noteInput && noteInput.value) ? noteInput.value.trim() : '';
+        if (!stage) return;
+        btn.disabled = true;
+        showTrackingMsg(host, 'Updating status…', true);
+        try {
+            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ stage: stage, note: note || 'Status updated by staff', by: 'staff' }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not update status');
+            const lineNumber = trackingLineNumber(btn);
+            await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'staff', lineNumber);
+            showTrackingMsg(findTrackingHost(detailsEl, lineNumber)?.querySelector('.office-tracking'), 'Status updated.', true);
+        } catch (err) {
+            showTrackingMsg(host, err.message || 'Could not update status', false);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     async function handleRequestChanges(btn) {
         const orderId = btn.dataset.orderId;
         const itemId = btn.dataset.itemId;
@@ -272,7 +349,9 @@
             const approve = e.target.closest('.office-approve-btn');
             if (approve) { e.preventDefault(); handleApprove(approve); return; }
             const changes = e.target.closest('.office-changes-btn');
-            if (changes) { e.preventDefault(); handleRequestChanges(changes); }
+            if (changes) { e.preventDefault(); handleRequestChanges(changes); return; }
+            const setStage = e.target.closest('.office-set-stage-btn');
+            if (setStage) { e.preventDefault(); handleSetStage(setStage); }
         });
     }
 
