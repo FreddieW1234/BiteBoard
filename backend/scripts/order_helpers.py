@@ -210,17 +210,131 @@ def split_line_items(line_items: list[dict]) -> tuple[list[dict], list[dict]]:
     return items, fees
 
 
-def _is_order_info_section_heading(key: str) -> bool:
-    """ALL CAPS keys (no trailing colon) are visual section headings in order info."""
-    k = (key or "").strip()
-    if not k or k.endswith(":"):
+def _is_order_info_section_heading(key: str, inline_value: str = "") -> bool:
+    """ALL CAPS label with colon and no value on the same line (e.g. DELIVERY CONTACT:)."""
+    k = (key or "").strip().rstrip(":")
+    if not k or (inline_value or "").strip():
         return False
     letters = [c for c in k if c.isalpha()]
     return bool(letters) and k.upper() == k
 
 
-def _order_info_field_full_width(key: str) -> bool:
+def _order_info_field_full_width(key: str, value: str = "") -> bool:
+    if "\n" in (value or ""):
+        return True
     return bool(re.search(r"address|notes|comments|instructions|details", key or "", re.I))
+
+
+_NOTE_LINE = re.compile(r"^(.+?):\s*(.*)$")
+
+
+def parse_order_note(note: str) -> list[dict]:
+    """Parse Shopify order note text into titled sections and labelled fields."""
+    text = (note or "").replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+    sections: list[dict] = []
+    current: dict | None = None
+    i = 0
+    n = len(lines)
+
+    def ensure_section() -> dict:
+        nonlocal current
+        if current is None:
+            current = {"heading": None, "fields": []}
+            sections.append(current)
+        return current
+
+    def next_meaningful(start: int) -> tuple[int | None, str | None]:
+        j = start
+        while j < n:
+            s = lines[j].strip()
+            if s:
+                return j, s
+            j += 1
+        return None, None
+
+    while i < n:
+        stripped = lines[i].strip()
+        if not stripped:
+            i += 1
+            continue
+
+        m = _NOTE_LINE.match(stripped)
+        if not m:
+            i += 1
+            continue
+
+        key_raw = m.group(1).strip()
+        inline_val = m.group(2)
+        key = key_raw if key_raw.endswith(":") else f"{key_raw}:"
+
+        if _is_order_info_section_heading(key_raw, inline_val):
+            current = {"heading": key, "fields": []}
+            sections.append(current)
+            i += 1
+            continue
+
+        if inline_val.strip() and key_raw.upper() == key_raw and re.search(r"[A-Z]", key_raw):
+            if current and current.get("fields"):
+                current = None
+
+        if inline_val.strip():
+            value = inline_val
+            i += 1
+        else:
+            i += 1
+            val_lines: list[str] = []
+            while i < n:
+                s = lines[i].strip()
+                if not s:
+                    _, ns = next_meaningful(i + 1)
+                    if ns and _NOTE_LINE.match(ns):
+                        break
+                    if ns is None:
+                        break
+                    val_lines.append("")
+                    i += 1
+                    continue
+                if _NOTE_LINE.match(s):
+                    break
+                val_lines.append(lines[i].rstrip("\n"))
+                i += 1
+            value = "\n".join(val_lines)
+
+        sec = ensure_section()
+        sec["fields"].append({
+            "key": key,
+            "value": value,
+            "full_width": _order_info_field_full_width(key, value),
+        })
+
+    return sections
+
+
+def serialize_order_note(sections: list[dict]) -> str:
+    """Rebuild Shopify order note text from structured sections."""
+    out_lines: list[str] = []
+    for si, sec in enumerate(sections or []):
+        if si > 0 and out_lines and out_lines[-1] != "":
+            out_lines.append("")
+        heading = (sec.get("heading") or "").strip()
+        if heading:
+            if not heading.endswith(":"):
+                heading += ":"
+            out_lines.append(heading)
+        for field in sec.get("fields") or []:
+            key = (field.get("key") or "").strip()
+            if key and not key.endswith(":"):
+                key += ":"
+            value = str(field.get("value") or "").replace("\r\n", "\n").replace("\r", "\n")
+            if "\n" in value:
+                out_lines.append(key)
+                out_lines.extend(value.split("\n"))
+            elif value:
+                out_lines.append(f"{key} {value}")
+            else:
+                out_lines.append(key)
+    return "\n".join(out_lines).strip()
 
 
 def group_order_info_attributes(attributes: list[dict]) -> list[dict]:
@@ -231,14 +345,18 @@ def group_order_info_attributes(attributes: list[dict]) -> list[dict]:
     for attr in attributes or []:
         key = (attr.get("key") or "").strip()
         value = attr.get("value") or ""
-        if _is_order_info_section_heading(key):
-            current = {"heading": key, "heading_value": value, "fields": []}
+        if _is_order_info_section_heading(key, value):
+            current = {"heading": key if key.endswith(":") else f"{key}:", "heading_value": value, "fields": []}
             sections.append(current)
             continue
         if current is None:
             current = {"heading": None, "heading_value": "", "fields": []}
             sections.append(current)
-        current["fields"].append({"key": key, "value": value, "full_width": _order_info_field_full_width(key)})
+        current["fields"].append({
+            "key": key if key.endswith(":") else f"{key}:",
+            "value": value,
+            "full_width": _order_info_field_full_width(key, value),
+        })
 
     return sections
 
@@ -246,10 +364,13 @@ def group_order_info_attributes(attributes: list[dict]) -> list[dict]:
 def format_order_info(node: dict) -> dict:
     note = (node.get("note") or "").strip()
     attributes = _parse_attributes(node.get("customAttributes"))
+    note_sections = parse_order_note(note)
     return {
         "note": note,
         "attributes": attributes,
+        "note_sections": note_sections,
         "sections": group_order_info_attributes(attributes),
+        "structured": bool(note_sections) or bool(attributes),
     }
 
 
@@ -285,8 +406,15 @@ def get_order_customer_id(order_id: str | int) -> str | None:
     return str(cid) if cid else None
 
 
-def update_order_info(order_id: str | int, note: str, attributes: list[dict]) -> dict:
+def update_order_info(
+    order_id: str | int,
+    note: str,
+    attributes: list[dict],
+    note_sections: list[dict] | None = None,
+) -> dict:
     """Update order note and customAttributes (full attribute list required by Shopify)."""
+    if note_sections is not None:
+        note = serialize_order_note(note_sections)
     gid = f"gid://shopify/Order/{order_id}"
     custom_attributes = [
         {"key": str(a.get("key") or "").strip(), "value": str(a.get("value") or "").strip()}

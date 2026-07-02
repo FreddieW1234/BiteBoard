@@ -1914,7 +1914,8 @@ def api_order_info_update(order_id):
         data = request.get_json(silent=True) or {}
         note = data.get("note", "")
         attributes = data.get("attributes") or []
-        return jsonify(update_order_info(order_id, note, attributes))
+        note_sections = data.get("note_sections")
+        return jsonify(update_order_info(order_id, note, attributes, note_sections=note_sections))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -1935,7 +1936,8 @@ def api_client_order_info_update(order_id):
         data = request.get_json(silent=True) or {}
         note = data.get("note", "")
         attributes = data.get("attributes") or []
-        return jsonify(update_order_info(order_id, note, attributes))
+        note_sections = data.get("note_sections")
+        return jsonify(update_order_info(order_id, note, attributes, note_sections=note_sections))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
