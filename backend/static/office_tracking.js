@@ -331,7 +331,7 @@
         if (detailsEl._officeTracking) {
             const idx = (detailsEl._officeTracking.items || []).findIndex(i => i.line_number === item.line_number);
             if (idx >= 0) detailsEl._officeTracking.items[idx] = item;
-            updateOrderRowIndicator(orderId, computeOrderIndicator(detailsEl._officeTracking.items));
+            syncOrderListBadge(orderId, detailsEl._officeTracking.items, role);
         }
     }
 
@@ -530,7 +530,7 @@
         if (!detailsEl || !orderId) return;
         if (detailsEl.dataset.trackingLoaded === '1' && detailsEl._officeTracking) {
             paintTrackingHosts(detailsEl, detailsEl._officeTracking, orderId, apiPrefix, role);
-            updateOrderRowIndicator(orderId, computeOrderIndicator(detailsEl._officeTracking.items));
+            syncOrderListBadge(orderId, detailsEl._officeTracking.items, role);
             return;
         }
         const hosts = detailsEl.querySelectorAll('.office-tracking-host');
@@ -544,12 +544,18 @@
             detailsEl._officeTracking = data;
             detailsEl.dataset.trackingLoaded = '1';
             paintTrackingHosts(detailsEl, data, orderId, apiPrefix, role);
-            updateOrderRowIndicator(orderId, computeOrderIndicator(data.items));
+            syncOrderListBadge(orderId, data.items, role);
         } catch (err) {
             hosts.forEach(h => {
                 h.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(err.message || 'Tracking unavailable') + '</p></div>';
             });
             detailsEl.dataset.trackingLoaded = '1';
+        }
+    }
+
+    function syncOrderListBadge(orderId, items, role) {
+        if (role !== 'client') {
+            updateOrderRowIndicator(orderId, computeOrderIndicator(items));
         }
     }
 
@@ -634,5 +640,6 @@
         computeOrderIndicator,
         loadOrderIndicatorsIn,
         updateOrderRowIndicator,
+        syncOrderListBadge,
     };
 })(typeof window !== 'undefined' ? window : this);
