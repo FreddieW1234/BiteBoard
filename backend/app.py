@@ -102,6 +102,7 @@ def client_orders_page():
     active_tab = request.args.get("tab", "orders")
     if active_tab not in ("profile", "orders"):
         active_tab = "orders"
+    in_iframe = request.headers.get("Sec-Fetch-Dest") == "iframe"
     if customer_id and email:
         from scripts.Client_Orders import verify_customer  # type: ignore
         if verify_customer(customer_id, email):
@@ -114,6 +115,7 @@ def client_orders_page():
                 orders=[],
                 logout_url=_client_logout_url(),
                 active_tab=active_tab,
+                in_iframe=in_iframe,
             )
     cid = get_client_customer_id()
     if not cid:
@@ -124,6 +126,7 @@ def client_orders_page():
             orders=[],
             logout_url=_client_logout_url(),
             active_tab=active_tab,
+            in_iframe=in_iframe,
         )
     try:
         from scripts.Client_Orders import get_customer_orders, get_customer_profile  # type: ignore
@@ -144,6 +147,7 @@ def client_orders_page():
             orders=[],
             logout_url=_client_logout_url(),
             active_tab=active_tab,
+            in_iframe=in_iframe,
         )
     return render_template(
         "UI/Client_Orders.html",
@@ -152,6 +156,7 @@ def client_orders_page():
         error=None,
         logout_url=_client_logout_url(),
         active_tab=active_tab,
+        in_iframe=in_iframe,
     )
 
 

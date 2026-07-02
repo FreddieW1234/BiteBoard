@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{% if in_iframe %} class="co-iframe-embed"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account</title>
+    <script>if(window.parent!==window)document.documentElement.classList.add('co-iframe-embed');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -19,14 +20,28 @@
             --bite-radius: 10px;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: auto;
+            min-height: 0;
+        }
+        html.co-iframe-embed,
+        html.co-iframe-embed body {
+            min-height: 0 !important;
+            height: auto !important;
+            display: block !important;
+        }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #fff;
-            min-height: 100vh;
             color: var(--bite-text);
-            padding: 8px 0 28px;
+            padding: 0 0 20px;
             -webkit-font-smoothing: antialiased;
         }
+        html.co-iframe-embed body { padding-top: 0 !important; }
+        html.co-iframe-embed .co-tabs { margin-top: 0; margin-bottom: 16px; }
+        html.co-iframe-embed .wrap { padding-top: 0; }
         .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
 
         /* Tabs — scoped names to avoid Shopify theme clashes */
@@ -345,7 +360,7 @@
         }
     </style>
 </head>
-<body>
+<body{% if in_iframe %} class="co-iframe-embed"{% endif %}>
     <div class="wrap">
         {% if error %}
         <div class="state-msg error">
@@ -561,6 +576,30 @@
             if (!detailRow) return;
             const isOpen = detailRow.classList.toggle('open');
             row.classList.toggle('expanded', isOpen);
+            reportPortalHeight();
+        }
+
+        function reportPortalHeight() {
+            if (window.parent === window) return;
+            const height = Math.max(
+                document.body.scrollHeight,
+                document.documentElement.scrollHeight,
+                document.body.offsetHeight
+            );
+            window.parent.postMessage({ source: 'bite-portal', type: 'resize', height: height }, '*');
+        }
+
+        if (window.parent !== window) {
+            reportPortalHeight();
+            window.addEventListener('load', reportPortalHeight);
+            window.addEventListener('resize', reportPortalHeight);
+            if (typeof MutationObserver !== 'undefined') {
+                new MutationObserver(reportPortalHeight).observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                });
+            }
         }
 
         const profileForm = document.getElementById('co-profile-form');
