@@ -85,179 +85,6 @@
         </li>`;
     }
 
-    function fileIconClass(name) {
-        const ext = (name || '').split('.').pop().toLowerCase();
-        if (['pdf'].includes(ext)) return 'fa-file-pdf';
-        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'fa-file-image';
-        if (['zip', 'rar', '7z'].includes(ext)) return 'fa-file-archive';
-        if (['ai', 'eps', 'psd'].includes(ext)) return 'fa-file-image';
-        return 'fa-file';
-    }
-
-    function renderFileExplorerRow(f, orderId, itemId, apiPrefix) {
-        const viewUrl = f.download_url
-            ? (f.download_url + (f.download_url.includes('?') ? '&' : '?') + 'inline=1')
-            : proxyFileUrl(orderId, itemId, f.name, apiPrefix, true);
-        const downloadUrl = f.download_url || proxyFileUrl(orderId, itemId, f.name, apiPrefix, false);
-        const versionLabel = f.version ? ` v${f.version}` : '';
-        const icon = fileIconClass(f.name);
-        return `<div class="office-fe-row">
-            <span class="office-fe-file"><i class="fas ${icon}"></i>
-                <span class="office-fe-name">${escapeHtml(f.name)}${versionLabel ? `<span class="office-file-ver">${escapeHtml(versionLabel.trim())}</span>` : ''}</span>
-            </span>
-            <span class="office-file-actions">
-                <a class="office-file-link" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener"><i class="fas fa-eye"></i> View</a>
-                <a class="office-file-link office-file-download" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(f.name)}"><i class="fas fa-download"></i> Download</a>
-            </span>
-        </div>`;
-    }
-
-    function renderFileExplorer(files, orderId, itemId, apiPrefix) {
-        const groups = [
-            { key: 'artwork', label: 'Artwork', icon: 'fa-palette' },
-            { key: 'proof', label: 'Proofs', icon: 'fa-file-image' },
-            { key: 'other', label: 'Other', icon: 'fa-folder' },
-        ];
-        let html = '<div class="office-file-explorer">';
-        groups.forEach(g => {
-            const items = (files || []).filter(f => {
-                const k = fileKind(f);
-                return g.key === 'other' ? (k !== 'artwork' && k !== 'proof') : k === g.key;
-            });
-            html += `<div class="office-fe-folder">`;
-            html += `<div class="office-fe-folder-head"><i class="fas ${g.icon}"></i> ${escapeHtml(g.label)} <span class="office-fe-count">${items.length}</span></div>`;
-            if (items.length) {
-                html += '<div class="office-fe-list">';
-                sortFilesByVersion(items).forEach(f => {
-                    html += renderFileExplorerRow(f, orderId, itemId, apiPrefix);
-                });
-                html += '</div>';
-            } else {
-                html += '<div class="office-fe-empty">No files</div>';
-            }
-            html += '</div>';
-        });
-        html += '</div>';
-        return html;
-    }
-
-    function renderArtworkEditorPanel(office, orderId, itemId, apiPrefix, role) {
-        const files = (office.files || []).filter(f => fileKind(f) === 'artwork');
-        let html = '<div class="office-artwork-editor">';
-        if (role === 'client' && canUploadArtwork(office)) {
-            html += `<div class="office-tracking-actions office-artwork-editor-actions">`;
-            html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
-                <input type="file" class="office-artwork-input" data-order-id="${escapeHtml(orderId)}"
-                    data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
-            html += '</div>';
-        }
-        if (files.length) {
-            html += '<ul class="office-file-list">';
-            sortFilesByVersion(files).forEach(f => {
-                html += renderFileRow(f, orderId, itemId, apiPrefix);
-            });
-            html += '</ul>';
-        } else {
-            html += '<p class="office-fe-panel-empty">No artwork files yet.</p>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    function renderTrackingTabs(office, orderId, itemId, apiPrefix, role) {
-        const fileCount = (office.files || []).length;
-        let html = '<div class="office-tracking-tabs" role="tablist">';
-        html += `<button type="button" class="office-tracking-tab active" role="tab" data-tab="tracking" aria-selected="true">Tracking</button>`;
-        html += `<button type="button" class="office-tracking-tab" role="tab" data-tab="artwork" aria-selected="false">Artwork Editor</button>`;
-        html += `<button type="button" class="office-tracking-tab" role="tab" data-tab="files" aria-selected="false">Files${fileCount ? ` (${fileCount})` : ''}</button>`;
-        html += '</div>';
-
-        html += '<div class="office-tracking-tab-panels">';
-        html += renderTrackingPanel(office, orderId, itemId, apiPrefix, role);
-        html += `<div class="office-tracking-tab-panel" data-panel="artwork" role="tabpanel" hidden>`;
-        html += renderArtworkEditorPanel(office, orderId, itemId, apiPrefix, role);
-        html += '</div>';
-        html += `<div class="office-tracking-tab-panel" data-panel="files" role="tabpanel" hidden>`;
-        html += `<div class="office-file-explorer-toolbar"><button type="button" class="office-fe-refresh-btn" title="Refresh file list"><i class="fas fa-sync-alt"></i> Refresh</button></div>`;
-        html += `<div class="office-file-explorer-root">${renderFileExplorer(office.files, orderId, itemId, apiPrefix)}</div>`;
-        html += '</div>';
-        html += '</div>';
-        return html;
-    }
-
-    function renderTrackingPanel(office, orderId, itemId, apiPrefix, role) {
-        const stage = office.current_stage || '';
-        let html = `<div class="office-tracking-tab-panel active" data-panel="tracking" role="tabpanel">`;
-        if (role === 'staff') {
-            html += '<div class="office-tracking-body office-tracking-panel-body">';
-            html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
-            html += '</div>';
-            html += '<div class="office-tracking-actions office-staff-actions">';
-            html += renderStaffProofUpload(orderId, itemId, apiPrefix);
-            html += '<span class="office-tracking-msg" hidden></span></div>';
-        } else {
-            html += '<div class="office-tracking-actions">';
-            if (isProofStage(stage)) {
-                const proof = latestProofFile(office.files);
-                if (proof) {
-                    html += `<button type="button" class="office-btn office-btn-approve office-approve-btn"
-                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
-                        data-api-prefix="${escapeHtml(apiPrefix)}">Approve proof</button>`;
-                    html += `<button type="button" class="office-btn office-btn-changes office-changes-btn"
-                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
-                        data-order-name="${escapeHtml(office.order || '')}"
-                        data-stage="${escapeHtml(stage)}" data-api-prefix="${escapeHtml(apiPrefix)}">Request changes</button>`;
-                }
-            }
-            html += '<span class="office-tracking-msg" hidden></span></div>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    async function refreshFileExplorerPanel(trackingEl) {
-        const root = trackingEl.querySelector('.office-file-explorer-root');
-        if (!root) return;
-        const orderId = trackingEl.dataset.orderId;
-        const itemId = trackingEl.dataset.itemId;
-        const apiPrefix = trackingEl.dataset.apiPrefix;
-        if (!orderId || !itemId || !apiPrefix) return;
-        root.innerHTML = '<div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>';
-        try {
-            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files`, { credentials: 'same-origin' });
-            const data = await parseJsonResponse(res);
-            if (!res.ok || !data.success) throw new Error(data.error || 'Could not load files');
-            root.innerHTML = renderFileExplorer(data.files, orderId, itemId, apiPrefix);
-            const filesTab = trackingEl.querySelector('.office-tracking-tab[data-tab="files"]');
-            const count = (data.files || []).length;
-            if (filesTab) filesTab.textContent = count ? `Files (${count})` : 'Files';
-        } catch (err) {
-            root.innerHTML = `<p class="office-tracking-error">${escapeHtml(err.message || 'Could not load files')}</p>`;
-        }
-    }
-
-    function activateTrackingTab(trackingEl, tabName) {
-        if (!trackingEl) return;
-        trackingEl.querySelectorAll('.office-tracking-tab').forEach(btn => {
-            const active = btn.dataset.tab === tabName;
-            btn.classList.toggle('active', active);
-            btn.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-        trackingEl.querySelectorAll('.office-tracking-tab-panel').forEach(panel => {
-            const show = panel.dataset.panel === tabName;
-            panel.classList.toggle('active', show);
-            panel.hidden = !show;
-        });
-    }
-
-    function handleTrackingTabClick(btn) {
-        const tab = btn.dataset.tab;
-        const tracking = btn.closest('.office-tracking');
-        if (!tracking || !tab) return;
-        activateTrackingTab(tracking, tab);
-        if (tab === 'files') refreshFileExplorerPanel(tracking);
-    }
-
     function renderFileSection(title, files, orderId, itemId, apiPrefix) {
         if (!files || !files.length) return '';
         let html = `<div class="office-file-section"><h5 class="office-file-section-title">${escapeHtml(title)}</h5><ul class="office-file-list">`;
@@ -557,11 +384,40 @@
             return '<div class="office-tracking"><p class="office-tracking-error">Tracking unavailable</p></div>';
         }
         const itemId = item.office_item_id;
-        let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '"'
-            + ' data-order-id="' + escapeHtml(orderId) + '"'
-            + ' data-api-prefix="' + escapeHtml(apiPrefix) + '">';
+        const stage = office.current_stage || '';
+        let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '">';
         html += renderStatusBar(normalizeStagesForDisplay(office));
-        html += renderTrackingTabs(office, orderId, itemId, apiPrefix, role);
+
+        if (role === 'staff') {
+            html += '<div class="office-tracking-body">';
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
+            html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
+            html += '</div>';
+            html += '<div class="office-tracking-actions office-staff-actions">';
+            html += renderStaffProofUpload(orderId, itemId, apiPrefix);
+            html += '<span class="office-tracking-msg" hidden></span></div>';
+        } else {
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix);
+            html += '<div class="office-tracking-actions">';
+            if (canUploadArtwork(office)) {
+                html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
+                    <input type="file" class="office-artwork-input" data-order-id="${escapeHtml(orderId)}"
+                        data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
+            }
+            if (isProofStage(stage)) {
+                const proof = latestProofFile(office.files);
+                if (proof) {
+                    html += `<button type="button" class="office-btn office-btn-approve office-approve-btn"
+                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                        data-api-prefix="${escapeHtml(apiPrefix)}">Approve proof</button>`;
+                    html += `<button type="button" class="office-btn office-btn-changes office-changes-btn"
+                        data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                        data-order-name="${escapeHtml(office.order || '')}"
+                        data-stage="${escapeHtml(stage)}" data-api-prefix="${escapeHtml(apiPrefix)}">Request changes</button>`;
+                }
+            }
+            html += '<span class="office-tracking-msg" hidden></span></div>';
+        }
         html += '</div>';
         return html;
     }
@@ -810,15 +666,6 @@
             if (e.target.classList.contains('office-proof-input')) handleProofUpload(e.target);
         });
         root.addEventListener('click', function (e) {
-            const tabBtn = e.target.closest('.office-tracking-tab');
-            if (tabBtn) { e.preventDefault(); handleTrackingTabClick(tabBtn); return; }
-            const refreshBtn = e.target.closest('.office-fe-refresh-btn');
-            if (refreshBtn) {
-                e.preventDefault();
-                const tracking = refreshBtn.closest('.office-tracking');
-                if (tracking) refreshFileExplorerPanel(tracking);
-                return;
-            }
             const approve = e.target.closest('.office-approve-btn');
             if (approve) { e.preventDefault(); handleApprove(approve); return; }
             const changes = e.target.closest('.office-changes-btn');

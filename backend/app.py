@@ -2161,6 +2161,22 @@ def api_order_office_files_list(order_id, item):
     return _office_list_files(order_id, item, "/api/orders")
 
 
+@app.route("/api/office-files", methods=["GET"])
+def api_office_files_browse():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    search = (request.args.get("search") or "").strip()
+    try:
+        max_orders = int(request.args.get("max_orders", 150))
+    except ValueError:
+        max_orders = 150
+    try:
+        from scripts.Office_Files import browse_office_files  # type: ignore
+        return jsonify(browse_office_files(search=search, max_orders=max_orders))
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @app.route("/api/client/orders/<order_id>/items/<path:item>/files", methods=["GET"])
 def api_client_order_office_files_list(order_id, item):
     if not can_access_order(order_id):
