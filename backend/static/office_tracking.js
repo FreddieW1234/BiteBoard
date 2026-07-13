@@ -182,18 +182,31 @@
         return (files || []).slice().sort((a, b) => (b.version || 0) - (a.version || 0));
     }
 
-    function renderFileRow(f, orderId, itemId, apiPrefix, staffCanDelete) {
+    function canDeleteFile(role, office, file) {
+        if (!office || !file) return false;
+        if (role === 'staff') return true;
+        if (role !== 'client') return false;
+        const stage = office.current_stage || '';
+        if (stage !== 'received' && stage !== 'artwork') return false;
+        return fileKind(file) === 'artwork';
+    }
+
+    function roleFromApiPrefix(apiPrefix) {
+        return apiPrefix && String(apiPrefix).includes('/client') ? 'client' : 'staff';
+    }
+
+    function renderFileRow(f, orderId, itemId, apiPrefix, role, office) {
         const viewUrl = f.download_url
             ? (f.download_url + (f.download_url.includes('?') ? '&' : '?') + 'inline=1')
             : proxyFileUrl(orderId, itemId, f.name, apiPrefix, true);
         const downloadUrl = f.download_url || proxyFileUrl(orderId, itemId, f.name, apiPrefix, false);
         const versionLabel = f.version ? ` v${f.version}` : '';
         let deleteBtn = '';
-        if (staffCanDelete) {
+        if (canDeleteFile(role, office, f)) {
             deleteBtn = `<button type="button" class="office-file-link office-file-delete office-delete-file-btn"
                 data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
                 data-filename="${escapeHtml(f.name)}" data-api-prefix="${escapeHtml(apiPrefix)}"
-                title="Delete from server"><i class="fas fa-trash-alt"></i> Delete</button>`;
+                title="Remove file"><i class="fas fa-times"></i> Remove</button>`;
         }
         return `<li class="office-file-row">
             <span class="office-file-name">${escapeHtml(f.name)}${versionLabel ? `<span class="office-file-ver">${escapeHtml(versionLabel.trim())}</span>` : ''}</span>
@@ -205,23 +218,23 @@
         </li>`;
     }
 
-    function renderFileSection(title, files, orderId, itemId, apiPrefix, staffCanDelete) {
+    function renderFileSection(title, files, orderId, itemId, apiPrefix, role, office) {
         if (!files || !files.length) return '';
         let html = `<div class="office-file-section"><h5 class="office-file-section-title">${escapeHtml(title)}</h5><ul class="office-file-list">`;
         sortFilesByVersion(files).forEach(f => {
-            html += renderFileRow(f, orderId, itemId, apiPrefix, staffCanDelete);
+            html += renderFileRow(f, orderId, itemId, apiPrefix, role, office);
         });
         html += '</ul></div>';
         return html;
     }
 
-    function renderFileSections(files, orderId, itemId, apiPrefix, staffCanDelete) {
+    function renderFileSections(files, orderId, itemId, apiPrefix, role, office) {
         if (!files || !files.length) return '';
         const artwork = files.filter(f => fileKind(f) === 'artwork');
         const proofs = files.filter(f => fileKind(f) === 'proof');
         let html = '<div class="office-files-wrap">';
-        html += renderFileSection('Artwork', artwork, orderId, itemId, apiPrefix, staffCanDelete);
-        html += renderFileSection('Proofs', proofs, orderId, itemId, apiPrefix, staffCanDelete);
+        html += renderFileSection('Artwork', artwork, orderId, itemId, apiPrefix, role, office);
+        html += renderFileSection('Proofs', proofs, orderId, itemId, apiPrefix, role, office);
         html += '</div>';
         return html;
     }
@@ -504,20 +517,19 @@
         }
         const itemId = item.office_item_id;
         const stage = office.current_stage || '';
-        const staffCanDelete = role === 'staff' && apiPrefix === '/api/orders';
         let html = '<div class="office-tracking" data-item-id="' + escapeHtml(itemId) + '">';
         html += renderStatusBar(normalizeStagesForDisplay(office));
 
         if (role === 'staff') {
             html += '<div class="office-tracking-body">';
-            html += renderFileSections(office.files, orderId, itemId, apiPrefix, staffCanDelete);
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix, role, office);
             html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
             html += '</div>';
             html += '<div class="office-tracking-actions office-staff-actions">';
             html += renderStaffProofUpload(orderId, itemId, apiPrefix);
             html += '<span class="office-tracking-msg" hidden></span></div>';
         } else {
-            html += renderFileSections(office.files, orderId, itemId, apiPrefix, false);
+            html += renderFileSections(office.files, orderId, itemId, apiPrefix, role, office);
             html += '<div class="office-tracking-actions">';
             if (canUploadArtwork(office)) {
                 html += `<label class="office-upload-btn"><i class="fas fa-upload"></i> Upload artwork
@@ -557,6 +569,110 @@
         if (lineNumber == null || lineNumber === '') return null;
         const key = String(lineNumber);
         return detailsEl.querySelector('.office-tracking-host[data-line-number="' + key + '"]');
+    }
+
+    function ensureNotifyHost(detailsEl) {
+        let host = detailsEl.querySelector('.office-notify-host');
+        if (!host) {
+            host = document.createElement('div');
+            host.className = 'office-notify-host';
+            detailsEl.insertBefore(host, detailsEl.firstChild);
+        }
+        return host;
+    }
+
+    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail) {
+        const enabled = !!(notify && notify.enabled);
+        const savedEmail = (notify && notify.email) || '';
+        const autoEmail = (sessionEmail || savedEmail || '').trim();
+        const needsInput = !autoEmail;
+        let emailField = '';
+        if (needsInput) {
+            emailField = `<input type="email" class="office-notify-email" placeholder="Email address" value="${escapeHtml(savedEmail)}">`;
+        }
+        return `<div class="office-order-notify" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}">
+            <label class="office-notify-label">
+                <input type="checkbox" class="office-notify-checkbox"${enabled ? ' checked' : ''}>
+                <span>Email me production updates for this order</span>
+            </label>
+            ${emailField}
+            <span class="office-notify-msg" hidden></span>
+        </div>`;
+    }
+
+    function paintNotifyHost(detailsEl, payload, orderId, apiPrefix, role) {
+        if (role !== 'client' && role !== 'staff') return;
+        const host = ensureNotifyHost(detailsEl);
+        host.innerHTML = renderNotifyBlock(
+            orderId,
+            apiPrefix,
+            payload.notify || {},
+            payload.session_email || ''
+        );
+    }
+
+    async function saveNotifyPref(block) {
+        if (!block || block._notifySaving) return;
+        const orderId = block.dataset.orderId;
+        const apiPrefix = block.dataset.apiPrefix || '/api/client/orders';
+        const checkbox = block.querySelector('.office-notify-checkbox');
+        const emailInput = block.querySelector('.office-notify-email');
+        const msg = block.querySelector('.office-notify-msg');
+        if (!checkbox) return;
+        const enabled = checkbox.checked;
+        let email = '';
+        if (emailInput) {
+            email = (emailInput.value || '').trim();
+        } else {
+            email = (block.dataset.sessionEmail || '').trim();
+        }
+        if (enabled && !email) {
+            if (!emailInput) {
+                const input = document.createElement('input');
+                input.type = 'email';
+                input.className = 'office-notify-email';
+                input.placeholder = 'Email address';
+                block.insertBefore(input, msg);
+                input.focus();
+            }
+            if (msg) {
+                msg.textContent = 'Enter your email address to receive updates.';
+                msg.className = 'office-notify-msg err';
+                msg.hidden = false;
+            }
+            checkbox.checked = false;
+            return;
+        }
+        block._notifySaving = true;
+        if (msg) msg.hidden = true;
+        try {
+            const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/notify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ enabled, email }),
+            });
+            const data = await parseJsonResponse(res);
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not save preference');
+            if (data.notify) {
+                block.dataset.sessionEmail = block.dataset.sessionEmail || email;
+            }
+            if (msg) {
+                msg.textContent = 'Saved';
+                msg.className = 'office-notify-msg ok';
+                msg.hidden = false;
+                setTimeout(() => { if (msg.parentElement) msg.hidden = true; }, 2500);
+            }
+        } catch (err) {
+            checkbox.checked = !enabled;
+            if (msg) {
+                msg.textContent = err.message || 'Could not save preference';
+                msg.className = 'office-notify-msg err';
+                msg.hidden = false;
+            }
+        } finally {
+            block._notifySaving = false;
+        }
     }
 
     function paintTrackingHosts(detailsEl, payload, orderId, apiPrefix, role) {
@@ -792,37 +908,35 @@
         showChangesModal(orderName || fromPayload || '', btn);
     }
 
-    function showDeleteUnavailableModal() {
-        let modal = document.getElementById('office-delete-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'office-delete-modal';
-            modal.className = 'office-changes-modal';
-            modal.hidden = true;
-            modal.innerHTML = `
-                <div class="office-changes-modal-backdrop" data-close-delete-modal></div>
-                <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-delete-modal-title">
-                    <button type="button" class="office-changes-modal-close" data-close-delete-modal aria-label="Close">&times;</button>
-                    <h3 id="office-delete-modal-title">File deletion not available</h3>
-                    <p class="office-changes-modal-lead">File deletion is not set up yet. The Office Order API on the server needs a DELETE endpoint configured before files can be removed.</p>
-                    <div class="office-changes-modal-actions">
-                        <button type="button" class="office-btn office-btn-changes" data-close-delete-modal>OK</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-            modal.addEventListener('click', function (e) {
-                if (e.target.closest('[data-close-delete-modal]')) hideOfficeModal(modal);
-            });
-            document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && modal && !modal.hidden) hideOfficeModal(modal);
-            });
+    async function handleDeleteFile(btn) {
+        if (!btn || btn.disabled) return;
+        btn.blur();
+        if (!window.confirm('Remove this file?')) return;
+        const orderId = btn.dataset.orderId;
+        const itemId = btn.dataset.itemId;
+        const filename = btn.dataset.filename;
+        const apiPrefix = btn.dataset.apiPrefix || '/api/orders';
+        const role = roleFromApiPrefix(apiPrefix);
+        const tracking = btn.closest('.office-tracking');
+        const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
+        const lineNumber = trackingLineNumber(btn);
+        btn.disabled = true;
+        if (tracking) showTrackingMsg(tracking, '', true);
+        try {
+            const res = await fetch(
+                `${apiPrefix}/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`,
+                { method: 'DELETE', credentials: 'same-origin' }
+            );
+            const data = await parseJsonResponse(res);
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not remove file');
+            await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, role, lineNumber);
+            const refreshed = detailsEl.querySelector('.office-tracking[data-item-id="' + CSS.escape(itemId) + '"]');
+            showTrackingMsg(refreshed || tracking, 'File removed.', true);
+        } catch (err) {
+            showTrackingMsg(tracking, err.message || 'Could not remove file', false);
+        } finally {
+            btn.disabled = false;
         }
-        showOfficeModal(modal);
-    }
-
-    function handleDeleteFile(btn) {
-        if (btn) btn.blur();
-        showDeleteUnavailableModal();
     }
 
     const boundRoots = new WeakSet();
@@ -850,6 +964,7 @@
         el._officeTracking = data;
         el.dataset.trackingLoaded = '1';
         paintTrackingHosts(el, data, orderId, apiPrefix, role);
+        paintNotifyHost(el, data, orderId, apiPrefix, role);
     }
 
     function applyTrackingErrorToDetails(orderId, message, detailsEl) {
@@ -957,8 +1072,17 @@
         boundRoots.add(root);
         root.addEventListener('change', function (e) {
             if (e.target.classList.contains('office-artwork-input')) handleArtworkUpload(e.target);
+            if (e.target.classList.contains('office-notify-checkbox')) {
+                saveNotifyPref(e.target.closest('.office-order-notify'));
+            }
             if (e.target.classList.contains('office-proof-input')) handleProofUpload(e.target);
         });
+        root.addEventListener('blur', function (e) {
+            if (!e.target.classList.contains('office-notify-email')) return;
+            const block = e.target.closest('.office-order-notify');
+            const cb = block && block.querySelector('.office-notify-checkbox');
+            if (block && cb && cb.checked) saveNotifyPref(block);
+        }, true);
         root.addEventListener('click', function (e) {
             const deleteBtn = e.target.closest('.office-delete-file-btn');
             if (deleteBtn) { e.preventDefault(); handleDeleteFile(deleteBtn); return; }

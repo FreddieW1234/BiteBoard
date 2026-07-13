@@ -363,9 +363,56 @@ button.office-file-link {
     font-family: inherit;
     padding: 0;
 }
-.office-file-delete { color: #dc2626; }
-.office-file-delete:hover { color: #b91c1c; text-decoration: underline; }
+.office-file-delete { color: #9ca3af; font-size: 0.75rem; }
+.office-file-delete:hover { color: #dc2626; text-decoration: none; }
 .office-file-delete:disabled { opacity: 0.5; cursor: wait; }
+
+.office-notify-host {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px dashed #e5e7eb;
+}
+.office-order-notify {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+}
+.office-notify-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+    color: #374151;
+    cursor: pointer;
+    user-select: none;
+}
+.office-notify-label input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #4f46e5;
+    cursor: pointer;
+}
+.office-notify-email {
+    font-family: inherit;
+    font-size: 0.82rem;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    min-width: 200px;
+}
+.office-notify-email:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+.office-notify-msg {
+    font-size: 0.78rem;
+    font-weight: 500;
+    width: 100%;
+}
+.office-notify-msg.ok { color: #059669; }
+.office-notify-msg.err { color: #dc2626; }
 .office-delete-modal-warning {
     font-size: 0.85rem;
     color: #dc2626;

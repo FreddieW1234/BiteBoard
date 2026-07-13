@@ -2008,7 +2008,25 @@ def _office_tracking_response(order_id, entry, api_prefix):
             "title": item.get("title"),
             "office": office,
         })
-    return jsonify({"success": True, "order": order.get("name"), "items": items_out})
+
+    notify = {"order": entry.get("name") or "", "enabled": False, "email": None, "updated_at": None}
+    try:
+        from scripts.office_api import get_notify  # type: ignore
+        order_name = entry.get("name") or ""
+        if order_name:
+            notify = get_notify(order_name)
+    except Exception:
+        pass
+
+    payload = {
+        "success": True,
+        "order": order.get("name"),
+        "items": items_out,
+        "notify": notify,
+    }
+    if api_prefix.startswith("/api/client"):
+        payload["session_email"] = get_client_email()
+    return jsonify(payload)
 
 
 def _office_item_context(order_id, item):
@@ -2116,20 +2134,50 @@ def _office_file_download(order_id, item, filename, api_prefix):
         return jsonify({"success": False, "error": str(exc)}), 502
 
 
-def _office_delete_file(order_id, item, filename):
-    if not is_staff_authenticated():
-        return jsonify({"success": False, "error": "Staff login required"}), 403
+def _office_file_kind(file_meta: dict) -> str:
+    kind = (file_meta.get("kind") or "").strip().lower()
+    if kind in ("artwork", "proof"):
+        return kind
+    name = (file_meta.get("name") or "").lower()
+    if name.startswith("customer-artwork") or "artwork" in name:
+        return "artwork"
+    if name.startswith("proof"):
+        return "proof"
+    return "other"
+
+
+def _client_may_delete_file(office_item: dict, filename: str) -> tuple[bool, str]:
+    stage = (office_item.get("current_stage") or "").strip()
+    if stage not in ("received", "artwork"):
+        return False, "Files cannot be removed after proofing has started"
+    files = office_item.get("files") or []
+    match = next((f for f in files if (f.get("name") or "") == filename), None)
+    if not match:
+        return False, "File not found"
+    if _office_file_kind(match) != "artwork":
+        return False, "You can only remove your own artwork uploads"
+    return True, ""
+
+
+def _office_delete_file(order_id, item, filename, *, client_mode: bool = False):
     entry, order_name = _office_item_context(order_id, item)
     if not entry:
         return jsonify({"success": False, "error": "Item not found on this order"}), 404
     try:
-        from scripts.office_api import delete_file, OfficeApiError  # type: ignore
+        from scripts.office_api import get_item, delete_file, OfficeApiError  # type: ignore
+        office_item = get_item(order_name, item)
+        if not office_item:
+            return jsonify({"success": False, "error": "Item not found on this order"}), 404
+        if client_mode:
+            allowed, reason = _client_may_delete_file(office_item, filename)
+            if not allowed:
+                return jsonify({"success": False, "error": reason}), 403
+        elif not is_staff_authenticated():
+            return jsonify({"success": False, "error": "Not authorised"}), 403
         delete_file(order_name, item, filename)
         return jsonify({"success": True})
     except OfficeApiError as exc:
-        msg = str(exc)
-        status = 501 if "not enabled on the Office Order API" in msg else 502
-        return jsonify({"success": False, "error": msg}), status
+        return jsonify({"success": False, "error": str(exc)}), 502
 
 
 @app.route("/api/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET", "DELETE"])
@@ -2141,11 +2189,69 @@ def api_order_office_file(order_id, item, filename):
     return _office_file_download(order_id, item, filename, "/api/orders")
 
 
-@app.route("/api/client/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET"])
+@app.route("/api/client/orders/<order_id>/items/<path:item>/files/<path:filename>", methods=["GET", "DELETE"])
 def api_client_order_office_file(order_id, item, filename):
     if not can_access_order(order_id):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    if request.method == "DELETE":
+        return _office_delete_file(order_id, item, filename, client_mode=True)
     return _office_file_download(order_id, item, filename, "/api/client/orders")
+
+
+def _office_notify_get(order_id):
+    entry = _office_access(order_id)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    order_name = entry.get("name") or ""
+    try:
+        from scripts.office_api import get_notify, OfficeApiError  # type: ignore
+        notify = get_notify(order_name)
+        payload = {"success": True, "notify": notify}
+        if not is_staff_authenticated():
+            payload["session_email"] = get_client_email()
+        return jsonify(payload)
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+
+def _office_notify_set(order_id):
+    entry = _office_access(order_id)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    order_name = entry.get("name") or ""
+    data = request.get_json(silent=True) or {}
+    enabled = bool(data.get("enabled"))
+    email = (data.get("email") or "").strip()
+    if enabled and not email and not is_staff_authenticated():
+        email = (get_client_email() or "").strip()
+    try:
+        from scripts.office_api import set_notify, OfficeApiError  # type: ignore
+        notify = set_notify(order_name, enabled, email)
+        return jsonify({"success": True, "notify": notify})
+    except OfficeApiError as exc:
+        msg = str(exc)
+        status = 400 if "email" in msg.lower() else 502
+        return jsonify({"success": False, "error": msg}), status
+
+
+@app.route("/api/orders/<order_id>/notify", methods=["GET", "POST"])
+def api_order_notify(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    if request.method == "GET":
+        return _office_notify_get(order_id)
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    return _office_notify_set(order_id)
+
+
+@app.route("/api/client/orders/<order_id>/notify", methods=["GET", "POST"])
+def api_client_order_notify(order_id):
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    if request.method == "GET":
+        return _office_notify_get(order_id)
+    return _office_notify_set(order_id)
 
 
 def _office_list_files(order_id, item, api_prefix):

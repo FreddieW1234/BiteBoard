@@ -77,10 +77,7 @@ def _handle_response(resp: requests.Response, *, allow_404: bool = False):
         logger.error("Office API rejected API key")
         raise OfficeApiError("Order tracking authentication failed")
     if resp.status_code == 405:
-        raise OfficeApiError(
-            "File deletion is not enabled on the Office Order API. "
-            "Add DELETE /orders/{order}/items/{item}/files/{filename} on the office server."
-        )
+        raise OfficeApiError(f"Order tracking request failed ({resp.status_code})")
     if not resp.ok:
         detail = ""
         try:
@@ -183,8 +180,42 @@ def fetch_file(order: str, item: str, filename: str) -> requests.Response:
 
 
 def delete_file(order: str, item: str, filename: str) -> dict | None:
-    """Delete a file from the Office server."""
+    """Soft-delete (archive) a file — never passes permanent=true."""
     url = f"{_url(order, item, 'files', filename)}"
     resp = _request("DELETE", url)
     result = _handle_response(resp)
     return result if isinstance(result, dict) else None
+
+
+def list_archived(order: str, item: str) -> dict:
+    url = f"{_url(order, item, 'archive')}"
+    resp = _request("GET", url)
+    result = _handle_response(resp)
+    return result if isinstance(result, dict) else {"files": []}
+
+
+def restore_file(order: str, item: str, filename: str) -> dict:
+    url = f"{_url(order, item, 'archive', filename, 'restore')}"
+    resp = _request("POST", url, json={})
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from file restore")
+    return result
+
+
+def get_notify(order: str) -> dict:
+    url = f"{OFFICE_API_URL.rstrip('/')}/orders/{_path(order)}/notify"
+    resp = _request("GET", url)
+    result = _handle_response(resp, allow_404=True)
+    if not result:
+        return {"order": order, "enabled": False, "email": None, "updated_at": None}
+    return result
+
+
+def set_notify(order: str, enabled: bool, email: str = "") -> dict:
+    url = f"{OFFICE_API_URL.rstrip('/')}/orders/{_path(order)}/notify"
+    resp = _request("POST", url, json={"enabled": bool(enabled), "email": (email or "").strip()})
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from notify update")
+    return result
