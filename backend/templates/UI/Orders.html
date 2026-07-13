@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=15" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=17" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -102,12 +102,11 @@
         .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .detail-line:last-child { border-bottom: none; }
         .detail-section-fees .detail-line-fee,
-        .detail-section-cost .detail-line-cost {
+        .detail-section-extra-costs .detail-line-cost {
             padding: 3px 0;
             border-bottom: none;
         }
-        .detail-section-fees h4,
-        .detail-section-cost h4 {
+        .detail-section-fees h4 {
             margin-bottom: 6px;
         }
         .line-fee-row {
@@ -131,6 +130,7 @@
         .order-summary-total {
             padding-top: 12px;
             margin-top: 6px;
+            margin-bottom: 20px;
             border-top: 1px solid #e5e7eb;
         }
         .order-summary-total .line-fee-row .line-title {
@@ -280,6 +280,10 @@
         }
         .order-info-note-input { min-height: 114px; }
         .order-info-attr-input { min-height: 72px; }
+        .order-info-note-field[data-field-role="address"],
+        .order-info-attr-input[data-field-role="address"] {
+            min-height: 144px;
+        }
         .order-info-note-input:focus,
         .order-info-note-field:focus,
         .order-info-note-raw:focus,
@@ -444,14 +448,13 @@
             return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value order-address-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
         }
 
-        function renderCostLineSection(title, label, priceDisplay) {
-            return `<div class="detail-section detail-section-cost"><h4>${escapeHtml(title)}</h4>
-                <div class="detail-line detail-line-cost">
-                    <div class="line-fee-row">
-                        <span class="line-title">${escapeHtml(label)}</span>
-                        <span class="line-price">${escapeHtml(priceDisplay)}</span>
-                    </div>
-                </div></div>`;
+        function renderCostLine(label, priceDisplay) {
+            return `<div class="detail-line detail-line-cost">
+                <div class="line-fee-row">
+                    <span class="line-title">${escapeHtml(label)}</span>
+                    <span class="line-price">${escapeHtml(priceDisplay)}</span>
+                </div>
+            </div>`;
         }
 
         function renderOrderGrandTotal(o) {
@@ -468,8 +471,12 @@
             const tax = o.tax_display || formatGbp(o.tax);
             const shipVal = parseFloat(String(o.shipping ?? '').replace(/,/g, '')) || 0;
             const taxVal = parseFloat(String(o.tax ?? '').replace(/,/g, '')) || 0;
-            if (shipVal > 0) html += renderCostLineSection('Shipping', 'Shipping', ship);
-            if (taxVal > 0) html += renderCostLineSection('Tax', 'VAT', tax);
+            const lines = [];
+            if (shipVal > 0) lines.push(renderCostLine('Shipping', ship));
+            if (taxVal > 0) lines.push(renderCostLine('VAT', tax));
+            if (lines.length) {
+                html += `<div class="detail-section detail-section-extra-costs">${lines.join('')}</div>`;
+            }
             html += renderOrderGrandTotal(o);
             return html;
         }
@@ -529,7 +536,7 @@
 
         function renderOrderInfoField(f, inputClass, keyAttr, hideLabel) {
             const fw = f.full_width ? ' full-width' : '';
-            const rows = f.full_width ? 4 : 2;
+            const rows = f.field_role === 'address' ? 4 : (f.full_width ? 4 : 2);
             const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
             const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
             return `<div class="order-info-field${fw}">
@@ -962,6 +969,6 @@
         });
         loadOrders();
     </script>
-    <script src="/static/office_tracking.js?v=20"></script>
+    <script src="/static/office_tracking.js?v=23"></script>
 </body>
 </html>

@@ -208,7 +208,7 @@ def get_notify(order: str) -> dict:
     resp = _request("GET", url)
     result = _handle_response(resp, allow_404=True)
     if not result:
-        return {"order": order, "enabled": False, "email": None, "updated_at": None}
+        return {"order": order, "enabled": True, "email": None, "updated_at": None}
     return result
 
 

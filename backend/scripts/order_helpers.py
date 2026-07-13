@@ -336,11 +336,14 @@ def _order_info_field_meta(key: str, value: str = "") -> dict:
             "full_width": False,
         }
     canonical = key if key.endswith(":") else f"{key}:"
-    return {
+    meta = {
         "key": canonical,
         "display_label": canonical,
         "full_width": _order_info_field_full_width(key, value),
     }
+    if k_norm == "address":
+        meta["field_role"] = "address"
+    return meta
 
 
 def _finalize_order_note_sections(sections: list[dict]) -> list[dict]:
@@ -784,6 +787,7 @@ query OrderById($id: ID!) {
     processedAt
     customer {
       legacyResourceId
+      email
     }
 """
     + ORDER_EXTRA_FIELDS
@@ -817,6 +821,7 @@ def fetch_order_by_id(order_id: str | int) -> dict | None:
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
         "customer_id": customer.get("legacyResourceId"),
+        "customer_email": (customer.get("email") or "").strip(),
     }
     return enrich_order(node, base)
 

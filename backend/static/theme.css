@@ -1299,6 +1299,11 @@ html[data-theme="dark"] .of-delete-modal-panel {
 }
 html[data-theme="dark"] .of-delete-modal-lead { color: var(--bb-text-secondary) !important; }
 html[data-theme="dark"] .of-delete-modal-warning { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .of-delete-modal-note {
+    color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.1) !important;
+    border-color: rgba(251, 191, 36, 0.25) !important;
+}
 html[data-theme="dark"] .of-btn-cancel {
     background: var(--bb-surface-2) !important;
     border-color: var(--bb-border) !important;
@@ -1307,6 +1312,11 @@ html[data-theme="dark"] .of-btn-cancel {
 html[data-theme="dark"] .of-order { border-color: var(--bb-border) !important; }
 html[data-theme="dark"] .office-file-delete { color: var(--bb-danger) !important; }
 html[data-theme="dark"] .office-delete-modal-warning { color: var(--bb-danger) !important; }
+html[data-theme="dark"] .office-delete-modal-note {
+    color: #fbbf24 !important;
+    background: rgba(251, 191, 36, 0.1) !important;
+    border-color: rgba(251, 191, 36, 0.25) !important;
+}
 html[data-theme="dark"] .office-btn-danger { background: var(--bb-danger) !important; color: #fff !important; }
 
 /* ── Scrollbars (webkit) ── */

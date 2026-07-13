@@ -130,6 +130,74 @@
         }
     }
 
+    let deleteConfirmResolver = null;
+
+    function showDeleteModal(modal) {
+        if (!modal) return;
+        document.documentElement.classList.add('of-modal-open');
+        modal.hidden = false;
+    }
+
+    function hideDeleteModal(modal) {
+        if (modal) modal.hidden = true;
+        if (!document.querySelector('.of-delete-modal:not([hidden])')) {
+            document.documentElement.classList.remove('of-modal-open');
+        }
+    }
+
+    function ensureDeleteModal() {
+        let modal = document.getElementById('of-delete-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'of-delete-modal';
+        modal.className = 'of-delete-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="of-delete-modal-backdrop" data-close-of-delete></div>
+            <div class="of-delete-modal-panel" role="dialog" aria-modal="true" aria-labelledby="of-delete-modal-title">
+                <button type="button" class="of-delete-modal-close" data-close-of-delete aria-label="Close">&times;</button>
+                <h3 id="of-delete-modal-title">Remove file?</h3>
+                <p class="of-delete-modal-lead" id="of-delete-modal-lead"></p>
+                <p class="of-delete-modal-note" id="of-delete-modal-note">
+                    After removing a file, check the order progress and timeline to ensure they are still accurate.
+                </p>
+                <div class="of-delete-modal-actions">
+                    <button type="button" class="of-btn-danger" id="of-delete-confirm-btn">Remove</button>
+                    <button type="button" class="of-btn-cancel" data-close-of-delete>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-of-delete]')) finishDeleteConfirm(false);
+        });
+        document.getElementById('of-delete-confirm-btn').addEventListener('click', function () {
+            finishDeleteConfirm(true);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
+        });
+        return modal;
+    }
+
+    function finishDeleteConfirm(confirmed) {
+        hideDeleteModal(document.getElementById('of-delete-modal'));
+        if (deleteConfirmResolver) {
+            const resolve = deleteConfirmResolver;
+            deleteConfirmResolver = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmDeleteFile(filename) {
+        const modal = ensureDeleteModal();
+        const lead = document.getElementById('of-delete-modal-lead');
+        if (lead) {
+            lead.innerHTML = `Remove <strong>${escapeHtml(filename)}</strong>? It will be archived and hidden from the file list.`;
+        }
+        showDeleteModal(modal);
+        return new Promise(resolve => { deleteConfirmResolver = resolve; });
+    }
+
     async function handleDeleteFile(btn) {
         if (!btn || btn.disabled) return;
         btn.blur();
@@ -137,7 +205,8 @@
         const itemId = btn.dataset.itemId;
         const filename = btn.dataset.filename;
         if (!orderId || !itemId || !filename) return;
-        if (!window.confirm('Remove this file? It will be archived and hidden from the file list.')) return;
+        const confirmed = await confirmDeleteFile(filename);
+        if (!confirmed) return;
         btn.disabled = true;
         const row = btn.closest('.of-file-row');
         try {

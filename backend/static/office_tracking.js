@@ -477,6 +477,65 @@
         return new Promise(resolve => { skipConfirmResolver = resolve; });
     }
 
+    let deleteConfirmResolver = null;
+
+    function ensureDeleteConfirmModal() {
+        let modal = document.getElementById('office-delete-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-delete-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-delete-modal></div>
+            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-delete-modal-title">
+                <button type="button" class="office-changes-modal-close" data-close-delete-modal aria-label="Close">&times;</button>
+                <h3 id="office-delete-modal-title">Remove file?</h3>
+                <p class="office-changes-modal-lead" id="office-delete-modal-lead"></p>
+                <p class="office-delete-modal-note" id="office-delete-staff-note">
+                    After removing a file, check the order progress and timeline to ensure they are still accurate.
+                </p>
+                <div class="office-changes-modal-actions">
+                    <button type="button" class="office-btn-danger" id="office-delete-confirm-btn">Remove</button>
+                    <button type="button" class="office-btn office-btn-changes" data-close-delete-modal>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-delete-modal]')) finishDeleteConfirm(false);
+        });
+        document.getElementById('office-delete-confirm-btn').addEventListener('click', function () {
+            finishDeleteConfirm(true);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishDeleteConfirm(false);
+        });
+        return modal;
+    }
+
+    function finishDeleteConfirm(confirmed) {
+        hideOfficeModal(document.getElementById('office-delete-modal'));
+        if (deleteConfirmResolver) {
+            const resolve = deleteConfirmResolver;
+            deleteConfirmResolver = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmDeleteFile(filename, role) {
+        const modal = ensureDeleteConfirmModal();
+        const lead = document.getElementById('office-delete-modal-lead');
+        const staffNote = document.getElementById('office-delete-staff-note');
+        if (lead) {
+            lead.innerHTML = `Remove <strong>${escapeHtml(filename)}</strong>? It will be archived and hidden from the file list.`;
+        }
+        if (staffNote) {
+            staffNote.hidden = role !== 'staff';
+        }
+        showOfficeModal(modal);
+        return new Promise(resolve => { deleteConfirmResolver = resolve; });
+    }
+
     function renderStaffProofUpload(orderId, itemId, apiPrefix) {
         return `<label class="office-upload-btn office-upload-proof"><i class="fas fa-file-image"></i> Upload proof
             <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
@@ -581,16 +640,22 @@
         return host;
     }
 
-    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail) {
-        const enabled = !!(notify && notify.enabled);
+    function notifyIsExplicitlySet(notify) {
+        return !!(notify && notify.updated_at);
+    }
+
+    function notifyDefaultEnabled(notify, role) {
+        if ((role === 'client' || role === 'staff') && !notifyIsExplicitlySet(notify)) return true;
+        return !!(notify && notify.enabled);
+    }
+
+    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail, customerEmail, role) {
+        const enabled = notifyDefaultEnabled(notify, role);
         const savedEmail = (notify && notify.email) || '';
-        const autoEmail = (sessionEmail || savedEmail || '').trim();
-        const needsInput = !autoEmail;
-        let emailField = '';
-        if (needsInput) {
-            emailField = `<input type="email" class="office-notify-email" placeholder="Email address" value="${escapeHtml(savedEmail)}">`;
-        }
-        return `<div class="office-order-notify" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}">
+        const defaultEmail = (savedEmail || sessionEmail || customerEmail || '').trim();
+        const emailField = `<input type="email" class="office-notify-email" placeholder="Email address" value="${escapeHtml(defaultEmail)}">`;
+        const explicit = notifyIsExplicitlySet(notify) ? '1' : '0';
+        return `<div class="office-order-notify" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}" data-customer-email="${escapeHtml(customerEmail || '')}" data-notify-explicit="${explicit}">
             <label class="office-notify-label">
                 <input type="checkbox" class="office-notify-checkbox"${enabled ? ' checked' : ''}>
                 <span>Email me production updates for this order</span>
@@ -603,15 +668,31 @@
     function paintNotifyHost(detailsEl, payload, orderId, apiPrefix, role) {
         if (role !== 'client' && role !== 'staff') return;
         const host = ensureNotifyHost(detailsEl);
+        const notify = payload.notify || {};
         host.innerHTML = renderNotifyBlock(
             orderId,
             apiPrefix,
-            payload.notify || {},
-            payload.session_email || ''
+            notify,
+            payload.session_email || '',
+            payload.customer_email || '',
+            role
         );
+        if (!notifyIsExplicitlySet(notify)) {
+            const block = host.querySelector('.office-order-notify');
+            const email = (
+                (notify && notify.email) ||
+                payload.session_email ||
+                payload.customer_email ||
+                ''
+            ).trim();
+            if (block && email && block.querySelector('.office-notify-checkbox')?.checked) {
+                saveNotifyPref(block, { silent: true });
+            }
+        }
     }
 
-    async function saveNotifyPref(block) {
+    async function saveNotifyPref(block, options) {
+        const silent = !!(options && options.silent);
         if (!block || block._notifySaving) return;
         const orderId = block.dataset.orderId;
         const apiPrefix = block.dataset.apiPrefix || '/api/client/orders';
@@ -624,7 +705,7 @@
         if (emailInput) {
             email = (emailInput.value || '').trim();
         } else {
-            email = (block.dataset.sessionEmail || '').trim();
+            email = (block.dataset.sessionEmail || block.dataset.customerEmail || '').trim();
         }
         if (enabled && !email) {
             if (!emailInput) {
@@ -632,6 +713,7 @@
                 input.type = 'email';
                 input.className = 'office-notify-email';
                 input.placeholder = 'Email address';
+                input.value = (block.dataset.sessionEmail || block.dataset.customerEmail || '').trim();
                 block.insertBefore(input, msg);
                 input.focus();
             }
@@ -656,16 +738,17 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not save preference');
             if (data.notify) {
                 block.dataset.sessionEmail = block.dataset.sessionEmail || email;
+                block.dataset.notifyExplicit = '1';
             }
-            if (msg) {
+            if (msg && !silent) {
                 msg.textContent = 'Saved';
                 msg.className = 'office-notify-msg ok';
                 msg.hidden = false;
                 setTimeout(() => { if (msg.parentElement) msg.hidden = true; }, 2500);
             }
         } catch (err) {
-            checkbox.checked = !enabled;
-            if (msg) {
+            if (!silent) checkbox.checked = !enabled;
+            if (msg && !silent) {
                 msg.textContent = err.message || 'Could not save preference';
                 msg.className = 'office-notify-msg err';
                 msg.hidden = false;
@@ -911,12 +994,18 @@
     async function handleDeleteFile(btn) {
         if (!btn || btn.disabled) return;
         btn.blur();
-        if (!window.confirm('Remove this file? It will be archived and hidden from the file list.')) return;
         const orderId = btn.dataset.orderId;
         const itemId = btn.dataset.itemId;
         const filename = btn.dataset.filename;
         const apiPrefix = btn.dataset.apiPrefix || '/api/orders';
         const role = roleFromApiPrefix(apiPrefix);
+        let confirmed = false;
+        if (role === 'staff') {
+            confirmed = await confirmDeleteFile(filename, role);
+        } else {
+            confirmed = window.confirm('Remove this file? It will be archived and hidden from the file list.');
+        }
+        if (!confirmed) return;
         const tracking = btn.closest('.office-tracking');
         const detailsEl = btn.closest('.details-inner') || btn.closest('td') || document.body;
         const lineNumber = trackingLineNumber(btn);

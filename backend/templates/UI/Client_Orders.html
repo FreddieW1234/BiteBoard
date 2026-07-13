@@ -9,7 +9,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=15" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=17" rel="stylesheet">
     <style>
         :root {
             --bite-cyan: #3AC9E3;
@@ -237,12 +237,11 @@
         .orders-wrap .detail-line { padding: 14px 0 10px; border-bottom: 1px solid #eef0f3; }
         .orders-wrap .detail-line:last-child { border-bottom: none; }
         .orders-wrap .detail-section-fees .detail-line-fee,
-        .orders-wrap .detail-section-cost .detail-line-cost {
+        .orders-wrap .detail-section-extra-costs .detail-line-cost {
             padding: 3px 0;
             border-bottom: none;
         }
-        .orders-wrap .detail-section-fees h4,
-        .orders-wrap .detail-section-cost h4 {
+        .orders-wrap .detail-section-fees h4 {
             margin-bottom: 6px;
         }
         .orders-wrap .line-fee-row {
@@ -266,6 +265,7 @@
         .orders-wrap .order-summary-total {
             padding-top: 12px;
             margin-top: 6px;
+            margin-bottom: 20px;
             border-top: 1px solid var(--bite-border);
         }
         .orders-wrap .order-summary-total .line-fee-row .line-title {
@@ -382,6 +382,9 @@
             min-height: 2.5rem;
         }
         .orders-wrap .order-info-value.empty { color: #9ca3af; font-style: italic; }
+        .orders-wrap .order-info-value.order-info-product-address {
+            min-height: 144px;
+        }
         .orders-wrap .order-info-value.order-address-value {
             min-height: unset;
             height: auto;
@@ -581,27 +584,26 @@
                                     </div>
                                     {% endif %}
 
-                                    {% if order.shipping and (order.shipping | float) > 0 %}
-                                    <div class="detail-section detail-section-cost">
-                                        <h4>Shipping</h4>
+                                    {% set has_shipping = order.shipping and (order.shipping | float) > 0 %}
+                                    {% set has_tax = order.tax and (order.tax | float) > 0 %}
+                                    {% if has_shipping or has_tax %}
+                                    <div class="detail-section detail-section-extra-costs">
+                                        {% if has_shipping %}
                                         <div class="detail-line detail-line-cost">
                                             <div class="line-fee-row">
                                                 <span class="line-title">Shipping</span>
                                                 <span class="line-price">{{ order.shipping_display }}</span>
                                             </div>
                                         </div>
-                                    </div>
-                                    {% endif %}
-
-                                    {% if order.tax and (order.tax | float) > 0 %}
-                                    <div class="detail-section detail-section-cost">
-                                        <h4>Tax</h4>
+                                        {% endif %}
+                                        {% if has_tax %}
                                         <div class="detail-line detail-line-cost">
                                             <div class="line-fee-row">
                                                 <span class="line-title">VAT</span>
                                                 <span class="line-price">{{ order.tax_display }}</span>
                                             </div>
                                         </div>
+                                        {% endif %}
                                     </div>
                                     {% endif %}
 
@@ -677,7 +679,7 @@
                                                             {% if not hide_label %}
                                                             <label>{{ field.display_label or field.key }}</label>
                                                             {% endif %}
-                                                            <div class="order-info-value{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
+                                                            <div class="order-info-value{% if field.field_role == 'address' %} order-info-product-address{% endif %}{% if not (field.value or '').strip() %} empty{% endif %}">{{ field.value or '—' }}</div>
                                                         </div>
                                                         {% endfor %}
                                                     </div>
@@ -863,7 +865,7 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=20"></script>
+    <script src="/static/office_tracking.js?v=23"></script>
     <script>
         (function () {
             function prefetchClientOrderTracking() {

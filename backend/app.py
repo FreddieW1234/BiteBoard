@@ -2009,7 +2009,7 @@ def _office_tracking_response(order_id, entry, api_prefix):
             "office": office,
         })
 
-    notify = {"order": entry.get("name") or "", "enabled": False, "email": None, "updated_at": None}
+    notify = {"order": entry.get("name") or "", "enabled": True, "email": None, "updated_at": None}
     try:
         from scripts.office_api import get_notify  # type: ignore
         order_name = entry.get("name") or ""
@@ -2023,6 +2023,7 @@ def _office_tracking_response(order_id, entry, api_prefix):
         "order": order.get("name"),
         "items": items_out,
         "notify": notify,
+        "customer_email": (order.get("customer_email") or "").strip(),
     }
     if api_prefix.startswith("/api/client"):
         payload["session_email"] = get_client_email()
