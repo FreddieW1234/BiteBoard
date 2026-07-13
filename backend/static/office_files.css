@@ -254,9 +254,16 @@ button.of-file-link {
     cursor: pointer;
     font-family: inherit;
 }
-.of-file-delete { color: #dc2626 !important; }
-.of-file-delete:hover { background: #fef2f2 !important; color: #b91c1c !important; }
+.of-file-delete { color: #9ca3af !important; font-size: 0.78rem; }
+.of-file-delete:hover { color: #dc2626 !important; background: transparent !important; }
 .of-file-delete:disabled { opacity: 0.5; cursor: wait; }
+.of-file-error {
+    display: block;
+    width: 100%;
+    font-size: 0.75rem;
+    color: #dc2626;
+    margin-top: 4px;
+}
 
 /* Delete confirmation modal */
 .of-delete-modal {

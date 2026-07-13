@@ -58,7 +58,7 @@
                 ${downloadUrl ? `<a class="of-file-link" href="${escapeHtml(downloadUrl)}" download="${escapeHtml(f.name)}"><i class="fas fa-download"></i> Download</a>` : ''}
                 ${oid && iid ? `<button type="button" class="of-file-link of-file-delete of-delete-file-btn"
                     data-order-id="${escapeHtml(oid)}" data-item-id="${escapeHtml(iid)}"
-                    data-filename="${escapeHtml(f.name)}" title="Delete from server"><i class="fas fa-trash-alt"></i> Delete</button>` : ''}
+                    data-filename="${escapeHtml(f.name)}" title="Archive file"><i class="fas fa-times"></i> Remove</button>` : ''}
             </span>
         </li>`;
     }
@@ -120,37 +120,48 @@
         });
     }
 
-    function showDeleteUnavailableModal() {
-        let modal = document.getElementById('of-delete-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'of-delete-modal';
-            modal.className = 'of-delete-modal';
-            modal.hidden = true;
-            modal.innerHTML = `
-                <div class="of-delete-modal-backdrop" data-of-close-delete></div>
-                <div class="of-delete-modal-panel" role="dialog" aria-modal="true">
-                    <button type="button" class="of-delete-modal-close" data-of-close-delete aria-label="Close">&times;</button>
-                    <h3>File deletion not available</h3>
-                    <p class="of-delete-modal-lead">File deletion is not set up yet. The Office Order API on the server needs a DELETE endpoint configured before files can be removed.</p>
-                    <div class="of-delete-modal-actions">
-                        <button type="button" class="of-btn-cancel" data-of-close-delete>OK</button>
-                    </div>
-                </div>`;
-            document.body.appendChild(modal);
-            modal.addEventListener('click', e => {
-                if (e.target.closest('[data-of-close-delete]')) modal.hidden = true;
-            });
-            document.addEventListener('keydown', e => {
-                if (e.key === 'Escape' && modal && !modal.hidden) modal.hidden = true;
-            });
+    async function parseJsonResponse(res) {
+        const text = await res.text();
+        if (!text) return res.ok ? {} : { error: 'Request failed (' + res.status + ')' };
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            throw new Error('Invalid server response');
         }
-        modal.hidden = false;
     }
 
-    function handleDeleteFile(btn) {
-        if (btn) btn.blur();
-        showDeleteUnavailableModal();
+    async function handleDeleteFile(btn) {
+        if (!btn || btn.disabled) return;
+        btn.blur();
+        const orderId = btn.dataset.orderId;
+        const itemId = btn.dataset.itemId;
+        const filename = btn.dataset.filename;
+        if (!orderId || !itemId || !filename) return;
+        if (!window.confirm('Remove this file? It will be archived and hidden from the file list.')) return;
+        btn.disabled = true;
+        const row = btn.closest('.of-file-row');
+        try {
+            const url = `/api/orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/files/${encodeURIComponent(filename)}`;
+            const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
+            const data = await parseJsonResponse(res);
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not archive file');
+            const searchInput = document.getElementById('of-search');
+            lastSearch = searchInput ? searchInput.value.trim() : lastSearch;
+            await loadFiles(lastSearch);
+        } catch (err) {
+            btn.disabled = false;
+            if (row) {
+                let errEl = row.querySelector('.of-file-error');
+                if (!errEl) {
+                    errEl = document.createElement('span');
+                    errEl.className = 'of-file-error';
+                    row.appendChild(errEl);
+                }
+                errEl.textContent = err.message || 'Could not archive file';
+            } else {
+                window.alert(err.message || 'Could not archive file');
+            }
+        }
     }
 
     function bindDeleteButtons(root) {

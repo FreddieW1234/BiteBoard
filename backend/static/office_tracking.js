@@ -206,7 +206,7 @@
             deleteBtn = `<button type="button" class="office-file-link office-file-delete office-delete-file-btn"
                 data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
                 data-filename="${escapeHtml(f.name)}" data-api-prefix="${escapeHtml(apiPrefix)}"
-                title="Remove file"><i class="fas fa-times"></i> Remove</button>`;
+                title="Archive file"><i class="fas fa-times"></i> Remove</button>`;
         }
         return `<li class="office-file-row">
             <span class="office-file-name">${escapeHtml(f.name)}${versionLabel ? `<span class="office-file-ver">${escapeHtml(versionLabel.trim())}</span>` : ''}</span>
@@ -911,7 +911,7 @@
     async function handleDeleteFile(btn) {
         if (!btn || btn.disabled) return;
         btn.blur();
-        if (!window.confirm('Remove this file?')) return;
+        if (!window.confirm('Remove this file? It will be archived and hidden from the file list.')) return;
         const orderId = btn.dataset.orderId;
         const itemId = btn.dataset.itemId;
         const filename = btn.dataset.filename;
@@ -931,7 +931,7 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not remove file');
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, role, lineNumber);
             const refreshed = detailsEl.querySelector('.office-tracking[data-item-id="' + CSS.escape(itemId) + '"]');
-            showTrackingMsg(refreshed || tracking, 'File removed.', true);
+            showTrackingMsg(refreshed || tracking, 'File archived.', true);
         } catch (err) {
             showTrackingMsg(tracking, err.message || 'Could not remove file', false);
         } finally {
