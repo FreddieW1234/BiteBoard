@@ -366,7 +366,11 @@
         .cu-orders-modal-body .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
         .cu-orders-modal-body .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
         .cu-orders-modal-body .line-props li strong { font-weight: 600; color: #6b7280; }
-        .cu-orders-modal-body .order-info-note { font-size: 0.86rem; line-height: 1.55; color: #374151; white-space: pre-wrap; margin-bottom: 8px; }
+        .cu-orders-modal-body .order-status-label-slot {
+            font-size: 0.84rem;
+            color: #374151;
+            white-space: nowrap;
+        }
         .cu-orders-modal-body .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }
         .cu-orders-modal-body .info-kv strong { font-weight: 600; color: #6b7280; }
         .cu-orders-modal-body .order-info-panel {
@@ -1344,15 +1348,16 @@
             if (!orders.length) {
                 return '<div class="state-msg">This customer has no orders yet.</div>';
             }
-            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Total</th></tr></thead><tbody>';
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Order Status</th><th>Total</th></tr></thead><tbody>';
             orders.forEach((o, i) => {
                 html += `<tr class="data-row" data-order-idx="${i}" data-order-id="${escapeHtml(o.id)}">
                     <td><strong>${escapeHtml(o.name)}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                     <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(o.id)}"></span></td>
                     <td>${escapeHtml(formatOrderDate(o.processed_at))}</td>
+                    <td class="order-status-label-cell"><span class="order-status-label-slot" data-order-id="${escapeHtml(o.id)}">—</span></td>
                     <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="cu-order-details-${i}"><td colspan="4">${renderCustomerOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="cu-order-details-${i}"><td colspan="5">${renderCustomerOrderDetails(o)}</td></tr>`;
             });
             return html + '</tbody></table></div>';
         }
@@ -1585,6 +1590,6 @@
             });
         });
     </script>
-    <script src="/static/office_tracking.js?v=26"></script>
+    <script src="/static/office_tracking.js?v=27"></script>
 </body>
 </html>

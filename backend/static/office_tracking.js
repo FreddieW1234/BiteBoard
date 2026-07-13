@@ -1221,6 +1221,7 @@
 
     function syncOrderListBadge(orderId, items, role, immediate) {
         const indicator = computeOrderIndicator(items);
+        updateOrderRowStatus(orderId, items);
         if (role !== 'client') {
             updateOrderRowIndicator(orderId, indicator);
         }
@@ -1256,6 +1257,38 @@
         return 'yellow';
     }
 
+    function officeStageLabel(office) {
+        if (!office) return '—';
+        const stage = effectiveDisplayStage(office);
+        if (!stage) return '—';
+        const apiStage = (office.stages || []).find(s => (s.key || '') === (office.current_stage || ''));
+        return labelForStage(stage, apiStage, maxProofReached(office)) || '—';
+    }
+
+    function computeOrderStatusLabel(items) {
+        let picked = null;
+        let pickedP = INDICATOR_PRIORITY.none;
+        (items || []).forEach(item => {
+            const office = item && item.office;
+            if (!office) return;
+            const t = computeItemIndicator(office);
+            const p = INDICATOR_PRIORITY[t] ?? INDICATOR_PRIORITY.none;
+            if (p < pickedP || !picked) {
+                picked = item;
+                pickedP = p;
+            }
+        });
+        if (!picked || !picked.office) return '—';
+        return officeStageLabel(picked.office);
+    }
+
+    function updateOrderRowStatus(orderId, items) {
+        const label = computeOrderStatusLabel(items);
+        document.querySelectorAll(`.order-status-label-slot[data-order-id="${CSS.escape(String(orderId))}"]`).forEach(slot => {
+            slot.textContent = label;
+        });
+    }
+
     function computeOrderIndicator(items) {
         let worst = 'none';
         let worstP = INDICATOR_PRIORITY.none;
@@ -1268,6 +1301,17 @@
             }
         });
         return worst;
+    }
+
+    function refreshOrderStatusLabelsIn(container) {
+        if (!container) return;
+        container.querySelectorAll('.order-status-label-slot[data-order-id]').forEach(slot => {
+            const orderId = slot.dataset.orderId;
+            const entry = orderTrackingCache[String(orderId)];
+            if (entry && entry.status === 'done') {
+                slot.textContent = computeOrderStatusLabel(entry.data.items);
+            }
+        });
     }
 
     function renderOrderIndicatorHtml(type) {
@@ -1294,7 +1338,9 @@
             const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/indicator`, { credentials: 'same-origin' });
             const data = await parseJsonResponse(res);
             if (!res.ok || !data.success) return;
-            slotEl.innerHTML = renderOrderIndicatorHtml(computeOrderIndicator(data.items));
+            const items = data.items || [];
+            slotEl.innerHTML = renderOrderIndicatorHtml(computeOrderIndicator(items));
+            updateOrderRowStatus(orderId, items);
         } catch (_) { /* ignore */ }
     }
 
@@ -1342,8 +1388,11 @@
         proxyFileUrl,
         bindTrackingEvents,
         computeOrderIndicator,
+        computeOrderStatusLabel,
         loadOrderIndicatorsIn,
         updateOrderRowIndicator,
+        updateOrderRowStatus,
+        refreshOrderStatusLabelsIn,
         syncOrderListBadge,
         fetchOrderIndicators,
         isCompletedIndicator,

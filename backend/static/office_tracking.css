@@ -700,6 +700,11 @@ html.co-embed .office-changes-contact-link:hover {
     min-width: 18px;
     min-height: 18px;
 }
+.order-status-label-slot {
+    font-size: 0.84rem;
+    color: #374151;
+    white-space: nowrap;
+}
 .order-status-indicator {
     display: inline-flex;
     align-items: center;

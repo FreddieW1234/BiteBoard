@@ -381,6 +381,11 @@
             white-space: pre-wrap;
             min-height: 2.5rem;
         }
+        .orders-wrap .order-status-label-slot {
+            font-size: 0.84rem;
+            color: #374151;
+            white-space: nowrap;
+        }
         .orders-wrap .order-info-value.empty { color: #9ca3af; font-style: italic; }
         .orders-wrap .order-info-value.order-address-value {
             min-height: unset;
@@ -515,6 +520,7 @@
                         <tr>
                             <th>Order</th>
                             <th>Date</th>
+                            <th>Order Status</th>
                             <th>Total</th>
                         </tr>
                     </thead>
@@ -523,10 +529,11 @@
                         <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ order.id }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
+                            <td class="order-status-label-cell"><span class="order-status-label-slot" data-order-id="{{ order.id }}">—</span></td>
                             <td>{{ order.total_display }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ order.id }}" data-order-id="{{ order.id }}">
-                            <td colspan="3">
+                            <td colspan="4">
                                 <div class="details-inner">
                                     <div class="detail-section">
                                         <h4>Items</h4>
@@ -862,7 +869,7 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=26"></script>
+    <script src="/static/office_tracking.js?v=27"></script>
     <script>
         (function () {
             function prefetchClientOrderTracking() {
@@ -880,6 +887,9 @@
                 }).then(function () {
                     if (wrap && OfficeTracking.applyCachedTrackingIn) {
                         OfficeTracking.applyCachedTrackingIn(wrap, '/api/client/orders', 'client');
+                    }
+                    if (wrap && OfficeTracking.refreshOrderStatusLabelsIn) {
+                        OfficeTracking.refreshOrderStatusLabelsIn(wrap);
                     }
                     if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
                 });
