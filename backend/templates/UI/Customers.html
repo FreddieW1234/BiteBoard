@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=4" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=18" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=19" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -1143,9 +1143,15 @@
 
         function fitOrderInfoAddressTextarea(ta) {
             if (!ta) return;
-            ta.style.height = 'auto';
+            const hidden = !ta.offsetParent && getComputedStyle(ta).display !== 'fixed';
+            if (hidden) {
+                ta.dataset.addressPendingFit = '1';
+                return;
+            }
+            ta.style.height = '0px';
             const minH = parseFloat(getComputedStyle(ta).minHeight) || 0;
             ta.style.height = Math.max(ta.scrollHeight, minH) + 'px';
+            ta.dataset.addressPendingFit = '0';
         }
 
         function initOrderInfoAddressAutoHeight(root) {
@@ -1157,9 +1163,19 @@
             });
         }
 
+        function scheduleAddressTextareaFit(root) {
+            const el = root || document;
+            const run = () => initOrderInfoAddressAutoHeight(el);
+            run();
+            requestAnimationFrame(() => {
+                run();
+                requestAnimationFrame(run);
+            });
+        }
+
         function renderOrderInfoField(f, inputClass, keyAttr, hideLabel) {
             const fw = f.full_width ? ' full-width' : '';
-            const rows = f.full_width ? 4 : 2;
+            const rows = f.field_role === 'address' ? 1 : (f.full_width ? 4 : 2);
             const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
             const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
             return `<div class="order-info-field${fw}">
@@ -1366,7 +1382,7 @@
                 }
                 customerModalOrders = data.orders || [];
                 body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
-                initOrderInfoAddressAutoHeight(body);
+                scheduleAddressTextareaFit(body);
                 if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
@@ -1380,7 +1396,7 @@
                                 OfficeTracking.loadOrderTracking(row.dataset.orderId, '/api/orders', inner, 'staff');
                             }
                             if (isOpen) {
-                                requestAnimationFrame(() => initOrderInfoAddressAutoHeight(dr));
+                                scheduleAddressTextareaFit(dr);
                             }
                         }
                     });
@@ -1569,6 +1585,6 @@
             });
         });
     </script>
-    <script src="/static/office_tracking.js?v=24"></script>
+    <script src="/static/office_tracking.js?v=26"></script>
 </body>
 </html>

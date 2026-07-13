@@ -657,7 +657,7 @@
         const explicit = notifyIsExplicitlySet(notify) ? '1' : '0';
         const isStaff = role === 'staff';
         const labelText = isStaff
-            ? 'Customer requested production updates to the email address:'
+            ? 'Email production updates to:'
             : 'Email me production updates for this order';
         const staffClass = isStaff ? ' office-order-notify--staff' : '';
         return `<div class="office-order-notify${staffClass}" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}" data-customer-email="${escapeHtml(customerEmail || '')}" data-notify-explicit="${explicit}" data-notify-role="${escapeHtml(role || '')}">
@@ -674,25 +674,10 @@
         if (!input) return;
         const block = input.closest('.office-order-notify');
         if (!block || block.dataset.notifyRole !== 'staff') return;
-        let sizer = input._notifyEmailSizer;
-        if (!sizer) {
-            sizer = document.createElement('span');
-            sizer.className = 'office-notify-email-sizer';
-            sizer.setAttribute('aria-hidden', 'true');
-            input.insertAdjacentElement('afterend', sizer);
-            input._notifyEmailSizer = sizer;
-        }
-        const style = getComputedStyle(input);
-        sizer.style.fontFamily = style.fontFamily;
-        sizer.style.fontSize = style.fontSize;
-        sizer.style.fontWeight = style.fontWeight;
-        sizer.style.letterSpacing = style.letterSpacing;
-        sizer.textContent = input.value || input.placeholder || '';
-        const pad = 24;
-        const min = 140;
-        const max = 420;
-        const width = Math.min(max, Math.max(min, sizer.offsetWidth + pad));
-        input.style.width = width + 'px';
+        const minChars = 40;
+        const text = input.value || input.placeholder || '';
+        const chars = Math.max(minChars, text.length + 1);
+        input.style.width = chars + 'ch';
     }
 
     function initNotifyEmailAutoWidth(block) {
