@@ -1216,7 +1216,17 @@
 
     async function loadOrderTracking(orderId, apiPrefix, detailsEl, role) {
         if (!detailsEl || !orderId) return;
-        await ensureOrderTracking(orderId, apiPrefix, detailsEl, role);
+        try {
+            await ensureOrderTracking(orderId, apiPrefix, detailsEl, role);
+            const entry = orderTrackingCache[String(orderId)];
+            if (entry && entry.status === 'done') {
+                applyTrackingToDetails(orderId, entry.data, apiPrefix, role, detailsEl);
+            } else if (entry && entry.status === 'error') {
+                applyTrackingErrorToDetails(orderId, entry.error, detailsEl);
+            }
+        } catch (err) {
+            applyTrackingErrorToDetails(orderId, err.message || 'Tracking unavailable', detailsEl);
+        }
     }
 
     function syncOrderListBadge(orderId, items, role, immediate) {

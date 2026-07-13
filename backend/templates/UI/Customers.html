@@ -1010,7 +1010,7 @@
             }
             html += `</div></div><div class="line-price-row"><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div>`;
             if (li.line_number != null) {
-                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"></div>`;
+                html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"><div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div></div>`;
             }
             html += '</div>';
             return html;
@@ -1388,7 +1388,27 @@
                 customerModalOrders = data.orders || [];
                 body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
                 scheduleAddressTextareaFit(body);
-                if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
+                if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') {
+                    OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
+                }
+                if (window.OfficeTracking && typeof OfficeTracking.prefetchAllOrderTracking === 'function') {
+                    const orderIds = customerModalOrders.map(o => o.id).filter(Boolean);
+                    if (orderIds.length) {
+                        OfficeTracking.prefetchAllOrderTracking(orderIds, '/api/orders', 'staff', function (orderId) {
+                            if (OfficeTracking.refreshOrderStatusLabelsIn) {
+                                OfficeTracking.refreshOrderStatusLabelsIn(body);
+                            }
+                            const row = body.querySelector('.data-row[data-order-id="' + CSS.escape(String(orderId)) + '"]');
+                            if (!row || !row.classList.contains('expanded')) return;
+                            const idx = row.getAttribute('data-order-idx');
+                            const dr = document.getElementById('cu-order-details-' + idx);
+                            const inner = dr && (dr.querySelector('.details-inner') || dr);
+                            if (inner && OfficeTracking.loadOrderTracking) {
+                                OfficeTracking.loadOrderTracking(orderId, '/api/orders', inner, 'staff');
+                            }
+                        });
+                    }
+                }
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');
@@ -1590,6 +1610,6 @@
             });
         });
     </script>
-    <script src="/static/office_tracking.js?v=27"></script>
+    <script src="/static/office_tracking.js?v=28"></script>
 </body>
 </html>
