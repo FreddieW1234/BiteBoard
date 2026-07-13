@@ -403,6 +403,20 @@ button.office-file-link {
     width: min(100%, 360px);
     flex: 1 1 280px;
 }
+.office-order-notify--staff .office-notify-email {
+    min-width: 140px;
+    width: 140px;
+    max-width: 420px;
+    flex: 0 1 auto;
+}
+.office-notify-email-sizer {
+    position: absolute;
+    visibility: hidden;
+    white-space: pre;
+    pointer-events: none;
+    height: 0;
+    overflow: hidden;
+}
 .office-notify-email:focus {
     outline: none;
     border-color: #4f46e5;

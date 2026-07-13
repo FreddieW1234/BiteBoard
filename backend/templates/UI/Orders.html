@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
-    <link href="/static/office_tracking.css?v=17" rel="stylesheet">
+    <link href="/static/office_tracking.css?v=18" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -282,7 +282,9 @@
         .order-info-attr-input { min-height: 72px; }
         .order-info-note-field[data-field-role="address"],
         .order-info-attr-input[data-field-role="address"] {
-            min-height: 144px;
+            resize: none;
+            overflow: hidden;
+            min-height: calc(1.45em * 2 + 18px);
         }
         .order-info-note-input:focus,
         .order-info-note-field:focus,
@@ -534,9 +536,25 @@
             return f.display_label || f.key || '';
         }
 
+        function fitOrderInfoAddressTextarea(ta) {
+            if (!ta) return;
+            ta.style.height = 'auto';
+            const minH = parseFloat(getComputedStyle(ta).minHeight) || 0;
+            ta.style.height = Math.max(ta.scrollHeight, minH) + 'px';
+        }
+
+        function initOrderInfoAddressAutoHeight(root) {
+            (root || document).querySelectorAll('textarea[data-field-role="address"]').forEach(ta => {
+                fitOrderInfoAddressTextarea(ta);
+                if (ta.dataset.addressAutoHeight) return;
+                ta.dataset.addressAutoHeight = '1';
+                ta.addEventListener('input', () => fitOrderInfoAddressTextarea(ta));
+            });
+        }
+
         function renderOrderInfoField(f, inputClass, keyAttr, hideLabel) {
             const fw = f.full_width ? ' full-width' : '';
-            const rows = f.field_role === 'address' ? 4 : (f.full_width ? 4 : 2);
+            const rows = f.full_width ? 4 : 2;
             const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
             const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
             return `<div class="order-info-field${fw}">
@@ -798,6 +816,9 @@
                             const inner = dr.querySelector('.details-inner') || dr;
                             OfficeTracking.loadOrderTracking(orderId, '/api/orders', inner, 'staff');
                         }
+                        if (isOpen) {
+                            requestAnimationFrame(() => initOrderInfoAddressAutoHeight(dr));
+                        }
                     }
                 });
             });
@@ -839,6 +860,7 @@
             html += '</div>';
             content.innerHTML = html;
             bindOrderRows(content);
+            initOrderInfoAddressAutoHeight(content);
             if (window.OfficeTracking && typeof OfficeTracking.applyCachedTrackingIn === 'function') {
                 OfficeTracking.applyCachedTrackingIn(content, '/api/orders', 'staff');
             }
@@ -969,6 +991,6 @@
         });
         loadOrders();
     </script>
-    <script src="/static/office_tracking.js?v=23"></script>
+    <script src="/static/office_tracking.js?v=24"></script>
 </body>
 </html>

@@ -655,14 +655,54 @@
         const defaultEmail = (savedEmail || sessionEmail || customerEmail || '').trim();
         const emailField = `<input type="email" class="office-notify-email" placeholder="Email address" value="${escapeHtml(defaultEmail)}">`;
         const explicit = notifyIsExplicitlySet(notify) ? '1' : '0';
-        return `<div class="office-order-notify" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}" data-customer-email="${escapeHtml(customerEmail || '')}" data-notify-explicit="${explicit}">
+        const isStaff = role === 'staff';
+        const labelText = isStaff
+            ? 'Customer requested production updates to the email address:'
+            : 'Email me production updates for this order';
+        const staffClass = isStaff ? ' office-order-notify--staff' : '';
+        return `<div class="office-order-notify${staffClass}" data-order-id="${escapeHtml(orderId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-session-email="${escapeHtml(sessionEmail || '')}" data-customer-email="${escapeHtml(customerEmail || '')}" data-notify-explicit="${explicit}" data-notify-role="${escapeHtml(role || '')}">
             <label class="office-notify-label">
                 <input type="checkbox" class="office-notify-checkbox"${enabled ? ' checked' : ''}>
-                <span>Email me production updates for this order</span>
+                <span>${escapeHtml(labelText)}</span>
             </label>
             ${emailField}
             <span class="office-notify-msg" hidden></span>
         </div>`;
+    }
+
+    function fitNotifyEmailWidth(input) {
+        if (!input) return;
+        const block = input.closest('.office-order-notify');
+        if (!block || block.dataset.notifyRole !== 'staff') return;
+        let sizer = input._notifyEmailSizer;
+        if (!sizer) {
+            sizer = document.createElement('span');
+            sizer.className = 'office-notify-email-sizer';
+            sizer.setAttribute('aria-hidden', 'true');
+            input.insertAdjacentElement('afterend', sizer);
+            input._notifyEmailSizer = sizer;
+        }
+        const style = getComputedStyle(input);
+        sizer.style.fontFamily = style.fontFamily;
+        sizer.style.fontSize = style.fontSize;
+        sizer.style.fontWeight = style.fontWeight;
+        sizer.style.letterSpacing = style.letterSpacing;
+        sizer.textContent = input.value || input.placeholder || '';
+        const pad = 24;
+        const min = 140;
+        const max = 420;
+        const width = Math.min(max, Math.max(min, sizer.offsetWidth + pad));
+        input.style.width = width + 'px';
+    }
+
+    function initNotifyEmailAutoWidth(block) {
+        if (!block || block.dataset.notifyRole !== 'staff') return;
+        const input = block.querySelector('.office-notify-email');
+        if (!input) return;
+        fitNotifyEmailWidth(input);
+        if (input.dataset.notifyAutoWidth) return;
+        input.dataset.notifyAutoWidth = '1';
+        input.addEventListener('input', () => fitNotifyEmailWidth(input));
     }
 
     function paintNotifyHost(detailsEl, payload, orderId, apiPrefix, role) {
@@ -688,6 +728,10 @@
             if (block && email && block.querySelector('.office-notify-checkbox')?.checked) {
                 saveNotifyPref(block, { silent: true });
             }
+        }
+        const block = host.querySelector('.office-order-notify');
+        if (block) {
+            requestAnimationFrame(() => initNotifyEmailAutoWidth(block));
         }
     }
 
@@ -715,6 +759,7 @@
                 input.placeholder = 'Email address';
                 input.value = (block.dataset.sessionEmail || block.dataset.customerEmail || '').trim();
                 block.insertBefore(input, msg);
+                initNotifyEmailAutoWidth(block);
                 input.focus();
             }
             if (msg) {
@@ -744,7 +789,7 @@
                 msg.textContent = 'Saved';
                 msg.className = 'office-notify-msg ok';
                 msg.hidden = false;
-                setTimeout(() => { if (msg.parentElement) msg.hidden = true; }, 2500);
+                setTimeout(() => { if (msg.parentElement) msg.hidden = true; }, 2000);
             }
         } catch (err) {
             if (!silent) checkbox.checked = !enabled;
