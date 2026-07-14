@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=4" rel="stylesheet">
-    <link href="/static/diary.css?v=7" rel="stylesheet">
+    <link href="/static/diary.css?v=9" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -85,21 +85,23 @@
                 </div>
 
                 <div class="diary-toolbar-group">
-                    <button type="button" class="diary-nav-btn" id="diary-prev-btn" aria-label="Previous period"><i class="fas fa-chevron-left"></i></button>
-                    <span class="diary-range-label" id="diary-range-label">—</span>
-                    <button type="button" class="diary-nav-btn" id="diary-next-btn" aria-label="Next period"><i class="fas fa-chevron-right"></i></button>
+                    <div class="diary-nav-core">
+                        <button type="button" class="diary-nav-btn" id="diary-prev-btn" aria-label="Previous period"><i class="fas fa-chevron-left"></i></button>
+                        <span class="diary-range-label" id="diary-range-label">—</span>
+                        <button type="button" class="diary-nav-btn" id="diary-next-btn" aria-label="Next period"><i class="fas fa-chevron-right"></i></button>
+                    </div>
                     <input type="date" class="diary-focus-input" id="diary-focus-input" aria-label="Jump to date">
                     <button type="button" class="btn-ghost" id="diary-today-btn">Today</button>
                 </div>
 
                 <div class="diary-toolbar-actions">
-                    <button type="button" class="btn-print" id="diary-print-btn" title="In the print dialog, turn off Headers and footers for a clean page"><i class="fas fa-print"></i> Print</button>
+                    <button type="button" class="btn-print" id="diary-print-btn"><i class="fas fa-print"></i> Print</button>
                     <button type="button" class="btn-ghost" id="diary-refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
                 </div>
             </div>
             <div id="diary-content"></div>
         </div>
     </div>
-    <script src="/static/diary.js?v=7"></script>
+    <script src="/static/diary.js?v=8"></script>
 </body>
 </html>
