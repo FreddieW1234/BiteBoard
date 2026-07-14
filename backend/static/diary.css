@@ -185,12 +185,12 @@
 .diary-product {
     color: #111827;
     font-weight: 500;
-    min-width: 180px;
+    min-width: 220px;
 }
 .diary-company {
     color: #374151;
-    min-width: 140px;
-    max-width: 200px;
+    min-width: 100px;
+    max-width: 160px;
 }
 .diary-carrier-cell {
     display: flex;
@@ -323,11 +323,11 @@
     .diary-table th:nth-child(3),
     .diary-table td:nth-child(3) { width: 9%; }
     .diary-table th:nth-child(4),
-    .diary-table td:nth-child(4) { width: 34%; }
+    .diary-table td:nth-child(4) { width: 40%; }
     .diary-table th:nth-child(5),
-    .diary-table td:nth-child(5) { width: 20%; }
+    .diary-table td:nth-child(5) { width: 15%; }
     .diary-table th:nth-child(6),
-    .diary-table td:nth-child(6) { width: 15%; }
+    .diary-table td:nth-child(6) { width: 14%; }
     .diary-product,
     .diary-company {
         min-width: 0 !important;

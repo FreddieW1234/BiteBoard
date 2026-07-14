@@ -214,8 +214,8 @@
             <th>Requested delivery date</th>
             <th>Order number</th>
             <th>Product</th>
-            <th>Company</th>
             <th>Carrier</th>
+            <th>Company</th>
             </tr></thead><tbody>`;
 
         displayRows.forEach((row, idx) => {
@@ -232,7 +232,6 @@
             html += `<td class="diary-requested">${escapeHtml(row.requested_date || '—')}</td>`;
             html += `<td><a class="diary-order-link diary-screen-only" href="/app/Orders#order-${escapeHtml(row.order_id)}">${escapeHtml(row.order_name)}</a><span class="diary-print-only">${escapeHtml(row.order_name)}</span></td>`;
             html += `<td class="diary-product">${escapeHtml(row.product_label)}</td>`;
-            html += `<td class="diary-company">${escapeHtml(row.company || '—')}</td>`;
             html += `<td>
                 <div class="diary-carrier-cell">
                     <select class="diary-carrier-select diary-screen-only ${carrierClass(row.carrier)}" data-field="carrier" aria-label="Carrier for ${escapeHtml(row.product_label)}">
@@ -242,6 +241,7 @@
                     <span class="diary-save-msg diary-screen-only" data-msg="${escapeHtml(key)}" hidden></span>
                 </div>
             </td>`;
+            html += `<td class="diary-company">${escapeHtml(row.company || '—')}</td>`;
             html += '</tr>';
         });
 
@@ -338,15 +338,66 @@
         renderTable();
     }
 
+    function printStyles() {
+        return `
+            @page { size: A4 portrait; margin: 12mm; }
+            html, body { margin: 0; padding: 0; background: #fff; font-family: Inter, sans-serif; color: #111827; }
+            .diary-table-card { border: none; overflow: visible; }
+            .diary-table-scroll { overflow: visible; width: 100%; }
+            .diary-print-header { display: block; padding: 0 0 10px; margin: 0 0 10px; border-bottom: 2px solid #111827; }
+            .diary-print-header h2 { font-size: 1.15rem; margin: 0 0 4px; }
+            .diary-print-header p { margin: 0; font-size: 0.8rem; color: #374151; }
+            .diary-print-meta { margin-top: 4px; font-size: 0.72rem; color: #6b7280; }
+            .diary-screen-only { display: none !important; }
+            .diary-print-only { display: inline !important; }
+            .diary-table { width: 100%; table-layout: fixed; font-size: 0.68rem; border-collapse: collapse; }
+            .diary-table th, .diary-table td { padding: 5px 4px; white-space: normal; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; border-bottom: 1px solid #e5e7eb; text-align: left; }
+            .diary-table th { background: #eee; font-weight: 600; }
+            .diary-table th:nth-child(1), .diary-table td:nth-child(1) { width: 11%; }
+            .diary-table th:nth-child(2), .diary-table td:nth-child(2) { width: 11%; }
+            .diary-table th:nth-child(3), .diary-table td:nth-child(3) { width: 9%; }
+            .diary-table th:nth-child(4), .diary-table td:nth-child(4) { width: 40%; }
+            .diary-table th:nth-child(5), .diary-table td:nth-child(5) { width: 15%; }
+            .diary-table th:nth-child(6), .diary-table td:nth-child(6) { width: 14%; }
+            .diary-print-carrier.carrier-royal_mail { background: #fde8ea; padding: 2px 6px; border-radius: 4px; }
+            .diary-print-carrier.carrier-fedex { background: #f0e6f6; padding: 2px 6px; border-radius: 4px; }
+            .diary-print-carrier.carrier-frenni { background: #e6f0fa; padding: 2px 6px; border-radius: 4px; }
+        `;
+    }
+
     function printDiary() {
-        const origTitle = document.title;
-        document.title = ' ';
-        const restoreTitle = () => {
-            document.title = origTitle;
-            window.removeEventListener('afterprint', restoreTitle);
+        const area = document.getElementById('diary-print-area');
+        if (!area) return;
+
+        const popup = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700');
+        if (!popup) {
+            window.print();
+            return;
+        }
+
+        popup.document.open();
+        popup.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title></title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>${printStyles()}</style>
+</head>
+<body>${area.outerHTML}</body>
+</html>`);
+        popup.document.close();
+
+        const runPrint = () => {
+            popup.focus();
+            popup.print();
+            popup.close();
         };
-        window.addEventListener('afterprint', restoreTitle);
-        window.print();
+        if (popup.document.readyState === 'complete') {
+            setTimeout(runPrint, 250);
+        } else {
+            popup.onload = () => setTimeout(runPrint, 250);
+        }
     }
 
     async function loadDiary() {
