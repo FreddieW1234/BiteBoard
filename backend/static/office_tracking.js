@@ -354,7 +354,7 @@
     /** Default dropdown selection: one pipeline stage ahead of current (proof → Proof Approved, not next proof). */
     function defaultSelectStageKey(office) {
         const current = effectiveDisplayStage(office);
-        const maxProof = maxProofReached(office);
+        const maxProof = Math.max(maxProofReached(office), 1);
         const keys = buildPipelineKeys(maxProof);
         let currentIdx = keys.indexOf(current);
         if (currentIdx < 0) {
@@ -420,7 +420,6 @@
         if (!office || !targetStage) return null;
         const current = effectiveDisplayStage(office);
         if (targetStage === current) return null;
-        if (targetStage === 'approved') return null;
 
         const maxProof = Math.max(maxProofReached(office), proofNum(targetStage), 1);
         const currentIdx = pipelineIndex(current, maxProof);
@@ -438,7 +437,7 @@
         if (targetIdx > artworkIdx && !hasArtwork && !hasProof) {
             warnings.push('No artwork file has been uploaded');
         }
-        if (targetIdx >= firstProofIdx && targetIdx < approvedIdx && !hasProof) {
+        if (targetIdx >= firstProofIdx && targetIdx <= approvedIdx && !hasProof) {
             warnings.push('No proof has been uploaded');
         }
         if (targetIdx > approvedIdx && !proofWasApproved(office)) {
