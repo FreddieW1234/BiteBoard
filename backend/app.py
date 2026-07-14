@@ -2246,6 +2246,63 @@ def api_order_notify(order_id):
     return _office_notify_set(order_id)
 
 
+@app.route("/api/orders/<order_id>/production-notify", methods=["POST"])
+def api_order_production_notify(order_id):
+    """Staff: send a production update email via Klaviyo after explicit confirmation."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    if not can_access_order(order_id):
+        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+    entry = _office_access(order_id)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    update_type = (data.get("update_type") or "").strip()
+    item_title = (data.get("item_title") or "").strip()
+    item_id = (data.get("item_id") or "").strip()
+    email_override = (data.get("email") or "").strip()
+
+    from scripts.klaviyo_api import (  # type: ignore
+        NOTIFY_WORTHY_UPDATE_TYPES,
+        KlaviyoError,
+        klaviyo_configured,
+        send_production_update,
+    )
+
+    if not klaviyo_configured():
+        return jsonify({"success": False, "error": "Email notifications are not configured"}), 503
+    if update_type not in NOTIFY_WORTHY_UPDATE_TYPES:
+        return jsonify({"success": False, "error": "Invalid update type"}), 400
+
+    order_name = entry.get("name") or ""
+    try:
+        from scripts.office_api import get_notify, OfficeApiError  # type: ignore
+        notify = get_notify(order_name) if order_name else {}
+    except OfficeApiError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+    if not notify.get("enabled"):
+        return jsonify({"success": False, "error": "Production updates are disabled for this order"}), 400
+
+    email = email_override or (notify.get("email") or "").strip()
+    if not email:
+        return jsonify({"success": False, "error": "No email address for this order"}), 400
+
+    try:
+        send_production_update(
+            email,
+            order_name,
+            update_type,
+            item_title=item_title,
+            item_id=item_id,
+        )
+    except KlaviyoError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+    return jsonify({"success": True, "email": email, "update_type": update_type})
+
+
 @app.route("/api/client/orders/<order_id>/notify", methods=["GET", "POST"])
 def api_client_order_notify(order_id):
     if not can_access_order(order_id):

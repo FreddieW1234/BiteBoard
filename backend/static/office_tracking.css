@@ -573,6 +573,11 @@ html.office-modal-open body {
     color: #374151;
     line-height: 1.5;
 }
+.office-production-notify-email {
+    margin: 0 0 16px;
+    font-size: 0.9rem;
+    color: #6b7280;
+}
 .office-changes-modal-email {
     margin: 0 0 16px;
     font-size: 0.95rem;

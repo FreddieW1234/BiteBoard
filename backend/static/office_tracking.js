@@ -536,6 +536,158 @@
         return new Promise(resolve => { deleteConfirmResolver = resolve; });
     }
 
+    const PRODUCTION_UPDATE_LABELS = {
+        proof_uploaded: 'Proof ready for review',
+        printing: 'Printing',
+        in_production: 'In production',
+        shipped: 'Shipped',
+    };
+
+    const NOTIFY_WORTHY_STAGES = new Set(['printing', 'in_production', 'shipped']);
+
+    let productionNotifyResolver = null;
+
+    function getOrderNotifyPref(detailsEl) {
+        const block = detailsEl && detailsEl.querySelector('.office-order-notify');
+        if (!block) return { enabled: false, email: '' };
+        const checkbox = block.querySelector('.office-notify-checkbox');
+        const emailInput = block.querySelector('.office-notify-email');
+        const enabled = !!(checkbox && checkbox.checked);
+        let email = '';
+        if (emailInput) {
+            email = (emailInput.value || '').trim();
+        } else {
+            email = (block.dataset.sessionEmail || block.dataset.customerEmail || '').trim();
+        }
+        return { enabled, email };
+    }
+
+    function updateTypeForStage(stage) {
+        if (stage === 'shipped') return 'shipped';
+        if (stage === 'in_production') return 'in_production';
+        if (stage === 'printing') return 'printing';
+        return null;
+    }
+
+    function getItemTitleFromTrackingHost(detailsEl, lineNumber) {
+        const host = findTrackingHost(detailsEl, lineNumber);
+        if (!host) return '';
+        const line = host.closest('.detail-line');
+        const titleEl = line && line.querySelector('.line-title');
+        return titleEl ? titleEl.textContent.trim() : '';
+    }
+
+    function productionNotifyPreview(updateType, orderName, itemTitle) {
+        const label = PRODUCTION_UPDATE_LABELS[updateType] || updateType;
+        const order = orderName || 'this order';
+        const product = itemTitle ? ` (${itemTitle})` : '';
+        return `Send an email to let the customer know their order <strong>${escapeHtml(order)}</strong>${escapeHtml(product)} is now at: <strong>${escapeHtml(label)}</strong>.`;
+    }
+
+    function ensureProductionNotifyModal() {
+        let modal = document.getElementById('office-production-notify-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-production-notify-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-production-notify></div>
+            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-production-notify-title">
+                <button type="button" class="office-changes-modal-close" data-close-production-notify aria-label="Close">&times;</button>
+                <h3 id="office-production-notify-title">Email customer?</h3>
+                <p class="office-changes-modal-lead" id="office-production-notify-lead"></p>
+                <p class="office-production-notify-email" id="office-production-notify-email"></p>
+                <div class="office-changes-modal-actions">
+                    <button type="button" class="office-btn office-btn-set-stage" id="office-production-notify-send-btn">Send email</button>
+                    <button type="button" class="office-btn office-btn-changes" data-close-production-notify>Not now</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-production-notify]')) finishProductionNotify(false);
+        });
+        document.getElementById('office-production-notify-send-btn').addEventListener('click', function () {
+            finishProductionNotify(true);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishProductionNotify(false);
+        });
+        return modal;
+    }
+
+    function finishProductionNotify(confirmed) {
+        hideOfficeModal(document.getElementById('office-production-notify-modal'));
+        if (productionNotifyResolver) {
+            const resolve = productionNotifyResolver;
+            productionNotifyResolver = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmProductionNotify(updateType, orderName, email, itemTitle) {
+        const modal = ensureProductionNotifyModal();
+        const lead = document.getElementById('office-production-notify-lead');
+        const emailEl = document.getElementById('office-production-notify-email');
+        if (lead) {
+            lead.innerHTML = productionNotifyPreview(updateType, orderName, itemTitle);
+        }
+        if (emailEl) {
+            emailEl.textContent = email ? `To: ${email}` : '';
+            emailEl.hidden = !email;
+        }
+        showOfficeModal(modal);
+        return new Promise(resolve => { productionNotifyResolver = resolve; });
+    }
+
+    async function sendProductionNotify(orderId, apiPrefix, payload) {
+        const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/production-notify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+        });
+        const data = await parseJsonResponse(res);
+        if (!res.ok || !data.success) throw new Error(data.error || 'Could not send email');
+        return data;
+    }
+
+    async function maybeOfferProductionNotify(options) {
+        const {
+            orderId,
+            apiPrefix,
+            detailsEl,
+            updateType,
+            itemId,
+            lineNumber,
+        } = options || {};
+        if (!orderId || !detailsEl || !updateType) return;
+        if (roleFromApiPrefix(apiPrefix) !== 'staff') return;
+
+        const pref = getOrderNotifyPref(detailsEl);
+        if (!pref.enabled || !pref.email) return;
+
+        const orderName = (detailsEl._officeTracking && detailsEl._officeTracking.order) || '';
+        const itemTitle = getItemTitleFromTrackingHost(detailsEl, lineNumber);
+
+        const confirmed = await confirmProductionNotify(updateType, orderName, pref.email, itemTitle);
+        if (!confirmed) return;
+
+        const host = findTrackingHost(detailsEl, lineNumber);
+        const tracking = host && host.querySelector('.office-tracking');
+        try {
+            await sendProductionNotify(orderId, apiPrefix, {
+                update_type: updateType,
+                email: pref.email,
+                item_id: itemId || '',
+                item_title: itemTitle,
+            });
+            showTrackingMsg(tracking, 'Update email sent.', true);
+        } catch (err) {
+            showTrackingMsg(tracking, err.message || 'Could not send email', false);
+        }
+    }
+
     function renderStaffProofUpload(orderId, itemId, apiPrefix) {
         return `<label class="office-upload-btn office-upload-proof"><i class="fas fa-file-image"></i> Upload proof
             <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
@@ -885,6 +1037,14 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Upload failed');
             const lineNumber = trackingLineNumber(input);
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'staff', lineNumber);
+            await maybeOfferProductionNotify({
+                orderId,
+                apiPrefix,
+                detailsEl,
+                updateType: 'proof_uploaded',
+                itemId,
+                lineNumber,
+            });
         } catch (err) {
             showTrackingMsg(host, err.message || 'Upload failed', false);
         } finally {
@@ -951,6 +1111,17 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not update status');
             await refreshItemTracking(detailsEl, orderId, itemId, apiPrefix, 'staff', lineNumber);
             showTrackingMsg(findTrackingHost(detailsEl, lineNumber)?.querySelector('.office-tracking'), 'Status updated.', true);
+            const updateType = updateTypeForStage(stage);
+            if (updateType) {
+                await maybeOfferProductionNotify({
+                    orderId,
+                    apiPrefix,
+                    detailsEl,
+                    updateType,
+                    itemId,
+                    lineNumber,
+                });
+            }
         } catch (err) {
             showTrackingMsg(host, err.message || 'Could not update status', false);
         } finally {

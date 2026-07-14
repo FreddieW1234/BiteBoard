@@ -41,6 +41,11 @@ OFFICE_API_KEY = os.environ.get("OFFICE_API_KEY") or ""
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 ORDER_ACCESS_CACHE_TTL_SEC = int(os.environ.get("ORDER_ACCESS_CACHE_TTL_SEC", "300"))
 
+# Klaviyo — production update emails (transactional Flow triggered by Events API)
+KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
+KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")
+KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Update")
+
 # Common headers for API requests
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN or "",
