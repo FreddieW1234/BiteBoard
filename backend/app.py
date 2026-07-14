@@ -135,6 +135,7 @@ def client_orders_page():
                 profile=None,
                 orders=[],
                 logout_url=_client_logout_url(),
+                deep_link={"order": "", "item": "", "proof": ""},
             )
     cid = get_client_customer_id()
     if not cid:
@@ -144,6 +145,7 @@ def client_orders_page():
             profile=None,
             orders=[],
             logout_url=_client_logout_url(),
+            deep_link={"order": "", "item": "", "proof": ""},
         )
     try:
         from scripts.Client_Orders import get_customer_orders, get_customer_profile  # type: ignore
@@ -159,13 +161,20 @@ def client_orders_page():
             profile=None,
             orders=[],
             logout_url=_client_logout_url(),
+            deep_link={"order": "", "item": "", "proof": ""},
         )
+    deep_link = {
+        "order": (request.args.get("order") or "").strip(),
+        "item": (request.args.get("item") or "").strip(),
+        "proof": (request.args.get("proof") or "").strip(),
+    }
     return render_template(
         "UI/Client_Orders.html",
         profile=profile,
         orders=orders,
         error=None,
         logout_url=_client_logout_url(),
+        deep_link=deep_link,
     )
 
 
@@ -2266,7 +2275,9 @@ def api_order_production_notify(order_id):
     from scripts.klaviyo_api import (  # type: ignore
         NOTIFY_WORTHY_UPDATE_TYPES,
         KlaviyoError,
+        build_portal_url,
         klaviyo_configured,
+        latest_proof_filename,
         send_production_update,
     )
 
@@ -2289,18 +2300,36 @@ def api_order_production_notify(order_id):
     if not email:
         return jsonify({"success": False, "error": "No email address for this order"}), 400
 
+    proof_filename = (data.get("proof_filename") or "").strip()
+
+    proof = proof_filename
+    if update_type == "proof_uploaded" and not proof and item_id:
+        proof = latest_proof_filename(order_name, item_id)
+
     try:
         send_production_update(
             email,
             order_name,
             update_type,
+            order_id=str(order_id),
             item_title=item_title,
             item_id=item_id,
+            proof_filename=proof,
         )
     except KlaviyoError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
 
-    return jsonify({"success": True, "email": email, "update_type": update_type})
+    portal_url = build_portal_url(
+        str(order_id),
+        item_id=item_id,
+        proof_filename=proof if update_type == "proof_uploaded" else "",
+    )
+    return jsonify({
+        "success": True,
+        "email": email,
+        "update_type": update_type,
+        "portal_url": portal_url,
+    })
 
 
 @app.route("/api/client/orders/<order_id>/notify", methods=["GET", "POST"])

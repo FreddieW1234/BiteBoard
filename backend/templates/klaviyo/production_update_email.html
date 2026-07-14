@@ -1,0 +1,111 @@
+<!-- Bite Promotions - Production Update (Klaviyo HTML block)
+     Paste into your Flow email. Button uses {{ event.portal_url }} from the portal API. -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
+  <tr>
+    <td align="center" style="padding:32px 24px;font-family:Helvetica,Arial,sans-serif;">
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+        <!-- Heading -->
+        <tr>
+          <td style="font-family:Helvetica,Arial,sans-serif;font-size:22px;line-height:1.3;font-weight:bold;color:#1a1a1a;padding-bottom:8px;">
+            {% if event.update_type == 'proof_uploaded' %}Your proof is ready to review
+            {% elif event.update_type == 'printing' %}Your order is being printed
+            {% elif event.update_type == 'in_production' %}Your order is in production
+            {% elif event.update_type == 'shipped' %}Your order is on its way
+            {% else %}Update on your order
+            {% endif %}
+          </td>
+        </tr>
+
+        <!-- Intro -->
+        <tr>
+          <td style="font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#444444;padding-bottom:24px;">
+            Hi {{ person.first_name|default:"there" }},<br>
+            {% if event.update_type == 'proof_uploaded' %}
+              Your proof is ready. Please review and approve it so we can keep your order on schedule.
+            {% elif event.update_type == 'printing' %}
+              Your order has moved to printing.
+            {% elif event.update_type == 'in_production' %}
+              Your order is now in production.
+            {% elif event.update_type == 'shipped' %}
+              Your order has been dispatched and is on its way to you.
+            {% else %}
+              Here's the latest update on your order.
+            {% endif %}
+          </td>
+        </tr>
+
+        <!-- Details card -->
+        <tr>
+          <td style="padding-bottom:28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e4e4e4;border-radius:10px;">
+              <tr>
+                <td style="padding:20px 22px;">
+
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">Order</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;padding-bottom:16px;">{{ event.order_name }}</td>
+                    </tr>
+
+                    <tr>
+                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">Product</td>
+                    </tr>
+                    <tr>
+                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;color:#1a1a1a;padding-bottom:16px;">{{ event.item_title }}</td>
+                    </tr>
+
+                    <tr>
+                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">Status</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td style="background:#5977ED;border-radius:20px;padding:7px 16px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;">
+                              {{ event.stage_label }}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td align="center" style="padding-bottom:28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background:#F06C9B;border-radius:8px;">
+                  <a href="{{ event.portal_url|default:'https://bitepromotions.uk/pages/portal' }}" target="_blank"
+                     style="display:inline-block;padding:14px 32px;font-family:Helvetica,Arial,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;">
+                    {% if event.update_type == 'proof_uploaded' %}Review your proof{% else %}View your order{% endif %}
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Sign-off -->
+        <tr>
+          <td style="font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#666666;border-top:1px solid #eeeeee;padding-top:20px;">
+            Any questions, just reply to this email or call us on <a href="tel:+441792293689" style="color:#666666;text-decoration:none;">01792 293689</a> and we'll help.<br><br>
+            The Bite Promotions team
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>

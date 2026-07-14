@@ -34,6 +34,8 @@ FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "biteboard-portal-session-
 FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in ("1", "true", "yes")
 # Customer-facing shop URL (for logout links from the client portal iframe)
 STOREFRONT_URL = (os.environ.get("SHOPIFY_STOREFRONT_URL") or "https://bitepromotions.uk").rstrip("/")
+# Customer portal page on the Shopify storefront (iframe embed)
+PORTAL_PAGE_URL = (os.environ.get("PORTAL_PAGE_URL") or f"{STOREFRONT_URL}/pages/portal").rstrip("/")
 
 # Office Order API (status pipeline + artwork/proof files on office server)
 OFFICE_API_URL = (os.environ.get("OFFICE_API_URL") or "").rstrip("/")

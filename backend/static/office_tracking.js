@@ -1400,6 +1400,86 @@
         }
     }
 
+    function parsePortalDeepLink(source) {
+        let orderId = '';
+        let itemId = '';
+        let proof = '';
+        if (source) {
+            const p = new URLSearchParams(source.startsWith('?') ? source : '?' + source);
+            orderId = (p.get('order') || '').trim();
+            itemId = (p.get('item') || '').trim();
+            proof = (p.get('proof') || '').trim();
+        } else if (typeof window !== 'undefined') {
+            const p = new URLSearchParams(window.location.search);
+            orderId = (p.get('order') || '').trim();
+            itemId = (p.get('item') || '').trim();
+            proof = (p.get('proof') || '').trim();
+            const embedded = window.__PORTAL_DEEP_LINK__;
+            if (embedded) {
+                orderId = orderId || String(embedded.order || '').trim();
+                itemId = itemId || String(embedded.item || '').trim();
+                proof = proof || String(embedded.proof || '').trim();
+            }
+        }
+        return { orderId, itemId, proof };
+    }
+
+    function openProofFile(orderId, itemId, filename, apiPrefix) {
+        const name = (filename || '').trim();
+        if (!orderId || !itemId || !name) return false;
+        const url = proxyFileUrl(orderId, itemId, name, apiPrefix || '/api/client/orders', true);
+        window.open(url, '_blank', 'noopener');
+        return true;
+    }
+
+    async function applyPortalDeepLink(options) {
+        const opts = options || {};
+        const apiPrefix = opts.apiPrefix || '/api/client/orders';
+        const role = opts.role || 'client';
+        const dl = parsePortalDeepLink(opts.search);
+        const orderId = (opts.orderId || dl.orderId || '').trim();
+        const itemId = (opts.itemId || dl.itemId || '').trim();
+        const proof = (opts.proof || dl.proof || '').trim();
+        if (!orderId) return false;
+
+        if (typeof opts.onBeforeExpand === 'function') {
+            opts.onBeforeExpand();
+        }
+
+        const dataRow = document.querySelector(
+            `.orders-wrap .data-row[data-order-id="${CSS.escape(orderId)}"], .data-row[data-order-id="${CSS.escape(orderId)}"]`
+        );
+        if (!dataRow) return false;
+
+        const detailsId = 'details-' + orderId;
+        const detailRow = document.getElementById(detailsId);
+        if (detailRow && !detailRow.classList.contains('open')) {
+            if (typeof opts.toggleDetails === 'function') {
+                opts.toggleDetails(dataRow, detailsId);
+            } else {
+                detailRow.classList.add('open');
+                dataRow.classList.add('expanded');
+            }
+        }
+
+        const inner = detailRow && (detailRow.querySelector('.details-inner') || detailRow);
+        if (!inner) return false;
+
+        await loadOrderTracking(orderId, apiPrefix, inner, role);
+
+        if (itemId) {
+            const tracking = inner.querySelector(`.office-tracking[data-item-id="${CSS.escape(itemId)}"]`);
+            if (tracking) {
+                tracking.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        if (proof) {
+            openProofFile(orderId, itemId, proof, apiPrefix);
+        }
+        return true;
+    }
+
     function syncOrderListBadge(orderId, items, role, immediate) {
         const indicator = computeOrderIndicator(items);
         updateOrderRowStatus(orderId, items);
@@ -1581,6 +1661,9 @@
         renderOrderIndicatorHtml,
         prefetchAllOrderTracking,
         applyCachedTrackingIn,
+        applyPortalDeepLink,
+        openProofFile,
+        parsePortalDeepLink,
         getCachedOrderIndicator,
         clearOrderTrackingCache,
         INDICATOR_PRIORITY,

@@ -738,6 +738,7 @@
 
     <script>
         const LOGOUT_URL = {{ logout_url | tojson }};
+        window.__PORTAL_DEEP_LINK__ = {{ deep_link | tojson }};
 
         async function doLogout() {
             try {
@@ -869,7 +870,7 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=29"></script>
+    <script src="/static/office_tracking.js?v=30"></script>
     <script>
         (function () {
             function prefetchClientOrderTracking() {
@@ -892,6 +893,16 @@
                         OfficeTracking.refreshOrderStatusLabelsIn(wrap);
                     }
                     if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+                    if (OfficeTracking.applyPortalDeepLink) {
+                        OfficeTracking.applyPortalDeepLink({
+                            apiPrefix: '/api/client/orders',
+                            role: 'client',
+                            toggleDetails: toggleDetails,
+                            onBeforeExpand: function () { switchClientTab('orders'); },
+                        }).then(function () {
+                            if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+                        });
+                    }
                 });
             }
             if (document.readyState === 'loading') {

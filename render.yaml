@@ -24,4 +24,6 @@ services:
         value: "Bite Production Update"
       - key: KLAVIYO_API_REVISION
         value: "2025-01-15"
+      - key: PORTAL_PAGE_URL
+        value: "https://bitepromotions.uk/pages/portal"
 

@@ -5,10 +5,16 @@ from __future__ import annotations
 import logging
 import uuid
 from typing import Any
+from urllib.parse import urlencode
 
 import requests
 
-from config import KLAVIYO_API_KEY, KLAVIYO_API_REVISION, KLAVIYO_METRIC_NAME  # type: ignore
+from config import (  # type: ignore
+    KLAVIYO_API_KEY,
+    KLAVIYO_API_REVISION,
+    KLAVIYO_METRIC_NAME,
+    PORTAL_PAGE_URL,
+)
 
 log = logging.getLogger(__name__)
 
@@ -30,13 +36,69 @@ def klaviyo_configured() -> bool:
     return bool(KLAVIYO_API_KEY and KLAVIYO_METRIC_NAME)
 
 
+def build_portal_url(
+    order_id: str,
+    *,
+    item_id: str = "",
+    proof_filename: str = "",
+) -> str:
+    """Deep-link URL for the Shopify portal page (order expand + optional proof view)."""
+    params: dict[str, str] = {}
+    oid = (order_id or "").strip()
+    if oid:
+        params["order"] = oid
+    iid = (item_id or "").strip()
+    if iid:
+        params["item"] = iid
+    proof = (proof_filename or "").strip()
+    if proof:
+        params["proof"] = proof
+    base = PORTAL_PAGE_URL or ""
+    if not params:
+        return base
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}{urlencode(params)}"
+
+
+def latest_proof_filename(order_name: str, item_id: str) -> str:
+    """Return the newest proof filename for an order line, or empty string."""
+    order_name = (order_name or "").strip()
+    item_id = (item_id or "").strip()
+    if not order_name or not item_id:
+        return ""
+    try:
+        from scripts.office_api import get_item, OfficeApiError  # type: ignore
+
+        office = get_item(order_name, item_id)
+    except OfficeApiError:
+        return ""
+    if not isinstance(office, dict):
+        return ""
+    proofs: list[dict] = []
+    for f in office.get("files") or []:
+        if not isinstance(f, dict):
+            continue
+        kind = (f.get("kind") or "").strip().lower()
+        name = (f.get("name") or "").strip()
+        if not name:
+            continue
+        if kind == "proof" or name.lower().startswith("proof"):
+            proofs.append(f)
+    if not proofs:
+        return ""
+    best = max(proofs, key=lambda f: int(f.get("version") or 0))
+    return (best.get("name") or "").strip()
+
+
 def send_production_update(
     email: str,
     order_name: str,
     update_type: str,
     *,
+    order_id: str = "",
     item_title: str = "",
     item_id: str = "",
+    proof_filename: str = "",
 ) -> None:
     """Fire a Klaviyo metric event that triggers a transactional Flow."""
     if not klaviyo_configured():
@@ -52,16 +114,25 @@ def send_production_update(
     stage_label = UPDATE_LABELS.get(update_type, update_type)
     unique_id = f"{order_name}-{item_id}-{update_type}-{uuid.uuid4().hex}"
 
+    proof = (proof_filename or "").strip()
+    if update_type == "proof_uploaded" and not proof and order_name and item_id:
+        proof = latest_proof_filename(order_name, item_id)
+
+    portal_url = build_portal_url(order_id, item_id=item_id, proof_filename=proof)
+
     payload: dict[str, Any] = {
         "data": {
             "type": "event",
             "attributes": {
                 "properties": {
                     "order_name": order_name,
+                    "order_id": (order_id or "").strip(),
                     "update_type": update_type,
                     "stage_label": stage_label,
                     "item_title": item_title or "",
                     "item_id": item_id or "",
+                    "proof_filename": proof,
+                    "portal_url": portal_url,
                 },
                 "metric": {
                     "data": {
