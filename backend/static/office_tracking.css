@@ -240,7 +240,14 @@
     flex: 1 1 100%;
     text-align: right;
 }
-.office-tracking-actions label.office-upload-btn {
+.office-staff-uploads {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+.office-tracking-actions label.office-upload-btn,
+.office-tracking-actions button.office-upload-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -253,8 +260,10 @@
     border-radius: 8px;
     background: #eef2ff;
     transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
 }
-.office-tracking-actions label.office-upload-btn:hover {
+.office-tracking-actions label.office-upload-btn:hover,
+.office-tracking-actions button.office-upload-btn:hover {
     background: #e0e7ff;
     border-color: #a5b4fc;
 }

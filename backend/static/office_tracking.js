@@ -509,6 +509,61 @@
         return new Promise(resolve => { skipConfirmResolver = resolve; });
     }
 
+    let staffArtworkConfirmResolver = null;
+
+    function ensureStaffArtworkModal() {
+        let modal = document.getElementById('office-staff-artwork-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-staff-artwork-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-staff-artwork-modal></div>
+            <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="office-staff-artwork-modal-title">
+                <button type="button" class="office-changes-modal-close" data-close-staff-artwork-modal aria-label="Close">&times;</button>
+                <h3 id="office-staff-artwork-modal-title">Upload artwork on customer's behalf?</h3>
+                <p class="office-changes-modal-lead">This file will be saved to the order exactly as if the customer uploaded it themselves.</p>
+                <div class="office-changes-modal-actions">
+                    <button type="button" class="office-btn office-btn-set-stage" id="office-staff-artwork-confirm-btn">Continue to upload</button>
+                    <button type="button" class="office-btn office-btn-changes" data-close-staff-artwork-modal>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-staff-artwork-modal]')) finishStaffArtworkConfirm(false);
+        });
+        document.getElementById('office-staff-artwork-confirm-btn').addEventListener('click', function () {
+            finishStaffArtworkConfirm(true);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal && !modal.hidden) finishStaffArtworkConfirm(false);
+        });
+        return modal;
+    }
+
+    function finishStaffArtworkConfirm(confirmed) {
+        hideOfficeModal(document.getElementById('office-staff-artwork-modal'));
+        if (staffArtworkConfirmResolver) {
+            const resolve = staffArtworkConfirmResolver;
+            staffArtworkConfirmResolver = null;
+            resolve(confirmed);
+        }
+    }
+
+    function confirmStaffArtworkUpload() {
+        showOfficeModal(ensureStaffArtworkModal());
+        return new Promise(resolve => { staffArtworkConfirmResolver = resolve; });
+    }
+
+    async function handleStaffArtworkBtnClick(btn) {
+        const confirmed = await confirmStaffArtworkUpload();
+        if (!confirmed) return;
+        const tracking = btn.closest('.office-tracking');
+        const input = tracking && tracking.querySelector('.office-staff-artwork-input');
+        if (input) input.click();
+    }
+
     let deleteConfirmResolver = null;
 
     function ensureDeleteConfirmModal() {
@@ -720,10 +775,31 @@
         }
     }
 
-    function renderStaffProofUpload(orderId, itemId, apiPrefix) {
-        return `<label class="office-upload-btn office-upload-proof"><i class="fas fa-file-image"></i> Upload proof
-            <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
-                data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
+    function canStaffUploadProof(office) {
+        return office && !proofWasApproved(office);
+    }
+
+    function renderStaffProofUpload(office, orderId, itemId, apiPrefix) {
+        const showProof = canStaffUploadProof(office);
+        const showArtwork = canUploadArtwork(office);
+        if (!showProof && !showArtwork) return '';
+
+        let html = '<div class="office-staff-uploads">';
+        if (showProof) {
+            html += `<label class="office-upload-btn office-upload-proof"><i class="fas fa-file-image"></i> Upload proof
+                <input type="file" class="office-proof-input" data-order-id="${escapeHtml(orderId)}"
+                    data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}"></label>`;
+        }
+        if (showArtwork) {
+            html += `<button type="button" class="office-upload-btn office-staff-artwork-btn"
+                data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                data-api-prefix="${escapeHtml(apiPrefix)}"><i class="fas fa-upload"></i> Upload artwork</button>
+            <input type="file" class="office-staff-artwork-input" hidden
+                data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}"
+                data-api-prefix="${escapeHtml(apiPrefix)}">`;
+        }
+        html += '</div>';
+        return html;
     }
 
     function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
@@ -770,7 +846,7 @@
             html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
             html += '</div>';
             html += '<div class="office-tracking-actions office-staff-actions">';
-            html += renderStaffProofUpload(orderId, itemId, apiPrefix);
+            html += renderStaffProofUpload(office, orderId, itemId, apiPrefix);
             html += '<span class="office-tracking-msg" hidden></span></div>';
         } else {
             html += renderFileSections(office.files, orderId, itemId, apiPrefix, role, office);
@@ -1395,6 +1471,7 @@
         boundRoots.add(root);
         root.addEventListener('change', function (e) {
             if (e.target.classList.contains('office-artwork-input')) handleArtworkUpload(e.target);
+            if (e.target.classList.contains('office-staff-artwork-input')) handleArtworkUpload(e.target);
             if (e.target.classList.contains('office-notify-checkbox')) {
                 saveNotifyPref(e.target.closest('.office-order-notify'));
             }
@@ -1409,6 +1486,8 @@
         root.addEventListener('click', function (e) {
             const deleteBtn = e.target.closest('.office-delete-file-btn');
             if (deleteBtn) { e.preventDefault(); handleDeleteFile(deleteBtn); return; }
+            const staffArtwork = e.target.closest('.office-staff-artwork-btn');
+            if (staffArtwork) { e.preventDefault(); handleStaffArtworkBtnClick(staffArtwork); return; }
             const approve = e.target.closest('.office-approve-btn');
             if (approve) { e.preventDefault(); handleApprove(approve); return; }
             const changes = e.target.closest('.office-changes-btn');

@@ -2398,13 +2398,17 @@ def api_client_order_office_files_list(order_id, item):
     return _office_list_files(order_id, item, "/api/client/orders")
 
 
-def _office_upload_artwork(order_id, item):
-    cid = get_client_customer_id()
-    if not cid:
-        return jsonify({"success": False, "error": "Customer login required"}), 403
-    from scripts.order_helpers import resolve_order_access  # type: ignore
-    if not resolve_order_access(order_id, client_customer_id=cid):
-        return jsonify({"success": False, "error": "Not authorised for this order"}), 403
+def _office_upload_artwork(order_id, item, api_prefix, *, staff=False):
+    if staff:
+        if not is_staff_authenticated():
+            return jsonify({"success": False, "error": "Staff login required"}), 403
+    else:
+        cid = get_client_customer_id()
+        if not cid:
+            return jsonify({"success": False, "error": "Customer login required"}), 403
+        from scripts.order_helpers import resolve_order_access  # type: ignore
+        if not resolve_order_access(order_id, client_customer_id=cid):
+            return jsonify({"success": False, "error": "Not authorised for this order"}), 403
     entry, order_name = _office_item_context(order_id, item)
     if not entry:
         return jsonify({"success": False, "error": "Item not found on this order"}), 404
@@ -2414,7 +2418,7 @@ def _office_upload_artwork(order_id, item):
     try:
         from scripts.office_api import upload_artwork, OfficeApiError  # type: ignore
         office = upload_artwork(order_name, item, f.stream, f.filename)
-        _rewrite_office_files(office, order_id, item, "/api/client/orders")
+        _rewrite_office_files(office, order_id, item, api_prefix)
         return jsonify({"success": True, "office": office})
     except OfficeApiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
@@ -2440,7 +2444,12 @@ def _office_upload_proof(order_id, item, api_prefix):
 
 @app.route("/api/client/orders/<order_id>/items/<path:item>/artwork", methods=["POST"])
 def api_client_order_artwork(order_id, item):
-    return _office_upload_artwork(order_id, item)
+    return _office_upload_artwork(order_id, item, "/api/client/orders", staff=False)
+
+
+@app.route("/api/orders/<order_id>/items/<path:item>/artwork", methods=["POST"])
+def api_order_artwork(order_id, item):
+    return _office_upload_artwork(order_id, item, "/api/orders", staff=True)
 
 
 @app.route("/api/orders/<order_id>/items/<path:item>/proof", methods=["POST"])
