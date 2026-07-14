@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Files - BiteBoard</title>
+    <title>Diary - BiteBoard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=4" rel="stylesheet">
-    <link href="/static/office_files.css?v=4" rel="stylesheet">
+    <link href="/static/diary.css?v=1" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -39,6 +39,10 @@
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 8px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
         .page-desc { font-size: 0.875rem; color: #6b7280; margin: 0 0 20px 0; }
+        .diary-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .count-pill { font-size: 0.8rem; color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 999px; }
+        .btn-ghost { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
+        .btn-ghost:hover { background: #f9fafb; }
     </style>
 </head>
 <body>
@@ -50,32 +54,26 @@
                     <a href="/app/All_Products" class="app-tab"><i class="fas fa-list"></i><span>All Products</span></a>
                     <a href="/app/Product_Creator" class="app-tab"><i class="fas fa-plus-circle"></i><span>Product Manager</span></a>
                     <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
-                                        <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
-<a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
+                    <a href="/app/Diary" class="app-tab active"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+                    <a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
                     <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
-                    <a href="/app/Files" class="app-tab active"><i class="fas fa-folder-open"></i><span>Files</span></a>
+                    <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
                 </div>
             </nav>
             <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
         </aside>
         <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
 
-        <div class="main-wrap">
-            <h1 class="page-title"><i class="fas fa-folder-open"></i> Files</h1>
-            <p class="page-desc">Browse artwork and proof files from the Office Order API across recent orders.</p>
-            <div class="of-toolbar">
-                <div class="of-search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="of-search" placeholder="Search order, customer, or product…" autocomplete="off">
-                </div>
-                <span class="of-stats" id="of-stats"></span>
-                <button type="button" class="of-btn-ghost" id="of-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+        <div class="main-wrap diary-wrap">
+            <h1 class="page-title"><i class="fas fa-calendar-days"></i> Diary</h1>
+            <p class="page-desc">One row per product line — dispatch dates and carriers for upcoming deliveries.</p>
+            <div class="diary-toolbar">
+                <span class="count-pill" id="diary-count-pill">Loading…</span>
+                <button type="button" class="btn-ghost" id="diary-refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
             </div>
-            <div class="of-panel" id="of-panel">
-                <div class="of-state"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>
-            </div>
+            <div id="diary-content"></div>
         </div>
     </div>
-    <script src="/static/office_files.js?v=5"></script>
+    <script src="/static/diary.js?v=1"></script>
 </body>
 </html>

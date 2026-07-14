@@ -1,0 +1,107 @@
+/* Staff Diary page */
+.diary-wrap {
+    padding: 0 0 24px;
+}
+.diary-table-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.diary-table-scroll {
+    overflow-x: auto;
+}
+.diary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.diary-table th {
+    text-align: left;
+    padding: 12px 14px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+.diary-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+.diary-table tbody tr:hover {
+    background: #fafbff;
+}
+.diary-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.diary-date-input {
+    border: 1px solid transparent;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    padding: 6px 8px;
+    border-radius: 6px;
+    min-width: 130px;
+    cursor: pointer;
+}
+.diary-date-input:hover,
+.diary-date-input:focus {
+    border-color: #c7d2fe;
+    background: #fff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+.diary-requested {
+    color: #374151;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.diary-order-link {
+    color: #4f46e5;
+    font-weight: 600;
+    text-decoration: none;
+}
+.diary-order-link:hover {
+    text-decoration: underline;
+}
+.diary-product {
+    color: #111827;
+    font-weight: 500;
+    min-width: 180px;
+}
+.diary-carrier-select {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font: inherit;
+    min-width: 140px;
+    cursor: pointer;
+    background: #fff;
+}
+.diary-carrier-select.carrier-royal_mail {
+    background: #fde8ea;
+    border-color: #f5c2c7;
+}
+.diary-carrier-select.carrier-fedex {
+    background: #f0e6f6;
+    border-color: #dcc9ea;
+}
+.diary-carrier-select.carrier-frenni {
+    background: #e6f0fa;
+    border-color: #c2d9f5;
+}
+.diary-save-msg {
+    font-size: 0.78rem;
+    margin-left: 6px;
+    color: #059669;
+}
+.diary-save-msg.err {
+    color: #dc2626;
+}
+.diary-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: #6b7280;
+}

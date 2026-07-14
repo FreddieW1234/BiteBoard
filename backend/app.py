@@ -231,7 +231,10 @@ def add_headers(response):
 def get_tools():
     scripts_dir = os.path.join(os.path.dirname(__file__), 'scripts')
     files = [f[:-3] for f in os.listdir(scripts_dir)
-             if f.endswith('.py') and f not in ('app.py', '__init__.py', 'Customers.py', 'Client_Orders.py', 'Orders.py')]
+             if f.endswith('.py') and f not in (
+                 'app.py', '__init__.py', 'Customers.py', 'Client_Orders.py', 'Orders.py',
+                 'Diary.py', 'diary_store.py', 'diary_helpers.py',
+             )]
     return files
 
 @app.route('/api/health')
@@ -2505,6 +2508,34 @@ def api_order_status(order_id, item):
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
     return _office_set_status(order_id, item, "/api/orders")
+
+
+@app.route('/api/diary', methods=['GET'])
+def api_diary():
+    """Flat product-line diary rows for staff dispatch planning."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.Diary import get_diary_overview  # type: ignore
+        return jsonify(get_diary_overview())
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "rows": [], "total": 0}), 500
+
+
+@app.route('/api/diary/entry', methods=['PUT'])
+def api_diary_entry():
+    """Save dispatch date and/or carrier for one order line."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.Diary import save_diary_entry  # type: ignore
+        result = save_diary_entry(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/orders', methods=['GET'])
