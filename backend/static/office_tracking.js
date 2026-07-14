@@ -336,6 +336,37 @@
         return effectiveDisplayStage(office);
     }
 
+    function proofWasApproved(office) {
+        if (!office) return false;
+        const current = effectiveDisplayStage(office);
+        const maxProof = maxProofReached(office);
+        const approvedIdx = pipelineIndex('approved', maxProof);
+        const currentIdx = pipelineIndex(current, maxProof);
+        if (approvedIdx >= 0 && currentIdx >= approvedIdx) return true;
+        const history = office.history || [];
+        if (history.some(h => (h.stage || h.key || '') === 'approved')) return true;
+        if (history.some(h => /proof approved/i.test(h.note || ''))) return true;
+        const approvedStage = (office.stages || []).find(s => s.key === 'approved');
+        if (approvedStage && approvedStage.state === 'done') return true;
+        return false;
+    }
+
+    /** Default dropdown selection: one pipeline stage ahead of current (proof → Proof Approved, not next proof). */
+    function defaultSelectStageKey(office) {
+        const current = effectiveDisplayStage(office);
+        const maxProof = maxProofReached(office);
+        const keys = buildPipelineKeys(maxProof);
+        let currentIdx = keys.indexOf(current);
+        if (currentIdx < 0) {
+            const fallbackIdx = ALL_STAGE_OPTIONS.findIndex(o => o.key === current);
+            if (fallbackIdx < 0 || fallbackIdx >= ALL_STAGE_OPTIONS.length - 1) return current;
+            return ALL_STAGE_OPTIONS[fallbackIdx + 1].key;
+        }
+        if (currentIdx >= keys.length - 1) return current;
+        if (/^proof_\d+$/.test(current)) return 'approved';
+        return keys[currentIdx + 1];
+    }
+
     /** Expand proof_1..proof_N and add Printing before In Production for display. */
     function normalizeStagesForDisplay(office) {
         const current = effectiveDisplayStage(office);
@@ -389,6 +420,7 @@
         if (!office || !targetStage) return null;
         const current = effectiveDisplayStage(office);
         if (targetStage === current) return null;
+        if (targetStage === 'approved') return null;
 
         const maxProof = Math.max(maxProofReached(office), proofNum(targetStage), 1);
         const currentIdx = pipelineIndex(current, maxProof);
@@ -406,10 +438,10 @@
         if (targetIdx > artworkIdx && !hasArtwork) {
             warnings.push('No artwork file has been uploaded');
         }
-        if (targetIdx >= firstProofIdx && !hasProof) {
+        if (targetIdx >= firstProofIdx && targetIdx < approvedIdx && !hasProof) {
             warnings.push('No proof has been uploaded');
         }
-        if (targetIdx >= approvedIdx && current !== 'approved') {
+        if (targetIdx > approvedIdx && !proofWasApproved(office)) {
             warnings.push('Proof has not been approved by the customer');
         }
         if (warnings.length) return [...new Set(warnings)];
@@ -696,12 +728,13 @@
 
     function renderStaffStatusControls(office, orderId, itemId, apiPrefix) {
         const current = staffSelectStageKey(office);
+        const defaultStage = defaultSelectStageKey(office);
         const options = stageOptionsForSelect(office);
         let html = '<div class="office-staff-status">';
         html += '<label class="office-staff-status-label">Move to stage</label>';
-        html += `<select class="office-stage-select" data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}">`;
+        html += `<select class="office-stage-select" data-order-id="${escapeHtml(orderId)}" data-item-id="${escapeHtml(itemId)}" data-api-prefix="${escapeHtml(apiPrefix)}" data-current-stage="${escapeHtml(current)}">`;
         options.forEach(opt => {
-            const sel = opt.key === current ? ' selected' : '';
+            const sel = opt.key === defaultStage ? ' selected' : '';
             html += `<option value="${escapeHtml(opt.key)}"${sel}>${escapeHtml(opt.label)}</option>`;
         });
         html += '</select>';

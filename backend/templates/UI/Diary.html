@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=4" rel="stylesheet">
-    <link href="/static/diary.css?v=1" rel="stylesheet">
+    <link href="/static/diary.css?v=4" rel="stylesheet">
     <script src="/static/theme.js?v=1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -43,6 +43,8 @@
         .count-pill { font-size: 0.8rem; color: #6b7280; background: #f3f4f6; padding: 6px 12px; border-radius: 999px; }
         .btn-ghost { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
         .btn-ghost:hover { background: #f9fafb; }
+        .btn-print { border: 1px solid #4f46e5; background: #4f46e5; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
+        .btn-print:hover { background: #4338ca; }
     </style>
 </head>
 <body>
@@ -67,13 +69,37 @@
         <div class="main-wrap diary-wrap">
             <h1 class="page-title"><i class="fas fa-calendar-days"></i> Diary</h1>
             <p class="page-desc">One row per product line — dispatch dates and carriers for upcoming deliveries.</p>
-            <div class="diary-toolbar">
+            <div class="diary-toolbar no-print">
                 <span class="count-pill" id="diary-count-pill">Loading…</span>
+
+                <div class="diary-toolbar-group">
+                    <span class="diary-toolbar-label">Sort</span>
+                    <select class="diary-select" id="diary-sort-select" aria-label="Sort diary"></select>
+                </div>
+
+                <div class="diary-toolbar-group">
+                    <span class="diary-toolbar-label">View</span>
+                    <div class="diary-view-toggle" role="group" aria-label="Diary view">
+                        <button type="button" class="diary-view-btn" data-view="day">Day</button>
+                        <button type="button" class="diary-view-btn" data-view="week">Week</button>
+                        <button type="button" class="diary-view-btn" data-view="month">Month</button>
+                    </div>
+                </div>
+
+                <div class="diary-toolbar-group">
+                    <button type="button" class="diary-nav-btn" id="diary-prev-btn" aria-label="Previous period"><i class="fas fa-chevron-left"></i></button>
+                    <span class="diary-range-label" id="diary-range-label">—</span>
+                    <button type="button" class="diary-nav-btn" id="diary-next-btn" aria-label="Next period"><i class="fas fa-chevron-right"></i></button>
+                    <input type="date" class="diary-focus-input" id="diary-focus-input" aria-label="Jump to date">
+                    <button type="button" class="btn-ghost" id="diary-today-btn">Today</button>
+                </div>
+
+                <button type="button" class="btn-print" id="diary-print-btn"><i class="fas fa-print"></i> Print</button>
                 <button type="button" class="btn-ghost" id="diary-refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
             </div>
             <div id="diary-content"></div>
         </div>
     </div>
-    <script src="/static/diary.js?v=1"></script>
+    <script src="/static/diary.js?v=4"></script>
 </body>
 </html>

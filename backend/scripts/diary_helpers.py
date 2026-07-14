@@ -157,6 +157,7 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "item_id": item_id,
                 "line_number": line_number,
                 "product_label": product_label(line, matched),
+                "company": (order.get("company") or "").strip(),
                 "requested_date": format_display_date(requested_date),
                 "requested_date_iso": format_iso_date(requested_date),
                 "dispatch_date": format_display_date(dispatch_date),
