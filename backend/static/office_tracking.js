@@ -775,7 +775,12 @@
     }
 
     function canStaffUploadProof(office) {
-        return office && !proofWasApproved(office);
+        if (!office) return false;
+        const maxProof = Math.max(maxProofReached(office), 1);
+        const currentIdx = pipelineIndex(effectiveDisplayStage(office), maxProof);
+        const approvedIdx = pipelineIndex('approved', maxProof);
+        if (currentIdx < 0 || approvedIdx < 0) return true;
+        return currentIdx < approvedIdx;
     }
 
     function renderStaffProofUpload(office, orderId, itemId, apiPrefix) {
