@@ -9,6 +9,12 @@
     margin-bottom: 16px;
     flex-wrap: wrap;
 }
+.diary-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
 .diary-toolbar-group {
     display: flex;
     align-items: center;
@@ -238,49 +244,94 @@
 .diary-print-carrier.carrier-frenni { color: #1d4ed8; }
 
 @media print {
-    body {
+    @page {
+        size: A4 portrait;
+        margin: 12mm;
+    }
+    html, body {
         background: #fff !important;
+        width: 100% !important;
+        overflow: visible !important;
+    }
+    .app-layout,
+    .main-wrap,
+    .diary-wrap {
+        display: block !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
     .sidebar,
-    .page-desc,
+    .page-title,
     .diary-toolbar,
     .diary-screen-only {
         display: none !important;
-    }
-    .main-wrap {
-        padding: 0 !important;
-    }
-    .page-title {
-        font-size: 1rem !important;
-        margin-bottom: 8px !important;
     }
     .diary-table-card {
         border: none !important;
         border-radius: 0 !important;
         box-shadow: none !important;
+        overflow: visible !important;
+    }
+    .diary-table-scroll {
+        overflow: visible !important;
+        width: 100% !important;
     }
     .diary-print-header {
         display: block !important;
-        padding: 0 0 16px;
-        margin-bottom: 12px;
+        padding: 0 0 10px;
+        margin: 0 0 10px;
         border-bottom: 2px solid #111827;
     }
     .diary-print-header h2 {
-        font-size: 1.25rem;
+        font-size: 1.15rem;
         margin: 0 0 4px;
     }
     .diary-print-header p {
         margin: 0;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: #374151;
     }
     .diary-print-meta {
         margin-top: 4px !important;
-        font-size: 0.75rem !important;
+        font-size: 0.72rem !important;
         color: #6b7280 !important;
     }
     .diary-print-only {
         display: inline !important;
+    }
+    .diary-table {
+        width: 100% !important;
+        table-layout: fixed;
+        font-size: 0.68rem;
+        border-collapse: collapse;
+    }
+    .diary-table th,
+    .diary-table td {
+        padding: 5px 4px;
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        vertical-align: top;
+    }
+    .diary-table th:nth-child(1),
+    .diary-table td:nth-child(1) { width: 11%; }
+    .diary-table th:nth-child(2),
+    .diary-table td:nth-child(2) { width: 11%; }
+    .diary-table th:nth-child(3),
+    .diary-table td:nth-child(3) { width: 9%; }
+    .diary-table th:nth-child(4),
+    .diary-table td:nth-child(4) { width: 34%; }
+    .diary-table th:nth-child(5),
+    .diary-table td:nth-child(5) { width: 20%; }
+    .diary-table th:nth-child(6),
+    .diary-table td:nth-child(6) { width: 15%; }
+    .diary-product,
+    .diary-company {
+        min-width: 0 !important;
+        max-width: none !important;
     }
     .diary-table th {
         background: #eee !important;
@@ -292,21 +343,21 @@
     }
     .diary-print-carrier.carrier-royal_mail {
         background: #fde8ea !important;
-        padding: 2px 8px;
+        padding: 2px 6px;
         border-radius: 4px;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
     .diary-print-carrier.carrier-fedex {
         background: #f0e6f6 !important;
-        padding: 2px 8px;
+        padding: 2px 6px;
         border-radius: 4px;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
     .diary-print-carrier.carrier-frenni {
         background: #e6f0fa !important;
-        padding: 2px 8px;
+        padding: 2px 6px;
         border-radius: 4px;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;

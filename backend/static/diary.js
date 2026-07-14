@@ -339,6 +339,13 @@
     }
 
     function printDiary() {
+        const origTitle = document.title;
+        document.title = ' ';
+        const restoreTitle = () => {
+            document.title = origTitle;
+            window.removeEventListener('afterprint', restoreTitle);
+        };
+        window.addEventListener('afterprint', restoreTitle);
         window.print();
     }
 
