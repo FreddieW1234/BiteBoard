@@ -435,7 +435,7 @@
         const firstProofIdx = pipelineIndex('proof_1', maxProof);
         const artworkIdx = pipelineIndex('artwork', maxProof);
 
-        if (targetIdx > artworkIdx && !hasArtwork) {
+        if (targetIdx > artworkIdx && !hasArtwork && !hasProof) {
             warnings.push('No artwork file has been uploaded');
         }
         if (targetIdx >= firstProofIdx && targetIdx < approvedIdx && !hasProof) {
