@@ -47,6 +47,9 @@ ORDER_ACCESS_CACHE_TTL_SEC = int(os.environ.get("ORDER_ACCESS_CACHE_TTL_SEC", "3
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
 KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")
 KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Update")
+KLAVIYO_CUSTOMER_TYPE_METRIC_NAME = os.environ.get(
+    "KLAVIYO_CUSTOMER_TYPE_METRIC_NAME", "Bite Customer Type Assigned"
+)
 
 # ShipStation — parcel labels (Royal Mail, FedEx, etc.)
 SHIPSTATION_API_KEY = os.environ.get("SHIPSTATION_API_KEY") or ""

@@ -725,6 +725,112 @@
             { value: 'pending', label: 'Pending Decision', shopifyTag: 'Pending' },
         ];
 
+        const ACTIVATED_CUSTOMER_TYPES = new Set(['trade', 'end-customer']);
+
+        function customerTypeLabel(typeKey) {
+            const opt = TYPE_TAG_OPTIONS.find(o => o.value === typeKey);
+            return opt ? opt.label : typeKey;
+        }
+
+        function isPendingToActivatedTransition(prevType, newType) {
+            const prev = String(prevType || '').toLowerCase();
+            const next = String(newType || '').toLowerCase();
+            return prev === 'pending' && ACTIVATED_CUSTOMER_TYPES.has(next);
+        }
+
+        let customerTypeNotifyResolver = null;
+
+        function ensureCustomerTypeNotifyModal() {
+            let modal = document.getElementById('cu-type-notify-modal');
+            if (modal) return modal;
+            modal = document.createElement('div');
+            modal.id = 'cu-type-notify-modal';
+            modal.className = 'office-changes-modal';
+            modal.hidden = true;
+            modal.innerHTML = `
+                <div class="office-changes-modal-backdrop" data-close-cu-type-notify></div>
+                <div class="office-changes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="cu-type-notify-title">
+                    <button type="button" class="office-changes-modal-close" data-close-cu-type-notify aria-label="Close">&times;</button>
+                    <h3 id="cu-type-notify-title">Notify customer?</h3>
+                    <p class="office-changes-modal-lead" id="cu-type-notify-lead"></p>
+                    <p class="office-production-notify-email" id="cu-type-notify-email"></p>
+                    <div class="office-changes-modal-actions">
+                        <button type="button" class="office-btn office-btn-set-stage" id="cu-type-notify-send-btn">Send email</button>
+                        <button type="button" class="office-btn office-btn-changes" data-close-cu-type-notify>Not now</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', function(e) {
+                if (e.target.closest('[data-close-cu-type-notify]')) finishCustomerTypeNotify(false);
+            });
+            document.getElementById('cu-type-notify-send-btn').addEventListener('click', function() {
+                finishCustomerTypeNotify(true);
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && modal && !modal.hidden) finishCustomerTypeNotify(false);
+            });
+            return modal;
+        }
+
+        function finishCustomerTypeNotify(confirmed) {
+            const modal = document.getElementById('cu-type-notify-modal');
+            if (modal) modal.hidden = true;
+            if (customerTypeNotifyResolver) {
+                const resolve = customerTypeNotifyResolver;
+                customerTypeNotifyResolver = null;
+                resolve(confirmed);
+            }
+        }
+
+        function customerTypeNotifyPreview(customerName, typeKey) {
+            const name = (customerName || '').trim() || 'this customer';
+            const label = customerTypeLabel(typeKey);
+            return `Do you want to notify <strong>${escapeHtml(name)}</strong> that their account is now active as a <strong>${escapeHtml(label)}</strong>?`;
+        }
+
+        function confirmCustomerTypeNotify(customerName, customerType, email) {
+            const modal = ensureCustomerTypeNotifyModal();
+            const lead = document.getElementById('cu-type-notify-lead');
+            const emailEl = document.getElementById('cu-type-notify-email');
+            if (lead) lead.innerHTML = customerTypeNotifyPreview(customerName, customerType);
+            if (emailEl) {
+                emailEl.textContent = email ? `To: ${email}` : '';
+                emailEl.hidden = !email;
+            }
+            modal.hidden = false;
+            return new Promise(resolve => { customerTypeNotifyResolver = resolve; });
+        }
+
+        async function sendCustomerTypeNotify(customerId, customerType, email) {
+            const resp = await fetch(`/api/customers/${encodeURIComponent(customerId)}/type-assigned-notify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    customer_type: customerType,
+                    email: email || undefined,
+                }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.success) {
+                throw new Error((data && data.error) ? data.error : 'Could not send email');
+            }
+            return data;
+        }
+
+        async function maybeOfferCustomerTypeNotify(customerId, prevType, customerType, email, customerName) {
+            if (!isPendingToActivatedTransition(prevType, customerType)) return;
+            const emailTrimmed = (email || '').trim();
+            if (!emailTrimmed) return;
+            const confirmed = await confirmCustomerTypeNotify(customerName, customerType, emailTrimmed);
+            if (!confirmed) return;
+            try {
+                await sendCustomerTypeNotify(customerId, customerType, emailTrimmed);
+            } catch (err) {
+                alert('Could not send email: ' + (err.message || err));
+            }
+        }
+
         function getCurrentTypeTagKey(c) {
             const matched = c.matched_tags || [];
             if (matched.length === 1) return String(matched[0]).toLowerCase();
@@ -815,6 +921,14 @@
                 }
                 mergeCustomerUpdate(customerId, data.customer);
                 render();
+                const customer = CU_DATA.customers[idx];
+                await maybeOfferCustomerTypeNotify(
+                    customerId,
+                    prevValue,
+                    typeKey,
+                    (customer && customer.email) || '',
+                    (customer && customer.name) || '',
+                );
             } catch (err) {
                 mergeCustomerUpdate(customerId, {
                     tags: snapshot.tags,
@@ -920,6 +1034,8 @@
 
         async function saveCustomerDetails(customerId, formEl) {
             const saveBtn = formEl.querySelector('.cu-save-btn');
+            const idx = (CU_DATA.customers || []).findIndex(c => String(c.id) === String(customerId));
+            const prevType = idx >= 0 ? getCurrentTypeTagKey(CU_DATA.customers[idx]) : '';
             const fd = new FormData(formEl);
             const body = {
                 first_name: fd.get('first_name'),
@@ -931,6 +1047,7 @@
                 mobile_number: fd.get('mobile_number'),
                 type_tag: fd.get('type_tag') || null,
             };
+            const newType = body.type_tag || '';
             if (saveBtn) {
                 saveBtn.disabled = true;
                 saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
@@ -947,6 +1064,14 @@
                 }
                 mergeCustomerUpdate(customerId, data.customer);
                 render();
+                const customer = idx >= 0 ? CU_DATA.customers[idx] : data.customer;
+                await maybeOfferCustomerTypeNotify(
+                    customerId,
+                    prevType,
+                    newType,
+                    (body.email || (customer && customer.email) || '').trim(),
+                    (customer && customer.name) || '',
+                );
             } catch (err) {
                 alert('Could not save customer: ' + (err.message || err));
                 if (saveBtn) {

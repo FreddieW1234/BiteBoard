@@ -2666,6 +2666,57 @@ def api_customer_type_tag(customer_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/customers/<customer_id>/type-assigned-notify', methods=['POST'])
+def api_customer_type_assigned_notify(customer_id):
+    """Staff: send Klaviyo event after pending → trade/end-customer (explicit confirmation)."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+
+    data = request.get_json(silent=True) or {}
+    customer_type = (data.get("customer_type") or "").strip().lower()
+    email_override = (data.get("email") or "").strip()
+
+    from scripts.klaviyo_api import (  # type: ignore
+        ASSIGNED_CUSTOMER_TYPES,
+        KlaviyoError,
+        klaviyo_customer_type_configured,
+        send_customer_type_assigned,
+    )
+    from scripts.Customers import _fetch_single_customer  # type: ignore
+
+    if not klaviyo_customer_type_configured():
+        return jsonify({"success": False, "error": "Email notifications are not configured"}), 503
+    if customer_type not in ASSIGNED_CUSTOMER_TYPES:
+        return jsonify({"success": False, "error": "Invalid customer type"}), 400
+
+    try:
+        customer = _fetch_single_customer(customer_id)
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+    email = email_override or (customer.get("email") or "").strip()
+    if not email:
+        return jsonify({"success": False, "error": "No email address for this customer"}), 400
+
+    customer_name = (customer.get("name") or "").strip()
+
+    try:
+        send_customer_type_assigned(
+            email,
+            customer_name,
+            customer_type,
+            customer_id=str(customer_id),
+        )
+    except KlaviyoError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 502
+
+    return jsonify({
+        "success": True,
+        "email": email,
+        "customer_type": customer_type,
+    })
+
+
 @app.route('/api/customers/<customer_id>', methods=['PUT'])
 def api_customer_update(customer_id):
     """Save customer email, type tag, and custom_fields metafields."""
