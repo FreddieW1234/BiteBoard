@@ -244,6 +244,10 @@ def set_diary_entry(
     dispatch_date: str | None = None,
     dispatch_manual: bool | None = None,
     carrier: str | None = None,
+    tracking_number: str | None = None,
+    label_id: str | None = None,
+    service_code: str | None = None,
+    shipment_type: str | None = None,
 ) -> dict:
     """Upsert one diary entry via ``PUT /orders/{order}/items/{item}/diary``."""
     url = f"{_url(order, item)}/diary"
@@ -254,6 +258,14 @@ def set_diary_entry(
         payload["dispatch_manual"] = bool(dispatch_manual)
     if carrier is not None:
         payload["carrier"] = carrier
+    if tracking_number is not None:
+        payload["tracking_number"] = tracking_number
+    if label_id is not None:
+        payload["label_id"] = label_id
+    if service_code is not None:
+        payload["service_code"] = service_code
+    if shipment_type is not None:
+        payload["shipment_type"] = shipment_type
     resp = _request("PUT", url, json=payload)
     result = _handle_response(resp)
     if not isinstance(result, dict):

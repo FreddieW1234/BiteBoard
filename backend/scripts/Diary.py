@@ -52,6 +52,10 @@ def _load_saved_entries() -> dict[tuple[str, str], dict]:
                     "dispatch_date": e.get("dispatch_date") or "",
                     "dispatch_manual": bool(e.get("dispatch_manual")),
                     "carrier": e.get("carrier") or "",
+                    "tracking_number": e.get("tracking_number") or "",
+                    "label_id": e.get("label_id") or "",
+                    "service_code": e.get("service_code") or "",
+                    "shipment_type": e.get("shipment_type") or "",
                     "updated_at": e.get("updated_at") or "",
                 }
             enrich_saved_index(out)
@@ -96,6 +100,10 @@ def save_diary_entry(payload: dict) -> dict:
     dispatch_date = payload.get("dispatch_date")
     dispatch_manual = payload.get("dispatch_manual")
     carrier = payload.get("carrier")
+    tracking_number = payload.get("tracking_number")
+    label_id = payload.get("label_id")
+    service_code = payload.get("service_code")
+    shipment_type = payload.get("shipment_type")
 
     if dispatch_date is not None:
         parsed = parse_delivery_date(str(dispatch_date))
@@ -116,6 +124,10 @@ def save_diary_entry(payload: dict) -> dict:
                 dispatch_date=dispatch_date if dispatch_date is not None else None,
                 dispatch_manual=dispatch_manual if dispatch_manual is not None else None,
                 carrier=carrier if carrier is not None else None,
+                tracking_number=tracking_number if tracking_number is not None else None,
+                label_id=label_id if label_id is not None else None,
+                service_code=service_code if service_code is not None else None,
+                shipment_type=shipment_type if shipment_type is not None else None,
             )
             return {"success": True, "entry": entry}
         except Exception as exc:
@@ -128,6 +140,10 @@ def save_diary_entry(payload: dict) -> dict:
             dispatch_date=dispatch_date if dispatch_date is not None else None,
             dispatch_manual=dispatch_manual if dispatch_manual is not None else None,
             carrier=carrier if carrier is not None else None,
+            tracking_number=tracking_number if tracking_number is not None else None,
+            label_id=label_id if label_id is not None else None,
+            service_code=service_code if service_code is not None else None,
+            shipment_type=shipment_type if shipment_type is not None else None,
         )
     except ValueError as exc:
         return {"success": False, "error": str(exc)}

@@ -1,0 +1,358 @@
+/* Full-screen shipping modal (diary Ship button) */
+
+.ship-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.ship-overlay[hidden] {
+    display: none !important;
+}
+
+.ship-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: min(960px, 100%);
+    max-height: min(92vh, 900px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+.ship-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+
+.ship-modal-header h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #111827;
+}
+
+.ship-modal-close {
+    border: none;
+    background: transparent;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.ship-modal-close:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.ship-modal-body {
+    padding: 20px 22px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.ship-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid #e5e7eb;
+    flex-shrink: 0;
+    background: #fafbff;
+}
+
+.ship-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+@media (max-width: 720px) {
+    .ship-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ship-section {
+    margin-bottom: 18px;
+}
+
+.ship-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.ship-address {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.ship-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.875rem;
+}
+
+.ship-items li {
+    padding: 6px 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.ship-items li:last-child {
+    border-bottom: none;
+}
+
+.ship-fields {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+@media (max-width: 720px) {
+    .ship-fields {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.ship-field label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.ship-field input,
+.ship-field select {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.ship-type-toggle {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.ship-type-btn {
+    flex: 1;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ship-type-btn.active {
+    border-color: #4f46e5;
+    background: #eef2ff;
+    color: #4338ca;
+    font-weight: 600;
+}
+
+.ship-type-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ship-rates {
+    margin-top: 8px;
+}
+
+.ship-rate-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ship-rate-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.ship-rate-item:hover {
+    border-color: #c7d2fe;
+    background: #fafbff;
+}
+
+.ship-rate-item.selected {
+    border-color: #4f46e5;
+    background: #eef2ff;
+}
+
+.ship-rate-item input {
+    flex-shrink: 0;
+}
+
+.ship-rate-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.ship-rate-carrier {
+    font-weight: 600;
+    color: #111827;
+    font-size: 0.9rem;
+}
+
+.ship-rate-service {
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+.ship-rate-price {
+    font-weight: 600;
+    color: #111827;
+    white-space: nowrap;
+}
+
+.ship-msg {
+    font-size: 0.875rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.ship-msg.err {
+    background: #fef2f2;
+    color: #b42318;
+    border: 1px solid #fecaca;
+}
+
+.ship-msg.info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.ship-msg.ok {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.ship-btn-primary {
+    border: none;
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ship-btn-primary:hover:not(:disabled) {
+    background: #4338ca;
+}
+
+.ship-btn-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ship-btn-secondary {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.ship-btn-secondary:hover {
+    background: #f9fafb;
+}
+
+.ship-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.ship-status-chip.shipped {
+    color: #047857;
+}
+
+.diary-ship-cell {
+    white-space: nowrap;
+}
+
+.diary-ship-btn {
+    border: 1px solid #4f46e5;
+    background: #4f46e5;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.diary-ship-btn:hover {
+    background: #4338ca;
+}
+
+.diary-shipped-info {
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.diary-shipped-info .diary-shipped-carrier {
+    font-weight: 600;
+    color: #111827;
+}
+
+.diary-shipped-info .diary-shipped-tracking {
+    color: #6b7280;
+    word-break: break-all;
+}
+
+@media print {
+    .ship-overlay {
+        display: none !important;
+    }
+}

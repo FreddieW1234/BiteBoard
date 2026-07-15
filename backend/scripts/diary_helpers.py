@@ -215,6 +215,7 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 dispatch_date = parse_delivery_date(dispatch_iso)
 
             carrier = entry.get("carrier") or ""
+            tracking_number = entry.get("tracking_number") or ""
 
             rows.append({
                 "order_id": order_id,
@@ -230,6 +231,8 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "dispatch_manual": dispatch_manual,
                 "carrier": carrier,
                 "carrier_label": _CARRIER_LABELS.get(carrier, carrier),
+                "tracking_number": tracking_number,
+                "shipped": bool(tracking_number),
             })
 
     def sort_key(row: dict):

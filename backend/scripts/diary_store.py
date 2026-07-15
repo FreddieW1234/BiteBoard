@@ -30,12 +30,40 @@ def init_db() -> None:
                 dispatch_date TEXT,
                 dispatch_manual INTEGER NOT NULL DEFAULT 0,
                 carrier TEXT,
+                tracking_number TEXT,
+                label_id TEXT,
+                service_code TEXT,
+                shipment_type TEXT,
                 updated_at TEXT,
                 PRIMARY KEY (order_name, item_id)
             )
             """
         )
+        for col, typedef in (
+            ("tracking_number", "TEXT"),
+            ("label_id", "TEXT"),
+            ("service_code", "TEXT"),
+            ("shipment_type", "TEXT"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE diary_entries ADD COLUMN {col} {typedef}")
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
+
+
+def _row_to_entry(row: sqlite3.Row) -> dict:
+    keys = row.keys()
+    return {
+        "dispatch_date": row["dispatch_date"] or "",
+        "dispatch_manual": bool(row["dispatch_manual"]),
+        "carrier": row["carrier"] or "",
+        "tracking_number": row["tracking_number"] or "" if "tracking_number" in keys else "",
+        "label_id": row["label_id"] or "" if "label_id" in keys else "",
+        "service_code": row["service_code"] or "" if "service_code" in keys else "",
+        "shipment_type": row["shipment_type"] or "" if "shipment_type" in keys else "",
+        "updated_at": row["updated_at"] or "",
+    }
 
 
 def get_all_entries() -> dict[tuple[str, str], dict]:
@@ -43,16 +71,13 @@ def get_all_entries() -> dict[tuple[str, str], dict]:
     out: dict[tuple[str, str], dict] = {}
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT order_name, item_id, dispatch_date, dispatch_manual, carrier, updated_at FROM diary_entries"
+            """SELECT order_name, item_id, dispatch_date, dispatch_manual, carrier,
+                      tracking_number, label_id, service_code, shipment_type, updated_at
+               FROM diary_entries"""
         ).fetchall()
     for row in rows:
         key = (row["order_name"], row["item_id"])
-        out[key] = {
-            "dispatch_date": row["dispatch_date"] or "",
-            "dispatch_manual": bool(row["dispatch_manual"]),
-            "carrier": row["carrier"] or "",
-            "updated_at": row["updated_at"] or "",
-        }
+        out[key] = _row_to_entry(row)
     return out
 
 
@@ -61,19 +86,15 @@ def get_entry(order_name: str, item_id: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT dispatch_date, dispatch_manual, carrier, updated_at
+            SELECT dispatch_date, dispatch_manual, carrier, tracking_number, label_id,
+                   service_code, shipment_type, updated_at
             FROM diary_entries WHERE order_name = ? AND item_id = ?
             """,
             (order_name, item_id),
         ).fetchone()
     if not row:
         return None
-    return {
-        "dispatch_date": row["dispatch_date"] or "",
-        "dispatch_manual": bool(row["dispatch_manual"]),
-        "carrier": row["carrier"] or "",
-        "updated_at": row["updated_at"] or "",
-    }
+    return _row_to_entry(row)
 
 
 def upsert_entry(
@@ -83,6 +104,10 @@ def upsert_entry(
     dispatch_date: str | None = None,
     dispatch_manual: bool | None = None,
     carrier: str | None = None,
+    tracking_number: str | None = None,
+    label_id: str | None = None,
+    service_code: str | None = None,
+    shipment_type: str | None = None,
 ) -> dict:
     init_db()
     order_name = (order_name or "").strip()
@@ -94,6 +119,10 @@ def upsert_entry(
         "dispatch_date": "",
         "dispatch_manual": False,
         "carrier": "",
+        "tracking_number": "",
+        "label_id": "",
+        "service_code": "",
+        "shipment_type": "",
         "updated_at": "",
     }
 
@@ -106,18 +135,33 @@ def upsert_entry(
         if c not in VALID_CARRIERS:
             raise ValueError("Invalid carrier")
         existing["carrier"] = c
+    if tracking_number is not None:
+        existing["tracking_number"] = (tracking_number or "").strip()
+    if label_id is not None:
+        existing["label_id"] = (label_id or "").strip()
+    if service_code is not None:
+        existing["service_code"] = (service_code or "").strip()
+    if shipment_type is not None:
+        existing["shipment_type"] = (shipment_type or "").strip()
 
     existing["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     with _connect() as conn:
         conn.execute(
             """
-            INSERT INTO diary_entries (order_name, item_id, dispatch_date, dispatch_manual, carrier, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO diary_entries (
+                order_name, item_id, dispatch_date, dispatch_manual, carrier,
+                tracking_number, label_id, service_code, shipment_type, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(order_name, item_id) DO UPDATE SET
                 dispatch_date = excluded.dispatch_date,
                 dispatch_manual = excluded.dispatch_manual,
                 carrier = excluded.carrier,
+                tracking_number = excluded.tracking_number,
+                label_id = excluded.label_id,
+                service_code = excluded.service_code,
+                shipment_type = excluded.shipment_type,
                 updated_at = excluded.updated_at
             """,
             (
@@ -126,6 +170,10 @@ def upsert_entry(
                 existing["dispatch_date"] or None,
                 1 if existing["dispatch_manual"] else 0,
                 existing["carrier"] or None,
+                existing["tracking_number"] or None,
+                existing["label_id"] or None,
+                existing["service_code"] or None,
+                existing["shipment_type"] or None,
                 existing["updated_at"],
             ),
         )

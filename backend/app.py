@@ -2548,6 +2548,61 @@ def api_diary_entry():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/shipping/status', methods=['GET'])
+def api_shipping_status():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.shipping import shipping_status  # type: ignore
+        return jsonify({"success": True, "providers": shipping_status()})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/shipping/prepare/<order_id>', methods=['GET'])
+def api_shipping_prepare(order_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.shipping import prepare_shipment  # type: ignore
+        result = prepare_shipment(order_id)
+        if not result.get("success"):
+            return jsonify(result), 404
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/shipping/quote', methods=['POST'])
+def api_shipping_quote():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.shipping import quote_shipment  # type: ignore
+        result = quote_shipment(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/shipping/ship', methods=['POST'])
+def api_shipping_ship():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.shipping import ship_order  # type: ignore
+        result = ship_order(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     """Return recent Shopify orders for the staff Orders page."""

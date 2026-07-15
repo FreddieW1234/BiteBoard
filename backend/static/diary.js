@@ -215,13 +215,21 @@
             <th>Order number</th>
             <th>Product</th>
             <th>Company</th>
-            <th>Carrier</th>
+            <th>Ship</th>
             </tr></thead><tbody>`;
+
+        const firstShipRowByOrder = {};
+        displayRows.forEach((row, idx) => {
+            if (!firstShipRowByOrder[row.order_name]) {
+                firstShipRowByOrder[row.order_name] = idx;
+            }
+        });
 
         displayRows.forEach((row, idx) => {
             const key = rowKey(row);
             const dispatchPrint = formatDisplayDate(row.dispatch_date_iso);
             const carrierPrint = carrierLabel(row.carrier);
+            const showShipBtn = !row.shipped && firstShipRowByOrder[row.order_name] === idx;
             html += `<tr data-idx="${idx}" data-key="${escapeHtml(key)}" data-row-id="${escapeHtml(key)}">`;
             html += `<td class="diary-dispatch-cell">
                 <div class="diary-date-wrap diary-screen-only">
@@ -232,6 +240,7 @@
                     <button type="button" class="diary-date-open" aria-label="Choose dispatch date for ${escapeHtml(row.product_label)}">
                         <i class="far fa-calendar" aria-hidden="true"></i>
                     </button>
+                    <span class="diary-save-msg diary-screen-only" data-msg="${escapeHtml(key)}" hidden></span>
                 </div>
                 <span class="diary-print-only">${escapeHtml(dispatchPrint)}</span>
             </td>`;
@@ -239,14 +248,22 @@
             html += `<td><a class="diary-order-link diary-screen-only" href="/app/Orders#order-${escapeHtml(row.order_id)}">${escapeHtml(row.order_name)}</a><span class="diary-print-only">${escapeHtml(row.order_name)}</span></td>`;
             html += `<td class="diary-product">${escapeHtml(row.product_label)}</td>`;
             html += `<td class="diary-company">${escapeHtml(row.company || '—')}</td>`;
-            html += `<td>
-                <div class="diary-carrier-cell">
-                    <select class="diary-carrier-select diary-screen-only ${carrierClass(row.carrier)}" data-field="carrier" aria-label="Carrier for ${escapeHtml(row.product_label)}">
-                        ${CARRIERS.map(c => `<option value="${escapeHtml(c.value)}"${c.value === row.carrier ? ' selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}
-                    </select>
-                    <span class="diary-print-only diary-print-carrier ${carrierClass(row.carrier)}">${escapeHtml(carrierPrint)}</span>
-                    <span class="diary-save-msg diary-screen-only" data-msg="${escapeHtml(key)}" hidden></span>
-                </div>
+            html += `<td class="diary-ship-cell">
+                <div class="diary-screen-only">`;
+            if (row.shipped) {
+                html += `<div class="diary-shipped-info">
+                    <div class="diary-shipped-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.carrier_label || carrierPrint)}</div>
+                    ${row.tracking_number ? `<div class="diary-shipped-tracking">${escapeHtml(row.tracking_number)}</div>` : ''}
+                </div>`;
+            } else if (showShipBtn) {
+                html += `<button type="button" class="diary-ship-btn" data-ship-order-id="${escapeHtml(row.order_id)}" data-ship-order-name="${escapeHtml(row.order_name)}">
+                    <i class="fas fa-truck"></i> Ship
+                </button>`;
+            } else {
+                html += `<span class="diary-shipped-tracking">—</span>`;
+            }
+            html += `</div>
+                <span class="diary-print-only diary-print-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.shipped ? (row.tracking_number ? row.tracking_number + ' · ' : '') + carrierPrint : '—')}</span>
             </td>`;
             html += '</tr>';
         });
@@ -340,14 +357,19 @@
                 carrier: row.carrier || '',
             });
         }
-        if (e.target.dataset.field === 'carrier') {
-            e.target.className = 'diary-carrier-select diary-screen-only ' + carrierClass(e.target.value);
-            scheduleSave(row, {
-                carrier: e.target.value,
-                dispatch_date: row.dispatch_date_iso || '',
-                dispatch_manual: !!row.dispatch_manual,
-            });
+    }
+
+    function onTableClickShip(e) {
+        const shipBtn = e.target.closest('.diary-ship-btn');
+        if (shipBtn) {
+            const orderId = shipBtn.dataset.shipOrderId;
+            const orderName = shipBtn.dataset.shipOrderName || '';
+            if (orderId && typeof window.openShippingModal === 'function') {
+                window.openShippingModal(orderId, orderName);
+            }
+            return;
         }
+        onTableClick(e);
     }
 
     function navigatePeriod(delta) {
@@ -421,7 +443,9 @@
         });
     });
     document.getElementById('diary-content')?.addEventListener('change', onTableChange);
-    document.getElementById('diary-content')?.addEventListener('click', onTableClick);
+    document.getElementById('diary-content')?.addEventListener('click', onTableClickShip);
+
+    window.__diaryReload = loadDiary;
 
     const sortSelect = document.getElementById('diary-sort-select');
     if (sortSelect) {

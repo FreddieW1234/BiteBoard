@@ -100,6 +100,7 @@ ADDRESS_FIELDS = """
             province
             zip
             country
+            countryCodeV2
             phone
 """
 
@@ -630,7 +631,34 @@ def format_mailing_address(addr: dict | None) -> dict | None:
         parts.append(phone)
     if not parts:
         return None
-    return {"lines": parts, "text": "\n".join(parts)}
+    country_code = (addr.get("countryCodeV2") or "").strip().upper()
+    if not country_code and country:
+        country_code = _guess_country_code(country)
+    return {
+        "lines": parts,
+        "text": "\n".join(parts),
+        "name": name,
+        "company": company,
+        "address1": (addr.get("address1") or "").strip(),
+        "address2": (addr.get("address2") or "").strip(),
+        "city": city,
+        "province": province,
+        "zip": zip_code,
+        "country": country,
+        "country_code": country_code or "GB",
+        "phone": phone,
+    }
+
+
+def _guess_country_code(country: str) -> str:
+    c = (country or "").strip().lower()
+    if c in ("united kingdom", "uk", "great britain", "gb"):
+        return "GB"
+    if c in ("ireland", "republic of ireland"):
+        return "IE"
+    if len(c) == 2:
+        return c.upper()
+    return ""
 
 
 _ON_ACCOUNT_GATEWAY_HINTS = (

@@ -48,6 +48,19 @@ KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
 KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")
 KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Update")
 
+# ShipStation — parcel labels (Royal Mail, FedEx, etc.)
+SHIPSTATION_API_KEY = os.environ.get("SHIPSTATION_API_KEY") or ""
+SHIPSTATION_API_URL = (os.environ.get("SHIPSTATION_API_URL") or "https://api.shipstation.com").rstrip("/")
+SHIPSTATION_WAREHOUSE_ID = os.environ.get("SHIPSTATION_WAREHOUSE_ID") or ""
+
+# Palletways — pallet consignments (optional until API key is issued)
+PALLETWAYS_API_KEY = os.environ.get("PALLETWAYS_API_KEY") or ""
+PALLETWAYS_API_URL = (os.environ.get("PALLETWAYS_API_URL") or "https://api.palletways.com").rstrip("/")
+
+# Office LAN print server — receives ZPL/PDF jobs from Render (optional in phase 1)
+OFFICE_PRINT_SERVER_URL = (os.environ.get("OFFICE_PRINT_SERVER_URL") or "").rstrip("/")
+OFFICE_PRINT_SERVER_KEY = os.environ.get("OFFICE_PRINT_SERVER_KEY") or ""
+
 # Common headers for API requests
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN or "",
