@@ -167,6 +167,7 @@ def client_orders_page():
         "order": (request.args.get("order") or "").strip(),
         "item": (request.args.get("item") or "").strip(),
         "proof": (request.args.get("proof") or "").strip(),
+        "action": (request.args.get("action") or "").strip(),
     }
     return render_template(
         "UI/Client_Orders.html",

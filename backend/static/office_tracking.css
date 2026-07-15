@@ -268,6 +268,15 @@
     border-color: #a5b4fc;
 }
 .office-tracking-actions label.office-upload-btn input { display: none; }
+@keyframes biteUploadFlash {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
+    50% { box-shadow: 0 0 0 5px rgba(79, 70, 229, 0.4); }
+}
+.bite-upload-flash {
+    animation: biteUploadFlash 0.9s ease-in-out 3;
+    border-color: #4f46e5 !important;
+    background: #e0e7ff !important;
+}
 .office-tracking-actions .office-btn {
     display: inline-flex;
     align-items: center;

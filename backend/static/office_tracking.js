@@ -1520,24 +1520,101 @@
         let orderId = '';
         let itemId = '';
         let proof = '';
+        let action = '';
         if (source) {
             const p = new URLSearchParams(source.startsWith('?') ? source : '?' + source);
             orderId = (p.get('order') || '').trim();
             itemId = (p.get('item') || '').trim();
             proof = (p.get('proof') || '').trim();
+            action = (p.get('action') || '').trim().toLowerCase();
         } else if (typeof window !== 'undefined') {
             const p = new URLSearchParams(window.location.search);
             orderId = (p.get('order') || '').trim();
             itemId = (p.get('item') || '').trim();
             proof = (p.get('proof') || '').trim();
+            action = (p.get('action') || '').trim().toLowerCase();
             const embedded = window.__PORTAL_DEEP_LINK__;
             if (embedded) {
                 orderId = orderId || String(embedded.order || '').trim();
                 itemId = itemId || String(embedded.item || '').trim();
                 proof = proof || String(embedded.proof || '').trim();
+                action = action || String(embedded.action || '').trim().toLowerCase();
             }
         }
-        return { orderId, itemId, proof };
+        return { orderId, itemId, proof, action };
+    }
+
+    function slugifyTitle(text) {
+        return String(text || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
+    function stripLinePrefix(id) {
+        return String(id || '').replace(/^\d+-/, '');
+    }
+
+    /**
+     * Resolve a deep-link `item` value to an actual office_item_id present on the order.
+     * Tries exact match first, then tolerant slug matching (the email uses Shopify handleize,
+     * which may differ slightly from the portal's slugify). Returns '' if nothing matches.
+     */
+    function resolveDeepLinkItemId(items, rawItemId) {
+        const raw = (rawItemId || '').trim();
+        if (!raw) return '';
+        const list = items || [];
+        if (list.some(i => (i.office_item_id || '') === raw)) return raw;
+
+        const rawSlug = stripLinePrefix(raw);
+        if (!rawSlug) return '';
+
+        let match = list.find(i => stripLinePrefix(i.office_item_id || '') === rawSlug);
+        if (!match) match = list.find(i => slugifyTitle(i.title) === rawSlug);
+        if (!match) {
+            match = list.find(i => {
+                const s = stripLinePrefix(i.office_item_id || '');
+                return s && (s.indexOf(rawSlug) === 0 || rawSlug.indexOf(s) === 0);
+            });
+        }
+        if (!match) {
+            match = list.find(i => {
+                const s = slugifyTitle(i.title);
+                return s && (s.indexOf(rawSlug) === 0 || rawSlug.indexOf(s) === 0);
+            });
+        }
+        return match ? (match.office_item_id || '') : '';
+    }
+
+    function flashUploadControl(tracking) {
+        if (!tracking) return false;
+        const fileInput = tracking.querySelector('.office-artwork-input, .office-staff-artwork-input');
+        const highlightTarget =
+            tracking.querySelector('label.office-upload-btn') ||
+            tracking.querySelector('.office-staff-artwork-btn') ||
+            (fileInput && fileInput.closest('label')) ||
+            fileInput;
+        if (!highlightTarget && !fileInput) return false;
+
+        if (highlightTarget) {
+            highlightTarget.classList.add('bite-upload-flash');
+            setTimeout(() => highlightTarget.classList.remove('bite-upload-flash'), 3000);
+            if (typeof highlightTarget.scrollIntoView === 'function') {
+                highlightTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // Attempt to auto-open the file picker. Arriving via a link is not a user
+        // gesture, so the browser will usually block this — that's fine, the
+        // highlighted button is the fallback the customer clicks themselves.
+        if (fileInput) {
+            try {
+                fileInput.click();
+            } catch (_) {
+                /* blocked without a user gesture — highlight is the fallback */
+            }
+        }
+        return true;
     }
 
     function openProofFile(orderId, itemId, filename, apiPrefix) {
@@ -1556,6 +1633,7 @@
         const orderId = (opts.orderId || dl.orderId || '').trim();
         const itemId = (opts.itemId || dl.itemId || '').trim();
         const proof = (opts.proof || dl.proof || '').trim();
+        const action = (opts.action || dl.action || '').trim().toLowerCase();
         if (!orderId) return false;
 
         if (typeof opts.onBeforeExpand === 'function') {
@@ -1583,15 +1661,25 @@
 
         await loadOrderTracking(orderId, apiPrefix, inner, role);
 
-        if (itemId) {
-            const tracking = inner.querySelector(`.office-tracking[data-item-id="${CSS.escape(itemId)}"]`);
+        // Resolve the deep-link item to a real office_item_id (tolerant slug match).
+        const cacheEntry = orderTrackingCache[String(orderId)];
+        const items = (cacheEntry && cacheEntry.data && cacheEntry.data.items) || [];
+        const resolvedItemId = resolveDeepLinkItemId(items, itemId);
+
+        let tracking = null;
+        if (resolvedItemId) {
+            tracking = inner.querySelector(`.office-tracking[data-item-id="${CSS.escape(resolvedItemId)}"]`);
             if (tracking) {
                 tracking.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         }
 
         if (proof) {
-            openProofFile(orderId, itemId, proof, apiPrefix);
+            openProofFile(orderId, resolvedItemId || itemId, proof, apiPrefix);
+        }
+
+        if (action === 'upload' && tracking) {
+            flashUploadControl(tracking);
         }
         return true;
     }

@@ -1,12 +1,12 @@
 /**
- * Shopify /pages/portal helper: forward ?order=&item=&proof= from the store page into the portal iframe.
+ * Shopify /pages/portal helper: forward ?order=&item=&proof=&action= from the store page into the portal iframe.
  * Add to the portal page in your theme:
  *   <script src="https://YOUR-PORTAL-HOST/static/bite_portal_parent_deep_link.js" defer></script>
  */
 (function () {
     'use strict';
 
-    var FORWARD = ['order', 'item', 'proof'];
+    var FORWARD = ['order', 'item', 'proof', 'action'];
 
     function findPortalIframe() {
         var selectors = [
