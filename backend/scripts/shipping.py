@@ -492,8 +492,7 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> list[dict]
     rates = rate_resp.get("rate_response", {}).get("rates")
     if rates is None:
         rates = rate_resp.get("rates") or []
-    dest = (dest_country or "GB").upper()
-    domestic_uk = dest == "GB"
+    domestic_uk = (dest_country or "GB").upper() == "GB"
 
     out: list[dict] = []
     for r in rates or []:
@@ -508,8 +507,6 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> list[dict]
         service_type = r.get("service_type") or r.get("service_code") or ""
         service_code = r.get("service_code") or ""
         if domestic_uk and _looks_international(f"{service_type} {service_code}"):
-            continue
-        if domestic_uk and currency and currency != "GBP":
             continue
 
         out.append({

@@ -53,8 +53,8 @@ SHIPSTATION_API_KEY = os.environ.get("SHIPSTATION_API_KEY") or ""
 SHIPSTATION_API_URL = (os.environ.get("SHIPSTATION_API_URL") or "https://api.shipstation.com").rstrip("/")
 # Optional — if unset, the first warehouse from GET /v2/warehouses is used for ship-from
 SHIPSTATION_WAREHOUSE_ID = os.environ.get("SHIPSTATION_WAREHOUSE_ID") or ""
-# Comma-separated carrier_code substrings to quote (default: Royal Mail). Use "all" for every carrier.
-SHIPSTATION_CARRIER_CODES = os.environ.get("SHIPSTATION_CARRIER_CODES") or "royal_mail,stamps_com,parcelforce"
+# Optional comma-separated carrier_code substrings to limit quotes (empty = all carriers).
+SHIPSTATION_CARRIER_CODES = os.environ.get("SHIPSTATION_CARRIER_CODES") or ""
 # Optional manual ship-from fallback when no warehouse is configured in ShipStation
 SHIPSTATION_ORIGIN_NAME = os.environ.get("SHIPSTATION_ORIGIN_NAME") or ""
 SHIPSTATION_ORIGIN_PHONE = os.environ.get("SHIPSTATION_ORIGIN_PHONE") or ""

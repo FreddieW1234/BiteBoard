@@ -1744,6 +1744,10 @@ def api_create_product():
                 print(f"[API] Shopify media IDs to keep: {processed_ids}")
             else:
                 data['shopify_media_ids'] = []
+
+            data['media_explicitly_cleared'] = request.form.get(
+                'media_explicitly_cleared', 'false'
+            ).lower() in ('true', '1', 'yes')
             
             # Handle media order for reordering
             media_order_str = request.form.get('media_order', '[]')

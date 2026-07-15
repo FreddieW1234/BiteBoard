@@ -2271,6 +2271,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "artworkguidelines", "artworktemplates", "custom_category", "subcategory",
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
+            "product_colours", "packaging_colours",
         ]) | set(FILTER_GROUP_KEYS or [])
 
         def _is_clearable(ns, k):
@@ -2373,9 +2374,13 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     # Fallback to raw value if formatting fails
                     formatted_value = raw_value
                 
-                # Replace blank/empty values with "-" (except for list types which should remain as JSON arrays)
+                # Replace blank/empty values with "-" (except clearable keys and colour fields)
                 # Also skip if value is already a valid JSON array (for list types)
-                if not mf_type.startswith('list.'):
+                _skip_dash_placeholder = (
+                    namespace == "custom"
+                    and key in ("product_colours", "packaging_colours")
+                )
+                if not mf_type.startswith('list.') and not _skip_dash_placeholder:
                     # For non-list types, check if value is blank
                     if isinstance(formatted_value, str):
                         if not formatted_value.strip():
@@ -3020,15 +3025,22 @@ def create_product(product_data):
                 if is_updating:
                     time.sleep(5.0)
                     print(f"🔄 Step 2: Managing media for existing product - {len(media_files)} new files, {len(shopify_media_ids)} existing files to keep...")
-                    
-                    # Step 2a: Remove media not in the keep list
-                    # Always call this - empty list means remove all images
-                    print(f"🗑️ Step 2a: Removing unwanted media from product (keeping {len(shopify_media_ids) if shopify_media_ids else 0} images)...")
-                    manage_results = manage_product_media(product_id, shopify_media_ids or [], shopify_domain=actual_shopify_domain)
-                    if manage_results.get("success"):
-                        print(f"✅ Step 2a Complete: Removed {manage_results.get('removed_count', 0)} unwanted media items")
+
+                    media_explicitly_cleared = str(product_data.get("media_explicitly_cleared", "")).lower() in (
+                        "1", "true", "yes",
+                    )
+                    should_manage_media = bool(shopify_media_ids or media_files or media_explicitly_cleared)
+
+                    # Step 2a: Remove media not in the keep list (only when user changed media)
+                    if should_manage_media:
+                        print(f"🗑️ Step 2a: Removing unwanted media from product (keeping {len(shopify_media_ids) if shopify_media_ids else 0} images)...")
+                        manage_results = manage_product_media(product_id, shopify_media_ids or [], shopify_domain=actual_shopify_domain)
+                        if manage_results.get("success"):
+                            print(f"✅ Step 2a Complete: Removed {manage_results.get('removed_count', 0)} unwanted media items")
+                        else:
+                            print(f"⚠️ Step 2a Partial: Some media removal failed: {manage_results.get('errors', [])}")
                     else:
-                        print(f"⚠️ Step 2a Partial: Some media removal failed: {manage_results.get('errors', [])}")
+                        print("ℹ️ Step 2a Skipped: No media changes in save — keeping existing product images")
                     
                     # Step 2b: Upload ONLY new media files (don't try to re-attach existing ones)
                     if has_new_media:

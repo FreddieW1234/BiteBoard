@@ -5959,6 +5959,7 @@ Dietary</textarea>
         // Media Upload Functionality
         let selectedMediaFiles = [];
         let selectedShopifyMedia = []; // Declare early to prevent ReferenceError
+        let mediaExplicitlyCleared = false;
         const maxFiles = 250;
 
         // Initialize media upload functionality
@@ -6359,6 +6360,7 @@ Dietary</textarea>
                 // Prefill media preview with Shopify images (skip when creating from parent - leave images blank)
                 try {
                     selectedShopifyMedia = [];
+                    mediaExplicitlyCleared = false;
                     if (!isDuplicate) {
                         console.log(`📷 Raw product data.images:`, data.images);
                         console.log(`📷 Type of data.images:`, typeof data.images, Array.isArray(data.images));
@@ -7190,6 +7192,7 @@ Dietary</textarea>
 
             // Add new files to selection
             selectedMediaFiles = selectedMediaFiles.concat(validFiles);
+            mediaExplicitlyCleared = false;
             updateMediaPreview();
         }
 
@@ -7273,6 +7276,7 @@ Dietary</textarea>
                     if (selectedShopifyMedia) {
                         selectedShopifyMedia = [];
                     }
+                    mediaExplicitlyCleared = true;
                     updateMediaPreview();
                     document.getElementById('mediaFiles').value = '';
                 }
@@ -7603,6 +7607,7 @@ Dietary</textarea>
             // Send the complete ordered list as JSON
             formData.append('media_order', JSON.stringify(mediaOrder));
             formData.append('media_count', selectedMediaFiles.length + selectedShopifyMedia.length);
+            formData.append('media_explicitly_cleared', mediaExplicitlyCleared ? 'true' : 'false');
             
             console.log('📦 Media order being sent:', mediaOrder);
             console.log('📦 Total Shopify media IDs being sent:', selectedShopifyMedia.length);
@@ -7862,46 +7867,61 @@ Dietary</textarea>
             }
         }
 
+        function parseColourTokens(coloursStr) {
+            if (!coloursStr || typeof coloursStr !== 'string') return [];
+            return coloursStr.split(',').map(c => c.trim()).filter(token => {
+                if (!token || token === '-' || token === ':') return false;
+                const namePart = token.includes(':') ? token.split(':', 2)[0].trim() : token;
+                return namePart && namePart !== '-';
+            });
+        }
+
+        function appendEmptyColourCell(container, index) {
+            const cell = document.createElement('div');
+            cell.className = 'colour-cell';
+            cell.innerHTML = `
+                <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none;">
+                <span class="colour-cell-divider"></span>
+                <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none;">
+            `;
+            container.appendChild(cell);
+        }
+
         // Function to load colours into the inputs (called when loading a product for editing)
         function loadColoursIntoInputs(coloursStr, containerId) {
             const container = document.getElementById(containerId);
             if (!container) return;
             container.innerHTML = '';
-            
-            let colours = [];
-            if (coloursStr && typeof coloursStr === 'string' && coloursStr.trim() !== '') {
-                colours = coloursStr.split(',').map(c => c.trim()).filter(c => c.length > 0);
-            }
-            
-            // If no colours, start with 2 empty cells
-            if (colours.length === 0) {
-                colours.push(':', ':');
-            }
-            
-            // Create cells for each colour
-            colours.forEach((colour, index) => {
-                let name = '', code = '';
-                if (colour.includes(':')) {
-                    const parts = colour.split(':', 2);
-                    name = parts[0].trim();
-                    code = parts[1] ? parts[1].trim() : '';
-                } else {
-                    name = colour;
-                }
-                
-                const cell = document.createElement('div');
-                cell.className = 'colour-cell';
-                
-                cell.innerHTML = `
-                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none;">
-                    <span class="colour-cell-divider"></span>
-                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none;">
-                `;
 
-                container.appendChild(cell);
-            });
-            
-            // Add the + button at the end
+            const colours = parseColourTokens(coloursStr);
+
+            if (colours.length === 0) {
+                appendEmptyColourCell(container, 0);
+                appendEmptyColourCell(container, 1);
+            } else {
+                colours.forEach((colour, index) => {
+                    let name = '';
+                    let code = '';
+                    if (colour.includes(':')) {
+                        const parts = colour.split(':', 2);
+                        name = parts[0].trim();
+                        code = parts[1] ? parts[1].trim() : '';
+                    } else {
+                        name = colour;
+                    }
+                    if (!name || name === '-') return;
+
+                    const cell = document.createElement('div');
+                    cell.className = 'colour-cell';
+                    cell.innerHTML = `
+                        <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name.replace(/"/g, '&quot;')}" style="border: none;">
+                        <span class="colour-cell-divider"></span>
+                        <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code.replace(/"/g, '&quot;')}" style="border: none;">
+                    `;
+                    container.appendChild(cell);
+                });
+            }
+
             const plusButton = document.createElement('button');
             plusButton.type = 'button';
             plusButton.className = 'add-colour-btn';

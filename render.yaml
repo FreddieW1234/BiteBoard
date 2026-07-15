@@ -32,8 +32,6 @@ services:
         value: "https://api.shipstation.com"
       - key: SHIPSTATION_WAREHOUSE_ID
         sync: false
-      - key: SHIPSTATION_CARRIER_CODES
-        value: "royal_mail,stamps_com,parcelforce"
       - key: PALLETWAYS_API_KEY
         sync: false
       - key: OFFICE_PRINT_SERVER_URL

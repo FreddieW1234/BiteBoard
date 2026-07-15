@@ -33,11 +33,6 @@ _SHIPMENT_KEYS = frozenset({
     "validate_address", "ship_to", "ship_from", "packages",
 })
 
-# Default Royal Mail carrier codes in ShipStation (stamps_com is the common integration id).
-_DEFAULT_UK_CARRIER_HINTS = ("royal_mail", "stamps_com", "parcelforce", "royal")
-
-_services_cache: dict[str, list[dict]] = {}
-
 
 class ShipStationError(Exception):
     """Raised when ShipStation returns an error or is unreachable."""
@@ -194,19 +189,6 @@ def list_carriers() -> list[dict]:
     return []
 
 
-def list_carrier_services(carrier_id: str) -> list[dict]:
-    if carrier_id in _services_cache:
-        return _services_cache[carrier_id]
-    data = _handle_response(_request("GET", f"/v2/carriers/{carrier_id}/services"))
-    services: list[dict] = []
-    if isinstance(data, dict):
-        services = list(data.get("services") or [])
-    elif isinstance(data, list):
-        services = data
-    _services_cache[carrier_id] = services
-    return services
-
-
 def _parse_carrier_code_patterns() -> list[str]:
     raw = (SHIPSTATION_CARRIER_CODES or "").strip()
     if not raw or raw.lower() in ("all", "*"):
@@ -238,51 +220,28 @@ def _country_code(addr: dict | None) -> str:
     ).strip().upper()
 
 
-def _is_domestic_shipment(shipment: dict) -> bool:
-    origin = _country_code(shipment.get("ship_from"))
-    dest = _country_code(shipment.get("ship_to"))
-    return bool(origin and dest and origin == dest)
-
-
 def _select_carriers_for_quote(shipment: dict) -> list[dict]:
+    """All connected carriers unless SHIPSTATION_CARRIER_CODES limits them."""
     carriers = list_carriers()
     if not carriers:
         return []
 
     patterns = _parse_carrier_code_patterns()
-    if patterns:
-        matched = [c for c in carriers if _carrier_matches_patterns(c, patterns)]
-        if matched:
-            return matched
-        logger.warning(
-            "SHIPSTATION_CARRIER_CODES=%r matched no carriers; falling back to defaults",
-            SHIPSTATION_CARRIER_CODES,
-        )
+    if not patterns:
+        return carriers
 
-    if _is_domestic_shipment(shipment) and _country_code(shipment.get("ship_to")) == "GB":
-        matched = [c for c in carriers if _carrier_matches_patterns(c, list(_DEFAULT_UK_CARRIER_HINTS))]
-        if matched:
-            return matched
-
+    matched = [c for c in carriers if _carrier_matches_patterns(c, patterns)]
+    if matched:
+        return matched
+    logger.warning(
+        "SHIPSTATION_CARRIER_CODES=%r matched no carriers; using all connected carriers",
+        SHIPSTATION_CARRIER_CODES,
+    )
     return carriers
 
 
-def _domestic_service_codes(carrier_ids: list[str]) -> list[str]:
-    codes: list[str] = []
-    seen: set[str] = set()
-    for carrier_id in carrier_ids:
-        for svc in list_carrier_services(carrier_id):
-            if svc.get("domestic") is not True:
-                continue
-            code = str(svc.get("service_code") or "").strip()
-            if code and code not in seen:
-                seen.add(code)
-                codes.append(code)
-    return codes
-
-
 def resolve_rate_options(shipment: dict) -> dict[str, Any]:
-    """Build rate_options: filtered carriers + domestic service codes when applicable."""
+    """Build rate_options for POST /v2/rates."""
     selected = _select_carriers_for_quote(shipment)
     carrier_ids = [
         str(c.get("carrier_id") or "")
@@ -293,21 +252,10 @@ def resolve_rate_options(shipment: dict) -> dict[str, Any]:
         raise ShipStationError("No carriers connected in ShipStation")
 
     options: dict[str, Any] = {"carrier_ids": carrier_ids}
-    dest = _country_code(shipment.get("ship_to"))
-    if dest == "GB":
+    if _country_code(shipment.get("ship_to")) == "GB":
         options["preferred_currency"] = "gbp"
 
-    if _is_domestic_shipment(shipment):
-        service_codes = _domestic_service_codes(carrier_ids)
-        if service_codes:
-            options["service_codes"] = service_codes
-
-    logger.info(
-        "ShipStation rate options: carriers=%s domestic=%s service_codes=%s",
-        len(carrier_ids),
-        _is_domestic_shipment(shipment),
-        len(options.get("service_codes") or []),
-    )
+    logger.info("ShipStation rate options: %s carrier(s)", len(carrier_ids))
     return options
 
 
