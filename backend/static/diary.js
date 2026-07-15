@@ -224,9 +224,15 @@
             const carrierPrint = carrierLabel(row.carrier);
             html += `<tr data-idx="${idx}" data-key="${escapeHtml(key)}" data-row-id="${escapeHtml(key)}">`;
             html += `<td class="diary-dispatch-cell">
-                <input type="date" class="diary-date-input diary-screen-only" data-field="dispatch"
-                    value="${escapeHtml(row.dispatch_date_iso || '')}"
-                    aria-label="Dispatch date for ${escapeHtml(row.product_label)}">
+                <div class="diary-date-wrap diary-screen-only">
+                    <span class="diary-date-display">${escapeHtml(dispatchPrint)}</span>
+                    <input type="date" class="diary-date-input" data-field="dispatch"
+                        value="${escapeHtml(row.dispatch_date_iso || '')}"
+                        tabindex="-1" aria-hidden="true">
+                    <button type="button" class="diary-date-open" aria-label="Choose dispatch date for ${escapeHtml(row.product_label)}">
+                        <i class="far fa-calendar" aria-hidden="true"></i>
+                    </button>
+                </div>
                 <span class="diary-print-only">${escapeHtml(dispatchPrint)}</span>
             </td>`;
             html += `<td class="diary-requested">${escapeHtml(row.requested_date || '—')}</td>`;
@@ -302,6 +308,20 @@
         saveTimers[key] = setTimeout(() => saveRow(row, patch), 400);
     }
 
+    function onTableClick(e) {
+        const btn = e.target.closest('.diary-date-open');
+        if (!btn) return;
+        const input = btn.closest('.diary-date-wrap')?.querySelector('.diary-date-input');
+        if (!input) return;
+        if (typeof input.showPicker === 'function') {
+            try {
+                input.showPicker();
+                return;
+            } catch (_) { /* fall through */ }
+        }
+        input.focus();
+    }
+
     function onTableChange(e) {
         const tr = e.target.closest('tr[data-row-id]');
         if (!tr) return;
@@ -309,6 +329,11 @@
         if (!row) return;
 
         if (e.target.dataset.field === 'dispatch') {
+            const wrap = e.target.closest('.diary-date-wrap');
+            const display = wrap?.querySelector('.diary-date-display');
+            if (display) {
+                display.textContent = formatDisplayDate(e.target.value || '');
+            }
             scheduleSave(row, {
                 dispatch_date: e.target.value || '',
                 dispatch_manual: true,
@@ -396,6 +421,7 @@
         });
     });
     document.getElementById('diary-content')?.addEventListener('change', onTableChange);
+    document.getElementById('diary-content')?.addEventListener('click', onTableClick);
 
     const sortSelect = document.getElementById('diary-sort-select');
     if (sortSelect) {

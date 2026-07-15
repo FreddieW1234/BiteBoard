@@ -159,22 +159,60 @@
 .diary-table tbody tr:last-child td {
     border-bottom: none;
 }
-.diary-date-input {
-    border: 1px solid transparent;
-    background: transparent;
-    font: inherit;
-    color: inherit;
-    padding: 6px 8px;
-    border-radius: 6px;
-    min-width: 130px;
-    cursor: pointer;
+.diary-dispatch-cell {
+    white-space: nowrap;
 }
-.diary-date-input:hover,
-.diary-date-input:focus {
+.diary-date-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+}
+.diary-date-display {
+    color: inherit;
+    font-weight: 500;
+    cursor: default;
+    user-select: none;
+    min-width: 5.5rem;
+}
+.diary-date-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.diary-date-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.diary-date-open:hover,
+.diary-date-open:focus {
     border-color: #c7d2fe;
     background: #fff;
+    color: #4f46e5;
     outline: none;
     box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+.diary-date-open i {
+    font-size: 0.95rem;
+    pointer-events: none;
 }
 .diary-requested {
     color: #374151;
