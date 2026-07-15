@@ -8,7 +8,12 @@ from typing import Any
 
 import requests
 
-from config import SHIPSTATION_API_KEY, SHIPSTATION_API_URL, SHIPSTATION_WAREHOUSE_ID  # type: ignore
+from config import (  # type: ignore
+    SHIPSTATION_API_KEY,
+    SHIPSTATION_API_URL,
+    SHIPSTATION_CARRIER_CODES,
+    SHIPSTATION_WAREHOUSE_ID,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,11 @@ _ADDRESS_KEYS = frozenset({
 _SHIPMENT_KEYS = frozenset({
     "validate_address", "ship_to", "ship_from", "packages",
 })
+
+# Default Royal Mail carrier codes in ShipStation (stamps_com is the common integration id).
+_DEFAULT_UK_CARRIER_HINTS = ("royal_mail", "stamps_com", "parcelforce", "royal")
+
+_services_cache: dict[str, list[dict]] = {}
 
 
 class ShipStationError(Exception):
@@ -184,6 +194,123 @@ def list_carriers() -> list[dict]:
     return []
 
 
+def list_carrier_services(carrier_id: str) -> list[dict]:
+    if carrier_id in _services_cache:
+        return _services_cache[carrier_id]
+    data = _handle_response(_request("GET", f"/v2/carriers/{carrier_id}/services"))
+    services: list[dict] = []
+    if isinstance(data, dict):
+        services = list(data.get("services") or [])
+    elif isinstance(data, list):
+        services = data
+    _services_cache[carrier_id] = services
+    return services
+
+
+def _parse_carrier_code_patterns() -> list[str]:
+    raw = (SHIPSTATION_CARRIER_CODES or "").strip()
+    if not raw or raw.lower() in ("all", "*"):
+        return []
+    return [p.strip().lower() for p in raw.split(",") if p.strip()]
+
+
+def _carrier_text(carrier: dict) -> str:
+    parts = (
+        carrier.get("carrier_code"),
+        carrier.get("carrier_id"),
+        carrier.get("nickname"),
+        carrier.get("friendly_name"),
+        carrier.get("carrier_friendly_name"),
+    )
+    return " ".join(str(p or "") for p in parts).lower()
+
+
+def _carrier_matches_patterns(carrier: dict, patterns: list[str]) -> bool:
+    haystack = _carrier_text(carrier)
+    return any(p in haystack for p in patterns)
+
+
+def _country_code(addr: dict | None) -> str:
+    if not isinstance(addr, dict):
+        return ""
+    return str(
+        addr.get("country_code") or addr.get("countryCode") or ""
+    ).strip().upper()
+
+
+def _is_domestic_shipment(shipment: dict) -> bool:
+    origin = _country_code(shipment.get("ship_from"))
+    dest = _country_code(shipment.get("ship_to"))
+    return bool(origin and dest and origin == dest)
+
+
+def _select_carriers_for_quote(shipment: dict) -> list[dict]:
+    carriers = list_carriers()
+    if not carriers:
+        return []
+
+    patterns = _parse_carrier_code_patterns()
+    if patterns:
+        matched = [c for c in carriers if _carrier_matches_patterns(c, patterns)]
+        if matched:
+            return matched
+        logger.warning(
+            "SHIPSTATION_CARRIER_CODES=%r matched no carriers; falling back to defaults",
+            SHIPSTATION_CARRIER_CODES,
+        )
+
+    if _is_domestic_shipment(shipment) and _country_code(shipment.get("ship_to")) == "GB":
+        matched = [c for c in carriers if _carrier_matches_patterns(c, list(_DEFAULT_UK_CARRIER_HINTS))]
+        if matched:
+            return matched
+
+    return carriers
+
+
+def _domestic_service_codes(carrier_ids: list[str]) -> list[str]:
+    codes: list[str] = []
+    seen: set[str] = set()
+    for carrier_id in carrier_ids:
+        for svc in list_carrier_services(carrier_id):
+            if svc.get("domestic") is not True:
+                continue
+            code = str(svc.get("service_code") or "").strip()
+            if code and code not in seen:
+                seen.add(code)
+                codes.append(code)
+    return codes
+
+
+def resolve_rate_options(shipment: dict) -> dict[str, Any]:
+    """Build rate_options: filtered carriers + domestic service codes when applicable."""
+    selected = _select_carriers_for_quote(shipment)
+    carrier_ids = [
+        str(c.get("carrier_id") or "")
+        for c in selected
+        if c.get("carrier_id")
+    ]
+    if not carrier_ids:
+        raise ShipStationError("No carriers connected in ShipStation")
+
+    options: dict[str, Any] = {"carrier_ids": carrier_ids}
+    dest = _country_code(shipment.get("ship_to"))
+    if dest == "GB":
+        options["preferred_currency"] = "gbp"
+
+    if _is_domestic_shipment(shipment):
+        service_codes = _domestic_service_codes(carrier_ids)
+        if service_codes:
+            options["service_codes"] = service_codes
+
+    logger.info(
+        "ShipStation rate options: carriers=%s domestic=%s service_codes=%s",
+        len(carrier_ids),
+        _is_domestic_shipment(shipment),
+        len(options.get("service_codes") or []),
+    )
+    return options
+
+
 def get_default_warehouse() -> dict | None:
     warehouses = list_warehouses()
     if not warehouses:
@@ -197,15 +324,6 @@ def get_default_warehouse() -> dict | None:
 
 def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     """Quote rates via POST /v2/rates with inline shipment details."""
-    if not carrier_ids:
-        carrier_ids = [
-            str(c.get("carrier_id") or "")
-            for c in list_carriers()
-            if c.get("carrier_id")
-        ]
-    if not carrier_ids:
-        raise ShipStationError("No carriers connected in ShipStation")
-
     cleaned = scrub_shipment(shipment)
     if not cleaned.get("ship_to"):
         raise ShipStationError("Ship-to address is missing or invalid")
@@ -217,8 +335,13 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     if not cleaned.get("packages"):
         raise ShipStationError("Package weight is required")
 
+    if carrier_ids:
+        rate_options: dict[str, Any] = {"carrier_ids": carrier_ids}
+    else:
+        rate_options = resolve_rate_options(cleaned)
+
     payload = {
-        "rate_options": {"carrier_ids": carrier_ids},
+        "rate_options": rate_options,
         "shipment": cleaned,
     }
     logger.info(

@@ -154,7 +154,8 @@ def quote_shipment(payload: dict) -> dict:
 
         shipment = _build_shipstation_shipment(prep, payload)
         rate_resp = shipstation_api.get_rates(shipment)
-        rates = _normalize_rates(rate_resp)
+        dest_country = (prep.get("ship_to") or {}).get("country_code") or "GB"
+        rates = _normalize_rates(rate_resp, dest_country=dest_country)
         return {
             "success": True,
             "shipment_type": "parcel",
@@ -454,29 +455,73 @@ def _finalize_ss_address(mapped: dict) -> dict:
     return out
 
 
-def _normalize_rates(rate_resp: dict) -> list[dict]:
+def _rate_total(r: dict) -> tuple[float | None, str | None]:
+    """Sum shipping + fees; return (total, currency)."""
+    total = 0.0
+    currency: str | None = None
+    for key in ("shipping_amount", "insurance_amount", "confirmation_amount", "other_amount"):
+        block = r.get(key)
+        if not isinstance(block, dict):
+            continue
+        amount = block.get("amount")
+        if amount is None:
+            continue
+        cur = str(block.get("currency") or "").upper() or None
+        if currency and cur and cur != currency:
+            return None, None
+        currency = currency or cur
+        try:
+            total += float(amount)
+        except (TypeError, ValueError):
+            return None, None
+    if currency is None:
+        return None, None
+    return total, currency
+
+
+def _looks_international(service_text: str) -> bool:
+    text = (service_text or "").lower()
+    return any(hint in text for hint in (
+        "international", "global", "worldwide", "export", "import",
+        "overseas", "cross border", "cross-border", "ddp", "ddu",
+        "eu ", " europe", "usa ", " united states",
+    ))
+
+
+def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> list[dict]:
     rates = rate_resp.get("rate_response", {}).get("rates")
     if rates is None:
         rates = rate_resp.get("rates") or []
+    dest = (dest_country or "GB").upper()
+    domestic_uk = dest == "GB"
+
     out: list[dict] = []
     for r in rates or []:
-        amount = r.get("shipping_amount") or r.get("total_amount") or {}
-        if isinstance(amount, dict):
-            price = amount.get("amount")
-            currency = amount.get("currency") or "GBP"
-        else:
-            price = amount
-            currency = "GBP"
+        status = str(r.get("validation_status") or "valid").lower()
+        if status == "invalid":
+            continue
+
+        price, currency = _rate_total(r)
+        if price is None or price <= 0:
+            continue
+
+        service_type = r.get("service_type") or r.get("service_code") or ""
+        service_code = r.get("service_code") or ""
+        if domestic_uk and _looks_international(f"{service_type} {service_code}"):
+            continue
+        if domestic_uk and currency and currency != "GBP":
+            continue
+
         out.append({
             "rate_id": r.get("rate_id") or "",
             "carrier_id": r.get("carrier_id") or "",
             "carrier_code": r.get("carrier_code") or "",
             "carrier_friendly_name": r.get("carrier_friendly_name") or r.get("carrier_nickname") or "",
-            "service_code": r.get("service_code") or "",
-            "service_type": r.get("service_type") or r.get("service_code") or "",
+            "service_code": service_code,
+            "service_type": service_type,
             "delivery_days": r.get("delivery_days"),
-            "price": price,
-            "currency": currency,
+            "price": round(price, 2),
+            "currency": currency or "GBP",
         })
     out.sort(key=lambda x: (x.get("price") is None, x.get("price") or 999999))
     return out
