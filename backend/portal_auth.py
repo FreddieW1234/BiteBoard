@@ -65,6 +65,7 @@ def is_client_path(path: str) -> bool:
         or path.startswith("/api/client")
         or path == "/portal"
         or path.startswith("/portal/")
+        or path == "/portal-register"
     )
 
 

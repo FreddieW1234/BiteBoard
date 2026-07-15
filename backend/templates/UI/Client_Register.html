@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register — Bite Promotions</title>
+    <script>if(window.parent!==window)document.documentElement.classList.add('co-embed');</script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bite-cyan: #3AC9E3;
+            --bite-cyan-dark: #2db3cc;
+            --bite-text: #162447;
+            --bite-muted: #6b7280;
+            --bite-label: #9ca3af;
+            --bite-border: #e5e7eb;
+            --bite-radius: 10px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: auto; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fff;
+            min-height: 100vh;
+            color: var(--bite-text);
+            padding: 8px 0 28px;
+            -webkit-font-smoothing: antialiased;
+        }
+        html.co-embed, html.co-embed body { min-height: 0 !important; height: auto !important; }
+        html.co-embed body { padding: 0 0 12px; overflow: hidden; }
+        .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+        html.co-embed .wrap { padding-top: 0; }
+
+        .co-card {
+            background: #fff;
+            border: 1px solid var(--bite-border);
+            border-radius: var(--bite-radius);
+            box-shadow: 0 1px 4px rgba(22, 36, 71, 0.06);
+            overflow: hidden;
+        }
+
+        .co-portal-profile { padding: 24px 28px 28px; }
+        .co-portal-profile .co-section-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--bite-text);
+            margin-bottom: 8px;
+        }
+        .co-portal-profile .co-section-lead {
+            font-size: 0.9375rem;
+            line-height: 1.55;
+            color: var(--bite-muted);
+            margin-bottom: 20px;
+        }
+        .co-portal-profile .co-profile-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px 20px;
+        }
+        .co-portal-profile .co-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+        .co-portal-profile .co-field.co-full { grid-column: 1 / -1; }
+        .co-portal-profile .co-field label {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: var(--bite-label);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .co-portal-profile .co-field label .req { color: #dc2626; margin-left: 2px; }
+        .co-portal-profile .co-field input.co-field-invalid {
+            border-color: #fca5a5;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+        .co-portal-profile .co-field input,
+        .co-portal-profile .co-field textarea {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid var(--bite-border);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: var(--bite-text);
+            background: #fff;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .co-portal-profile .co-field input::placeholder,
+        .co-portal-profile .co-field textarea::placeholder { color: #c4c9d4; font-weight: 400; }
+        .co-portal-profile .co-field input:focus,
+        .co-portal-profile .co-field textarea:focus {
+            outline: none;
+            border-color: var(--bite-cyan);
+            box-shadow: 0 0 0 3px rgba(58, 201, 227, 0.18);
+        }
+        .co-portal-profile .co-field textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+        .co-portal-profile .co-form-footer {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 6px;
+            padding-top: 8px;
+        }
+        .co-portal-profile .co-btn-save {
+            padding: 13px 32px;
+            background: var(--bite-cyan);
+            color: #fff;
+            border: none;
+            border-radius: var(--bite-radius);
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .co-portal-profile .co-btn-save:hover { background: var(--bite-cyan-dark); }
+        .co-portal-profile .co-btn-save:disabled { opacity: 0.65; cursor: not-allowed; }
+        .co-portal-profile .co-save-msg { font-size: 0.875rem; font-weight: 500; }
+        .co-portal-profile .co-save-msg.ok { color: #059669; }
+        .co-portal-profile .co-save-msg.err { color: #dc2626; }
+        .co-hp-field {
+            position: absolute;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
+        .co-success-panel {
+            padding: 32px 28px;
+            text-align: center;
+        }
+        .co-success-panel i {
+            font-size: 2rem;
+            color: #059669;
+            margin-bottom: 14px;
+        }
+        .co-success-panel h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .co-success-panel p {
+            font-size: 0.9375rem;
+            line-height: 1.55;
+            color: var(--bite-muted);
+            max-width: 420px;
+            margin: 0 auto 20px;
+        }
+        .co-success-panel a {
+            display: inline-block;
+            padding: 12px 24px;
+            background: var(--bite-cyan);
+            color: #fff;
+            text-decoration: none;
+            border-radius: var(--bite-radius);
+            font-weight: 600;
+            font-size: 0.9375rem;
+        }
+        .co-success-panel a:hover { background: var(--bite-cyan-dark); }
+
+        @media (max-width: 640px) {
+            .co-portal-profile .co-profile-form { grid-template-columns: 1fr; }
+            .co-portal-profile { padding: 18px 16px 22px; }
+            .co-portal-profile .co-btn-save { width: 100%; }
+            .co-portal-profile .co-form-footer { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div id="bite-client-register" class="wrap">
+        <div id="co-register-form-wrap" class="co-card co-portal-profile">
+            <h2 class="co-section-title">Create your account</h2>
+            <p class="co-section-lead">Fill in your details below. We'll review your profile and activate your account shortly.</p>
+            <form id="co-register-form" class="co-profile-form">
+                <div class="co-field">
+                    <label for="co-first_name">First name <span class="req">*</span></label>
+                    <input type="text" id="co-first_name" name="first_name" autocomplete="given-name" placeholder="First name" required>
+                </div>
+                <div class="co-field">
+                    <label for="co-last_name">Last name</label>
+                    <input type="text" id="co-last_name" name="last_name" autocomplete="family-name" placeholder="Last name">
+                </div>
+                <div class="co-field">
+                    <label for="co-company_name">Company (if required)</label>
+                    <input type="text" id="co-company_name" name="company_name" autocomplete="organization" placeholder="Company name">
+                </div>
+                <div class="co-field">
+                    <label for="co-email">Email <span class="req">*</span></label>
+                    <input type="email" id="co-email" name="email" autocomplete="email" placeholder="Email address" required>
+                </div>
+                <div class="co-field">
+                    <label for="co-landline_phone">Landline</label>
+                    <input type="text" id="co-landline_phone" name="landline_phone" autocomplete="tel" placeholder="Landline number">
+                </div>
+                <div class="co-field">
+                    <label for="co-mobile_number">Mobile</label>
+                    <input type="text" id="co-mobile_number" name="mobile_number" autocomplete="tel-national" placeholder="Mobile number">
+                </div>
+                <div class="co-field co-full">
+                    <label for="co-invoice_address">Invoice address</label>
+                    <textarea id="co-invoice_address" name="invoice_address" rows="4" placeholder="Invoice address"></textarea>
+                </div>
+                <div class="co-hp-field" aria-hidden="true">
+                    <label for="co-website">Website</label>
+                    <input type="text" id="co-website" name="website" tabindex="-1" autocomplete="off">
+                </div>
+                <div class="co-form-footer">
+                    <button type="submit" class="co-btn-save" id="co-register-btn">Register</button>
+                    <p class="co-save-msg" id="co-register-msg" hidden></p>
+                </div>
+            </form>
+        </div>
+
+        <div id="co-register-success" class="co-card co-success-panel" hidden>
+            <i class="fas fa-circle-check"></i>
+            <h2>Registration received</h2>
+            <p id="co-success-text">Thanks for registering. We've received your details and will review your account shortly.</p>
+            <a id="co-success-link" href="{{ storefront_url }}">Back to store</a>
+        </div>
+    </div>
+
+    <script>
+        const STOREFRONT_URL = {{ storefront_url | tojson }};
+
+        function notifyEmbedHeight() {
+            if (window.parent === window) return;
+            const root = document.getElementById('bite-client-register') || document.body;
+            const height = Math.ceil(root.getBoundingClientRect().height) + 8;
+            window.parent.postMessage({ source: 'bite-portal', type: 'resize', height }, '*');
+        }
+
+        (function () {
+            const form = document.getElementById('co-register-form');
+            const formWrap = document.getElementById('co-register-form-wrap');
+            const successPanel = document.getElementById('co-register-success');
+            const registerBtn = document.getElementById('co-register-btn');
+            const registerMsg = document.getElementById('co-register-msg');
+            const firstNameInput = document.getElementById('co-first_name');
+            const emailInput = document.getElementById('co-email');
+
+            function validateForm() {
+                let ok = true;
+                const firstName = (firstNameInput?.value || '').trim();
+                const email = (emailInput?.value || '').trim();
+                firstNameInput?.classList.remove('co-field-invalid');
+                emailInput?.classList.remove('co-field-invalid');
+                if (!firstName) {
+                    firstNameInput?.classList.add('co-field-invalid');
+                    ok = false;
+                }
+                if (!email) {
+                    emailInput?.classList.add('co-field-invalid');
+                    ok = false;
+                } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    emailInput?.classList.add('co-field-invalid');
+                    ok = false;
+                }
+                return ok;
+            }
+
+            [firstNameInput, emailInput].forEach(el => {
+                el?.addEventListener('input', () => el.classList.remove('co-field-invalid'));
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                registerMsg.hidden = true;
+
+                if (!validateForm()) {
+                    registerMsg.textContent = 'First name and a valid email are required.';
+                    registerMsg.className = 'co-save-msg err';
+                    registerMsg.hidden = false;
+                    notifyEmbedHeight();
+                    return;
+                }
+
+                const body = Object.fromEntries(new FormData(form).entries());
+                registerBtn.disabled = true;
+                registerBtn.textContent = 'Submitting…';
+                try {
+                    const res = await fetch('/api/client/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(body),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Registration failed');
+
+                    const successText = document.getElementById('co-success-text');
+                    if (successText && data.message) successText.textContent = data.message;
+                    formWrap.hidden = true;
+                    successPanel.hidden = false;
+                    notifyEmbedHeight();
+                } catch (err) {
+                    registerMsg.textContent = err.message || 'Could not register. Please try again.';
+                    registerMsg.className = 'co-save-msg err';
+                    registerMsg.hidden = false;
+                    notifyEmbedHeight();
+                } finally {
+                    registerBtn.disabled = false;
+                    registerBtn.textContent = 'Register';
+                }
+            });
+
+            if (window.parent !== window) {
+                notifyEmbedHeight();
+                window.addEventListener('load', notifyEmbedHeight);
+                window.addEventListener('resize', notifyEmbedHeight);
+                if (typeof ResizeObserver !== 'undefined') {
+                    const root = document.getElementById('bite-client-register');
+                    if (root) new ResizeObserver(notifyEmbedHeight).observe(root);
+                }
+            }
+        })();
+    </script>
+</body>
+</html>

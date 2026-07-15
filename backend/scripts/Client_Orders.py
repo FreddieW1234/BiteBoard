@@ -153,6 +153,47 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     return get_customer_profile(customer_id)
 
 
+def register_client_customer(payload: dict) -> dict:
+    """Create a new Shopify customer from the public registration form."""
+    import os
+    import sys
+    scripts_dir = os.path.dirname(__file__)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+
+    if (payload.get("website") or "").strip():
+        return {
+            "success": True,
+            "message": "Thanks for registering. We've received your details and will review your account shortly.",
+        }
+
+    from Customers import create_customer  # type: ignore
+
+    first_name = str(payload.get("first_name") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    if not first_name:
+        return {"success": False, "error": "First name is required."}
+    if not email:
+        return {"success": False, "error": "Email is required."}
+
+    safe = {k: payload[k] for k in CLIENT_PROFILE_KEYS if k in payload}
+    safe["first_name"] = first_name
+    safe["email"] = email
+
+    try:
+        customer = create_customer(safe)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+    return {
+        "success": True,
+        "customer_id": customer.get("id"),
+        "message": "Thanks for registering. We've received your details and will review your account shortly.",
+    }
+
+
 def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
     """Return orders for one customer (paginated when fetch_all=True)."""
     cid = str(customer_id).strip()

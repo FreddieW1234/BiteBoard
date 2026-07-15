@@ -184,6 +184,30 @@ def _client_logout_url() -> str:
     return f"{base.rstrip('/')}/account/logout"
 
 
+@app.route("/portal-register")
+def client_register_page():
+    shop_url = (request.args.get("shop_url") or "").strip()
+    return render_template(
+        "UI/Client_Register.html",
+        shop_url=shop_url,
+        storefront_url=STOREFRONT_URL,
+    )
+
+
+@app.route("/api/client/register", methods=["POST"])
+def api_client_register():
+    """Public: create a new Shopify customer (Pending tag) from the registration form."""
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.Client_Orders import register_client_customer  # type: ignore
+        result = register_client_customer(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/client/profile", methods=["GET", "PUT"])
 def api_client_profile():
     cid = get_client_customer_id()

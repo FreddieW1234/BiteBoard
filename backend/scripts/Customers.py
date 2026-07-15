@@ -256,6 +256,78 @@ def _fetch_single_customer(customer_id):
     return _format_customer_rest(raw, mf)
 
 
+def _request_with_status(method, url, **kwargs):
+    """Like _safe_request but returns the response without raising on 4xx."""
+    while True:
+        resp = requests.request(method, url, headers=HEADERS, timeout=30, **kwargs)
+        if resp.status_code == 429:
+            time.sleep(2)
+            continue
+        return resp
+
+
+def create_customer(payload: dict) -> dict:
+    """Create a Shopify customer tagged Pending with custom_fields metafields."""
+    import re
+
+    first_name = str(payload.get("first_name") or "").strip()
+    last_name = str(payload.get("last_name") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    if not first_name:
+        raise ValueError("First name is required.")
+    if not email:
+        raise ValueError("Email is required.")
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        raise ValueError("Please enter a valid email address.")
+
+    create_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/customers.json"
+    resp = _request_with_status(
+        "POST",
+        create_url,
+        json={
+            "customer": {
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "tags": TYPE_TAG_LABELS["pending"],
+                "send_email_welcome": False,
+                "verified_email": True,
+            }
+        },
+    )
+    if resp.status_code == 422:
+        detail = resp.text or ""
+        if "email" in detail.lower() and ("taken" in detail.lower() or "already" in detail.lower()):
+            raise ValueError("An account with this email already exists.")
+        try:
+            errors = resp.json().get("errors") or {}
+            email_errors = errors.get("email") if isinstance(errors, dict) else None
+            if email_errors:
+                raise ValueError("An account with this email already exists.")
+        except ValueError:
+            raise
+        except Exception:
+            pass
+        raise ValueError("Could not create account. Please check your details and try again.")
+    resp.raise_for_status()
+
+    created = resp.json().get("customer") or {}
+    customer_id = created.get("id")
+    if not customer_id:
+        raise RuntimeError("Shopify did not return a customer id.")
+
+    metafield_payload = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+    }
+    for key in METAFIELD_PAYLOAD_KEYS:
+        if key in payload:
+            metafield_payload[key] = payload.get(key)
+
+    return update_customer_details(customer_id, metafield_payload)
+
+
 def update_customer_details(customer_id, payload):
     """Update customer tags, email, and custom_fields metafields."""
     customer_id = int(customer_id)
