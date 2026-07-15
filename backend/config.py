@@ -51,7 +51,17 @@ KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Upd
 # ShipStation — parcel labels (Royal Mail, FedEx, etc.)
 SHIPSTATION_API_KEY = os.environ.get("SHIPSTATION_API_KEY") or ""
 SHIPSTATION_API_URL = (os.environ.get("SHIPSTATION_API_URL") or "https://api.shipstation.com").rstrip("/")
+# Optional — if unset, the first warehouse from GET /v2/warehouses is used for ship-from
 SHIPSTATION_WAREHOUSE_ID = os.environ.get("SHIPSTATION_WAREHOUSE_ID") or ""
+# Optional manual ship-from fallback when no warehouse is configured in ShipStation
+SHIPSTATION_ORIGIN_NAME = os.environ.get("SHIPSTATION_ORIGIN_NAME") or ""
+SHIPSTATION_ORIGIN_PHONE = os.environ.get("SHIPSTATION_ORIGIN_PHONE") or ""
+SHIPSTATION_ORIGIN_LINE1 = os.environ.get("SHIPSTATION_ORIGIN_LINE1") or ""
+SHIPSTATION_ORIGIN_LINE2 = os.environ.get("SHIPSTATION_ORIGIN_LINE2") or ""
+SHIPSTATION_ORIGIN_CITY = os.environ.get("SHIPSTATION_ORIGIN_CITY") or ""
+SHIPSTATION_ORIGIN_STATE = os.environ.get("SHIPSTATION_ORIGIN_STATE") or ""
+SHIPSTATION_ORIGIN_POSTCODE = os.environ.get("SHIPSTATION_ORIGIN_POSTCODE") or ""
+SHIPSTATION_ORIGIN_COUNTRY = os.environ.get("SHIPSTATION_ORIGIN_COUNTRY") or "GB"
 
 # Palletways — pallet consignments (optional until API key is issued)
 PALLETWAYS_API_KEY = os.environ.get("PALLETWAYS_API_KEY") or ""

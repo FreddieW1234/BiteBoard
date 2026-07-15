@@ -331,6 +331,12 @@
             state.providers = (status.providers || prep.providers || {});
             if (!state.providers.shipstation) {
                 setMsg('ShipStation is not configured. Set SHIPSTATION_API_KEY on the server.', 'err');
+            } else if (state.providers.ship_from_ready === false) {
+                setMsg(
+                    'Ship-from address is missing. In ShipStation: Settings → Shipping → Warehouses, ' +
+                    'or set SHIPSTATION_ORIGIN_* env vars on Render.',
+                    'err'
+                );
             }
             renderBody();
         } catch (err) {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -13,6 +14,19 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = 45
 _session: requests.Session | None = None
+
+# Allowed address keys for ShipStation v2 request payloads.
+_ADDRESS_KEYS = frozenset({
+    "name", "phone", "email", "company_name",
+    "address_line1", "address_line2", "address_line3",
+    "city_locality", "state_province", "postal_code", "country_code",
+    "address_residential_indicator", "instructions",
+})
+
+# Allowed keys on inline rate / create shipment objects.
+_SHIPMENT_KEYS = frozenset({
+    "validate_address", "ship_to", "ship_from", "packages",
+})
 
 
 class ShipStationError(Exception):
@@ -47,6 +61,63 @@ def _request(method: str, path: str, **kwargs) -> requests.Response:
     except requests.RequestException as exc:
         logger.error("ShipStation request failed: %s", exc)
         raise ShipStationError("ShipStation service unavailable") from exc
+
+
+def scrub_address(addr: dict | None) -> dict:
+    """Keep only ShipStation-allowed address fields with non-empty values."""
+    if not isinstance(addr, dict):
+        return {}
+    return {
+        k: v for k, v in addr.items()
+        if k in _ADDRESS_KEYS and v is not None and v != ""
+    }
+
+
+def _scrub_package(pkg: dict) -> dict:
+    out: dict[str, Any] = {}
+    weight = pkg.get("weight")
+    if isinstance(weight, dict):
+        out["weight"] = {
+            "value": max(0.01, float(weight.get("value") or 1)),
+            "unit": weight.get("unit") or "kilogram",
+        }
+    code = (pkg.get("package_code") or "").strip()
+    if code:
+        out["package_code"] = code
+    dims = pkg.get("dimensions")
+    if isinstance(dims, dict):
+        length = dims.get("length")
+        width = dims.get("width")
+        height = dims.get("height")
+        if length and width and height:
+            out["dimensions"] = {
+                "length": float(length),
+                "width": float(width),
+                "height": float(height),
+                "unit": dims.get("unit") or "centimeter",
+            }
+    return out
+
+
+def scrub_shipment(shipment: dict) -> dict:
+    """Strip unknown keys before sending to ShipStation."""
+    out: dict[str, Any] = {}
+    for key in _SHIPMENT_KEYS:
+        if key not in shipment:
+            continue
+        val = shipment[key]
+        if key in ("ship_to", "ship_from"):
+            cleaned = scrub_address(val if isinstance(val, dict) else None)
+            if cleaned:
+                out[key] = cleaned
+        elif key == "packages" and isinstance(val, list):
+            packages = [_scrub_package(p) for p in val if isinstance(p, dict)]
+            packages = [p for p in packages if p.get("weight")]
+            if packages:
+                out[key] = packages
+        elif val is not None:
+            out[key] = val
+    return out
 
 
 def _format_error_body(body: dict) -> str:
@@ -124,24 +195,8 @@ def get_default_warehouse() -> dict | None:
     return warehouses[0]
 
 
-def create_shipment(shipment: dict) -> dict:
-    """Create a pending shipment and return the first created record."""
-    payload = {"shipments": [shipment]}
-    logger.debug(
-        "ShipStation create shipment: keys=%s ship_to=%s warehouse_id=%s",
-        sorted(shipment.keys()),
-        sorted((shipment.get("ship_to") or {}).keys()),
-        shipment.get("warehouse_id"),
-    )
-    data = _handle_response(_request("POST", "/v2/shipments", json=payload))
-    shipments = (data or {}).get("shipments") if isinstance(data, dict) else None
-    if not shipments:
-        raise ShipStationError("ShipStation did not return a shipment")
-    return shipments[0]
-
-
 def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
-    """Create a shipment, then quote rates by shipment_id (POST /v2/rates)."""
+    """Quote rates via POST /v2/rates with inline shipment details."""
     if not carrier_ids:
         carrier_ids = [
             str(c.get("carrier_id") or "")
@@ -151,22 +206,37 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     if not carrier_ids:
         raise ShipStationError("No carriers connected in ShipStation")
 
-    rate_options = {"carrier_ids": carrier_ids}
-    create_payload = dict(shipment)
-    create_payload.setdefault("validate_address", "no_validation")
-
-    created = create_shipment(create_payload)
-    shipment_id = str(created.get("shipment_id") or "")
-    if not shipment_id:
-        raise ShipStationError("ShipStation did not return a shipment_id")
-
-    return _handle_response(
-        _request(
-            "POST",
-            "/v2/rates",
-            json={"rate_options": rate_options, "shipment_id": shipment_id},
+    cleaned = scrub_shipment(shipment)
+    if not cleaned.get("ship_to"):
+        raise ShipStationError("Ship-to address is missing or invalid")
+    if not cleaned.get("ship_from"):
+        raise ShipStationError(
+            "Ship-from address is missing. Add a warehouse in ShipStation "
+            "(Settings → Shipping → Warehouses) or set SHIPSTATION_ORIGIN_* env vars on Render."
         )
+    if not cleaned.get("packages"):
+        raise ShipStationError("Package weight is required")
+
+    payload = {
+        "rate_options": {"carrier_ids": carrier_ids},
+        "shipment": cleaned,
+    }
+    logger.info(
+        "ShipStation rates request: shipment_keys=%s ship_to_keys=%s ship_from_keys=%s",
+        sorted(cleaned.keys()),
+        sorted(cleaned.get("ship_to", {}).keys()),
+        sorted(cleaned.get("ship_from", {}).keys()),
     )
+    resp = _request("POST", "/v2/rates", json=payload)
+    if not resp.ok:
+        try:
+            logger.warning(
+                "ShipStation rates payload rejected: %s",
+                json.dumps(payload, default=str)[:800],
+            )
+        except Exception:
+            pass
+    return _handle_response(resp)
 
 
 def create_label_from_rate(rate_id: str, *, label_format: str = "zpl") -> dict:
@@ -183,7 +253,7 @@ def create_label_from_rate(rate_id: str, *, label_format: str = "zpl") -> dict:
 def create_label(shipment: dict, *, label_format: str = "zpl") -> dict:
     """Purchase label with full shipment payload."""
     payload = {
-        "shipment": shipment,
+        "shipment": scrub_shipment(shipment),
         "label_format": label_format,
         "label_layout": "4x6",
     }

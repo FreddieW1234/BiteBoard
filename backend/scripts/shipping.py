@@ -5,7 +5,17 @@ from __future__ import annotations
 import logging
 from datetime import date
 
-from config import PALLETWAYS_API_KEY  # type: ignore
+from config import (  # type: ignore
+    PALLETWAYS_API_KEY,
+    SHIPSTATION_ORIGIN_CITY,
+    SHIPSTATION_ORIGIN_COUNTRY,
+    SHIPSTATION_ORIGIN_LINE1,
+    SHIPSTATION_ORIGIN_LINE2,
+    SHIPSTATION_ORIGIN_NAME,
+    SHIPSTATION_ORIGIN_PHONE,
+    SHIPSTATION_ORIGIN_POSTCODE,
+    SHIPSTATION_ORIGIN_STATE,
+)
 from scripts.order_helpers import fetch_order_by_id  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -29,11 +39,23 @@ def _shipstation_configured() -> bool:
 
 
 def shipping_status() -> dict:
-    return {
+    out = {
         "shipstation": _shipstation_configured(),
         "palletways": bool(PALLETWAYS_API_KEY),
         "print_server": _print_configured(),
     }
+    if out["shipstation"]:
+        try:
+            from scripts import shipstation_api  # type: ignore
+            warehouse = shipstation_api.get_default_warehouse()
+            ship_from = _resolve_ship_from(warehouse)
+            out["ship_from_ready"] = bool(ship_from.get("address_line1"))
+            if warehouse:
+                out["warehouse_name"] = (warehouse.get("name") or "").strip() or None
+        except Exception as exc:
+            logger.debug("Ship-from status check failed: %s", exc)
+            out["ship_from_ready"] = False
+    return out
 
 
 def _print_configured() -> bool:
@@ -128,6 +150,7 @@ def quote_shipment(payload: dict) -> dict:
 
     try:
         from scripts import shipstation_api  # type: ignore
+        from scripts.shipstation_api import ShipStationError  # type: ignore
 
         shipment = _build_shipstation_shipment(prep, payload)
         rate_resp = shipstation_api.get_rates(shipment)
@@ -138,6 +161,9 @@ def quote_shipment(payload: dict) -> dict:
             "order_name": prep.get("order_name"),
             "rates": rates,
         }
+    except ShipStationError as exc:
+        logger.warning("Shipping quote failed: %s", exc)
+        return {"success": False, "error": str(exc)}
     except Exception as exc:
         logger.warning("Shipping quote failed: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -257,7 +283,6 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
     height_cm = _parse_dim(payload.get("height_cm"))
 
     package: dict = {
-        "package_code": "package",
         "weight": {"value": max(0.01, weight_kg), "unit": "kilogram"},
     }
     if length_cm and width_cm and height_cm:
@@ -267,28 +292,47 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
             "height": height_cm,
             "unit": "centimeter",
         }
+    package["package_code"] = "package"
 
-    shipment: dict = {
+    ship_from = _resolve_ship_from(warehouse)
+    if not ship_from.get("address_line1"):
+        from scripts.shipstation_api import ShipStationError  # type: ignore
+        raise ShipStationError(
+            "Ship-from address is not configured. In ShipStation go to Settings → Shipping → "
+            "Warehouses and add your dispatch address, or set SHIPSTATION_ORIGIN_* env vars on Render."
+        )
+
+    return {
         "validate_address": "no_validation",
         "ship_to": _to_shipstation_address(ship_to),
+        "ship_from": ship_from,
         "packages": [package],
     }
 
-    wh_id = None
+
+def _resolve_ship_from(warehouse: dict | None) -> dict:
+    """Ship-from for rates: warehouse origin address, else SHIPSTATION_ORIGIN_* env vars."""
     if warehouse:
-        wh_id = warehouse.get("warehouse_id") or warehouse.get("id")
-    if wh_id:
-        shipment["warehouse_id"] = str(wh_id)
-    else:
-        ship_from = _warehouse_to_address(warehouse) if warehouse else {}
-        if ship_from.get("address_line1"):
-            shipment["ship_from"] = ship_from
+        origin = _warehouse_to_address(warehouse)
+        if origin.get("address_line1"):
+            return origin
+    return _origin_from_env()
 
-    order_name = (prep.get("order_name") or "").strip()
-    if order_name:
-        shipment["external_shipment_id"] = order_name.lstrip("#")[:50]
 
-    return shipment
+def _origin_from_env() -> dict:
+    if not SHIPSTATION_ORIGIN_LINE1.strip():
+        return {}
+    return _finalize_ss_address({
+        "name": _pick_str(SHIPSTATION_ORIGIN_NAME, default="Warehouse"),
+        "phone": _pick_str(SHIPSTATION_ORIGIN_PHONE, default="0000000000"),
+        "address_line1": SHIPSTATION_ORIGIN_LINE1.strip(),
+        "address_line2": SHIPSTATION_ORIGIN_LINE2.strip() or None,
+        "city_locality": SHIPSTATION_ORIGIN_CITY.strip(),
+        "state_province": SHIPSTATION_ORIGIN_STATE.strip(),
+        "postal_code": SHIPSTATION_ORIGIN_POSTCODE.strip(),
+        "country_code": (SHIPSTATION_ORIGIN_COUNTRY or "GB").strip().upper(),
+        "address_residential_indicator": "no",
+    })
 
 
 # Allowed keys on ShipStation v2 address objects (request payloads).
