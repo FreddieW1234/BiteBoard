@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import logging
 
-from scripts.diary_helpers import build_diary_rows, format_iso_date, parse_delivery_date  # type: ignore
+from scripts.diary_helpers import (  # type: ignore
+    _DEBUG_DIARY_KEYS,
+    build_diary_rows,
+    enrich_saved_index,
+    format_iso_date,
+    parse_delivery_date,
+)
 from scripts.diary_store import get_all_entries, upsert_entry  # type: ignore
 from scripts.Orders import get_orders_overview  # type: ignore
 
@@ -48,10 +54,27 @@ def _load_saved_entries() -> dict[tuple[str, str], dict]:
                     "carrier": e.get("carrier") or "",
                     "updated_at": e.get("updated_at") or "",
                 }
+            enrich_saved_index(out)
+            if _DEBUG_DIARY_KEYS:
+                exact_keys = [k for k in out if not str(k[1]).startswith("slug:")]
+                logger.warning(
+                    "Diary DEBUG office entry_count=%d exact_keys=%r",
+                    len(exact_keys),
+                    exact_keys,
+                )
             return out
         except Exception as exc:
             logger.warning("Diary: Office API unavailable, using local store (%s)", exc)
-    return get_all_entries()
+    out = get_all_entries()
+    enrich_saved_index(out)
+    if _DEBUG_DIARY_KEYS:
+        exact_keys = [k for k in out if not str(k[1]).startswith("slug:")]
+        logger.warning(
+            "Diary DEBUG sqlite entry_count=%d exact_keys=%r",
+            len(exact_keys),
+            exact_keys,
+        )
+    return out
 
 
 def get_diary_overview(max_orders: int = 250) -> dict:

@@ -5,7 +5,14 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timedelta
 
+import logging
+
 from scripts.office_api import item_key  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+# Temporary — remove once diary key matching is confirmed in production logs.
+_DEBUG_DIARY_KEYS = True
 
 _DATE_FORMATS = ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y")
 _CARRIER_LABELS = {
@@ -99,6 +106,54 @@ def _match_field_for_line(line: dict, fields: list[dict]) -> dict | None:
     return None
 
 
+def item_slug(item_id: str) -> str:
+    """Slug portion of an item id, stripping a leading line-number prefix."""
+    text = (item_id or "").strip()
+    if "-" in text:
+        prefix, rest = text.split("-", 1)
+        if prefix.isdigit() and rest:
+            return rest
+    return text
+
+
+def slug_lookup_key(order_name: str, slug: str) -> tuple[str, str]:
+    return ((order_name or "").strip(), f"slug:{slug}")
+
+
+def enrich_saved_index(out: dict[tuple[str, str], dict]) -> None:
+    """Add slug-only alias keys so lookup survives line_number prefix drift."""
+    aliases: list[tuple[tuple[str, str], dict]] = []
+    for (order, item_id), entry in out.items():
+        if str(item_id).startswith("slug:"):
+            continue
+        slug = item_slug(item_id)
+        if not slug:
+            continue
+        alias = slug_lookup_key(order, slug)
+        if alias not in out:
+            aliases.append((alias, entry))
+    out.update(aliases)
+
+
+def lookup_saved_entry(
+    saved: dict[tuple[str, str], dict],
+    order_name: str,
+    item_id: str,
+) -> tuple[dict, str]:
+    """Return (entry, match_kind) where match_kind is 'exact', 'slug', or ''."""
+    order_name = (order_name or "").strip()
+    item_id = (item_id or "").strip()
+    entry = saved.get((order_name, item_id))
+    if entry:
+        return entry, "exact"
+    slug = item_slug(item_id)
+    if slug:
+        entry = saved.get(slug_lookup_key(order_name, slug))
+        if entry:
+            return entry, "slug"
+    return {}, ""
+
+
 def product_label(line: dict, matched_field: dict | None) -> str:
     if matched_field:
         label = _field_label(matched_field)
@@ -136,7 +191,17 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
             requested_date = parse_delivery_date(requested_raw)
 
             key = (order_name, item_id)
-            entry = saved.get(key) or {}
+            entry, match_kind = lookup_saved_entry(saved, order_name, item_id)
+            if _DEBUG_DIARY_KEYS:
+                logger.warning(
+                    "Diary DEBUG row key=%r line_number=%r title=%r hit=%s match=%s carrier=%r",
+                    key,
+                    line_number,
+                    line.get("title"),
+                    bool(entry),
+                    match_kind or "none",
+                    entry.get("carrier") if entry else None,
+                )
 
             dispatch_manual = bool(entry.get("dispatch_manual"))
             if dispatch_manual:

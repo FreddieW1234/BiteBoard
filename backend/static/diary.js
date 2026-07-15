@@ -312,11 +312,16 @@
             scheduleSave(row, {
                 dispatch_date: e.target.value || '',
                 dispatch_manual: true,
+                carrier: row.carrier || '',
             });
         }
         if (e.target.dataset.field === 'carrier') {
             e.target.className = 'diary-carrier-select diary-screen-only ' + carrierClass(e.target.value);
-            scheduleSave(row, { carrier: e.target.value });
+            scheduleSave(row, {
+                carrier: e.target.value,
+                dispatch_date: row.dispatch_date_iso || '',
+                dispatch_manual: !!row.dispatch_manual,
+            });
         }
     }
 
