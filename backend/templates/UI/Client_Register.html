@@ -32,6 +32,34 @@
         .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
         html.co-embed .wrap { padding-top: 0; }
 
+        .co-tabs {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--bite-border);
+        }
+        .co-tab-btn {
+            appearance: none;
+            border: none;
+            background: transparent;
+            padding: 14px 20px;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: var(--bite-muted);
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -1px;
+            font-family: inherit;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .co-tab-btn:hover { color: var(--bite-text); }
+        .co-tab-btn.co-tab-active {
+            color: var(--bite-text);
+            font-weight: 600;
+            border-bottom-color: var(--bite-cyan);
+        }
+
         .co-card {
             background: #fff;
             border: 1px solid var(--bite-border);
@@ -165,6 +193,39 @@
         }
         .co-success-panel a:hover { background: var(--bite-cyan-dark); }
 
+        .co-signin-panel {
+            padding: 32px 28px;
+            text-align: center;
+        }
+        .co-signin-panel h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .co-signin-panel p {
+            font-size: 0.9375rem;
+            line-height: 1.55;
+            color: var(--bite-muted);
+            max-width: 400px;
+            margin: 0 auto 24px;
+        }
+        .co-signin-panel .co-btn-save {
+            display: inline-block;
+            text-decoration: none;
+            line-height: 1.2;
+            padding: 13px 32px;
+            background: var(--bite-cyan);
+            color: #fff;
+            border: none;
+            border-radius: var(--bite-radius);
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .co-signin-panel .co-btn-save:hover { background: var(--bite-cyan-dark); }
+
         @media (max-width: 640px) {
             .co-portal-profile .co-profile-form { grid-template-columns: 1fr; }
             .co-portal-profile { padding: 18px 16px 22px; }
@@ -175,6 +236,17 @@
 </head>
 <body>
     <div id="bite-client-register" class="wrap">
+        <nav class="co-tabs" id="co-auth-tabs">
+            <button type="button" class="co-tab-btn co-tab-active" data-tab="register">Create account</button>
+            <button type="button" class="co-tab-btn" data-tab="signin">Sign in</button>
+        </nav>
+
+        <div id="co-panel-signin" class="co-card co-signin-panel" hidden>
+            <h2>Welcome back</h2>
+            <p>Sign in to view your orders, profile, and production updates.</p>
+            <a href="{{ login_url }}" class="co-btn-save" id="co-signin-link">Sign in</a>
+        </div>
+
         <div id="co-register-form-wrap" class="co-card co-portal-profile">
             <h2 class="co-section-title">Create your account</h2>
             <p class="co-section-lead">Fill in your details below. We'll review your profile and activate your account shortly.</p>
@@ -228,6 +300,7 @@
 
     <script>
         const STOREFRONT_URL = {{ storefront_url | tojson }};
+        const LOGIN_URL = {{ login_url | tojson }};
 
         function notifyEmbedHeight() {
             if (window.parent === window) return;
@@ -237,13 +310,51 @@
         }
 
         (function () {
-            const form = document.getElementById('co-register-form');
+            const authTabs = document.getElementById('co-auth-tabs');
+            const signinPanel = document.getElementById('co-panel-signin');
             const formWrap = document.getElementById('co-register-form-wrap');
             const successPanel = document.getElementById('co-register-success');
+            const signinLink = document.getElementById('co-signin-link');
+
+            function switchAuthTab(tab) {
+                const isRegister = tab === 'register';
+                authTabs?.querySelectorAll('.co-tab-btn').forEach(btn => {
+                    btn.classList.toggle('co-tab-active', btn.dataset.tab === tab);
+                });
+                if (signinPanel) signinPanel.hidden = isRegister;
+                if (formWrap) formWrap.hidden = !isRegister;
+                if (successPanel && !successPanel.hidden) {
+                    if (authTabs) authTabs.hidden = true;
+                } else if (authTabs) {
+                    authTabs.hidden = false;
+                }
+                notifyEmbedHeight();
+            }
+
+            authTabs?.addEventListener('click', (e) => {
+                const btn = e.target.closest('.co-tab-btn');
+                if (!btn) return;
+                switchAuthTab(btn.dataset.tab || 'register');
+            });
+
+            signinLink?.addEventListener('click', (e) => {
+                e.preventDefault();
+                const url = LOGIN_URL || signinLink.getAttribute('href') || '/';
+                if (window.top && window.top !== window) {
+                    window.top.location.href = url;
+                } else {
+                    window.location.href = url;
+                }
+            });
+
+            const form = document.getElementById('co-register-form');
             const registerBtn = document.getElementById('co-register-btn');
             const registerMsg = document.getElementById('co-register-msg');
             const firstNameInput = document.getElementById('co-first_name');
             const emailInput = document.getElementById('co-email');
+
+            const urlTab = new URLSearchParams(window.location.search).get('tab');
+            if (urlTab === 'signin') switchAuthTab('signin');
 
             function validateForm() {
                 let ok = true;
@@ -296,7 +407,9 @@
 
                     const successText = document.getElementById('co-success-text');
                     if (successText && data.message) successText.textContent = data.message;
+                    if (authTabs) authTabs.hidden = true;
                     formWrap.hidden = true;
+                    if (signinPanel) signinPanel.hidden = true;
                     successPanel.hidden = false;
                     notifyEmbedHeight();
                 } catch (err) {

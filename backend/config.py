@@ -36,6 +36,10 @@ FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in
 STOREFRONT_URL = (os.environ.get("SHOPIFY_STOREFRONT_URL") or "https://bitepromotions.uk").rstrip("/")
 # Customer portal page on the Shopify storefront (iframe embed)
 PORTAL_PAGE_URL = (os.environ.get("PORTAL_PAGE_URL") or f"{STOREFRONT_URL}/pages/portal").rstrip("/")
+# Customer Hub / storefront login (linked from portal-register sign-in tab)
+CUSTOMER_LOGIN_URL = (
+    os.environ.get("CUSTOMER_LOGIN_URL") or f"{STOREFRONT_URL}/a/customerhub#account:a:login"
+).strip()
 
 # Office Order API (status pipeline + artwork/proof files on office server)
 OFFICE_API_URL = (os.environ.get("OFFICE_API_URL") or "").rstrip("/")

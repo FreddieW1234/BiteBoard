@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, CUSTOMER_LOGIN_URL, PORTAL_PAGE_URL  # type: ignore
 from portal_auth import (  # type: ignore
     check_staff_credentials,
     is_staff_authenticated,
@@ -191,6 +191,8 @@ def client_register_page():
         "UI/Client_Register.html",
         shop_url=shop_url,
         storefront_url=STOREFRONT_URL,
+        login_url=CUSTOMER_LOGIN_URL,
+        portal_page_url=PORTAL_PAGE_URL,
     )
 
 
