@@ -40,6 +40,10 @@ PORTAL_PAGE_URL = (os.environ.get("PORTAL_PAGE_URL") or f"{STOREFRONT_URL}/pages
 CUSTOMER_LOGIN_RETURN_TO = (os.environ.get("CUSTOMER_LOGIN_RETURN_TO") or "/pages/portal").strip()
 # Optional template override: .../login?login_hint={email}&return_to={return_to}
 CUSTOMER_LOGIN_URL = (os.environ.get("CUSTOMER_LOGIN_URL") or "").strip()
+# Send Shopify account invite email after portal registration (REST send_invite)
+CUSTOMER_SEND_ACCOUNT_INVITE = os.environ.get(
+    "CUSTOMER_SEND_ACCOUNT_INVITE", "true"
+).lower() in ("1", "true", "yes")
 
 
 def build_customer_login_url(email: str) -> str:

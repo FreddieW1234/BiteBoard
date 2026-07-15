@@ -1,5 +1,6 @@
 """Fetch Shopify customers for the Customers page."""
 
+import logging
 import os
 import sys
 import time
@@ -9,7 +10,9 @@ PARENT_DIR = os.path.dirname(os.path.dirname(__file__))
 if PARENT_DIR not in sys.path:
     sys.path.append(PARENT_DIR)
 
-from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
+from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN, CUSTOMER_SEND_ACCOUNT_INVITE  # type: ignore
+
+log = logging.getLogger(__name__)
 
 HEADERS = {
     "Content-Type": "application/json",
@@ -285,6 +288,23 @@ def customer_exists_by_email(email: str) -> bool:
         return False
 
 
+def _send_customer_account_invite(customer_id: int, email: str = "") -> bool:
+    """Send Shopify's default customer account invite / welcome email."""
+    url = (
+        f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/customers/"
+        f"{int(customer_id)}/send_invite.json"
+    )
+    invite_body: dict = {}
+    if email:
+        invite_body["to"] = email.strip()
+    resp = _request_with_status("POST", url, json={"customer_invite": invite_body})
+    if resp.status_code in (200, 201):
+        return True
+    detail = resp.text[:300] if resp.text else resp.reason
+    log.warning("Customer account invite failed (%s): %s", resp.status_code, detail)
+    return False
+
+
 def create_customer(payload: dict) -> dict:
     """Create a Shopify customer tagged Pending with custom_fields metafields."""
     import re
@@ -309,8 +329,6 @@ def create_customer(payload: dict) -> dict:
                 "last_name": last_name,
                 "email": email,
                 "tags": TYPE_TAG_LABELS["pending"],
-                "send_email_welcome": False,
-                "verified_email": True,
             }
         },
     )
@@ -344,7 +362,10 @@ def create_customer(payload: dict) -> dict:
         if key in payload:
             metafield_payload[key] = payload.get(key)
 
-    return update_customer_details(customer_id, metafield_payload)
+    customer = update_customer_details(customer_id, metafield_payload)
+    if CUSTOMER_SEND_ACCOUNT_INVITE:
+        _send_customer_account_invite(customer_id, email)
+    return customer
 
 
 def update_customer_details(customer_id, payload):

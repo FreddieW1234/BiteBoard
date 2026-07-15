@@ -284,11 +284,13 @@
             <i class="fas fa-circle-check"></i>
             <h2>Registration received</h2>
             <p id="co-success-text">Thanks for registering. We've received your details and will review your account shortly.</p>
-            <a id="co-success-link" href="{{ storefront_url }}">Back to store</a>
+            <a id="co-success-link" href="{{ storefront_url }}" target="_top" rel="noopener noreferrer">Back to store</a>
         </div>
     </div>
 
     <script>
+        const STOREFRONT_URL = {{ storefront_url | tojson }};
+
         function notifyEmbedHeight() {
             if (window.parent === window) return;
             const root = document.getElementById('bite-client-register') || document.body;
@@ -323,6 +325,12 @@
             const firstNameInput = document.getElementById('co-first_name');
             const changeEmailBtn = document.getElementById('co-change-email-btn');
             const successPanel = document.getElementById('co-register-success');
+            const successLink = document.getElementById('co-success-link');
+
+            successLink?.addEventListener('click', (e) => {
+                e.preventDefault();
+                navigateTop(STOREFRONT_URL || 'https://bitepromotions.uk');
+            });
 
             function showEmailError(message) {
                 emailMsg.textContent = message;
