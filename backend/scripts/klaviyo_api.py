@@ -12,6 +12,7 @@ import requests
 from config import (  # type: ignore
     KLAVIYO_API_KEY,
     KLAVIYO_API_REVISION,
+    KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME,
     KLAVIYO_CUSTOMER_TYPE_METRIC_NAME,
     KLAVIYO_METRIC_NAME,
     PORTAL_PAGE_URL,
@@ -47,6 +48,10 @@ def klaviyo_configured() -> bool:
 
 def klaviyo_customer_type_configured() -> bool:
     return bool(KLAVIYO_API_KEY and KLAVIYO_CUSTOMER_TYPE_METRIC_NAME)
+
+
+def klaviyo_customer_registered_configured() -> bool:
+    return bool(KLAVIYO_API_KEY and KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME)
 
 
 def build_portal_url(
@@ -251,4 +256,84 @@ def send_customer_type_assigned(
     if resp.status_code not in (200, 202):
         detail = resp.text[:500] if resp.text else resp.reason
         log.warning("Klaviyo customer type event failed (%s): %s", resp.status_code, detail)
+        raise KlaviyoError(f"Klaviyo returned {resp.status_code}")
+
+
+def send_customer_registered(
+    email: str,
+    *,
+    customer_id: str = "",
+    first_name: str = "",
+    last_name: str = "",
+    company_name: str = "",
+    login_url: str = "",
+) -> None:
+    """Fire a Klaviyo metric when a new customer registers via the portal."""
+    if not klaviyo_customer_registered_configured():
+        raise KlaviyoError(
+            "Klaviyo is not configured (KLAVIYO_API_KEY / KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME)"
+        )
+
+    email = (email or "").strip()
+    if not email:
+        raise KlaviyoError("Email address is required")
+
+    first = (first_name or "").strip()
+    last = (last_name or "").strip()
+    customer_name = f"{first} {last}".strip() or email
+    unique_id = f"customer-registered-{customer_id or email}-{uuid.uuid4().hex}"
+
+    profile_attrs: dict[str, str] = {"email": email}
+    if first:
+        profile_attrs["first_name"] = first
+    if last:
+        profile_attrs["last_name"] = last
+
+    payload: dict[str, Any] = {
+        "data": {
+            "type": "event",
+            "attributes": {
+                "properties": {
+                    "customer_id": str(customer_id or "").strip(),
+                    "customer_name": customer_name,
+                    "first_name": first,
+                    "last_name": last,
+                    "company_name": (company_name or "").strip(),
+                    "portal_url": (PORTAL_PAGE_URL or "").strip(),
+                    "storefront_url": (STOREFRONT_URL or "").strip(),
+                    "login_url": (login_url or "").strip(),
+                },
+                "metric": {
+                    "data": {
+                        "type": "metric",
+                        "attributes": {"name": KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME},
+                    }
+                },
+                "profile": {
+                    "data": {
+                        "type": "profile",
+                        "attributes": profile_attrs,
+                    }
+                },
+                "unique_id": unique_id,
+            },
+        }
+    }
+
+    url = "https://a.klaviyo.com/api/events"
+    headers = {
+        "Authorization": f"Klaviyo-API-Key {KLAVIYO_API_KEY}",
+        "accept": "application/json",
+        "content-type": "application/json",
+        "revision": KLAVIYO_API_REVISION,
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        raise KlaviyoError(f"Could not reach Klaviyo: {exc}") from exc
+
+    if resp.status_code not in (200, 202):
+        detail = resp.text[:500] if resp.text else resp.reason
+        log.warning("Klaviyo customer registered event failed (%s): %s", resp.status_code, detail)
         raise KlaviyoError(f"Klaviyo returned {resp.status_code}")

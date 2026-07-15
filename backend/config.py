@@ -40,9 +40,9 @@ PORTAL_PAGE_URL = (os.environ.get("PORTAL_PAGE_URL") or f"{STOREFRONT_URL}/pages
 CUSTOMER_LOGIN_RETURN_TO = (os.environ.get("CUSTOMER_LOGIN_RETURN_TO") or "/pages/portal").strip()
 # Optional template override: .../login?login_hint={email}&return_to={return_to}
 CUSTOMER_LOGIN_URL = (os.environ.get("CUSTOMER_LOGIN_URL") or "").strip()
-# Send Shopify customer welcome email when a customer is created via portal registration
+# Shopify welcome email only works for legacy accounts; default off for passwordless.
 CUSTOMER_SEND_WELCOME_EMAIL = os.environ.get(
-    "CUSTOMER_SEND_WELCOME_EMAIL", "true"
+    "CUSTOMER_SEND_WELCOME_EMAIL", "false"
 ).lower() in ("1", "true", "yes")
 
 
@@ -73,6 +73,9 @@ KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")
 KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Update")
 KLAVIYO_CUSTOMER_TYPE_METRIC_NAME = os.environ.get(
     "KLAVIYO_CUSTOMER_TYPE_METRIC_NAME", "Bite Customer Type Assigned"
+)
+KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME = os.environ.get(
+    "KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME", "Bite Customer Registered"
 )
 
 # ShipStation — parcel labels (Royal Mail, FedEx, etc.)

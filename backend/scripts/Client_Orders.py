@@ -215,6 +215,30 @@ def register_client_customer(payload: dict) -> dict:
     except Exception as exc:
         return {"success": False, "error": str(exc)}
 
+    try:
+        from config import build_customer_login_url  # type: ignore
+        from scripts.klaviyo_api import (  # type: ignore
+            KlaviyoError,
+            klaviyo_customer_registered_configured,
+            send_customer_registered,
+        )
+
+        if klaviyo_customer_registered_configured():
+            send_customer_registered(
+                email,
+                customer_id=str(customer.get("id") or ""),
+                first_name=safe.get("first_name") or first_name,
+                last_name=safe.get("last_name") or "",
+                company_name=safe.get("company_name") or "",
+                login_url=build_customer_login_url(email),
+            )
+    except KlaviyoError as exc:
+        import logging
+        logging.getLogger(__name__).warning("Klaviyo registration email not sent: %s", exc)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Klaviyo registration email failed: %s", exc)
+
     return {
         "success": True,
         "customer_id": customer.get("id"),
