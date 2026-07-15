@@ -266,6 +266,25 @@ def _request_with_status(method, url, **kwargs):
         return resp
 
 
+def customer_exists_by_email(email: str) -> bool:
+    """Return True if a Shopify customer with this email already exists."""
+    from urllib.parse import quote
+
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    query = quote(f"email:{email}")
+    url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/customers/search.json?query={query}"
+    try:
+        resp = _request_with_status("GET", url)
+        if resp.status_code != 200:
+            return False
+        customers = resp.json().get("customers") or []
+        return any((c.get("email") or "").strip().lower() == email for c in customers)
+    except Exception:
+        return False
+
+
 def create_customer(payload: dict) -> dict:
     """Create a Shopify customer tagged Pending with custom_fields metafields."""
     import re

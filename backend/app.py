@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, CUSTOMER_LOGIN_URL, PORTAL_PAGE_URL  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, PORTAL_PAGE_URL  # type: ignore
 from portal_auth import (  # type: ignore
     check_staff_credentials,
     is_staff_authenticated,
@@ -191,9 +191,22 @@ def client_register_page():
         "UI/Client_Register.html",
         shop_url=shop_url,
         storefront_url=STOREFRONT_URL,
-        login_url=CUSTOMER_LOGIN_URL,
         portal_page_url=PORTAL_PAGE_URL,
     )
+
+
+@app.route("/api/client/check-email", methods=["POST"])
+def api_client_check_email():
+    """Public: check if email exists in Shopify; return prefilled login URL when it does."""
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.Client_Orders import check_client_email  # type: ignore
+        result = check_client_email(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/client/register", methods=["POST"])

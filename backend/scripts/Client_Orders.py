@@ -153,6 +153,34 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     return get_customer_profile(customer_id)
 
 
+def check_client_email(payload: dict) -> dict:
+    """Check whether an email is already registered; return login URL if so."""
+    import re
+
+    if (payload.get("website") or "").strip():
+        return {"success": True, "exists": False}
+
+    email = str(payload.get("email") or "").strip().lower()
+    if not email:
+        return {"success": False, "error": "Email is required."}
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        return {"success": False, "error": "Please enter a valid email address."}
+
+    import os
+    import sys
+    scripts_dir = os.path.dirname(__file__)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from Customers import customer_exists_by_email  # type: ignore
+    from config import build_customer_login_url  # type: ignore
+
+    exists = customer_exists_by_email(email)
+    result = {"success": True, "exists": exists, "email": email}
+    if exists:
+        result["login_url"] = build_customer_login_url(email)
+    return result
+
+
 def register_client_customer(payload: dict) -> dict:
     """Create a new Shopify customer from the public registration form."""
     import os

@@ -36,10 +36,26 @@ FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in
 STOREFRONT_URL = (os.environ.get("SHOPIFY_STOREFRONT_URL") or "https://bitepromotions.uk").rstrip("/")
 # Customer portal page on the Shopify storefront (iframe embed)
 PORTAL_PAGE_URL = (os.environ.get("PORTAL_PAGE_URL") or f"{STOREFRONT_URL}/pages/portal").rstrip("/")
-# Customer Hub / storefront login (linked from portal-register sign-in tab)
-CUSTOMER_LOGIN_URL = (
-    os.environ.get("CUSTOMER_LOGIN_URL") or f"{STOREFRONT_URL}/a/customerhub#account:a:login"
-).strip()
+# Relative path after Shopify login (used with login_hint)
+CUSTOMER_LOGIN_RETURN_TO = (os.environ.get("CUSTOMER_LOGIN_RETURN_TO") or "/pages/portal").strip()
+# Optional template override: .../login?login_hint={email}&return_to={return_to}
+CUSTOMER_LOGIN_URL = (os.environ.get("CUSTOMER_LOGIN_URL") or "").strip()
+
+
+def build_customer_login_url(email: str) -> str:
+    """Shopify native login with email prefilled via login_hint."""
+    from urllib.parse import quote
+
+    email_q = quote((email or "").strip().lower())
+    return_to_q = quote(CUSTOMER_LOGIN_RETURN_TO or "/pages/portal", safe="")
+    if CUSTOMER_LOGIN_URL and "{email}" in CUSTOMER_LOGIN_URL:
+        return (
+            CUSTOMER_LOGIN_URL.replace("{email}", email_q).replace("{return_to}", return_to_q)
+        )
+    return (
+        f"{STOREFRONT_URL}/customer_authentication/login"
+        f"?login_hint={email_q}&return_to={return_to_q}"
+    )
 
 # Office Order API (status pipeline + artwork/proof files on office server)
 OFFICE_API_URL = (os.environ.get("OFFICE_API_URL") or "").rstrip("/")

@@ -28,8 +28,8 @@ services:
         value: "2025-01-15"
       - key: PORTAL_PAGE_URL
         value: "https://bitepromotions.uk/pages/portal"
-      - key: CUSTOMER_LOGIN_URL
-        value: "https://bitepromotions.uk/a/customerhub#account:a:login"
+      - key: CUSTOMER_LOGIN_RETURN_TO
+        value: "/pages/portal"
       - key: SHIPSTATION_API_KEY
         sync: false
       - key: SHIPSTATION_API_URL
