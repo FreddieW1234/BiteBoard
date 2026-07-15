@@ -180,9 +180,29 @@
     font-weight: 600;
 }
 
-.ship-type-btn:disabled {
+.ship-type-btn:disabled,
+.ship-type-btn.disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.ship-pallet-notice {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #1d4ed8;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+}
+
+.ship-package-section {
+    margin-top: 4px;
+}
+
+.ship-section + .ship-section {
+    margin-top: 16px;
 }
 
 .ship-rates {

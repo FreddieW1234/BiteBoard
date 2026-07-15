@@ -88,12 +88,21 @@
     function readForm() {
         const body = overlay?.querySelector('#ship-modal-body');
         if (!body) return {};
+        const parseDim = id => {
+            const raw = body.querySelector(id)?.value;
+            if (raw === '' || raw == null) return null;
+            const n = parseFloat(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        };
+        const weightRaw = body.querySelector('#ship-weight')?.value;
+        const weightFallback = state.prep?.defaults?.weight_kg || 1;
+        const weight = parseFloat(weightRaw);
         return {
             shipment_type: body.querySelector('[name="shipment_type"]:checked')?.value || 'parcel',
-            weight_kg: parseFloat(body.querySelector('#ship-weight')?.value) || 1,
-            length_cm: parseFloat(body.querySelector('#ship-length')?.value) || 30,
-            width_cm: parseFloat(body.querySelector('#ship-width')?.value) || 25,
-            height_cm: parseFloat(body.querySelector('#ship-height')?.value) || 10,
+            weight_kg: Number.isFinite(weight) && weight > 0 ? weight : weightFallback,
+            length_cm: parseDim('#ship-length'),
+            width_cm: parseDim('#ship-width'),
+            height_cm: parseDim('#ship-height'),
         };
     }
 
@@ -111,8 +120,9 @@
         const defs = prep.defaults || {};
         const palletDisabled = !state.providers.palletways;
         const palletHint = palletDisabled
-            ? '<span class="ship-msg info" style="margin-top:8px">Palletways API key pending — pallet shipping unavailable.</span>'
+            ? '<p class="ship-pallet-notice">Palletways API key pending — pallet shipping unavailable.</p>'
             : '';
+        const weightVal = defs.weight_kg != null ? defs.weight_kg : '';
 
         body.innerHTML = `
             <div id="ship-modal-msg" hidden></div>
@@ -134,30 +144,30 @@
                             <label class="ship-type-btn active">
                                 <input type="radio" name="shipment_type" value="parcel" checked hidden> Parcel
                             </label>
-                            <label class="ship-type-btn${palletDisabled ? '' : ''}">
+                            <label class="ship-type-btn${palletDisabled ? ' disabled' : ''}">
                                 <input type="radio" name="shipment_type" value="pallet"${palletDisabled ? ' disabled' : ''} hidden> Pallet
                             </label>
                         </div>
                         ${palletHint}
                     </div>
-                    <div class="ship-section">
+                    <div class="ship-section ship-package-section">
                         <div class="ship-section-title">Package</div>
                         <div class="ship-fields">
                             <div class="ship-field">
                                 <label for="ship-weight">Weight (kg)</label>
-                                <input type="number" id="ship-weight" min="0.01" step="0.01" value="${defs.weight_kg || 1}">
+                                <input type="number" id="ship-weight" min="0.01" step="0.001" value="${weightVal}">
                             </div>
                             <div class="ship-field">
                                 <label for="ship-length">Length (cm)</label>
-                                <input type="number" id="ship-length" min="1" step="1" value="${defs.length_cm || 30}">
+                                <input type="number" id="ship-length" min="1" step="1" placeholder="—">
                             </div>
                             <div class="ship-field">
                                 <label for="ship-width">Width (cm)</label>
-                                <input type="number" id="ship-width" min="1" step="1" value="${defs.width_cm || 25}">
+                                <input type="number" id="ship-width" min="1" step="1" placeholder="—">
                             </div>
                             <div class="ship-field">
                                 <label for="ship-height">Height (cm)</label>
-                                <input type="number" id="ship-height" min="1" step="1" value="${defs.height_cm || 10}">
+                                <input type="number" id="ship-height" min="1" step="1" placeholder="—">
                             </div>
                         </div>
                     </div>

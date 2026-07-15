@@ -61,6 +61,16 @@ LINE_ITEM_FIELDS = """
               sku
               variantTitle
               customAttributes { key value }
+              variant {
+                inventoryItem {
+                  measurement {
+                    weight {
+                      value
+                      unit
+                    }
+                  }
+                }
+              }
               originalUnitPriceSet {
                 shopMoney { amount currencyCode }
               }
@@ -218,6 +228,30 @@ def _format_fee_item(item: dict) -> dict:
     return item
 
 
+def _line_item_weight_kg(li: dict) -> float:
+    """Single-unit weight in kg from variant inventory measurement."""
+    variant = li.get("variant") or {}
+    inv = variant.get("inventoryItem") or {}
+    meas = inv.get("measurement") or {}
+    w = meas.get("weight") or {}
+    try:
+        value = float(w.get("value") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if value <= 0:
+        return 0.0
+    unit = (w.get("unit") or "GRAMS").upper()
+    if unit == "KILOGRAMS":
+        return value
+    if unit == "GRAMS":
+        return value / 1000.0
+    if unit == "POUNDS":
+        return value * 0.453592
+    if unit == "OUNCES":
+        return value * 0.0283495
+    return value / 1000.0
+
+
 def format_line_item(li: dict) -> dict:
     li_money = (li.get("originalTotalSet") or {}).get("shopMoney") or {}
     unit_money = (li.get("originalUnitPriceSet") or {}).get("shopMoney") or {}
@@ -231,11 +265,13 @@ def format_line_item(li: dict) -> dict:
     unit_price = unit_money.get("amount") or "0.00"
     total = li_money.get("amount") or "0.00"
     quantity = li.get("quantity") or 0
+    weight_kg = _line_item_weight_kg(li)
     item = {
         "title": title,
         "quantity": quantity,
         "sku": sku,
         "variant_title": variant_title,
+        "weight_kg": weight_kg,
         "meta_line": _build_meta_line(variant_title, merged_variants),
         "unit_price": unit_price,
         "total": total,

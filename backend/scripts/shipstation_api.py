@@ -56,7 +56,17 @@ def _handle_response(resp: requests.Response) -> Any:
         detail = ""
         try:
             body = resp.json()
-            detail = body.get("message") or body.get("error") or str(body.get("errors") or "")
+            detail = body.get("message") or body.get("error") or ""
+            errors = body.get("errors")
+            if errors:
+                parts: list[str] = []
+                for err in errors if isinstance(errors, list) else [errors]:
+                    if isinstance(err, dict):
+                        parts.append(str(err.get("message") or err))
+                    else:
+                        parts.append(str(err))
+                if parts:
+                    detail = "; ".join(parts)
         except Exception:
             detail = (resp.text or "")[:300]
         logger.error("ShipStation HTTP %s: %s", resp.status_code, detail or resp.reason)
@@ -78,6 +88,15 @@ def list_warehouses() -> list[dict]:
     return []
 
 
+def list_carriers() -> list[dict]:
+    data = _handle_response(_request("GET", "/v2/carriers"))
+    if isinstance(data, dict):
+        return list(data.get("carriers") or [])
+    if isinstance(data, list):
+        return data
+    return []
+
+
 def get_default_warehouse() -> dict | None:
     warehouses = list_warehouses()
     if not warehouses:
@@ -91,9 +110,19 @@ def get_default_warehouse() -> dict | None:
 
 def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     """Return rate quote response from POST /v2/rates."""
-    payload: dict[str, Any] = {"shipment": shipment}
-    if carrier_ids:
-        payload["rate_options"] = {"carrier_ids": carrier_ids}
+    if not carrier_ids:
+        carrier_ids = [
+            str(c.get("carrier_id") or "")
+            for c in list_carriers()
+            if c.get("carrier_id")
+        ]
+    if not carrier_ids:
+        raise ShipStationError("No carriers connected in ShipStation")
+
+    payload: dict[str, Any] = {
+        "shipment": shipment,
+        "rate_options": {"carrier_ids": carrier_ids},
+    }
     return _handle_response(_request("POST", "/v2/rates", json=payload))
 
 

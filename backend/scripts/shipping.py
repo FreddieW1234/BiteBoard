@@ -60,10 +60,18 @@ def prepare_shipment(order_id: str | int) -> dict:
             "title": li.get("title") or "",
             "sku": li.get("sku") or "",
             "quantity": li.get("quantity") or 1,
+            "weight_kg": li.get("weight_kg") or 0,
         }
         for li in (order.get("order_items") or [])
         if not li.get("is_fee")
     ]
+
+    total_weight_kg = sum(
+        (li.get("weight_kg") or 0) * max(1, int(li.get("quantity") or 1))
+        for li in items
+    )
+    if total_weight_kg <= 0:
+        total_weight_kg = 1.0
 
     return {
         "success": True,
@@ -74,10 +82,10 @@ def prepare_shipment(order_id: str | int) -> dict:
         "ship_to": ship_to,
         "items": items,
         "defaults": {
-            "weight_kg": 1.0,
-            "length_cm": 30,
-            "width_cm": 25,
-            "height_cm": 10,
+            "weight_kg": round(total_weight_kg, 3),
+            "length_cm": None,
+            "width_cm": None,
+            "height_cm": None,
             "shipment_type": "parcel",
         },
         "providers": shipping_status(),
@@ -227,24 +235,33 @@ def ship_order(payload: dict) -> dict:
         return {"success": False, "error": str(exc)}
 
 
+def _parse_dim(value) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        n = float(value)
+        return n if n > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
     from scripts import shipstation_api  # type: ignore
 
     ship_to = prep.get("ship_to") or {}
     warehouse = shipstation_api.get_default_warehouse()
-    ship_from = _warehouse_to_address(warehouse) if warehouse else None
 
-    weight_kg = float(payload.get("weight_kg") or 1.0)
-    length_cm = float(payload.get("length_cm") or 30)
-    width_cm = float(payload.get("width_cm") or 25)
-    height_cm = float(payload.get("height_cm") or 10)
+    weight_kg = float(payload.get("weight_kg") or prep.get("defaults", {}).get("weight_kg") or 1.0)
+    length_cm = _parse_dim(payload.get("length_cm")) or 20.0
+    width_cm = _parse_dim(payload.get("width_cm")) or 15.0
+    height_cm = _parse_dim(payload.get("height_cm")) or 10.0
 
     packages = [{
         "weight": {"value": max(0.01, weight_kg), "unit": "kilogram"},
         "dimensions": {
-            "length": max(1, length_cm),
-            "width": max(1, width_cm),
-            "height": max(1, height_cm),
+            "length": length_cm,
+            "width": width_cm,
+            "height": height_cm,
             "unit": "centimeter",
         },
         "package_code": "package",
@@ -256,12 +273,14 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
         "packages": packages,
         "external_order_id": prep.get("order_name") or "",
     }
-    if ship_from:
-        shipment["ship_from"] = ship_from
     if warehouse:
         wh_id = warehouse.get("warehouse_id") or warehouse.get("id")
         if wh_id:
             shipment["warehouse_id"] = wh_id
+        else:
+            ship_from = _warehouse_to_address(warehouse)
+            if ship_from.get("address_line1"):
+                shipment["ship_from"] = ship_from
     return shipment
 
 
