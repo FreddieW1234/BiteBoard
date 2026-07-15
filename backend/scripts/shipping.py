@@ -252,67 +252,84 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
     warehouse = shipstation_api.get_default_warehouse()
 
     weight_kg = float(payload.get("weight_kg") or prep.get("defaults", {}).get("weight_kg") or 1.0)
-    length_cm = _parse_dim(payload.get("length_cm")) or 20.0
-    width_cm = _parse_dim(payload.get("width_cm")) or 15.0
-    height_cm = _parse_dim(payload.get("height_cm")) or 10.0
+    length_cm = _parse_dim(payload.get("length_cm"))
+    width_cm = _parse_dim(payload.get("width_cm"))
+    height_cm = _parse_dim(payload.get("height_cm"))
 
-    packages = [{
+    package: dict = {
+        "package_code": "package",
         "weight": {"value": max(0.01, weight_kg), "unit": "kilogram"},
-        "dimensions": {
+    }
+    if length_cm and width_cm and height_cm:
+        package["dimensions"] = {
             "length": length_cm,
             "width": width_cm,
             "height": height_cm,
             "unit": "centimeter",
-        },
-        "package_code": "package",
-    }]
+        }
 
     shipment: dict = {
         "validate_address": "no_validation",
         "ship_to": _to_shipstation_address(ship_to),
-        "packages": packages,
-        "external_order_id": prep.get("order_name") or "",
+        "packages": [package],
     }
-    if warehouse:
+
+    ship_from = _warehouse_to_address(warehouse) if warehouse else {}
+    if ship_from.get("address_line1"):
+        shipment["ship_from"] = ship_from
+    elif warehouse:
         wh_id = warehouse.get("warehouse_id") or warehouse.get("id")
         if wh_id:
-            shipment["warehouse_id"] = wh_id
-        else:
-            ship_from = _warehouse_to_address(warehouse)
-            if ship_from.get("address_line1"):
-                shipment["ship_from"] = ship_from
+            shipment["warehouse_id"] = str(wh_id)
+
+    order_name = (prep.get("order_name") or "").strip()
+    if order_name:
+        shipment["external_shipment_id"] = order_name.lstrip("#")[:50]
+
     return shipment
 
 
 def _to_shipstation_address(addr: dict) -> dict:
-    return {
+    phone = (addr.get("phone") or "").strip() or "0000000000"
+    out = {
         "name": (addr.get("name") or addr.get("company") or "Recipient").strip(),
-        "company_name": (addr.get("company") or "").strip(),
-        "phone": (addr.get("phone") or "").strip(),
+        "phone": phone,
         "address_line1": (addr.get("address1") or "").strip(),
-        "address_line2": (addr.get("address2") or "").strip(),
         "city_locality": (addr.get("city") or "").strip(),
         "state_province": (addr.get("province") or "").strip(),
         "postal_code": (addr.get("zip") or "").strip(),
         "country_code": (addr.get("country_code") or "GB").strip().upper(),
         "address_residential_indicator": "unknown",
     }
+    company = (addr.get("company") or "").strip()
+    if company:
+        out["company_name"] = company
+    line2 = (addr.get("address2") or "").strip()
+    if line2:
+        out["address_line2"] = line2
+    return out
 
 
 def _warehouse_to_address(warehouse: dict) -> dict:
     origin = warehouse.get("origin_address") or warehouse.get("return_address") or warehouse
-    return {
+    phone = (origin.get("phone") or warehouse.get("phone") or "").strip() or "0000000000"
+    out = {
         "name": (origin.get("name") or warehouse.get("name") or "Warehouse").strip(),
-        "company_name": (origin.get("company_name") or origin.get("company") or "").strip(),
-        "phone": (origin.get("phone") or "").strip(),
+        "phone": phone,
         "address_line1": (origin.get("address_line1") or origin.get("address1") or "").strip(),
-        "address_line2": (origin.get("address_line2") or origin.get("address2") or "").strip(),
         "city_locality": (origin.get("city_locality") or origin.get("city") or "").strip(),
         "state_province": (origin.get("state_province") or origin.get("state") or "").strip(),
         "postal_code": (origin.get("postal_code") or origin.get("postalCode") or "").strip(),
         "country_code": (origin.get("country_code") or origin.get("countryCode") or "GB").strip().upper(),
-        "address_residential_indicator": "unknown",
+        "address_residential_indicator": "no",
     }
+    company = (origin.get("company_name") or origin.get("company") or warehouse.get("company") or "").strip()
+    if company:
+        out["company_name"] = company
+    line2 = (origin.get("address_line2") or origin.get("address2") or "").strip()
+    if line2:
+        out["address_line2"] = line2
+    return out
 
 
 def _normalize_rates(rate_resp: dict) -> list[dict]:

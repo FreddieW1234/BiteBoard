@@ -49,6 +49,26 @@ def _request(method: str, path: str, **kwargs) -> requests.Response:
         raise ShipStationError("ShipStation service unavailable") from exc
 
 
+def _format_error_body(body: dict) -> str:
+    detail = body.get("message") or body.get("error") or ""
+    errors = body.get("errors")
+    if errors:
+        parts: list[str] = []
+        for err in errors if isinstance(errors, list) else [errors]:
+            if isinstance(err, dict):
+                msg = str(err.get("message") or err)
+                field = err.get("field_name")
+                if field:
+                    parts.append(f"{field}: {msg}")
+                else:
+                    parts.append(msg)
+            else:
+                parts.append(str(err))
+        if parts:
+            return "; ".join(parts)
+    return str(detail)
+
+
 def _handle_response(resp: requests.Response) -> Any:
     if resp.status_code == 401:
         raise ShipStationError("ShipStation authentication failed — check SHIPSTATION_API_KEY")
@@ -56,17 +76,7 @@ def _handle_response(resp: requests.Response) -> Any:
         detail = ""
         try:
             body = resp.json()
-            detail = body.get("message") or body.get("error") or ""
-            errors = body.get("errors")
-            if errors:
-                parts: list[str] = []
-                for err in errors if isinstance(errors, list) else [errors]:
-                    if isinstance(err, dict):
-                        parts.append(str(err.get("message") or err))
-                    else:
-                        parts.append(str(err))
-                if parts:
-                    detail = "; ".join(parts)
+            detail = _format_error_body(body if isinstance(body, dict) else {})
         except Exception:
             detail = (resp.text or "")[:300]
         logger.error("ShipStation HTTP %s: %s", resp.status_code, detail or resp.reason)
@@ -108,6 +118,15 @@ def get_default_warehouse() -> dict | None:
     return warehouses[0]
 
 
+def create_shipment(shipment: dict) -> dict:
+    """Create a pending shipment and return the first created record."""
+    data = _handle_response(_request("POST", "/v2/shipments", json={"shipments": [shipment]}))
+    shipments = (data or {}).get("shipments") if isinstance(data, dict) else None
+    if not shipments:
+        raise ShipStationError("ShipStation did not return a shipment")
+    return shipments[0]
+
+
 def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     """Return rate quote response from POST /v2/rates."""
     if not carrier_ids:
@@ -119,11 +138,41 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     if not carrier_ids:
         raise ShipStationError("No carriers connected in ShipStation")
 
-    payload: dict[str, Any] = {
+    rate_options = {"carrier_ids": carrier_ids}
+    validate_address = shipment.pop("validate_address", "no_validation")
+
+    inline_payload: dict[str, Any] = {
+        "rate_options": rate_options,
+        "validate_address": validate_address,
         "shipment": shipment,
-        "rate_options": {"carrier_ids": carrier_ids},
     }
-    return _handle_response(_request("POST", "/v2/rates", json=payload))
+    resp = _request("POST", "/v2/rates", json=inline_payload)
+    if resp.ok:
+        return _handle_response(resp)
+
+    inline_error = ""
+    try:
+        inline_error = _format_error_body(resp.json())
+    except Exception:
+        inline_error = (resp.text or "")[:300]
+    logger.warning(
+        "ShipStation inline rates failed (%s): %s — retrying via shipment_id",
+        resp.status_code,
+        inline_error,
+    )
+
+    created = create_shipment({**shipment, "validate_address": validate_address})
+    shipment_id = str(created.get("shipment_id") or "")
+    if not shipment_id:
+        raise ShipStationError(inline_error or "ShipStation did not return a shipment_id")
+
+    return _handle_response(
+        _request(
+            "POST",
+            "/v2/rates",
+            json={"rate_options": rate_options, "shipment_id": shipment_id},
+        )
+    )
 
 
 def create_label_from_rate(rate_id: str, *, label_format: str = "zpl") -> dict:
