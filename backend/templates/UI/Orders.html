@@ -37,7 +37,7 @@
         .page-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
         .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
-        .status-legend { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; padding: 10px 14px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; font-size: 0.82rem; color: #374151; }
+        .status-legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 6px 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.8rem; color: #374151; }
         .status-legend-title { font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.72rem; }
         .status-legend-item { display: inline-flex; align-items: center; gap: 8px; }
         .status-legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
@@ -346,6 +346,11 @@
                     <input type="text" id="search-input" placeholder="Search order, company, customer, email…">
                 </div>
                 <span class="count-pill" id="count-pill">Loading…</span>
+                <div class="status-legend">
+                    <span class="status-legend-title">Key</span>
+                    <span class="status-legend-item"><span class="status-legend-dot orange"></span> Waiting on customer (artwork or proof approval)</span>
+                    <span class="status-legend-item"><span class="status-legend-dot red"></span> Customer waiting on us (proof upload needed)</span>
+                </div>
                 <div class="toolbar-actions">
                     <select class="sort-select" id="sort-select" aria-label="Sort active orders">
                         <option value="priority">Sort: Priority</option>
@@ -353,11 +358,6 @@
                     </select>
                     <button type="button" class="btn-ghost" id="refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
                 </div>
-            </div>
-            <div class="status-legend">
-                <span class="status-legend-title">Key</span>
-                <span class="status-legend-item"><span class="status-legend-dot orange"></span> Waiting on customer (artwork or proof approval)</span>
-                <span class="status-legend-item"><span class="status-legend-dot red"></span> Customer waiting on us (proof upload needed)</span>
             </div>
             <div id="content">
                 <div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>
