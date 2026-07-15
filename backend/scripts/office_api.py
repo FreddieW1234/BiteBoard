@@ -219,3 +219,43 @@ def set_notify(order: str, enabled: bool, email: str = "") -> dict:
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from notify update")
     return result
+
+
+def get_diary_entries() -> dict:
+    """All stored diary entries (dispatch date + carrier per order line).
+
+    Expects the Office API to expose ``GET /diary`` returning
+    ``{"entries": [{"order", "item", "dispatch_date", "dispatch_manual",
+    "carrier", "updated_at"}, ...]}``. Raises OfficeApiError if the endpoint
+    is missing/unreachable so callers can fall back to local storage.
+    """
+    url = f"{OFFICE_API_URL.rstrip('/')}/diary"
+    resp = _request("GET", url)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from diary list")
+    return result
+
+
+def set_diary_entry(
+    order: str,
+    item: str,
+    *,
+    dispatch_date: str | None = None,
+    dispatch_manual: bool | None = None,
+    carrier: str | None = None,
+) -> dict:
+    """Upsert one diary entry via ``PUT /orders/{order}/items/{item}/diary``."""
+    url = f"{_url(order, item)}/diary"
+    payload: dict = {}
+    if dispatch_date is not None:
+        payload["dispatch_date"] = dispatch_date
+    if dispatch_manual is not None:
+        payload["dispatch_manual"] = bool(dispatch_manual)
+    if carrier is not None:
+        payload["carrier"] = carrier
+    resp = _request("PUT", url, json=payload)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from diary update")
+    return result
