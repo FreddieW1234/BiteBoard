@@ -54,16 +54,22 @@ def _format_error_body(body: dict) -> str:
     errors = body.get("errors")
     if errors:
         parts: list[str] = []
+        seen: set[str] = set()
         for err in errors if isinstance(errors, list) else [errors]:
             if isinstance(err, dict):
-                msg = str(err.get("message") or err)
+                msg = str(err.get("message") or err).strip()
                 field = err.get("field_name")
-                if field:
-                    parts.append(f"{field}: {msg}")
+                if field and field not in msg:
+                    line = f"{field}: {msg}"
                 else:
-                    parts.append(msg)
+                    line = msg
             else:
-                parts.append(str(err))
+                line = str(err).strip()
+            if line and line not in seen:
+                seen.add(line)
+                parts.append(line)
+            if len(parts) >= 5:
+                break
         if parts:
             return "; ".join(parts)
     return str(detail)
@@ -120,7 +126,14 @@ def get_default_warehouse() -> dict | None:
 
 def create_shipment(shipment: dict) -> dict:
     """Create a pending shipment and return the first created record."""
-    data = _handle_response(_request("POST", "/v2/shipments", json={"shipments": [shipment]}))
+    payload = {"shipments": [shipment]}
+    logger.debug(
+        "ShipStation create shipment: keys=%s ship_to=%s warehouse_id=%s",
+        sorted(shipment.keys()),
+        sorted((shipment.get("ship_to") or {}).keys()),
+        shipment.get("warehouse_id"),
+    )
+    data = _handle_response(_request("POST", "/v2/shipments", json=payload))
     shipments = (data or {}).get("shipments") if isinstance(data, dict) else None
     if not shipments:
         raise ShipStationError("ShipStation did not return a shipment")
@@ -128,7 +141,7 @@ def create_shipment(shipment: dict) -> dict:
 
 
 def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
-    """Return rate quote response from POST /v2/rates."""
+    """Create a shipment, then quote rates by shipment_id (POST /v2/rates)."""
     if not carrier_ids:
         carrier_ids = [
             str(c.get("carrier_id") or "")
@@ -139,32 +152,13 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
         raise ShipStationError("No carriers connected in ShipStation")
 
     rate_options = {"carrier_ids": carrier_ids}
-    validate_address = shipment.pop("validate_address", "no_validation")
+    create_payload = dict(shipment)
+    create_payload.setdefault("validate_address", "no_validation")
 
-    inline_payload: dict[str, Any] = {
-        "rate_options": rate_options,
-        "validate_address": validate_address,
-        "shipment": shipment,
-    }
-    resp = _request("POST", "/v2/rates", json=inline_payload)
-    if resp.ok:
-        return _handle_response(resp)
-
-    inline_error = ""
-    try:
-        inline_error = _format_error_body(resp.json())
-    except Exception:
-        inline_error = (resp.text or "")[:300]
-    logger.warning(
-        "ShipStation inline rates failed (%s): %s — retrying via shipment_id",
-        resp.status_code,
-        inline_error,
-    )
-
-    created = create_shipment({**shipment, "validate_address": validate_address})
+    created = create_shipment(create_payload)
     shipment_id = str(created.get("shipment_id") or "")
     if not shipment_id:
-        raise ShipStationError(inline_error or "ShipStation did not return a shipment_id")
+        raise ShipStationError("ShipStation did not return a shipment_id")
 
     return _handle_response(
         _request(

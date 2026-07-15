@@ -274,13 +274,15 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
         "packages": [package],
     }
 
-    ship_from = _warehouse_to_address(warehouse) if warehouse else {}
-    if ship_from.get("address_line1"):
-        shipment["ship_from"] = ship_from
-    elif warehouse:
+    wh_id = None
+    if warehouse:
         wh_id = warehouse.get("warehouse_id") or warehouse.get("id")
-        if wh_id:
-            shipment["warehouse_id"] = str(wh_id)
+    if wh_id:
+        shipment["warehouse_id"] = str(wh_id)
+    else:
+        ship_from = _warehouse_to_address(warehouse) if warehouse else {}
+        if ship_from.get("address_line1"):
+            shipment["ship_from"] = ship_from
 
     order_name = (prep.get("order_name") or "").strip()
     if order_name:
@@ -289,46 +291,122 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
     return shipment
 
 
+# Allowed keys on ShipStation v2 address objects (request payloads).
+_SS_ADDRESS_KEYS = frozenset({
+    "name", "phone", "email", "company_name",
+    "address_line1", "address_line2", "address_line3",
+    "city_locality", "state_province", "postal_code", "country_code",
+    "address_residential_indicator", "instructions",
+})
+
+
+def _pick_str(*values: object, default: str = "") -> str:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return default
+
+
 def _to_shipstation_address(addr: dict) -> dict:
-    phone = (addr.get("phone") or "").strip() or "0000000000"
-    out = {
-        "name": (addr.get("name") or addr.get("company") or "Recipient").strip(),
-        "phone": phone,
-        "address_line1": (addr.get("address1") or "").strip(),
-        "city_locality": (addr.get("city") or "").strip(),
-        "state_province": (addr.get("province") or "").strip(),
-        "postal_code": (addr.get("zip") or "").strip(),
-        "country_code": (addr.get("country_code") or "GB").strip().upper(),
-        "address_residential_indicator": "unknown",
+    """Map Shopify or ShipStation address dict to a strict v2 address payload."""
+    residential = _pick_str(
+        addr.get("address_residential_indicator"),
+        addr.get("addressResidentialIndicator"),
+        default="unknown",
+    ).lower()
+    if residential not in ("unknown", "yes", "no"):
+        residential = "unknown"
+
+    mapped = {
+        "name": _pick_str(addr.get("name"), addr.get("company"), default="Recipient"),
+        "phone": _pick_str(addr.get("phone"), default="0000000000"),
+        "email": _pick_str(addr.get("email")) or None,
+        "company_name": _pick_str(addr.get("company_name"), addr.get("company")) or None,
+        "address_line1": _pick_str(
+            addr.get("address_line1"), addr.get("addressLine1"),
+            addr.get("address1"), addr.get("address_line_1"),
+        ),
+        "address_line2": _pick_str(
+            addr.get("address_line2"), addr.get("addressLine2"),
+            addr.get("address2"), addr.get("address_line_2"),
+        ) or None,
+        "address_line3": _pick_str(
+            addr.get("address_line3"), addr.get("addressLine3"), addr.get("address3"),
+        ) or None,
+        "city_locality": _pick_str(
+            addr.get("city_locality"), addr.get("cityLocality"), addr.get("city"),
+        ),
+        "state_province": _pick_str(
+            addr.get("state_province"), addr.get("stateProvince"),
+            addr.get("province"), addr.get("state"),
+        ),
+        "postal_code": _pick_str(addr.get("postal_code"), addr.get("postalCode"), addr.get("zip")),
+        "country_code": _pick_str(addr.get("country_code"), addr.get("countryCode"), default="GB").upper(),
+        "address_residential_indicator": residential,
     }
-    company = (addr.get("company") or "").strip()
-    if company:
-        out["company_name"] = company
-    line2 = (addr.get("address2") or "").strip()
-    if line2:
-        out["address_line2"] = line2
-    return out
+    return _finalize_ss_address(mapped)
 
 
-def _warehouse_to_address(warehouse: dict) -> dict:
+def _warehouse_to_address(warehouse: dict | None) -> dict:
+    if not warehouse:
+        return {}
     origin = warehouse.get("origin_address") or warehouse.get("return_address") or warehouse
-    phone = (origin.get("phone") or warehouse.get("phone") or "").strip() or "0000000000"
-    out = {
-        "name": (origin.get("name") or warehouse.get("name") or "Warehouse").strip(),
-        "phone": phone,
-        "address_line1": (origin.get("address_line1") or origin.get("address1") or "").strip(),
-        "city_locality": (origin.get("city_locality") or origin.get("city") or "").strip(),
-        "state_province": (origin.get("state_province") or origin.get("state") or "").strip(),
-        "postal_code": (origin.get("postal_code") or origin.get("postalCode") or "").strip(),
-        "country_code": (origin.get("country_code") or origin.get("countryCode") or "GB").strip().upper(),
+    mapped = {
+        "name": _pick_str(origin.get("name"), warehouse.get("name"), default="Warehouse"),
+        "phone": _pick_str(origin.get("phone"), warehouse.get("phone"), default="0000000000"),
+        "email": _pick_str(origin.get("email")) or None,
+        "company_name": _pick_str(
+            origin.get("company_name"), origin.get("company"), warehouse.get("company"),
+        ) or None,
+        "address_line1": _pick_str(
+            origin.get("address_line1"), origin.get("addressLine1"),
+            origin.get("address1"), origin.get("address_line_1"),
+        ),
+        "address_line2": _pick_str(
+            origin.get("address_line2"), origin.get("addressLine2"),
+            origin.get("address2"), origin.get("address_line_2"),
+        ) or None,
+        "address_line3": _pick_str(
+            origin.get("address_line3"), origin.get("addressLine3"), origin.get("address3"),
+        ) or None,
+        "city_locality": _pick_str(
+            origin.get("city_locality"), origin.get("cityLocality"), origin.get("city"),
+        ),
+        "state_province": _pick_str(
+            origin.get("state_province"), origin.get("stateProvince"),
+            origin.get("state"), origin.get("province"),
+        ),
+        "postal_code": _pick_str(
+            origin.get("postal_code"), origin.get("postalCode"), origin.get("zip"),
+        ),
+        "country_code": _pick_str(
+            origin.get("country_code"), origin.get("countryCode"), default="GB",
+        ).upper(),
         "address_residential_indicator": "no",
     }
-    company = (origin.get("company_name") or origin.get("company") or warehouse.get("company") or "").strip()
-    if company:
-        out["company_name"] = company
-    line2 = (origin.get("address_line2") or origin.get("address2") or "").strip()
-    if line2:
-        out["address_line2"] = line2
+    return _finalize_ss_address(mapped)
+
+
+def _finalize_ss_address(mapped: dict) -> dict:
+    """Drop unknown keys and empty optional fields; keep required address fields."""
+    out: dict = {}
+    for key in _SS_ADDRESS_KEYS:
+        value = mapped.get(key)
+        if value is None or value == "":
+            continue
+        out[key] = value
+
+    out.setdefault("name", "Recipient")
+    out.setdefault("phone", "0000000000")
+    out.setdefault("address_line1", mapped.get("address_line1") or "Address")
+    out.setdefault("city_locality", mapped.get("city_locality") or "")
+    out.setdefault("state_province", mapped.get("state_province") or "")
+    out.setdefault("postal_code", mapped.get("postal_code") or "")
+    out.setdefault("country_code", (mapped.get("country_code") or "GB").upper())
+    out.setdefault("address_residential_indicator", "unknown")
     return out
 
 
