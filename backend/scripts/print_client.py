@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 _LABEL_WIDTH_MM = float(os.environ.get("LABEL_WIDTH_MM") or "97")
 _LABEL_HEIGHT_MM = float(os.environ.get("LABEL_HEIGHT_MM") or "148")
 _FEDEX_DPI = int(os.environ.get("LABEL_DPI") or "203")
-# Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Default −3.5 mm right.
-_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-3.5")
+# Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Default −7 mm right.
+_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-7")
 # Print-time 180° — set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
 _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
     "1",
