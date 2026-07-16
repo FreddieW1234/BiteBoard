@@ -377,6 +377,7 @@ def get_rates(
     ]
 
     last_error: Exception | None = None
+    last_empty: dict | None = None
     for i, opts in enumerate(attempts):
         payload = _build_rate_payload(
             ship_from=ship_from,
@@ -394,10 +395,9 @@ def get_rates(
                 if i > 0:
                     logger.info("FedEx rates succeeded on retry attempt %s", i + 1)
                 return rates
-            # Empty but successful — don't keep retrying forever
-            if i == 0:
-                continue
-            return rates
+            last_empty = data
+            # Keep trying simpler shapes — sandbox virtualization is picky.
+            continue
         except FedExError as exc:
             last_error = exc
             msg = str(exc).upper()
@@ -424,97 +424,159 @@ def get_rates(
         ) from last_error
     if last_error:
         raise last_error
+    if last_empty is not None:
+        raise FedExError(describe_empty_rates(last_empty))
     return []
 
 
+def _money_value(block: object, *, default_currency: str = "GBP") -> tuple[float | None, str]:
+    """Parse FedEx money fields — either {amount,currency} or a bare number."""
+    if block is None:
+        return None, default_currency
+    if isinstance(block, (int, float)):
+        return float(block), default_currency
+    if isinstance(block, str):
+        try:
+            return float(block), default_currency
+        except ValueError:
+            return None, default_currency
+    if isinstance(block, dict):
+        currency = str(block.get("currency") or default_currency).upper()
+        amount = block.get("amount")
+        if amount is None:
+            # Some payloads nest again
+            for key in ("value", "totalNetCharge", "totalNetFedExCharge"):
+                if key in block:
+                    return _money_value(block.get(key), default_currency=currency)
+            return None, currency
+        try:
+            return float(amount), currency
+        except (TypeError, ValueError):
+            return None, currency
+    return None, default_currency
+
+
 def _rate_total(detail: dict) -> tuple[float | None, str]:
-    currency = "GBP"
-    for key in ("totalNetCharge", "totalNetChargeWithDutiesAndTaxes", "totalBaseCharge"):
-        block = detail.get(key)
-        if isinstance(block, dict) and block.get("amount") is not None:
-            try:
-                return float(block["amount"]), str(block.get("currency") or currency).upper()
-            except (TypeError, ValueError):
-                continue
+    currency = str(detail.get("currency") or "GBP").upper()
+    for key in (
+        "totalNetCharge",
+        "totalNetFedExCharge",
+        "totalNetChargeWithDutiesAndTaxes",
+        "totalBaseCharge",
+    ):
+        price, cur = _money_value(detail.get(key), default_currency=currency)
+        if price is not None:
+            return price, cur
+
+    nested = detail.get("shipmentRateDetail") or detail.get("shipmentRateDetails")
+    if isinstance(nested, dict):
+        for key in ("totalNetCharge", "totalNetFedExCharge", "totalNetChargeWithDutiesAndTaxes"):
+            price, cur = _money_value(nested.get(key), default_currency=currency)
+            if price is not None:
+                return price, cur
+        currency = str(nested.get("currency") or currency).upper()
+
     rated = detail.get("ratedShipmentDetails") or []
-    if isinstance(rated, list) and rated:
-        first = rated[0] if isinstance(rated[0], dict) else {}
-        for key in ("totalNetCharge", "totalNetFedExCharge", "shipmentRateDetails"):
-            block = first.get(key)
-            if isinstance(block, dict) and block.get("amount") is not None:
-                try:
-                    return float(block["amount"]), str(block.get("currency") or currency).upper()
-                except (TypeError, ValueError):
-                    continue
-            if key == "shipmentRateDetails" and isinstance(block, dict):
-                tnc = block.get("totalNetCharge")
-                if isinstance(tnc, dict) and tnc.get("amount") is not None:
-                    try:
-                        return float(tnc["amount"]), str(tnc.get("currency") or currency).upper()
-                    except (TypeError, ValueError):
-                        pass
+    if isinstance(rated, list):
+        # Prefer ACCOUNT rows first.
+        ordered = sorted(
+            [r for r in rated if isinstance(r, dict)],
+            key=lambda r: (0 if "ACCOUNT" in str(r.get("rateType") or "").upper() else 1),
+        )
+        for row in ordered:
+            price, cur = _rate_total(row)
+            if price is not None:
+                return price, cur
     return None, currency
+
+
+def _extract_alerts(data: dict) -> list[str]:
+    msgs: list[str] = []
+    for src in (
+        data,
+        data.get("output") if isinstance(data.get("output"), dict) else {},
+    ):
+        if not isinstance(src, dict):
+            continue
+        for key in ("alerts", "warnings", "notes"):
+            for alert in src.get(key) or []:
+                if isinstance(alert, dict):
+                    text = str(alert.get("message") or alert.get("code") or "").strip()
+                else:
+                    text = str(alert).strip()
+                if text and text not in msgs:
+                    msgs.append(text)
+    return msgs
 
 
 def _normalize_rates(data: dict) -> list[dict]:
     out: list[dict] = []
     output = data.get("output") if isinstance(data.get("output"), dict) else {}
     rate_reply = output.get("rateReplyDetails") or data.get("rateReplyDetails") or []
+    if not isinstance(rate_reply, list):
+        rate_reply = []
 
-    for reply in rate_reply if isinstance(rate_reply, list) else []:
+    skipped_no_price = 0
+    for reply in rate_reply:
         if not isinstance(reply, dict):
             continue
         service_type = str(reply.get("serviceType") or "").strip()
-        service_name = str(
-            reply.get("serviceName") or reply.get("serviceDescription", {}).get("description")
-            or service_type
-        ).strip()
-        if isinstance(reply.get("serviceDescription"), dict):
-            service_name = str(
-                reply["serviceDescription"].get("name")
-                or reply["serviceDescription"].get("description")
-                or service_name
-            ).strip()
+        if not service_type:
+            continue
 
-        # Prefer ACCOUNT rated shipment detail, else first.
+        service_name = service_type
+        desc = reply.get("serviceDescription")
+        if isinstance(desc, dict):
+            service_name = str(
+                desc.get("name") or desc.get("description") or service_type
+            ).strip()
+        elif reply.get("serviceName"):
+            service_name = str(reply.get("serviceName")).strip()
+
         rated_list = reply.get("ratedShipmentDetails") or []
         chosen = None
-        for r in rated_list if isinstance(rated_list, list) else []:
-            if not isinstance(r, dict):
-                continue
-            rtype = str(r.get("rateType") or "").upper()
-            if "ACCOUNT" in rtype:
-                chosen = r
-                break
-            if chosen is None:
-                chosen = r
-        if chosen is None and isinstance(rated_list, list) and rated_list:
-            chosen = rated_list[0] if isinstance(rated_list[0], dict) else None
+        if isinstance(rated_list, list):
+            for r in rated_list:
+                if not isinstance(r, dict):
+                    continue
+                if "ACCOUNT" in str(r.get("rateType") or "").upper():
+                    chosen = r
+                    break
+                if chosen is None:
+                    chosen = r
         if not isinstance(chosen, dict):
             chosen = reply
 
         price, currency = _rate_total(chosen)
         if price is None:
             price, currency = _rate_total(reply)
-        if price is None or price < 0:
-            continue
+        if price is None:
+            skipped_no_price += 1
+            # Still offer the service at £0 in sandbox if FedEx omitted money
+            # (some virtual responses are incomplete). Prefer skipping in prod.
+            if not is_sandbox():
+                continue
+            price = 0.0
+            currency = currency or "GBP"
 
         commit = reply.get("commit") if isinstance(reply.get("commit"), dict) else {}
-        days = commit.get("dateDetail", {}).get("dayOfWeek") if isinstance(commit.get("dateDetail"), dict) else None
         transit_days = None
-        for key in ("transitTime", "saturdayDelivery"):
-            val = commit.get(key) or reply.get(key)
-            if isinstance(val, str) and val.isdigit():
-                transit_days = int(val)
-                break
-        # FedEx often returns transit as enum like TWO_DAYS
-        tt = str(commit.get("transitTime") or reply.get("operationalDetail", {}).get("transitTime") or "")
+        op = reply.get("operationalDetail") if isinstance(reply.get("operationalDetail"), dict) else {}
+        tt = str(
+            commit.get("transitTime")
+            or op.get("transitTime")
+            or reply.get("transitTime")
+            or ""
+        ).upper()
         transit_map = {
             "ONE_DAY": 1, "TWO_DAYS": 2, "THREE_DAYS": 3, "FOUR_DAYS": 4,
             "FIVE_DAYS": 5, "SIX_DAYS": 6, "SEVEN_DAYS": 7,
+            "EIGHT_DAYS": 8, "NINE_DAYS": 9,
         }
         if tt in transit_map:
             transit_days = transit_map[tt]
+        elif tt.isdigit():
+            transit_days = int(tt)
 
         packaging = str(reply.get("packagingType") or "YOUR_PACKAGING")
         rate_id = f"fedex:{service_type}:{packaging}"
@@ -532,8 +594,33 @@ def _normalize_rates(data: dict) -> list[dict]:
             "packaging_type": packaging,
         })
 
+    if not out:
+        alerts = _extract_alerts(data)
+        logger.warning(
+            "FedEx rates parsed empty: reply_count=%s skipped_no_price=%s alerts=%s keys=%s",
+            len(rate_reply),
+            skipped_no_price,
+            alerts,
+            sorted((output or data).keys())[:20],
+        )
     out.sort(key=lambda x: (x.get("price") is None, x.get("price") or 999999))
     return out
+
+
+def describe_empty_rates(data: dict) -> str:
+    """Human hint when FedEx responded but we have no selectable rates."""
+    alerts = _extract_alerts(data)
+    output = data.get("output") if isinstance(data.get("output"), dict) else {}
+    reply = output.get("rateReplyDetails") or data.get("rateReplyDetails") or []
+    count = len(reply) if isinstance(reply, list) else 0
+    if alerts:
+        return "FedEx: " + "; ".join(alerts[:3])
+    if count:
+        return (
+            f"FedEx returned {count} service(s) but no usable prices could be read "
+            "from the response."
+        )
+    return "FedEx returned no rates for this package/route."
 
 
 def create_label(

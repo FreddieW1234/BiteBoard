@@ -295,7 +295,7 @@ def quote_shipment(payload: dict) -> dict:
                 width_cm=_parse_dim(payload.get("width_cm")),
                 height_cm=_parse_dim(payload.get("height_cm")),
             )
-            fedex_ok = True
+            fedex_ok = bool(rates)
             if not rates:
                 carrier_notes.append({
                     "carrier": "FedEx",
