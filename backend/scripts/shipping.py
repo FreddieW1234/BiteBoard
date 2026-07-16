@@ -192,13 +192,19 @@ def quote_shipment(payload: dict) -> dict:
         shipment = _build_shipstation_shipment(prep, payload)
         rate_resp = shipstation_api.get_rates(shipment)
         dest_country = (prep.get("ship_to") or {}).get("country_code") or "GB"
-        rates = _normalize_rates(rate_resp, dest_country=dest_country)
-        return {
+        rates, rate_meta = _normalize_rates(rate_resp, dest_country=dest_country)
+        result = {
             "success": True,
             "shipment_type": "parcel",
             "order_name": prep.get("order_name"),
+            "item_id": prep.get("item_id"),
+            "items": prep.get("items") or [],
             "rates": rates,
         }
+        if not rates:
+            result["rate_meta"] = rate_meta
+            result["error_hint"] = _empty_rates_hint(rate_meta, payload)
+        return result
     except ShipStationError as exc:
         logger.warning("Shipping quote failed: %s", exc)
         return {"success": False, "error": str(exc)}
@@ -527,25 +533,69 @@ def _looks_international(service_text: str) -> bool:
     ))
 
 
-def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> list[dict]:
-    rates = rate_resp.get("rate_response", {}).get("rates")
+def _rate_error_messages(rate: dict) -> list[str]:
+    msgs: list[str] = []
+    for key in ("error_messages", "errors", "messages"):
+        raw = rate.get(key)
+        if not raw:
+            continue
+        for err in raw if isinstance(raw, list) else [raw]:
+            if isinstance(err, dict):
+                text = str(err.get("message") or err.get("error") or "").strip()
+            else:
+                text = str(err).strip()
+            if text and text not in msgs:
+                msgs.append(text)
+    return msgs
+
+
+def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> tuple[list[dict], dict]:
+    rate_block = rate_resp.get("rate_response") if isinstance(rate_resp.get("rate_response"), dict) else {}
+    rates = rate_block.get("rates") if rate_block else None
     if rates is None:
         rates = rate_resp.get("rates") or []
     domestic_uk = (dest_country or "GB").upper() == "GB"
+
+    meta = {
+        "raw_count": len(rates or []),
+        "invalid": 0,
+        "zero_price": 0,
+        "international_filtered": 0,
+        "invalid_messages": [],
+        "api_errors": [],
+    }
+    for key in ("errors", "messages"):
+        for src in (rate_block, rate_resp):
+            raw = src.get(key) if isinstance(src, dict) else None
+            if not raw:
+                continue
+            for err in raw if isinstance(raw, list) else [raw]:
+                if isinstance(err, dict):
+                    text = str(err.get("message") or err.get("error") or "").strip()
+                else:
+                    text = str(err).strip()
+                if text and text not in meta["api_errors"]:
+                    meta["api_errors"].append(text)
 
     out: list[dict] = []
     for r in rates or []:
         status = str(r.get("validation_status") or "valid").lower()
         if status == "invalid":
+            meta["invalid"] += 1
+            for msg in _rate_error_messages(r):
+                if msg not in meta["invalid_messages"]:
+                    meta["invalid_messages"].append(msg)
             continue
 
         price, currency = _rate_total(r)
         if price is None or price <= 0:
+            meta["zero_price"] += 1
             continue
 
         service_type = r.get("service_type") or r.get("service_code") or ""
         service_code = r.get("service_code") or ""
         if domestic_uk and _looks_international(f"{service_type} {service_code}"):
+            meta["international_filtered"] += 1
             continue
 
         out.append({
@@ -560,7 +610,56 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> list[dict]
             "currency": currency or "GBP",
         })
     out.sort(key=lambda x: (x.get("price") is None, x.get("price") or 999999))
-    return out
+    meta["kept"] = len(out)
+    return out, meta
+
+
+def _empty_rates_hint(meta: dict, payload: dict) -> str:
+    """Human-readable reason when ShipStation returned nothing usable."""
+    parts: list[str] = []
+    api_errors = meta.get("api_errors") or []
+    invalid_messages = meta.get("invalid_messages") or []
+    if api_errors:
+        parts.append("; ".join(api_errors[:3]))
+    elif invalid_messages:
+        parts.append("; ".join(invalid_messages[:3]))
+    else:
+        raw = int(meta.get("raw_count") or 0)
+        invalid = int(meta.get("invalid") or 0)
+        zero = int(meta.get("zero_price") or 0)
+        intl = int(meta.get("international_filtered") or 0)
+        if raw == 0:
+            parts.append("ShipStation returned 0 carrier rates for this package/route.")
+        else:
+            details = []
+            if invalid:
+                details.append(f"{invalid} invalid")
+            if zero:
+                details.append(f"{zero} with no price")
+            if intl:
+                details.append(f"{intl} international filtered")
+            parts.append(
+                f"ShipStation returned {raw} rate(s); none kept"
+                + (f" ({', '.join(details)})" if details else "")
+                + "."
+            )
+
+    weight = float(payload.get("weight_kg") or 0)
+    length = _parse_dim(payload.get("length_cm"))
+    width = _parse_dim(payload.get("width_cm"))
+    height = _parse_dim(payload.get("height_cm"))
+    if length and width and height and weight > 0:
+        volume_m3 = (length * width * height) / 1_000_000.0
+        if volume_m3 > 0:
+            density = weight / volume_m3
+            if density > 500:  # kg/m³ — absurdly dense for a parcel
+                parts.append(
+                    f"Package looks unrealistic ({weight:g} kg in {length:g}×{width:g}×{height:g} cm) — "
+                    "carriers often reject this. Check weight/dims for this line only."
+                )
+    if weight >= PALLET_WEIGHT_KG:
+        parts.append(f"Weight ≥ {PALLET_WEIGHT_KG:g} kg usually needs pallet, not parcel.")
+    return " ".join(parts)
 
 
 def _map_carrier_slug(carrier_code: str) -> str:

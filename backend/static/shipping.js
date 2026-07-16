@@ -191,11 +191,14 @@
         });
     }
 
-    function renderRates(rates) {
+    function renderRates(rates, hint) {
         const area = overlay?.querySelector('#ship-rates-area');
         if (!area) return;
         if (!rates.length) {
-            area.innerHTML = '<p class="ship-msg err">No rates returned for this package.</p>';
+            const detail = hint
+                ? `<p class="ship-msg err">${escapeHtml(hint)}</p>`
+                : '<p class="ship-msg err">No rates returned for this package.</p>';
+            area.innerHTML = detail;
             return;
         }
         area.innerHTML = `<ul class="ship-rate-list">${rates.map(r => `
@@ -246,8 +249,13 @@
                 state.selectedRateId = state.rates[0].rate_id;
                 setConfirmEnabled(true);
             }
-            renderRates(state.rates);
-            setMsg(state.rates.length ? `${state.rates.length} rate(s) loaded.` : '', 'ok');
+            renderRates(state.rates, data.error_hint || '');
+            setMsg(
+                state.rates.length
+                    ? `${state.rates.length} rate(s) loaded.`
+                    : (data.error_hint || 'No rates returned for this package.'),
+                state.rates.length ? 'ok' : 'err'
+            );
         } catch (err) {
             state.rates = [];
             renderRates([]);
@@ -345,6 +353,13 @@
             const prep = await prepRes.json();
             const status = await statusRes.json();
             if (!prepRes.ok || !prep.success) throw new Error(prep.error || 'Could not load order');
+            // Guard: diary Ship always scopes to one line. If the server ignored item_id, refuse.
+            if (state.itemId && (prep.items || []).length !== 1) {
+                throw new Error(
+                    'This Ship action must cover one order line only, but the server returned ' +
+                    `${(prep.items || []).length} line(s). Hard-refresh the Diary page and try again.`
+                );
+            }
             state.prep = prep;
             state.providers = (status.providers || prep.providers || {});
             if (!state.providers.shipstation) {
