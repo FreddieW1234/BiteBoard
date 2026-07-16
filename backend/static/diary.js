@@ -249,8 +249,13 @@
             html += `<td class="diary-company">${escapeHtml(row.company || '—')}</td>`;
             html += `<td class="diary-ship-cell">
                 <div class="diary-screen-only">`;
-            if (row.shipped) {
-                const pending = !!row.label_status_pending;
+            const showPrint = !!(row.shipped || row.has_office_label);
+            const pending = !!row.label_status_pending;
+            if (pending && !showPrint) {
+                html += `<button type="button" class="diary-ship-btn" disabled title="Checking office server for a saved label…">
+                    <i class="fas fa-spinner fa-spin"></i> Checking…
+                </button>`;
+            } else if (showPrint) {
                 const hasStored = !!(row.can_print_label || row.can_reprint);
                 let title = 'Send stored ZPL label to the office Zebra';
                 let disabled = false;
@@ -292,7 +297,7 @@
                 html += `<span class="diary-shipped-tracking">—</span>`;
             }
             html += `</div>
-                <span class="diary-print-only diary-print-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.shipped ? (row.tracking_number ? row.tracking_number + ' · ' : '') + carrierPrint : '—')}</span>
+                <span class="diary-print-only diary-print-carrier ${carrierClass(row.carrier)}">${escapeHtml((row.shipped || row.has_office_label) ? (row.tracking_number ? row.tracking_number + ' · ' : '') + carrierPrint : '—')}</span>
             </td>`;
             html += '</tr>';
         });
@@ -503,10 +508,17 @@
         window.print();
     }
 
+    function trackingFromLabelFilename(filename) {
+        const m = String(filename || '').match(/^label-(\d+)-/i);
+        return m ? m[1] : '';
+    }
+
     async function refreshLabelStatus() {
-        const shipped = allRows.filter(r => r.shipped && r.order_name && r.item_id);
-        if (!shipped.length) return;
-        shipped.forEach(r => { r.label_status_pending = true; });
+        // Check every line — labels can exist on the office server even when the
+        // diary row was never stamped with tracking (shows Ship incorrectly).
+        const toCheck = allRows.filter(r => r.order_name && r.item_id);
+        if (!toCheck.length) return;
+        toCheck.forEach(r => { r.label_status_pending = true; });
         renderTable();
         try {
             const res = await fetch('/api/shipping/labels-status', {
@@ -514,7 +526,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
                 body: JSON.stringify({
-                    items: shipped.map(r => ({
+                    items: toCheck.map(r => ({
                         order_name: r.order_name,
                         item_id: r.item_id,
                     })),
@@ -523,8 +535,7 @@
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.success) {
                 console.warn('Label status check failed', data.error || res.status);
-                // Leave optimistic can_print_label so staff can still try Print.
-                shipped.forEach(r => { r.label_status_pending = false; });
+                toCheck.forEach(r => { r.label_status_pending = false; });
                 renderTable();
                 return;
             }
@@ -536,10 +547,20 @@
                 if (!row) continue;
                 seen.add(`${row.order_name}::${row.item_id}`);
                 if (result.has_label) {
+                    row.has_office_label = true;
+                    row.shipped = true;
                     row.can_print_label = true;
                     row.can_reprint = true;
                     row.label_check_failed = false;
                     row.label_filename = result.filename || '';
+                    if (!row.tracking_number && result.filename) {
+                        const fromFile = trackingFromLabelFilename(result.filename);
+                        if (fromFile) row.tracking_number = fromFile;
+                    }
+                    if (!row.carrier) {
+                        row.carrier = 'fedex';
+                        row.carrier_label = carrierLabel('fedex');
+                    }
                     console.info(
                         'Office label found',
                         result.order_name,
@@ -547,7 +568,7 @@
                         result.filename || result.source || ''
                     );
                 } else {
-                    // Shipped lines may still have a label on disk — don't hard-disable Print.
+                    row.has_office_label = false;
                     const shippedLine = !!(row.tracking_number || row.label_id);
                     if (shippedLine) {
                         row.can_print_label = true;
@@ -562,7 +583,7 @@
                 }
                 row.label_status_pending = false;
             }
-            shipped.forEach(r => {
+            toCheck.forEach(r => {
                 if (!seen.has(`${r.order_name}::${r.item_id}`)) {
                     r.label_status_pending = false;
                 }
@@ -570,7 +591,7 @@
             renderTable();
         } catch (err) {
             console.warn('Label status check error', err);
-            shipped.forEach(r => { r.label_status_pending = false; });
+            toCheck.forEach(r => { r.label_status_pending = false; });
             renderTable();
         }
     }

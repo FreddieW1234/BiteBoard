@@ -249,7 +249,7 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "label_id": label_id,
                 "shipped": shipped,
                 "can_print_label": can_print_label,
-                "label_status_pending": bool(shipped),
+                "label_status_pending": True,
                 # Back-compat for older diary.js caches
                 "can_reprint": can_print_label,
             })
