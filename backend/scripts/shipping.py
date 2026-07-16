@@ -398,8 +398,9 @@ def ship_order(payload: dict) -> dict:
         label_id = str(label.get("label_id") or tracking)
         service_code = str(label.get("service_code") or service_type)
         label_bytes = label.get("label_bytes") or b""
+        label_url = str(label.get("label_url") or "")
 
-        print_result: dict = {"skipped": True}
+        print_result: dict = {"skipped": True, "reason": "no_label_bytes"}
         if label_bytes:
             try:
                 print_result = print_client.send_print_job(
@@ -412,9 +413,10 @@ def ship_order(payload: dict) -> dict:
             except Exception as print_exc:
                 logger.warning("Label print failed (label still created): %s", print_exc)
                 print_result = {"success": False, "error": str(print_exc)}
+        elif not print_client.configured():
+            print_result = {"success": True, "skipped": True, "reason": "print_server_not_configured"}
 
         order_name = prep.get("order_name") or ""
-        today_iso = date.today().isoformat()
         for item in prep.get("items") or []:
             item_id = (item.get("item_id") or "").strip()
             if not item_id:
@@ -434,6 +436,8 @@ def ship_order(payload: dict) -> dict:
                 shipment_type="parcel",
             )
 
+        import base64
+
         return {
             "success": True,
             "order_name": order_name,
@@ -444,6 +448,8 @@ def ship_order(payload: dict) -> dict:
             "service_code": service_code,
             "print": print_result,
             "has_zpl": bool(label_bytes),
+            "label_download_url": label_url or None,
+            "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii") if label_bytes else None,
             "sandbox_note": (
                 "Sandbox/virtual response — not a live courier label."
                 if fedex_api.is_sandbox()

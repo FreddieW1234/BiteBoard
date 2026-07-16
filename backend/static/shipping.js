@@ -408,6 +408,70 @@
         }
     }
 
+    function renderShipSuccess(data) {
+        const body = overlay?.querySelector('#ship-modal-body');
+        if (!body) return;
+
+        const print = data.print || {};
+        let printLine = 'Label ready.';
+        if (print.skipped) {
+            printLine = 'Nothing was sent to a printer (office print server not configured).';
+        } else if (print.success === false) {
+            printLine = `Print failed: ${print.error || 'unknown'}.`;
+        } else {
+            printLine = 'Sent to office printer.';
+        }
+
+        const downloadBtn = data.label_download_url
+            ? `<a class="ship-btn-secondary" href="${escapeHtml(data.label_download_url)}" target="_blank" rel="noopener">Open label</a>`
+            : (data.label_zpl_base64
+                ? `<button type="button" class="ship-btn-secondary" id="ship-download-zpl">Download ZPL label</button>`
+                : '');
+
+        body.innerHTML = `
+            <div class="ship-success">
+                <p class="ship-msg ok">Label created successfully.</p>
+                <dl class="ship-success-meta">
+                    <div><dt>Carrier</dt><dd>${escapeHtml(data.carrier_label || data.carrier || '—')}</dd></div>
+                    <div><dt>Service</dt><dd>${escapeHtml(data.service_code || '—')}</dd></div>
+                    <div><dt>Tracking</dt><dd class="ship-tracking">${escapeHtml(data.tracking_number || '—')}</dd></div>
+                </dl>
+                <p class="ship-success-print">${escapeHtml(printLine)}</p>
+                ${data.sandbox_note ? `<p class="ship-msg info">${escapeHtml(data.sandbox_note)}</p>` : ''}
+                <p class="ship-success-hint">Check the Diary Ship column for this tracking number. Close when you’re done.</p>
+                <div class="ship-success-actions">
+                    ${downloadBtn}
+                    <button type="button" class="ship-btn-primary" id="ship-success-done">Done</button>
+                </div>
+            </div>`;
+
+        body.querySelector('#ship-success-done')?.addEventListener('click', () => {
+            if (typeof window.__diaryReload === 'function') window.__diaryReload();
+            closeModal();
+        });
+
+        const zplBtn = body.querySelector('#ship-download-zpl');
+        if (zplBtn && data.label_zpl_base64) {
+            zplBtn.addEventListener('click', () => {
+                const bin = atob(data.label_zpl_base64);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${(data.tracking_number || 'fedex-label').replace(/\s+/g, '_')}.zpl`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            });
+        }
+
+        const confirmBtn = overlay.querySelector('[data-ship-action="confirm"]');
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Done';
+        }
+    }
+
     async function confirmShip() {
         if (!state.selectedRateId) {
             setMsg('Select a rate first.', 'err');
@@ -431,28 +495,9 @@
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Ship failed');
-
-            let msg = `Label created. Tracking: ${data.tracking_number || '—'}`;
-            if (data.sandbox_note) {
-                msg += ` (${data.sandbox_note})`;
-            }
-            const print = data.print || {};
-            if (print.skipped) {
-                msg += ' (Print server not configured.)';
-            } else if (print.success === false) {
-                msg += ` Print failed: ${print.error || 'unknown'}.`;
-            } else {
-                msg += ' Sent to office printer.';
-            }
-            setMsg(msg, 'ok');
-
+            renderShipSuccess(data);
             if (typeof window.__diaryReload === 'function') {
-                setTimeout(() => {
-                    window.__diaryReload();
-                    closeModal();
-                }, 1200);
-            } else {
-                setTimeout(closeModal, 2000);
+                window.__diaryReload();
             }
         } catch (err) {
             setMsg(err.message || 'Could not purchase label', 'err');
