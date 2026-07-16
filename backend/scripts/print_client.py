@@ -14,14 +14,16 @@ logger = logging.getLogger(__name__)
 _LABEL_WIDTH_MM = float(os.environ.get("LABEL_WIDTH_MM") or "97")
 _LABEL_HEIGHT_MM = float(os.environ.get("LABEL_HEIGHT_MM") or "148")
 _FEDEX_DPI = int(os.environ.get("LABEL_DPI") or "203")
-# Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Was +2 mm; now −5 mm.
-_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-5")
+# Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Default −3.5 mm right.
+_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-3.5")
 # Print-time 180° — set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
 _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
     "1",
     "true",
     "yes",
 )
+# Uniform content scale (1.0 = none). Default 0.98 = shrink 2%.
+_LABEL_SCALE = float(os.environ.get("FEDEX_LABEL_SCALE") or "0.98")
 _PREPARED_MARKER = "bite-label-adjusted"
 
 
@@ -67,6 +69,89 @@ def _mm_to_dots(mm: float, dpi: int) -> int:
     return max(1, int(round(mm * dpi / 25.4)))
 
 
+def _scale_dots(value: int, factor: float, *, minimum: int = 0) -> int:
+    return max(minimum, int(round(value * factor)))
+
+
+def scale_zpl_content(zpl: str, *, scale: float = _LABEL_SCALE) -> str:
+    """Shrink/grow field positions, fonts, boxes, and barcodes uniformly."""
+    if not zpl or abs(scale - 1.0) < 0.0001:
+        return zpl
+
+    text = zpl
+
+    def sd(value: int, minimum: int = 0) -> int:
+        return _scale_dots(value, scale, minimum=minimum)
+
+    text = re.sub(
+        r"\^FO(\d+),(\d+)",
+        lambda m: f"^FO{sd(int(m.group(1)))},{sd(int(m.group(2)))}",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\^FT(\d+),(\d+)",
+        lambda m: f"^FT{sd(int(m.group(1)))},{sd(int(m.group(2)))}",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\^GB(\d+),(\d+),(\d+)",
+        lambda m: (
+            f"^GB{sd(int(m.group(1)), 1)},{sd(int(m.group(2)), 1)},"
+            f"{sd(int(m.group(3)), 1)}"
+        ),
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    def _scale_by(match: re.Match) -> str:
+        w = sd(int(match.group(1)), 1)
+        r = match.group(2)
+        h = match.group(3)
+        out = f"^BY{w}"
+        if r is not None:
+            out += f",{r}"
+            if h is not None:
+                out += f",{sd(int(h), 1)}"
+        return out
+
+    text = re.sub(
+        r"\^BY(\d+)(?:,(\d+))?(?:,(\d+))?",
+        _scale_by,
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    def _scale_font(match: re.Match) -> str:
+        face = match.group(1)
+        height = sd(int(match.group(2)), 1)
+        width = match.group(3)
+        if width is not None:
+            return f"^A{face},{height},{sd(int(width), 1)}"
+        return f"^A{face},{height}"
+
+    text = re.sub(
+        r"\^A([^,\^]+),(\d+)(?:,(\d+))?",
+        _scale_font,
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"(\^B[A-Z0-9@]+(?:,[A-Z])?),(\d+)",
+        lambda m: f"{m.group(1)},{sd(int(m.group(2)), 1)}",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\^FB(\d+)",
+        lambda m: f"^FB{sd(int(m.group(1)), 1)}",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text
+
+
 def is_prepared_fedex_zpl(zpl: str) -> bool:
     """True when ZPL was already adjusted before storing on the office server."""
     return _PREPARED_MARKER in (zpl or "")
@@ -80,6 +165,7 @@ def prepare_fedex_zpl(
     width_mm: float = _LABEL_WIDTH_MM,
     height_mm: float = _LABEL_HEIGHT_MM,
     rotate_180: bool = _FEDEX_ROTATE_180,
+    scale: float = _LABEL_SCALE,
 ) -> str:
     """Adjust FedEx ZPL once before saving on the office server."""
     return adjust_fedex_zpl(
@@ -89,6 +175,7 @@ def prepare_fedex_zpl(
         width_mm=width_mm,
         height_mm=height_mm,
         rotate_180=rotate_180,
+        scale=scale,
         mark_prepared=True,
     )
 
@@ -101,13 +188,13 @@ def adjust_fedex_zpl(
     width_mm: float = _LABEL_WIDTH_MM,
     height_mm: float = _LABEL_HEIGHT_MM,
     rotate_180: bool = _FEDEX_ROTATE_180,
+    scale: float = _LABEL_SCALE,
     mark_prepared: bool = False,
 ) -> str:
     """FedEx ZPL tweaks for 9.7×14.8 cm portrait stock.
 
     ``shift_mm``: positive = left, negative = right (via ``^LS`` / ``^LS-``).
-    Strips FedEx ``^PO``/``^LS``/``^PW``/``^LL`` then injects our values
-    immediately after ``^XA`` so nothing later in the file overrides them.
+    ``scale``: uniform shrink/grow of fields (default 0.98 = 2% smaller).
     """
     text = first_zpl_label(zpl)
     if not text:
@@ -119,6 +206,7 @@ def adjust_fedex_zpl(
 
     text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LH\d+,\d+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^PW\d+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LL\d+", "", text, flags=re.IGNORECASE)
     text = re.sub(
@@ -128,7 +216,14 @@ def adjust_fedex_zpl(
         flags=re.IGNORECASE,
     )
 
+    text = scale_zpl_content(text, scale=scale)
+
     injection = f"^PW{pw}^LL{ll}"
+    if abs(scale - 1.0) >= 0.0001:
+        lh_x = int(round(pw * (1.0 - scale) / 2.0))
+        lh_y = int(round(ll * (1.0 - scale) / 2.0))
+        if lh_x or lh_y:
+            injection += f"^LH{lh_x},{lh_y}"
     if rotate_180:
         injection += "^POI"
     if dots != 0:
@@ -143,8 +238,9 @@ def adjust_fedex_zpl(
         text = "^XA" + injection + text
 
     shift_desc = f"{abs(shift_mm)}mm {'left' if shift_mm > 0 else 'right'}" if shift_mm else "0"
+    scale_desc = f"{scale * 100:.1f}%"
     logger.info(
-        "FedEx ZPL prepared: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift=%s stored=%s",
+        "FedEx ZPL prepared: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift=%s scale=%s stored=%s",
         width_mm,
         height_mm,
         pw,
@@ -152,6 +248,7 @@ def adjust_fedex_zpl(
         dpi,
         rotate_180,
         shift_desc,
+        scale_desc,
         mark_prepared,
     )
     return text
