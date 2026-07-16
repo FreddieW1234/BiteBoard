@@ -226,28 +226,10 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
             label_id = entry.get("label_id") or ""
             # Treat label purchase as shipped even if sandbox omitted a tracking number.
             shipped = bool(tracking_number or label_id)
-            can_print_label = False
-            if shipped:
-                try:
-                    from scripts import office_api  # type: ignore
-                    from config import OFFICE_API_URL, OFFICE_API_KEY  # type: ignore
-                    if OFFICE_API_URL and OFFICE_API_KEY:
-                        can_print_label = office_api.has_label(order_name, item_id)
-                        if _DEBUG_DIARY_KEYS:
-                            logger.warning(
-                                "Diary DEBUG label probe order=%s item=%s can_print=%s",
-                                order_name,
-                                item_id,
-                                can_print_label,
-                            )
-                except Exception as exc:
-                    logger.warning(
-                        "Diary label probe failed for %s / %s: %s",
-                        order_name,
-                        item_id,
-                        exc,
-                    )
-                    can_print_label = False
+            # Don't probe the office API during diary build (slow / flaky).
+            # Frontend calls /api/shipping/labels-status after load to set this.
+            # Optimistic: shipped lines with tracking are likely printable.
+            can_print_label = bool(shipped and (tracking_number or label_id))
 
             rows.append({
                 "order_id": order_id,
@@ -267,6 +249,7 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "label_id": label_id,
                 "shipped": shipped,
                 "can_print_label": can_print_label,
+                "label_status_pending": bool(shipped),
                 # Back-compat for older diary.js caches
                 "can_reprint": can_print_label,
             })

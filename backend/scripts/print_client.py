@@ -58,13 +58,18 @@ def adjust_fedex_zpl(
     shift_mm: float = _FEDEX_SHIFT_MM,
     dpi: int = _FEDEX_DPI,
 ) -> str:
-    """Print-time FedEx tweaks: rotate 180° and shift left. Does not alter stored ZPL."""
+    """Print-time FedEx tweaks: rotate 180° and shift left. Does not alter stored ZPL.
+
+    FedEx ZPL usually contains its own ``^LS0`` / ``^PON`` later in the format.
+    Those override an inject-after-``^XA``, so we strip every ``^PO``/``^LS`` and
+    place ours immediately before ``^XZ`` so they win.
+    """
     text = first_zpl_label(zpl)
     if not text:
         return text
 
     dots = max(0, int(round(shift_mm * dpi / 25.4)))
-    # Strip any existing orientation / shift so we force a known result.
+    # Remove ALL orientation/shift commands FedEx (or we) embedded.
     text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
 
@@ -72,10 +77,37 @@ def adjust_fedex_zpl(
     if dots > 0:
         injection += f"^LS{dots}"
 
-    match = re.search(r"\^XA", text, flags=re.IGNORECASE)
-    if not match:
-        return text
-    return text[: match.end()] + injection + text[match.end() :]
+    if re.search(r"\^XZ", text, flags=re.IGNORECASE):
+        text = re.sub(
+            r"\^XZ",
+            injection + "^XZ",
+            text,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+    else:
+        match = re.search(r"\^XA", text, flags=re.IGNORECASE)
+        if match:
+            text = text[: match.end()] + injection + text[match.end() :]
+        else:
+            text = injection + text
+
+    logger.warning(
+        "FedEx ZPL adjust applied: rotate=180 shift_left=%smm (%s dots) tail=%r",
+        shift_mm,
+        dots,
+        text[-80:],
+    )
+    return text
+
+
+def _should_adjust_fedex(carrier: str, zpl_text: str) -> bool:
+    carrier_l = (carrier or "").strip().lower()
+    if carrier_l == "fedex":
+        return True
+    # Reprint paths sometimes omit carrier — detect FedEx ZPL content.
+    sample = (zpl_text or "")[:4000].upper()
+    return "FEDEX" in sample or "FDX" in sample
 
 
 def send_print_job(
@@ -117,13 +149,8 @@ def send_print_job(
     else:
         zpl_text = str(data)
 
-    if (carrier or "").strip().lower() == "fedex":
+    if _should_adjust_fedex(carrier, zpl_text):
         zpl_text = adjust_fedex_zpl(zpl_text)
-        logger.info(
-            "Applied FedEx print adjust: 180° + %.1fmm left for %s",
-            _FEDEX_SHIFT_MM,
-            order_name or tracking_number,
-        )
     else:
         zpl_text = first_zpl_label(zpl_text)
 

@@ -250,23 +250,27 @@
             html += `<td class="diary-ship-cell">
                 <div class="diary-screen-only">`;
             if (row.shipped) {
+                const pending = !!row.label_status_pending;
                 const hasStored = !!(row.can_print_label || row.can_reprint);
-                const printerOff = printerReady === false;
                 let title = 'Send stored ZPL label to the office Zebra';
                 let disabled = false;
-                if (!hasStored) {
+                let label = 'Print label';
+                if (pending) {
+                    title = 'Checking office server for a saved label…';
+                    label = 'Checking…';
+                    disabled = true;
+                } else if (!hasStored) {
                     title = 'No ZPL stored on the office server yet — ship again to save the label';
                     disabled = true;
-                } else if (printerOff) {
-                    title = 'Office printer is not configured';
-                    disabled = true;
+                } else if (printerReady === false) {
+                    title = 'Office printer may be offline — click to try anyway';
                 }
                 const printBtn = `<button type="button" class="diary-print-label-btn"
                     data-print-order-name="${escapeHtml(row.order_name)}"
                     data-print-item-id="${escapeHtml(row.item_id)}"
                     ${disabled ? 'disabled' : ''}
                     title="${escapeHtml(title)}">
-                    <i class="fas fa-print"></i> Print label
+                    <i class="fas fa-print"></i> ${escapeHtml(label)}
                 </button>`;
                 html += `<div class="diary-shipped-info">
                     <div class="diary-shipped-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.carrier_label || carrierPrint)}</div>
@@ -499,6 +503,8 @@
     async function refreshLabelStatus() {
         const shipped = allRows.filter(r => r.shipped && r.order_name && r.item_id);
         if (!shipped.length) return;
+        shipped.forEach(r => { r.label_status_pending = true; });
+        renderTable();
         try {
             const res = await fetch('/api/shipping/labels-status', {
                 method: 'POST',
@@ -511,24 +517,35 @@
                     })),
                 }),
             });
-            const data = await res.json();
-            if (!res.ok || !data.success) return;
-            let changed = false;
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                console.warn('Label status check failed', data.error || res.status);
+                // Leave optimistic can_print_label so staff can still try Print.
+                shipped.forEach(r => { r.label_status_pending = false; });
+                renderTable();
+                return;
+            }
+            const seen = new Set();
             for (const result of data.results || []) {
                 const row = allRows.find(
                     r => r.order_name === result.order_name && r.item_id === result.item_id
                 );
                 if (!row) continue;
-                const has = !!result.has_label;
-                if (row.can_print_label !== has || row.can_reprint !== has) {
-                    row.can_print_label = has;
-                    row.can_reprint = has;
-                    changed = true;
-                }
+                seen.add(`${row.order_name}::${row.item_id}`);
+                row.can_print_label = !!result.has_label;
+                row.can_reprint = !!result.has_label;
+                row.label_status_pending = false;
             }
-            if (changed) renderTable();
-        } catch (_) {
-            // Keep whatever the diary API already returned.
+            shipped.forEach(r => {
+                if (!seen.has(`${r.order_name}::${r.item_id}`)) {
+                    r.label_status_pending = false;
+                }
+            });
+            renderTable();
+        } catch (err) {
+            console.warn('Label status check error', err);
+            shipped.forEach(r => { r.label_status_pending = false; });
+            renderTable();
         }
     }
 
