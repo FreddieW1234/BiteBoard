@@ -283,6 +283,63 @@ def _package_line(
     return item
 
 
+def _compact_uk_postal(postal: str) -> str:
+    """FedEx samples often use UK postcodes without spaces."""
+    return "".join((postal or "").split()).upper()
+
+
+def _rate_address(party: dict) -> dict:
+    """Address-only block for rate quotes (contact not required)."""
+    addr = dict((party.get("address") or {}))
+    if _normalize_country(addr.get("countryCode") or "") == "GB":
+        if addr.get("postalCode"):
+            addr["postalCode"] = _compact_uk_postal(str(addr["postalCode"]))
+        # Prefer minimal address for sandbox virtualization matching.
+        addr.pop("stateOrProvinceCode", None)
+        addr.pop("residential", None)
+    return addr
+
+
+def _build_rate_payload(
+    *,
+    ship_from: dict,
+    ship_to: dict,
+    weight_kg: float,
+    length_cm: float | None,
+    width_cm: float | None,
+    height_cm: float | None,
+    include_dims: bool,
+    include_transit: bool,
+    preferred_currency: str | None,
+) -> dict:
+    shipper = _addr_party(ship_from)
+    recipient = _addr_party(ship_to)
+    pkg = _package_line(
+        weight_kg=weight_kg,
+        length_cm=length_cm if include_dims else None,
+        width_cm=width_cm if include_dims else None,
+        height_cm=height_cm if include_dims else None,
+    )
+    requested: dict[str, Any] = {
+        "shipper": {"address": _rate_address(shipper)},
+        "recipient": {"address": _rate_address(recipient)},
+        "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
+        "packagingType": "YOUR_PACKAGING",
+        "rateRequestType": ["LIST", "ACCOUNT"],
+        "requestedPackageLineItems": [pkg],
+    }
+    if preferred_currency:
+        requested["preferredCurrency"] = preferred_currency
+
+    payload: dict[str, Any] = {
+        "accountNumber": {"value": _account_number()},
+        "requestedShipment": requested,
+    }
+    if include_transit:
+        payload["rateRequestControlParameters"] = {"returnTransitTimes": True}
+    return payload
+
+
 def get_rates(
     *,
     ship_from: dict,
@@ -292,34 +349,82 @@ def get_rates(
     width_cm: float | None = None,
     height_cm: float | None = None,
 ) -> list[dict]:
-    """Return normalized rate dicts for the UI."""
-    shipper = _addr_party(ship_from)
-    recipient = _addr_party(ship_to)
+    """Return normalized rate dicts for the UI.
 
-    payload = {
-        "accountNumber": {"value": _account_number()},
-        "requestedShipment": {
-            "shipper": {"address": shipper["address"]},
-            "recipient": {"address": recipient["address"]},
-            "pickupType": "DROPOFF_AT_FEDEX_LOCATION",
-            "rateRequestType": ["LIST", "ACCOUNT"],
-            "preferredCurrency": "GBP",
-            "requestedPackageLineItems": [
-                _package_line(
-                    weight_kg=weight_kg,
-                    length_cm=length_cm,
-                    width_cm=width_cm,
-                    height_cm=height_cm,
-                )
-            ],
-        },
-        "rateRequestControlParameters": {
-            "returnTransitTimes": True,
-        },
-    }
+    Sandbox often returns SERVICE.UNAVAILABLE when the request does not match a
+    virtualized scenario and the live sandbox backend is down. We retry with
+    simpler FedEx-collection-style payloads in that case.
+    """
+    attempts = [
+        # Closest to production UK quote
+        dict(
+            include_dims=True,
+            include_transit=True,
+            preferred_currency="GBP",
+        ),
+        # Common Postman/collection shape (no transit / currency)
+        dict(
+            include_dims=bool(length_cm and width_cm and height_cm),
+            include_transit=False,
+            preferred_currency=None,
+        ),
+        # Weight-only — most reliable for virtualized sandbox
+        dict(
+            include_dims=False,
+            include_transit=False,
+            preferred_currency=None,
+        ),
+    ]
 
-    data = _request("POST", "/rate/v1/rates/quotes", json=payload)
-    return _normalize_rates(data)
+    last_error: Exception | None = None
+    for i, opts in enumerate(attempts):
+        payload = _build_rate_payload(
+            ship_from=ship_from,
+            ship_to=ship_to,
+            weight_kg=weight_kg,
+            length_cm=length_cm,
+            width_cm=width_cm,
+            height_cm=height_cm,
+            **opts,
+        )
+        try:
+            data = _request("POST", "/rate/v1/rates/quotes", json=payload)
+            rates = _normalize_rates(data)
+            if rates:
+                if i > 0:
+                    logger.info("FedEx rates succeeded on retry attempt %s", i + 1)
+                return rates
+            # Empty but successful — don't keep retrying forever
+            if i == 0:
+                continue
+            return rates
+        except FedExError as exc:
+            last_error = exc
+            msg = str(exc).upper()
+            retryable = (
+                "SERVICE.UNAVAILABLE" in msg
+                or "SYSTEM.UNAVAILABLE" in msg
+                or "NOT.FOUND" in msg
+            )
+            logger.warning(
+                "FedEx rates attempt %s failed (%s)%s",
+                i + 1,
+                exc,
+                " — retrying with simpler payload" if retryable and i + 1 < len(attempts) else "",
+            )
+            if not retryable or i + 1 >= len(attempts):
+                break
+
+    if last_error and "SERVICE.UNAVAILABLE" in str(last_error).upper():
+        raise FedExError(
+            "FedEx sandbox is temporarily unavailable (SERVICE.UNAVAILABLE.ERROR). "
+            "This is usually on FedEx's side — OAuth worked, but rate quotes are down "
+            "or our request didn't hit a virtualized test scenario. Try again later, "
+            "or test the same call in FedEx's API docs / Postman collection."
+        ) from last_error
+    if last_error:
+        raise last_error
+    return []
 
 
 def _rate_total(detail: dict) -> tuple[float | None, str]:
