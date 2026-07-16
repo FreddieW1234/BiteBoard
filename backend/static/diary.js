@@ -558,7 +558,7 @@
                         row.can_reprint = false;
                         row.label_check_failed = false;
                     }
-                    console.warn('No office label for', result.order_name, result.item_id, result.error || '');
+                    console.warn('No office label for', result.order_name, result.item_id, result.error || result.source || '');
                 }
                 row.label_status_pending = false;
             }

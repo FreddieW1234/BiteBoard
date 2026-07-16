@@ -681,6 +681,7 @@ def labels_status(payload: dict) -> dict:
             "filename": info.get("filename"),
             "source": info.get("source"),
             "version": info.get("version"),
+            "error": info.get("error"),
         })
     return {"success": True, "results": results}
 

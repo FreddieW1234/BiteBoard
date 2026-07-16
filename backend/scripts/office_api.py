@@ -433,9 +433,66 @@ def list_labels(order: str, item: str) -> dict:
     result = _handle_response(resp, allow_404=True)
     if result is None:
         return {"labels": [], "latest": None}
-    if not isinstance(result, dict):
-        raise OfficeApiError("Unexpected response from labels list")
-    return result
+    if isinstance(result, list):
+        latest = None
+        if result:
+            first = result[0]
+            latest = _entry_name(first) if isinstance(first, dict) else str(first).strip()
+        return {"labels": result, "latest": latest}
+    if isinstance(result, dict):
+        normalized = dict(result)
+        labels = normalized.get("labels")
+        if isinstance(labels, str) and labels.strip():
+            normalized["labels"] = [labels.strip()]
+        elif labels is None and normalized.get("filename"):
+            normalized["labels"] = [normalized]
+        return normalized
+    logger.warning("Unexpected /labels payload type %s for %s / %s", type(result).__name__, order, item)
+    return {"labels": [], "latest": None}
+
+
+def _item_slug(item_id: str) -> str:
+    text = (item_id or "").strip()
+    match = re.match(r"^\d+-(.+)$", text)
+    return match.group(1) if match else text
+
+
+def _item_key_variants(item: str) -> list[str]:
+    """Try ``2-foo-bar`` and ``foo-bar`` — diary vs disk folder keys can differ."""
+    text = (item or "").strip()
+    if not text:
+        return []
+    variants = [text]
+    slug = _item_slug(text)
+    if slug and slug not in variants:
+        variants.append(slug)
+    if not re.match(r"^\d+-", text) and slug:
+        # If diary only has slug, also try common line-1..9 prefixes from filenames.
+        for n in range(1, 10):
+            prefixed = f"{n}-{slug}"
+            if prefixed not in variants:
+                variants.append(prefixed)
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in variants:
+        if value and value not in seen:
+            seen.add(value)
+            out.append(value)
+    return out
+
+
+def _item_keys_match(want: str, got: str) -> bool:
+    want = (want or "").strip()
+    got = (got or "").strip()
+    if not want or not got:
+        return False
+    if want == got:
+        return True
+    want_slug = _item_slug(want)
+    got_slug = _item_slug(got)
+    if want_slug and want_slug == got_slug:
+        return True
+    return want in got or got in want
 
 
 def _order_key_variants(order: str) -> list[str]:
@@ -467,6 +524,8 @@ def _entry_name(entry) -> str:
         or entry.get("filename")
         or entry.get("file")
         or entry.get("path")
+        or entry.get("basename")
+        or entry.get("key")
         or entry.get("latest")
         or ""
     ).strip()
@@ -526,7 +585,9 @@ def _collect_names_from_payload(payload) -> list[tuple[str, str]]:
             rows.append((latest.strip(), "label"))
         for key in ("labels", "files", "items", "label_files"):
             block = payload.get(key)
-            if isinstance(block, list):
+            if isinstance(block, str) and block.strip():
+                rows.append((block.strip(), key))
+            elif isinstance(block, list):
                 rows.extend(_collect_names_from_payload(block))
             elif isinstance(block, dict):
                 if _entry_name(block):
@@ -594,25 +655,24 @@ def _label_get_metadata(order_key: str, item: str) -> dict | None:
         )
         return None
 
-    ctype = (resp.headers.get("Content-Type") or "").lower()
-    if "json" in ctype:
-        try:
-            body = resp.json()
-        except Exception:
-            body = {}
-        if isinstance(body, dict):
-            body = _unwrap_payload(body)
-            filename = str(body.get("filename") or body.get("latest") or "").strip()
-            zpl = _as_zpl_text(body.get("zpl") or "")
-            if zpl or filename:
-                return {
-                    "has_label": True,
-                    "filename": filename or None,
-                    "source": "label",
-                    "version": body.get("version") or _version_from_name(filename),
-                    "order_key": order_key,
-                }
-        return None
+    body = None
+    try:
+        body = resp.json()
+    except Exception:
+        body = None
+    if isinstance(body, dict):
+        body = _unwrap_payload(body)
+        filename = str(body.get("filename") or body.get("latest") or "").strip()
+        zpl = _as_zpl_text(body.get("zpl") or "")
+        if zpl or filename:
+            return {
+                "has_label": True,
+                "filename": filename or None,
+                "source": "label",
+                "version": body.get("version") or _version_from_name(filename),
+                "order_key": order_key,
+                "item_key": item,
+            }
 
     text = (resp.text or "").strip()
     if text and ("^XA" in text.upper() or "^XZ" in text.upper()):
@@ -621,25 +681,13 @@ def _label_get_metadata(order_key: str, item: str) -> dict | None:
             "filename": None,
             "source": "label-raw",
             "order_key": order_key,
+            "item_key": item,
         }
     return None
 
 
-def find_label_files(order: str, item: str) -> list[dict]:
-    """Find shipping label files in the office order/item folder.
-
-    Disk layout (via Office API):
-      Online Store/Orders/{order}/{item}/label-*.zpl
-    HTTP (in priority order):
-      GET /orders/{order}/items/{item}/labels
-      GET /orders/{order}/items/{item}/label
-      GET /orders/{order}/items/{item}/files
-      GET /orders/{order}/items/{item}
-    """
-    order = (order or "").strip()
-    item = (item or "").strip()
-    found: list[dict] = []
-    seen: set[str] = set()
+def _probe_label_folder(order_key: str, item_key: str, found: list[dict], seen: set[str]) -> None:
+    """Hit /labels, GET /label, /files, and get_item for one order/item path."""
 
     def _merge(rows: list[dict]) -> None:
         for row in rows:
@@ -649,72 +697,154 @@ def find_label_files(order: str, item: str) -> list[dict]:
             seen.add(name)
             found.append(row)
 
-    for order_key in _order_key_variants(order):
-        # 1) Dedicated labels index (office API spec).
-        try:
-            labels = list_labels(order_key, item)
-            merged = _labels_from_payload(labels, order_key=order_key, source="labels")
+    try:
+        labels = list_labels(order_key, item_key)
+        merged = _labels_from_payload(labels, order_key=order_key, source="labels")
+        _merge(merged)
+        if merged:
+            logger.info(
+                "label found /labels order=%s item=%s file=%s",
+                order_key,
+                item_key,
+                merged[0].get("filename"),
+            )
+    except Exception as exc:
+        logger.warning("label scan /labels failed for %s / %s: %s", order_key, item_key, exc)
+
+    meta = _label_get_metadata(order_key, item_key)
+    if meta and meta.get("filename"):
+        _merge([{
+            "filename": meta["filename"],
+            "source": meta.get("source") or "label",
+            "kind": "label",
+            "order_key": order_key,
+            "item_key": item_key,
+            "version": meta.get("version") or _version_from_name(meta["filename"]),
+        }])
+    elif meta and meta.get("has_label"):
+        _merge([{
+            "filename": f"__label__{order_key}__{item_key}",
+            "source": meta.get("source") or "label",
+            "kind": "label",
+            "order_key": order_key,
+            "item_key": item_key,
+            "version": 0,
+        }])
+
+    try:
+        listed = list_files(order_key, item_key)
+        merged = _labels_from_payload(listed, order_key=order_key, source="files")
+        _merge(merged)
+        raw_files = (listed or {}).get("files") if isinstance(listed, dict) else listed
+        sample = []
+        if isinstance(raw_files, list):
+            for entry in raw_files[:12]:
+                sample.append(_entry_name(entry) or str(entry)[:40])
+        if merged:
+            logger.info(
+                "label found /files order=%s item=%s file=%s",
+                order_key,
+                item_key,
+                merged[0].get("filename"),
+            )
+        else:
+            logger.info(
+                "label scan /files order=%s item=%s files=%s sample=%s",
+                order_key,
+                item_key,
+                len(raw_files) if isinstance(raw_files, list) else 0,
+                sample,
+            )
+    except Exception as exc:
+        logger.warning("label scan /files failed for %s / %s: %s", order_key, item_key, exc)
+
+    try:
+        item_view = get_item(order_key, item_key)
+        if isinstance(item_view, dict):
+            merged = _labels_from_payload(item_view, order_key=order_key, source="item")
             _merge(merged)
             if merged:
                 logger.info(
-                    "label scan /labels order=%s item=%s latest=%s",
+                    "label found get_item order=%s item=%s file=%s",
                     order_key,
-                    item,
+                    item_key,
                     merged[0].get("filename"),
                 )
-        except Exception as exc:
-            logger.warning("label scan /labels failed for %s / %s: %s", order_key, item, exc)
+    except Exception as exc:
+        logger.warning("label scan get_item failed for %s / %s: %s", order_key, item_key, exc)
 
-        # 2) Authoritative GET /label metadata.
-        meta = _label_get_metadata(order_key, item)
-        if meta and meta.get("filename"):
-            _merge([{
-                "filename": meta["filename"],
-                "source": meta.get("source") or "label",
-                "kind": "label",
-                "order_key": order_key,
-                "version": meta.get("version") or _version_from_name(meta["filename"]),
-            }])
-        elif meta and meta.get("has_label"):
-            # Label exists but filename unknown — still counts for has_label().
-            _merge([{
-                "filename": f"__label__{order_key}__{item}",
-                "source": meta.get("source") or "label",
-                "kind": "label",
-                "order_key": order_key,
-                "version": 0,
-            }])
 
-        # 3) Same /files listing used for artwork/proofs in that folder.
-        try:
-            listed = list_files(order_key, item)
-            merged = _labels_from_payload(listed, order_key=order_key, source="files")
-            _merge(merged)
-            raw_files = (listed or {}).get("files") if isinstance(listed, dict) else listed
-            sample = []
-            if isinstance(raw_files, list):
-                for entry in raw_files[:12]:
-                    sample.append(_entry_name(entry) or str(entry)[:40])
+def _scan_order_for_labels(order_key: str, item_hint: str, found: list[dict], seen: set[str]) -> None:
+    """Fallback: walk ``GET /orders/{order}`` items when direct item path misses."""
+    try:
+        order_view = get_order(order_key)
+    except Exception as exc:
+        logger.warning("label order scan failed for %s: %s", order_key, exc)
+        return
+    if not isinstance(order_view, dict):
+        return
+
+    for view in order_view.get("items") or []:
+        if not isinstance(view, dict):
+            continue
+        vid = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
+        if not vid:
+            continue
+        labels_here = _labels_from_payload(view, order_key=order_key, source="order-scan")
+        if not labels_here:
+            continue
+        if not _item_keys_match(item_hint, vid):
+            # Still accept if any label filename embeds the item slug (FedEx naming).
+            slug = _item_slug(item_hint)
+            if slug and not any(slug in (row.get("filename") or "") for row in labels_here):
+                continue
+        for row in labels_here:
+            name = row.get("filename") or ""
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            found.append({
+                **row,
+                "order_key": order_key,
+                "item_key": vid,
+                "source": row.get("source") or "order-scan",
+            })
+        if labels_here:
             logger.info(
-                "label scan /files order=%s item=%s label_hits=%s sample=%s",
+                "label found order-scan order=%s want=%s got=%s file=%s",
                 order_key,
-                item,
-                len(merged),
-                sample,
+                item_hint,
+                vid,
+                labels_here[0].get("filename"),
             )
-        except Exception as exc:
-            logger.warning("label scan /files failed for %s / %s: %s", order_key, item, exc)
 
-        # 4) Item view sometimes lists files when /files does not.
-        try:
-            item_view = get_item(order_key, item)
-            if isinstance(item_view, dict):
-                merged = _labels_from_payload(item_view, order_key=order_key, source="item")
-                _merge(merged)
-        except Exception as exc:
-            logger.warning("label scan get_item failed for %s / %s: %s", order_key, item, exc)
+
+def find_label_files(order: str, item: str) -> list[dict]:
+    """Find shipping label files in the office order/item folder."""
+    order = (order or "").strip()
+    item = (item or "").strip()
+    found: list[dict] = []
+    seen: set[str] = set()
+
+    for order_key in _order_key_variants(order):
+        for item_key in _item_key_variants(item):
+            _probe_label_folder(order_key, item_key, found, seen)
+            if found:
+                break
+        if not found:
+            _scan_order_for_labels(order_key, item, found, seen)
+        if found:
+            break
 
     found.sort(key=lambda row: (row.get("version") or 0, row.get("filename") or ""), reverse=True)
+    if not found:
+        logger.warning(
+            "label NOT FOUND order=%r item=%r tried_orders=%s tried_items=%s",
+            order,
+            item,
+            _order_key_variants(order),
+            _item_key_variants(item),
+        )
     return found
 
 
@@ -732,42 +862,42 @@ def get_label(order: str, item: str, version: int | None = None) -> dict:
 
     # 1) Dedicated label endpoint (when office implements it).
     for order_key in _order_key_variants(order):
-        url = f"{_url(order_key, item)}/label"
-        params = {"version": int(version)} if version is not None else None
-        try:
-            resp = _request("GET", url, params=params, timeout=_TIMEOUT)
-        except Exception as exc:
-            logger.warning("GET /label failed for %s / %s: %s", order_key, item, exc)
-            continue
-        if resp.status_code == 404:
-            continue
-        if not resp.ok:
-            logger.warning(
-                "GET /label HTTP %s for %s / %s: %s",
-                resp.status_code,
-                order_key,
-                item,
-                (resp.text or "")[:160],
-            )
-            continue
-        ctype = (resp.headers.get("Content-Type") or "").lower()
-        if "json" in ctype:
+        for item_key in _item_key_variants(item):
+            url = f"{_url(order_key, item_key)}/label"
+            params = {"version": int(version)} if version is not None else None
+            try:
+                resp = _request("GET", url, params=params, timeout=_TIMEOUT)
+            except Exception as exc:
+                logger.warning("GET /label failed for %s / %s: %s", order_key, item_key, exc)
+                continue
+            if resp.status_code == 404:
+                continue
+            if not resp.ok:
+                logger.warning(
+                    "GET /label HTTP %s for %s / %s: %s",
+                    resp.status_code,
+                    order_key,
+                    item_key,
+                    (resp.text or "")[:160],
+                )
+                continue
+            body = None
             try:
                 body = resp.json()
             except Exception:
-                body = {}
+                body = None
             if isinstance(body, dict):
                 body = _unwrap_payload(body)
                 zpl = _as_zpl_text(body.get("zpl") or "")
                 if zpl:
-                    return {**body, "zpl": zpl, "order_key": order_key, "source": "label"}
-        else:
+                    return {**body, "zpl": zpl, "order_key": order_key, "item_key": item_key, "source": "label"}
             zpl = _as_zpl_text(resp.content or b"")
             if zpl:
                 return {
                     "zpl": zpl,
                     "filename": "",
                     "order_key": order_key,
+                    "item_key": item_key,
                     "source": "label-raw",
                 }
 
@@ -785,28 +915,33 @@ def get_label(order: str, item: str, version: int | None = None) -> dict:
 
     chosen = candidates[0]
     order_key = chosen.get("order_key") or order
+    item_key = chosen.get("item_key") or item
     filename = chosen["filename"]
     if filename.startswith("__label__"):
-        url = f"{_url(order_key, item)}/label"
+        url = f"{_url(order_key, item_key)}/label"
         resp = _request("GET", url, timeout=_TIMEOUT)
         if not resp.ok:
             raise OfficeApiError(
                 "No stored label in office folder "
                 f"orders/{order}/{item}/ (GET /label failed)"
             )
-        if "json" in (resp.headers.get("Content-Type") or "").lower():
+        body = None
+        try:
             body = resp.json()
-            if isinstance(body, dict):
-                body = _unwrap_payload(body)
-                zpl = _as_zpl_text(body.get("zpl") or "")
-                if zpl:
-                    return {
-                        **body,
-                        "zpl": zpl,
-                        "order_key": order_key,
-                        "source": "label",
-                        "carrier": "fedex",
-                    }
+        except Exception:
+            body = None
+        if isinstance(body, dict):
+            body = _unwrap_payload(body)
+            zpl = _as_zpl_text(body.get("zpl") or "")
+            if zpl:
+                return {
+                    **body,
+                    "zpl": zpl,
+                    "order_key": order_key,
+                    "item_key": item_key,
+                    "source": "label",
+                    "carrier": "fedex",
+                }
         zpl = _as_zpl_text(resp.content or b"")
         if not zpl:
             raise OfficeApiError("Office label endpoint returned no ZPL")
@@ -814,11 +949,12 @@ def get_label(order: str, item: str, version: int | None = None) -> dict:
             "zpl": zpl,
             "filename": "",
             "order_key": order_key,
+            "item_key": item_key,
             "source": "label-raw",
             "carrier": "fedex",
         }
 
-    resp = fetch_file(order_key, item, filename)
+    resp = fetch_file(order_key, item_key, filename)
     zpl = _as_zpl_text(resp.content or b"")
     if not zpl:
         raise OfficeApiError(f"Office file {filename!r} is not valid ZPL")
@@ -885,6 +1021,11 @@ def labels_status(pairs: list[tuple[str, str]]) -> dict[str, dict]:
         return out
 
     def _probe(order: str, item: str) -> dict:
+        if not OFFICE_API_URL or not OFFICE_API_KEY:
+            return {
+                "has_label": False,
+                "error": "Office API not configured on Render (OFFICE_API_URL / OFFICE_API_KEY)",
+            }
         found = find_label_files(order, item)
         real = [row for row in found if not str(row.get("filename") or "").startswith("__label__")]
         pick = real[0] if real else (found[0] if found else None)
@@ -894,17 +1035,16 @@ def labels_status(pairs: list[tuple[str, str]]) -> dict[str, dict]:
                 "filename": pick.get("filename") if not str(pick.get("filename") or "").startswith("__label__") else None,
                 "source": pick.get("source"),
                 "version": pick.get("version"),
+                "item_key": pick.get("item_key"),
+                "order_key": pick.get("order_key"),
             }
-        for order_key in _order_key_variants(order):
-            meta = _label_get_metadata(order_key, item)
-            if meta and meta.get("has_label"):
-                return {
-                    "has_label": True,
-                    "filename": meta.get("filename"),
-                    "source": meta.get("source") or "label",
-                    "version": meta.get("version"),
-                }
-        return {"has_label": False}
+        return {
+            "has_label": False,
+            "error": (
+                f"No label via office API for order={order!r} item={item!r} "
+                f"(tried orders {_order_key_variants(order)}, items {_item_key_variants(item)})"
+            ),
+        }
 
     workers = min(4, len(cleaned))
     with ThreadPoolExecutor(max_workers=workers) as pool:
