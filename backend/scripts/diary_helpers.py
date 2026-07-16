@@ -233,7 +233,20 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                     from config import OFFICE_API_URL, OFFICE_API_KEY  # type: ignore
                     if OFFICE_API_URL and OFFICE_API_KEY:
                         can_print_label = office_api.has_label(order_name, item_id)
-                except Exception:
+                        if _DEBUG_DIARY_KEYS:
+                            logger.warning(
+                                "Diary DEBUG label probe order=%s item=%s can_print=%s",
+                                order_name,
+                                item_id,
+                                can_print_label,
+                            )
+                except Exception as exc:
+                    logger.warning(
+                        "Diary label probe failed for %s / %s: %s",
+                        order_name,
+                        item_id,
+                        exc,
+                    )
                     can_print_label = False
 
             rows.append({
