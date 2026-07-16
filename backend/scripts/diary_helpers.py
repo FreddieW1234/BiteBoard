@@ -226,6 +226,13 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
             label_id = entry.get("label_id") or ""
             # Treat label purchase as shipped even if sandbox omitted a tracking number.
             shipped = bool(tracking_number or label_id)
+            can_print_label = False
+            if shipped:
+                try:
+                    from scripts import label_store  # type: ignore
+                    can_print_label = label_store.has_zpl(order_name, item_id)
+                except Exception:
+                    can_print_label = False
 
             rows.append({
                 "order_id": order_id,
@@ -244,6 +251,9 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "tracking_number": tracking_number or label_id,
                 "label_id": label_id,
                 "shipped": shipped,
+                "can_print_label": can_print_label,
+                # Back-compat for older diary.js caches
+                "can_reprint": can_print_label,
             })
 
     def sort_key(row: dict):

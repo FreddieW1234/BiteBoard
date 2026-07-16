@@ -2647,6 +2647,21 @@ def api_shipping_ship():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/shipping/reprint', methods=['POST'])
+def api_shipping_reprint():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.shipping import reprint_label  # type: ignore
+        result = reprint_label(data)
+        if not result.get("success"):
+            return jsonify(result), 400
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     """Return recent Shopify orders for the staff Orders page."""

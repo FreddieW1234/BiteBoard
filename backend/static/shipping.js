@@ -451,11 +451,13 @@
         const print = data.print || {};
         let printLine = 'Label ready.';
         if (print.skipped) {
-            printLine = 'Nothing was sent to a printer (office print server not configured).';
+            printLine = print.reason === 'print_server_not_configured'
+                ? 'Label saved. Office printer API is not configured — use Print label later if needed.'
+                : 'Label saved. Nothing was sent to the Zebra automatically.';
         } else if (print.success === false) {
-            printLine = `Print failed: ${print.error || 'unknown'}.`;
+            printLine = `Print failed: ${print.error || 'unknown'}. Use Print label on the Diary row to retry.`;
         } else {
-            printLine = 'Sent to office printer.';
+            printLine = 'Sent to office Zebra printer.';
         }
 
         const downloadBtn = data.label_download_url
@@ -474,7 +476,7 @@
                 </dl>
                 <p class="ship-success-print">${escapeHtml(printLine)}</p>
                 ${data.sandbox_note ? `<p class="ship-msg info">${escapeHtml(data.sandbox_note)}</p>` : ''}
-                <p class="ship-success-hint">Check the Diary Ship column for this tracking number. Close when you’re done.</p>
+                <p class="ship-success-hint">Check the Diary Ship column for tracking and Print label. Close when you’re done.</p>
                 <div class="ship-success-actions">
                     ${downloadBtn}
                     <button type="button" class="ship-btn-primary" id="ship-success-done">Done</button>

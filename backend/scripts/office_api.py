@@ -271,3 +271,92 @@ def set_diary_entry(
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from diary update")
     return result
+
+
+_PRINT_TIMEOUT = 45
+
+
+def _print_error_message(resp: requests.Response) -> str:
+    detail = ""
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            detail = (
+                body.get("error")
+                or body.get("message")
+                or body.get("detail")
+                or ""
+            )
+    except Exception:
+        detail = (resp.text or "")[:200]
+
+    code = resp.status_code
+    if code == 400:
+        return detail or "Label data is not valid ZPL (missing ^XA/^XZ)."
+    if code == 500:
+        return detail or "Office printer is not configured on the server."
+    if code == 502:
+        return (
+            detail
+            or "Printer unreachable — the host PC may be asleep or the share is down."
+        )
+    if code == 504:
+        return detail or "Printer did not respond within 30 seconds."
+    return detail or f"Print request failed ({code})"
+
+
+def print_health() -> dict:
+    """``GET /print/health`` → ``{configured: bool, ...}``."""
+    _require_config()
+    url = f"{OFFICE_API_URL.rstrip('/')}/print/health"
+    resp = _request("GET", url, timeout=10)
+    if not resp.ok:
+        logger.warning("Office print health check failed: HTTP %s", resp.status_code)
+        return {"configured": False, "ok": False}
+    try:
+        body = resp.json()
+    except Exception:
+        return {"configured": False, "ok": False}
+    if not isinstance(body, dict):
+        return {"configured": False, "ok": False}
+    configured = bool(body.get("configured"))
+    return {**body, "configured": configured, "ok": True}
+
+
+def print_label(
+    zpl: str | bytes,
+    order: str | None = None,
+    label_ref: str | None = None,
+) -> dict:
+    """``POST /print`` with raw ZPL for the office Zebra.
+
+    Body: ``{zpl, order?, label_ref?}``. Raises OfficeApiError on non-200.
+    """
+    _require_config()
+    if isinstance(zpl, bytes):
+        zpl_text = zpl.decode("utf-8", errors="replace")
+    else:
+        zpl_text = str(zpl or "")
+    zpl_text = zpl_text.strip()
+    if not zpl_text:
+        raise OfficeApiError("No ZPL label data to print")
+
+    payload: dict = {"zpl": zpl_text}
+    if order:
+        payload["order"] = str(order).strip()
+    if label_ref:
+        payload["label_ref"] = str(label_ref).strip()
+
+    url = f"{OFFICE_API_URL.rstrip('/')}/print"
+    resp = _request("POST", url, json=payload, timeout=_PRINT_TIMEOUT)
+    if not resp.ok:
+        msg = _print_error_message(resp)
+        logger.error("Office print failed HTTP %s: %s", resp.status_code, msg)
+        raise OfficeApiError(msg)
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"ok": True}
+    if not isinstance(body, dict):
+        return {"ok": True}
+    return body

@@ -19,6 +19,7 @@
     let sortMode = localStorage.getItem('diary-sort') || 'dispatch_close';
     let viewMode = localStorage.getItem('diary-view') || 'week';
     let focusDate = parseIsoDate(localStorage.getItem('diary-focus')) || startOfDay(new Date());
+    let printerReady = null; // null = unknown, true/false after health check
     const saveTimers = Object.create(null);
 
     function escapeHtml(s) {
@@ -249,9 +250,25 @@
             html += `<td class="diary-ship-cell">
                 <div class="diary-screen-only">`;
             if (row.shipped) {
+                const canPrint = !!(row.can_print_label || row.can_reprint);
+                let printBtn = '';
+                if (canPrint) {
+                    const printerOff = printerReady === false;
+                    const title = printerOff
+                        ? 'Office printer is not configured'
+                        : 'Send stored ZPL label to the office Zebra';
+                    printBtn = `<button type="button" class="diary-print-label-btn"
+                        data-print-order-name="${escapeHtml(row.order_name)}"
+                        data-print-item-id="${escapeHtml(row.item_id)}"
+                        ${printerOff ? 'disabled' : ''}
+                        title="${escapeHtml(title)}">
+                        <i class="fas fa-print"></i> Print label
+                    </button>`;
+                }
                 html += `<div class="diary-shipped-info">
                     <div class="diary-shipped-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.carrier_label || carrierPrint)}</div>
                     ${row.tracking_number ? `<div class="diary-shipped-tracking">${escapeHtml(row.tracking_number)}</div>` : ''}
+                    ${printBtn}
                 </div>`;
             } else if (showShipBtn) {
                 html += `<button type="button" class="diary-ship-btn"
@@ -361,7 +378,82 @@
         }
     }
 
+    function showDiaryToast(message, kind) {
+        let el = document.getElementById('diary-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'diary-toast';
+            el.className = 'diary-toast';
+            el.setAttribute('role', 'status');
+            document.body.appendChild(el);
+        }
+        el.textContent = message || '';
+        el.className = `diary-toast diary-toast-${kind === 'err' ? 'err' : 'ok'}`;
+        el.hidden = false;
+        clearTimeout(showDiaryToast._timer);
+        showDiaryToast._timer = setTimeout(() => {
+            el.hidden = true;
+        }, kind === 'err' ? 6000 : 3200);
+    }
+
+    async function refreshPrinterHealth() {
+        try {
+            const res = await fetch('/api/shipping/status', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                printerReady = false;
+                return;
+            }
+            const providers = data.providers || {};
+            if (typeof providers.printer_ready === 'boolean') {
+                printerReady = providers.printer_ready;
+            } else {
+                printerReady = !!providers.print_server;
+            }
+        } catch (_) {
+            printerReady = false;
+        }
+    }
+
+    async function printStoredLabel(orderName, itemId, btn) {
+        if (!orderName || !itemId || !btn || btn.disabled) return;
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Printing…';
+        try {
+            const res = await fetch('/api/shipping/reprint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ order_name: orderName, item_id: itemId }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'Print failed');
+            }
+            showDiaryToast(data.message || 'Sent to printer', 'ok');
+            btn.innerHTML = '<i class="fas fa-check"></i> Sent';
+            setTimeout(() => {
+                btn.disabled = printerReady === false;
+                btn.innerHTML = original || '<i class="fas fa-print"></i> Print label';
+            }, 1600);
+        } catch (err) {
+            showDiaryToast(err.message || 'Could not print label', 'err');
+            btn.disabled = printerReady === false;
+            btn.innerHTML = original || '<i class="fas fa-print"></i> Print label';
+        }
+    }
+
     function onTableClickShip(e) {
+        const printBtn = e.target.closest('.diary-print-label-btn, .diary-reprint-btn');
+        if (printBtn) {
+            printStoredLabel(
+                printBtn.dataset.printOrderName || printBtn.dataset.reprintOrderName || '',
+                printBtn.dataset.printItemId || printBtn.dataset.reprintItemId || '',
+                printBtn
+            );
+            return;
+        }
         const shipBtn = e.target.closest('.diary-ship-btn');
         if (shipBtn) {
             const orderId = shipBtn.dataset.shipOrderId;
@@ -408,7 +500,10 @@
             content.innerHTML = '<div class="diary-table-card"><div class="diary-empty"><i class="fas fa-spinner fa-spin"></i> Loading diary…</div></div>';
         }
         try {
-            const res = await fetch('/api/diary', { credentials: 'same-origin' });
+            const [res] = await Promise.all([
+                fetch('/api/diary', { credentials: 'same-origin' }),
+                refreshPrinterHealth(),
+            ]);
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not load diary');
             allRows = data.rows || [];
@@ -463,6 +558,8 @@
         row.carrier_label = info?.carrier_label || carrierLabel(row.carrier);
         row.tracking_number = info?.tracking_number || info?.label_id || row.tracking_number || '';
         row.label_id = info?.label_id || row.label_id || '';
+        row.can_print_label = !!(info?.label_zpl_base64 || info?.has_zpl);
+        row.can_reprint = row.can_print_label;
         renderTable();
         return true;
     }

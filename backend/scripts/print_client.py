@@ -1,17 +1,12 @@
-"""Send label print jobs to the office LAN print server."""
+"""Send ZPL labels to the office Zebra via the Office API ``/print`` endpoint."""
 
 from __future__ import annotations
 
-import base64
 import logging
 
-import requests
-
-from config import OFFICE_PRINT_SERVER_KEY, OFFICE_PRINT_SERVER_URL  # type: ignore
+from config import OFFICE_API_KEY, OFFICE_API_URL  # type: ignore
 
 logger = logging.getLogger(__name__)
-
-_TIMEOUT = 30
 
 
 class PrintClientError(Exception):
@@ -19,58 +14,73 @@ class PrintClientError(Exception):
 
 
 def configured() -> bool:
-    return bool(OFFICE_PRINT_SERVER_URL)
+    """True when Office API credentials exist (printer may still be offline)."""
+    return bool(OFFICE_API_URL and OFFICE_API_KEY)
+
+
+def printer_ready() -> bool:
+    """True when Office API reports the Zebra print path is configured."""
+    if not configured():
+        return False
+    try:
+        from scripts import office_api  # type: ignore
+        health = office_api.print_health()
+        return bool(health.get("configured"))
+    except Exception as exc:
+        logger.warning("Office print health check failed: %s", exc)
+        return False
 
 
 def send_print_job(
     *,
-    profile: str,
-    label_format: str,
+    profile: str = "parcel-4x6-zpl",
+    label_format: str = "zpl",
     data: bytes,
     order_name: str = "",
     tracking_number: str = "",
 ) -> dict:
-    """POST a print job to the office print server.
+    """POST raw ZPL to ``{OFFICE_API_URL}/print``.
 
-    Expected office server contract (phase 1):
-      POST {OFFICE_PRINT_SERVER_URL}/print
-      { profile, format, data_base64, order_name, tracking_number }
+    ``profile`` / ``label_format`` are kept for call-site compatibility; the
+    office endpoint expects a ``zpl`` string.
     """
+    del profile  # unused — office API only accepts raw ZPL
     if not configured():
         logger.info(
-            "Print server not configured — skipping print for %s (%s)",
+            "Office API not configured — skipping print for %s (%s)",
             order_name,
             tracking_number,
         )
         return {"success": True, "skipped": True, "reason": "print_server_not_configured"}
 
-    headers = {"Content-Type": "application/json"}
-    if OFFICE_PRINT_SERVER_KEY:
-        headers["X-Print-Key"] = OFFICE_PRINT_SERVER_KEY
+    if not data:
+        return {"success": False, "error": "No label data to print"}
 
-    payload = {
-        "profile": profile,
-        "format": label_format,
-        "data_base64": base64.b64encode(data).decode("ascii"),
-        "order_name": order_name,
-        "tracking_number": tracking_number,
-    }
+    if (label_format or "zpl").lower().find("zpl") < 0:
+        return {
+            "success": False,
+            "error": f"Office printer only accepts ZPL (got {label_format!r})",
+        }
+
     try:
-        resp = requests.post(
-            f"{OFFICE_PRINT_SERVER_URL}/print",
-            json=payload,
-            headers=headers,
-            timeout=_TIMEOUT,
+        from scripts import office_api  # type: ignore
+        from scripts.office_api import OfficeApiError  # type: ignore
+    except Exception as exc:
+        raise PrintClientError("Office API client unavailable") from exc
+
+    try:
+        result = office_api.print_label(
+            data,
+            order=order_name or None,
+            label_ref=tracking_number or None,
         )
-    except requests.RequestException as exc:
-        raise PrintClientError("Office print server unreachable") from exc
+    except OfficeApiError as exc:
+        raise PrintClientError(str(exc)) from exc
 
-    if not resp.ok:
-        detail = (resp.text or "")[:200]
-        raise PrintClientError(detail or f"Print server error ({resp.status_code})")
-
-    try:
-        body = resp.json()
-    except Exception:
-        body = {"success": True}
-    return body if isinstance(body, dict) else {"success": True}
+    return {
+        "success": True,
+        "ok": bool(result.get("ok", True)),
+        "printer": result.get("printer"),
+        "bytes": result.get("bytes"),
+        "raw": result,
+    }

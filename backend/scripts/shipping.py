@@ -62,10 +62,18 @@ def _ship_from_ready() -> bool:
     return bool((SHIP_FROM_LINE1 or "").strip() and (SHIP_FROM_POSTCODE or "").strip())
 
 
-def _print_configured() -> bool:
+def _print_api_configured() -> bool:
     try:
         from scripts import print_client  # type: ignore
         return print_client.configured()
+    except Exception:
+        return False
+
+
+def _printer_ready() -> bool:
+    try:
+        from scripts import print_client  # type: ignore
+        return print_client.printer_ready()
     except Exception:
         return False
 
@@ -90,6 +98,8 @@ def shipping_status() -> dict:
             "ready": False,
         },
     }
+    print_api = _print_api_configured()
+    printer_ready = _printer_ready() if print_api else False
     return {
         "royal_mail": carriers["royal_mail"]["configured"],
         "fedex": carriers["fedex"]["configured"],
@@ -97,7 +107,9 @@ def shipping_status() -> dict:
         "carriers": carriers,
         "carrier_labels": [c["label"] for c in CARRIERS],
         "ship_from_ready": _ship_from_ready(),
-        "print_server": _print_configured(),
+        "print_server": printer_ready,
+        "print_api_configured": print_api,
+        "printer_ready": printer_ready,
         "any_carrier_configured": any(c["configured"] for c in carriers.values()),
         "shipstation": False,
     }
@@ -481,6 +493,26 @@ def ship_order(payload: dict) -> dict:
                 logger.warning("Diary stamp failed for %s / %s: %s", order_name, item_id, saved)
             else:
                 stamped += 1
+            try:
+                from scripts import label_store  # type: ignore
+                label_store.save_label(
+                    order_name=order_name,
+                    item_id=item_id,
+                    label_bytes=label_bytes,
+                    label_url=label_url,
+                    label_format="zpl" if label_bytes else "url",
+                    tracking_number=tracking,
+                    label_id=label_id,
+                    carrier="fedex",
+                    service_code=service_code,
+                )
+            except Exception as store_exc:
+                logger.warning(
+                    "Could not persist label for reprint (%s / %s): %s",
+                    order_name,
+                    item_id,
+                    store_exc,
+                )
         if stamped == 0:
             return {
                 "success": False,
@@ -552,3 +584,96 @@ def save_manual_dispatch(
         "shipment_type": shipment_type or "parcel",
     })
     return result if isinstance(result, dict) else {"success": True}
+
+
+def reprint_label(payload: dict) -> dict:
+    """Print a stored ZPL label on the office Zebra via Office API ``/print``."""
+    import base64
+
+    from scripts import label_store, print_client  # type: ignore
+    from scripts.print_client import PrintClientError  # type: ignore
+
+    order_name = (payload.get("order_name") or "").strip()
+    item_id = (payload.get("item_id") or "").strip()
+    if not order_name or not item_id:
+        return {"success": False, "error": "order_name and item_id are required"}
+
+    stored = label_store.load_label(order_name, item_id)
+    if not stored:
+        return {
+            "success": False,
+            "error": (
+                "No saved ZPL label for this line. "
+                "Ship the line first so a label is stored, then use Print label."
+            ),
+        }
+
+    label_bytes = stored.get("label_bytes") or b""
+    label_url = str(stored.get("label_url") or "")
+    tracking = str(stored.get("tracking_number") or "")
+    label_id = str(stored.get("label_id") or "")
+
+    if not label_bytes:
+        return {
+            "success": False,
+            "error": (
+                "This shipment has no stored ZPL to send to the Zebra. "
+                + (f"Label URL available: {label_url}" if label_url else "Re-ship to create a ZPL label.")
+            ),
+            "label_download_url": label_url or None,
+        }
+
+    if not print_client.configured():
+        return {
+            "success": False,
+            "error": "Office API is not configured (OFFICE_API_URL / OFFICE_API_KEY).",
+            "has_zpl": True,
+            "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii"),
+        }
+
+    try:
+        print_result = print_client.send_print_job(
+            profile="parcel-4x6-zpl",
+            label_format="zpl",
+            data=label_bytes,
+            order_name=order_name,
+            tracking_number=tracking or label_id,
+        )
+    except PrintClientError as print_exc:
+        logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
+        return {
+            "success": False,
+            "error": str(print_exc),
+            "order_name": order_name,
+            "item_id": item_id,
+            "tracking_number": tracking,
+            "has_zpl": True,
+            "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii"),
+        }
+    except Exception as print_exc:
+        logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
+        return {
+            "success": False,
+            "error": str(print_exc),
+            "order_name": order_name,
+            "item_id": item_id,
+            "tracking_number": tracking,
+            "has_zpl": True,
+        }
+
+    return {
+        "success": True,
+        "order_name": order_name,
+        "item_id": item_id,
+        "tracking_number": tracking,
+        "label_id": label_id,
+        "carrier": stored.get("carrier") or "",
+        "carrier_label": (
+            "FedEx" if (stored.get("carrier") or "") == "fedex"
+            else (stored.get("carrier") or "")
+        ),
+        "service_code": stored.get("service_code") or "",
+        "print": print_result,
+        "message": "Sent to printer",
+        "has_zpl": True,
+    }
