@@ -567,6 +567,7 @@ def ship_order(payload: dict) -> dict:
                     data=label_bytes,
                     order_name=order_name,
                     tracking_number=tracking,
+                    carrier="fedex",
                 )
             except Exception as print_exc:
                 logger.warning("Label print failed (label still stored): %s", print_exc)
@@ -683,6 +684,7 @@ def reprint_label(payload: dict) -> dict:
     zpl = stored.get("zpl") or ""
     tracking = str(stored.get("tracking") or stored.get("tracking_number") or "").strip()
     label_ref = tracking or str(stored.get("filename") or "")
+    carrier = str(stored.get("carrier") or payload.get("carrier") or "fedex").strip().lower()
 
     try:
         print_result = print_client.send_print_job(
@@ -691,6 +693,7 @@ def reprint_label(payload: dict) -> dict:
             data=zpl.encode("utf-8") if isinstance(zpl, str) else zpl,
             order_name=order_name,
             tracking_number=label_ref,
+            carrier=carrier,
         )
     except PrintClientError as print_exc:
         logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
