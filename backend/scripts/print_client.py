@@ -22,8 +22,8 @@ _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() 
     "true",
     "yes",
 )
-# Uniform content scale (1.0 = none). Default 0.98 = shrink 2%.
-_LABEL_SCALE = float(os.environ.get("FEDEX_LABEL_SCALE") or "0.98")
+# Uniform content scale (1.0 = none). Default 0.9653 ≈ 3.5% smaller (was 2%, then −1.5% more).
+_LABEL_SCALE = float(os.environ.get("FEDEX_LABEL_SCALE") or "0.9653")
 _PREPARED_MARKER = "bite-label-adjusted"
 
 
