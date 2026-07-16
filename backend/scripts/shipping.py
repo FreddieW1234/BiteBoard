@@ -489,13 +489,25 @@ def ship_order(payload: dict) -> dict:
             }
 
         # Office server is the source of truth for label ZPL (not Render disk).
+        from scripts import office_api  # type: ignore
+        from scripts.office_api import OfficeApiError  # type: ignore
+
         label_stored = False
         label_store_meta: dict = {}
         store_errors: list[str] = []
-        if label_bytes:
-            from scripts import office_api  # type: ignore
-            from scripts.office_api import OfficeApiError  # type: ignore
+        office_ready = print_client.configured()
 
+        if not label_bytes:
+            store_errors.append(
+                "FedEx did not return usable ZPL for this label"
+                + (f" (url present: {bool(label_url)})" if label_url else "")
+                + ". Check FedEx label format is ZPLII, not PDF/PNG."
+            )
+        elif not office_ready:
+            store_errors.append(
+                "Office API is not configured (OFFICE_API_URL / OFFICE_API_KEY) — cannot store label."
+            )
+        else:
             for item_id in stamp_ids:
                 try:
                     label_store_meta = office_api.store_label(
@@ -504,6 +516,7 @@ def ship_order(payload: dict) -> dict:
                         label_bytes,
                         tracking=tracking,
                         carrier="fedex",
+                        item_label=item_id,
                     )
                     label_stored = True
                 except OfficeApiError as store_exc:
@@ -522,8 +535,28 @@ def ship_order(payload: dict) -> dict:
                         store_exc,
                     )
                     store_errors.append(str(store_exc))
-        elif label_url:
-            store_errors.append("FedEx returned a label URL but no ZPL bytes to store")
+
+        # Don't pretend ship succeeded if the office copy (source of truth) failed.
+        if not label_stored:
+            return {
+                "success": False,
+                "error": (
+                    "FedEx label was created"
+                    + (f" (tracking {tracking})" if tracking else "")
+                    + ", but it was NOT saved on the office server. "
+                    + (store_errors[0] if store_errors else "Unknown store error.")
+                    + " Fix the error and ship again (creates v2) so Print label can work."
+                ),
+                "order_name": order_name,
+                "item_id": diary_item_id or (stamp_ids[0] if stamp_ids else ""),
+                "tracking_number": tracking,
+                "label_id": label_id,
+                "carrier": "fedex",
+                "label_stored": False,
+                "label_store_error": store_errors[0] if store_errors else None,
+                "has_zpl": bool(label_bytes),
+                "label_download_url": label_url or None,
+            }
 
         print_result: dict = {"skipped": True, "reason": "no_label_bytes"}
         if label_bytes:
@@ -536,7 +569,7 @@ def ship_order(payload: dict) -> dict:
                     tracking_number=tracking,
                 )
             except Exception as print_exc:
-                logger.warning("Label print failed (label still created): %s", print_exc)
+                logger.warning("Label print failed (label still stored): %s", print_exc)
                 print_result = {"success": False, "error": str(print_exc)}
         elif not print_client.configured():
             print_result = {
@@ -557,11 +590,10 @@ def ship_order(payload: dict) -> dict:
             "carrier_label": "FedEx",
             "service_code": service_code,
             "print": print_result,
-            "label_stored": label_stored,
+            "label_stored": True,
             "label_filename": label_store_meta.get("filename"),
             "label_version": label_store_meta.get("version"),
-            "label_store_error": store_errors[0] if store_errors and not label_stored else None,
-            "has_zpl": bool(label_bytes),
+            "has_zpl": True,
             "label_download_url": label_url or None,
             "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii") if label_bytes else None,
             "sandbox_note": (

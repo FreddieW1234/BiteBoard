@@ -250,21 +250,24 @@
             html += `<td class="diary-ship-cell">
                 <div class="diary-screen-only">`;
             if (row.shipped) {
-                const canPrint = !!(row.can_print_label || row.can_reprint);
-                let printBtn = '';
-                if (canPrint) {
-                    const printerOff = printerReady === false;
-                    const title = printerOff
-                        ? 'Office printer is not configured'
-                        : 'Send stored ZPL label to the office Zebra';
-                    printBtn = `<button type="button" class="diary-print-label-btn"
-                        data-print-order-name="${escapeHtml(row.order_name)}"
-                        data-print-item-id="${escapeHtml(row.item_id)}"
-                        ${printerOff ? 'disabled' : ''}
-                        title="${escapeHtml(title)}">
-                        <i class="fas fa-print"></i> Print label
-                    </button>`;
+                const hasStored = !!(row.can_print_label || row.can_reprint);
+                const printerOff = printerReady === false;
+                let title = 'Send stored ZPL label to the office Zebra';
+                let disabled = false;
+                if (!hasStored) {
+                    title = 'No ZPL stored on the office server yet — ship again to save the label';
+                    disabled = true;
+                } else if (printerOff) {
+                    title = 'Office printer is not configured';
+                    disabled = true;
                 }
+                const printBtn = `<button type="button" class="diary-print-label-btn"
+                    data-print-order-name="${escapeHtml(row.order_name)}"
+                    data-print-item-id="${escapeHtml(row.item_id)}"
+                    ${disabled ? 'disabled' : ''}
+                    title="${escapeHtml(title)}">
+                    <i class="fas fa-print"></i> Print label
+                </button>`;
                 html += `<div class="diary-shipped-info">
                     <div class="diary-shipped-carrier ${carrierClass(row.carrier)}">${escapeHtml(row.carrier_label || carrierPrint)}</div>
                     ${row.tracking_number ? `<div class="diary-shipped-tracking">${escapeHtml(row.tracking_number)}</div>` : ''}

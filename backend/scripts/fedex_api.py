@@ -686,6 +686,74 @@ def create_label(
     return _normalize_label(data, service_type=service_type)
 
 
+def _looks_like_zpl(text: str | bytes) -> bool:
+    if isinstance(text, bytes):
+        try:
+            sample = text.decode("utf-8", errors="ignore")
+        except Exception:
+            return b"^XA" in text[:80] and b"^XZ" in text
+    else:
+        sample = str(text or "")
+    upper = sample.upper()
+    return "^XA" in upper and "^XZ" in upper
+
+
+def _decode_label_payload(encoded: str) -> bytes:
+    """Turn FedEx encodedLabel into raw ZPL bytes (handles raw or base64)."""
+    import base64
+    import re
+
+    raw = (encoded or "").strip()
+    if not raw:
+        return b""
+    if _looks_like_zpl(raw):
+        return raw.encode("utf-8")
+    try:
+        compact = re.sub(r"\s+", "", raw)
+        decoded = base64.b64decode(compact, validate=False)
+        if _looks_like_zpl(decoded):
+            return decoded
+        # Some sandboxes return base64 of already-base64, or latin-1 ZPL.
+        as_text = decoded.decode("utf-8", errors="replace").strip()
+        if _looks_like_zpl(as_text):
+            return as_text.encode("utf-8")
+        if decoded.startswith(b"^XA") or b"^XA" in decoded[:80]:
+            return decoded
+        # Not ZPL (often PNG/PDF) — keep bytes for diagnostics but caller may reject.
+        return decoded
+    except Exception as exc:
+        logger.warning("Could not decode FedEx label: %s", exc)
+        if _looks_like_zpl(raw):
+            return raw.encode("utf-8")
+        return b""
+
+
+def _fetch_label_url(url: str) -> bytes:
+    """Download label content from FedEx document URL (may be ZPL)."""
+    if not url:
+        return b""
+    try:
+        resp = requests.get(url, timeout=45)
+    except requests.RequestException as exc:
+        logger.warning("FedEx label URL fetch failed: %s", exc)
+        return b""
+    if not resp.ok:
+        logger.warning("FedEx label URL HTTP %s", resp.status_code)
+        return b""
+    content = resp.content or b""
+    if _looks_like_zpl(content):
+        return content
+    # Sometimes the URL body is base64 text.
+    try:
+        text = content.decode("utf-8", errors="replace").strip()
+        decoded = _decode_label_payload(text)
+        if _looks_like_zpl(decoded):
+            return decoded
+    except Exception:
+        pass
+    return content if _looks_like_zpl(content) else b""
+
+
 def _normalize_label(data: dict, *, service_type: str) -> dict:
     output = data.get("output") if isinstance(data.get("output"), dict) else data
     txns = output.get("transactionShipments") or []
@@ -696,6 +764,24 @@ def _normalize_label(data: dict, *, service_type: str) -> dict:
     label_b64 = ""
     label_url = ""
     master = ""
+    doc_types: list[str] = []
+
+    def _ingest_doc(doc: dict) -> None:
+        nonlocal label_b64, label_url
+        if not isinstance(doc, dict):
+            return
+        dtype = str(doc.get("contentType") or doc.get("docType") or doc.get("type") or "")
+        if dtype:
+            doc_types.append(dtype)
+        if doc.get("url") and not label_url:
+            label_url = str(doc["url"])
+        encoded = (
+            doc.get("encodedLabel")
+            or doc.get("encodedLabelPart")
+            or doc.get("label")
+        )
+        if encoded and not label_b64:
+            label_b64 = str(encoded)
 
     for txn in txns if isinstance(txns, list) else []:
         if not isinstance(txn, dict):
@@ -712,28 +798,25 @@ def _normalize_label(data: dict, *, service_type: str) -> dict:
                 continue
             tracking = str(piece.get("trackingNumber") or tracking)
             for doc in piece.get("packageDocuments") or []:
-                if not isinstance(doc, dict):
-                    continue
-                if doc.get("url"):
-                    label_url = str(doc["url"])
-                if doc.get("encodedLabel"):
-                    label_b64 = str(doc["encodedLabel"])
-                    break
+                _ingest_doc(doc)
         for doc in txn.get("shipmentDocuments") or []:
-            if not isinstance(doc, dict):
-                continue
-            if doc.get("url") and not label_url:
-                label_url = str(doc["url"])
-            if doc.get("encodedLabel") and not label_b64:
-                label_b64 = str(doc["encodedLabel"])
+            _ingest_doc(doc)
 
-    label_bytes = b""
-    if label_b64:
-        import base64
-        try:
-            label_bytes = base64.b64decode(label_b64)
-        except Exception as exc:
-            logger.warning("Could not decode FedEx label: %s", exc)
+    label_bytes = _decode_label_payload(label_b64) if label_b64 else b""
+    if not _looks_like_zpl(label_bytes) and label_url:
+        fetched = _fetch_label_url(label_url)
+        if _looks_like_zpl(fetched):
+            label_bytes = fetched
+
+    if label_bytes and not _looks_like_zpl(label_bytes):
+        logger.warning(
+            "FedEx label bytes are not ZPL (types=%s, size=%s, head=%r)",
+            doc_types or "?",
+            len(label_bytes),
+            label_bytes[:40],
+        )
+        # Don't pass PNG/PDF through as "ZPL" — clear so store fails loudly.
+        label_bytes = b""
 
     if not tracking and not label_bytes and not label_url:
         alerts = output.get("alerts") or data.get("alerts") or []

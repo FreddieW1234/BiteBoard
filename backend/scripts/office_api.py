@@ -360,15 +360,30 @@ def store_label(
     *,
     tracking: str | None = None,
     carrier: str | None = None,
+    item_label: str | None = None,
 ) -> dict:
     """``POST /orders/{order}/items/{item}/label`` — persist ZPL on office disk."""
     _require_config()
+    order = (order or "").strip()
+    item = (item or "").strip()
+    if not order or not item:
+        raise OfficeApiError("order and item are required to store a label")
+
     zpl_text = _as_zpl_text(zpl)
     if not zpl_text:
         raise OfficeApiError("No ZPL label data to store")
     upper = zpl_text.upper()
     if "^XA" not in upper or "^XZ" not in upper:
-        raise OfficeApiError("Label data is not valid ZPL (missing ^XA/^XZ)")
+        preview = zpl_text[:80].replace("\n", "\\n")
+        raise OfficeApiError(
+            f"Label data is not valid ZPL (missing ^XA/^XZ). Preview: {preview!r}"
+        )
+
+    # Ensure the order/item folder exists (same as artwork/proof uploads).
+    try:
+        ensure_item(order, item, item_label or item)
+    except OfficeApiError as exc:
+        logger.warning("Office ensure_item before label store: %s", exc)
 
     payload: dict = {"zpl": zpl_text}
     if tracking:
@@ -377,14 +392,29 @@ def store_label(
         payload["carrier"] = str(carrier).strip().lower()
 
     url = f"{_url(order, item)}/label"
+    logger.info("Office store_label POST %s (zpl_len=%s)", url, len(zpl_text))
     resp = _request("POST", url, json=payload, timeout=_TIMEOUT)
     if not resp.ok:
         msg = _print_error_message(resp)
-        logger.error("Office store_label failed HTTP %s: %s", resp.status_code, msg)
+        logger.error(
+            "Office store_label failed HTTP %s for %s / %s: %s | body=%s",
+            resp.status_code,
+            order,
+            item,
+            msg,
+            (resp.text or "")[:300],
+        )
         raise OfficeApiError(msg)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from label store")
+    logger.info(
+        "Office store_label ok for %s / %s → %s v%s",
+        order,
+        item,
+        result.get("filename"),
+        result.get("version"),
+    )
     return result
 
 
@@ -425,13 +455,20 @@ def has_label(order: str, item: str) -> bool:
     try:
         data = list_labels(order, item)
     except OfficeApiError:
-        return False
+        # Fall back to GET latest — some servers omit the list route.
+        try:
+            get_label(order, item)
+            return True
+        except OfficeApiError:
+            return False
+        except Exception:
+            return False
     except Exception as exc:
         logger.warning("Office has_label check failed for %s / %s: %s", order, item, exc)
         return False
-    if data.get("latest"):
+    if data.get("latest") or data.get("filename"):
         return True
-    labels = data.get("labels") or []
+    labels = data.get("labels") or data.get("files") or []
     return bool(labels)
 
 
