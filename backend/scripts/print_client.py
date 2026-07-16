@@ -21,6 +21,7 @@ _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() 
     "true",
     "yes",
 )
+_PREPARED_MARKER = "bite-label-adjusted"
 
 
 class PrintClientError(Exception):
@@ -65,7 +66,12 @@ def _mm_to_dots(mm: float, dpi: int) -> int:
     return max(1, int(round(mm * dpi / 25.4)))
 
 
-def adjust_fedex_zpl(
+def is_prepared_fedex_zpl(zpl: str) -> bool:
+    """True when ZPL was already adjusted before storing on the office server."""
+    return _PREPARED_MARKER in (zpl or "")
+
+
+def prepare_fedex_zpl(
     zpl: str,
     *,
     shift_mm: float = _FEDEX_SHIFT_MM,
@@ -74,14 +80,32 @@ def adjust_fedex_zpl(
     height_mm: float = _LABEL_HEIGHT_MM,
     rotate_180: bool = _FEDEX_ROTATE_180,
 ) -> str:
-    """Print-time FedEx tweaks for 9.7×14.8 cm portrait stock.
+    """Adjust FedEx ZPL once before saving on the office server."""
+    return adjust_fedex_zpl(
+        zpl,
+        shift_mm=shift_mm,
+        dpi=dpi,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        rotate_180=rotate_180,
+        mark_prepared=True,
+    )
 
-    - Force ``^PW`` / ``^LL`` to physical label size (FedEx ships ~4×6 / 812×1218).
-    - Optional 180° (``^POI``) and left shift (``^LS``).
-    Does not alter stored ZPL.
 
-    FedEx ZPL usually contains its own ``^LS0`` / ``^PON`` / ``^PW`` later.
-    Those override inject-after-``^XA``, so we strip them and inject before ``^XZ``.
+def adjust_fedex_zpl(
+    zpl: str,
+    *,
+    shift_mm: float = _FEDEX_SHIFT_MM,
+    dpi: int = _FEDEX_DPI,
+    width_mm: float = _LABEL_WIDTH_MM,
+    height_mm: float = _LABEL_HEIGHT_MM,
+    rotate_180: bool = _FEDEX_ROTATE_180,
+    mark_prepared: bool = False,
+) -> str:
+    """FedEx ZPL tweaks for 9.7×14.8 cm portrait stock.
+
+    Strips FedEx ``^PO``/``^LS``/``^PW``/``^LL`` then injects our values
+    immediately after ``^XA`` so nothing later in the file overrides them.
     """
     text = first_zpl_label(zpl)
     if not text:
@@ -95,30 +119,29 @@ def adjust_fedex_zpl(
     text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^PW\d+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LL\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\^FX[^\r\n]*" + re.escape(_PREPARED_MARKER),
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
 
     injection = f"^PW{pw}^LL{ll}"
     if rotate_180:
         injection += "^POI"
     if dots > 0:
         injection += f"^LS{dots}"
+    if mark_prepared:
+        injection += f"^FX {_PREPARED_MARKER}"
 
-    if re.search(r"\^XZ", text, flags=re.IGNORECASE):
-        text = re.sub(
-            r"\^XZ",
-            injection + "^XZ",
-            text,
-            count=1,
-            flags=re.IGNORECASE,
-        )
+    match = re.search(r"\^XA", text, flags=re.IGNORECASE)
+    if match:
+        text = text[: match.end()] + injection + text[match.end() :]
     else:
-        match = re.search(r"\^XA", text, flags=re.IGNORECASE)
-        if match:
-            text = text[: match.end()] + injection + text[match.end() :]
-        else:
-            text = injection + text
+        text = "^XA" + injection + text
 
-    logger.warning(
-        "FedEx ZPL adjust: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift_left=%smm tail=%r",
+    logger.info(
+        "FedEx ZPL prepared: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift_left=%smm stored=%s",
         width_mm,
         height_mm,
         pw,
@@ -126,7 +149,7 @@ def adjust_fedex_zpl(
         dpi,
         rotate_180,
         shift_mm,
-        text[-100:],
+        mark_prepared,
     )
     return text
 
@@ -148,8 +171,14 @@ def send_print_job(
     order_name: str = "",
     tracking_number: str = "",
     carrier: str = "",
+    adjust: bool | None = None,
 ) -> dict:
-    """POST raw ZPL to ``{OFFICE_API_URL}/print``."""
+    """POST raw ZPL to ``{OFFICE_API_URL}/print``.
+
+    By default prints the ZPL as stored on the office server (no extra tweaks).
+    Legacy labels saved before store-time adjustment are auto-adjusted once unless
+    ``adjust=False``.
+    """
     del profile  # unused — office API only accepts raw ZPL
     if not configured():
         logger.info(
@@ -179,8 +208,11 @@ def send_print_job(
     else:
         zpl_text = str(data)
 
-    if _should_adjust_fedex(carrier, zpl_text):
-        zpl_text = adjust_fedex_zpl(zpl_text)
+    if is_prepared_fedex_zpl(zpl_text):
+        zpl_text = first_zpl_label(zpl_text)
+    elif adjust is not False and _should_adjust_fedex(carrier, zpl_text):
+        # Old labels stored before we adjusted at save time.
+        zpl_text = adjust_fedex_zpl(zpl_text, mark_prepared=False)
     else:
         zpl_text = first_zpl_label(zpl_text)
 

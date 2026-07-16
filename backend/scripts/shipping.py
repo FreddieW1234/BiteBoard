@@ -443,6 +443,14 @@ def ship_order(payload: dict) -> dict:
         label_bytes = label.get("label_bytes") or b""
         label_url = str(label.get("label_url") or "")
 
+        if label_bytes:
+            try:
+                raw_zpl = label_bytes.decode("utf-8", errors="replace")
+                prepared_zpl = print_client.prepare_fedex_zpl(raw_zpl)
+                label_bytes = prepared_zpl.encode("utf-8")
+            except Exception as prep_exc:
+                logger.warning("FedEx ZPL prepare failed (using raw ZPL): %s", prep_exc)
+
         order_name = prep.get("order_name") or ""
         # Prefer the Diary row's item_id so the Ship column updates the same key.
         diary_item_id = (payload.get("item_id") or prep.get("item_id") or "").strip()
@@ -568,6 +576,7 @@ def ship_order(payload: dict) -> dict:
                     order_name=order_name,
                     tracking_number=tracking,
                     carrier="fedex",
+                    adjust=False,
                 )
             except Exception as print_exc:
                 logger.warning("Label print failed (label still stored): %s", print_exc)
@@ -726,6 +735,8 @@ def reprint_label(payload: dict) -> dict:
             order_name=order_name,
             tracking_number=label_ref,
             carrier=carrier,
+            # Stored labels are print-ready; legacy unmarked copies still get one adjust.
+            adjust=False if print_client.is_prepared_fedex_zpl(zpl) else None,
         )
     except PrintClientError as print_exc:
         logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
