@@ -240,9 +240,27 @@ def _select_carriers_for_quote(shipment: dict) -> list[dict]:
     return carriers
 
 
+def carrier_label(carrier: dict) -> str:
+    return (
+        str(
+            carrier.get("friendly_name")
+            or carrier.get("carrier_friendly_name")
+            or carrier.get("nickname")
+            or carrier.get("carrier_code")
+            or carrier.get("carrier_id")
+            or ""
+        ).strip()
+    )
+
+
+def list_quote_carriers(shipment: dict | None = None) -> list[dict]:
+    """Connected carriers that will be quoted (honours SHIPSTATION_CARRIER_CODES)."""
+    return _select_carriers_for_quote(shipment or {})
+
+
 def resolve_rate_options(shipment: dict) -> dict[str, Any]:
     """Build rate_options for POST /v2/rates."""
-    selected = _select_carriers_for_quote(shipment)
+    selected = list_quote_carriers(shipment)
     carrier_ids = [
         str(c.get("carrier_id") or "")
         for c in selected
@@ -255,7 +273,12 @@ def resolve_rate_options(shipment: dict) -> dict[str, Any]:
     if _country_code(shipment.get("ship_to")) == "GB":
         options["preferred_currency"] = "gbp"
 
-    logger.info("ShipStation rate options: %s carrier(s)", len(carrier_ids))
+    labels = [carrier_label(c) for c in selected if carrier_label(c)]
+    logger.info(
+        "ShipStation rate options: %s carrier(s) %s",
+        len(carrier_ids),
+        labels,
+    )
     return options
 
 
@@ -284,7 +307,9 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
         raise ShipStationError("Package weight is required")
 
     if carrier_ids:
-        rate_options: dict[str, Any] = {"carrier_ids": carrier_ids}
+        rate_options: dict[str, Any] = {"carrier_ids": [str(c) for c in carrier_ids if c]}
+        if _country_code(cleaned.get("ship_to")) == "GB":
+            rate_options["preferred_currency"] = "gbp"
     else:
         rate_options = resolve_rate_options(cleaned)
 

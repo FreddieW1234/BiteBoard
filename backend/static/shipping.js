@@ -1,7 +1,12 @@
 (function () {
     'use strict';
 
+    const RATE_DEBOUNCE_MS = 450;
+    const DENSITY_WARN_KG_M3 = 500;
+
     let overlay = null;
+    let rateTimer = null;
+    let rateRequestId = 0;
     let state = {
         orderId: '',
         orderName: '',
@@ -11,6 +16,7 @@
         rates: [],
         selectedRateId: '',
         providers: {},
+        ratesLoading: false,
     };
 
     function escapeHtml(s) {
@@ -49,7 +55,6 @@
                 <div class="ship-modal-body" id="ship-modal-body"></div>
                 <div class="ship-modal-footer">
                     <button type="button" class="ship-btn-secondary" data-ship-action="cancel">Cancel</button>
-                    <button type="button" class="ship-btn-secondary" data-ship-action="quote">Get rates</button>
                     <button type="button" class="ship-btn-primary" data-ship-action="confirm" disabled>
                         Confirm &amp; print label
                     </button>
@@ -62,7 +67,6 @@
         });
         overlay.querySelector('.ship-modal-close')?.addEventListener('click', closeModal);
         overlay.querySelector('[data-ship-action="cancel"]')?.addEventListener('click', closeModal);
-        overlay.querySelector('[data-ship-action="quote"]')?.addEventListener('click', fetchRates);
         overlay.querySelector('[data-ship-action="confirm"]')?.addEventListener('click', confirmShip);
         overlay.querySelector('.ship-modal')?.addEventListener('click', e => e.stopPropagation());
 
@@ -108,6 +112,22 @@
         };
     }
 
+    function packageDensityHint(form) {
+        const weight = Number(form.weight_kg) || 0;
+        const length = form.length_cm;
+        const width = form.width_cm;
+        const height = form.height_cm;
+        if (!(weight > 0 && length && width && height)) return '';
+        const volumeM3 = (length * width * height) / 1_000_000;
+        if (volumeM3 <= 0) return '';
+        const density = weight / volumeM3;
+        if (density <= DENSITY_WARN_KG_M3) return '';
+        return (
+            `These package details look unrealistic (${weight} kg in ${length}×${width}×${height} cm). ` +
+            'Double-check weight and dimensions are sensible for this line.'
+        );
+    }
+
     function renderBody() {
         const prep = state.prep;
         const body = overlay.querySelector('#ship-modal-body');
@@ -115,10 +135,6 @@
 
         const shipTo = prep.ship_to || {};
         const addressText = shipTo.text || (shipTo.lines || []).join('\n') || '—';
-        const itemsHtml = (prep.items || []).map(it =>
-            `<li>${escapeHtml(it.title)}${it.quantity > 1 ? ` × ${it.quantity}` : ''}</li>`
-        ).join('') || '<li>—</li>';
-
         const defs = prep.defaults || {};
         const palletDisabled = !state.providers.palletways;
         const palletHint = palletDisabled
@@ -135,12 +151,6 @@
                         <div class="ship-address">${escapeHtml(addressText)}</div>
                     </div>
                     <div class="ship-section">
-                        <div class="ship-section-title">${state.itemId ? 'Shipping this line' : 'Order lines'}</div>
-                        <ul class="ship-items">${itemsHtml}</ul>
-                    </div>
-                </div>
-                <div>
-                    <div class="ship-section">
                         <div class="ship-section-title">Shipment type</div>
                         <div class="ship-type-toggle">
                             <label class="ship-type-btn active">
@@ -152,6 +162,8 @@
                         </div>
                         ${palletHint}
                     </div>
+                </div>
+                <div>
                     <div class="ship-section ship-package-section">
                         <div class="ship-section-title">Package</div>
                         <div class="ship-fields">
@@ -172,12 +184,18 @@
                                 <input type="number" id="ship-height" min="1" step="1" placeholder="—">
                             </div>
                         </div>
+                        <p id="ship-package-hint" class="ship-package-hint" hidden></p>
                     </div>
                 </div>
             </div>
             <div class="ship-section ship-rates">
                 <div class="ship-section-title">Rates</div>
-                <div id="ship-rates-area"><p class="ship-msg info">Click “Get rates” to load carrier options.</p></div>
+                <div id="ship-rates-area">
+                    <div class="ship-rates-loading">
+                        <span class="ship-spinner" aria-hidden="true"></span>
+                        <span>Loading rates…</span>
+                    </div>
+                </div>
             </div>`;
 
         body.querySelectorAll('.ship-type-btn').forEach(label => {
@@ -187,17 +205,52 @@
                 body.querySelectorAll('.ship-type-btn').forEach(l => l.classList.remove('active'));
                 label.classList.add('active');
                 input.checked = true;
+                scheduleRates();
             });
         });
+
+        ['#ship-weight', '#ship-length', '#ship-width', '#ship-height'].forEach(sel => {
+            const input = body.querySelector(sel);
+            if (!input) return;
+            input.addEventListener('input', scheduleRates);
+            input.addEventListener('change', scheduleRates);
+        });
+
+        updatePackageHint();
+    }
+
+    function updatePackageHint() {
+        const el = overlay?.querySelector('#ship-package-hint');
+        if (!el) return;
+        const hint = packageDensityHint(readForm());
+        if (!hint) {
+            el.hidden = true;
+            el.textContent = '';
+            return;
+        }
+        el.hidden = false;
+        el.textContent = hint;
+    }
+
+    function showRatesLoading() {
+        const area = overlay?.querySelector('#ship-rates-area');
+        if (!area) return;
+        area.innerHTML = `
+            <div class="ship-rates-loading">
+                <span class="ship-spinner" aria-hidden="true"></span>
+                <span>Loading rates…</span>
+            </div>`;
     }
 
     function renderRates(rates, hint) {
         const area = overlay?.querySelector('#ship-rates-area');
         if (!area) return;
         if (!rates.length) {
-            const detail = hint
-                ? `<p class="ship-msg err">${escapeHtml(hint)}</p>`
-                : '<p class="ship-msg err">No rates returned for this package.</p>';
+            const density = packageDensityHint(readForm());
+            const parts = [hint, density].filter(Boolean);
+            const detail = parts.length
+                ? `<p class="ship-msg err">${escapeHtml(parts.join(' '))}</p>`
+                : '<p class="ship-msg err">No rates returned for this package. Double-check weight and dimensions look sensible.</p>';
             area.innerHTML = detail;
             return;
         }
@@ -222,15 +275,50 @@
         });
     }
 
-    async function fetchRates() {
-        setMsg('Loading rates…', 'info');
+    function cancelPendingRates() {
+        if (rateTimer) {
+            clearTimeout(rateTimer);
+            rateTimer = null;
+        }
+        rateRequestId += 1;
+        state.ratesLoading = false;
+    }
+
+    function scheduleRates() {
+        if (!state.prep || !overlay || overlay.hidden) return;
+        updatePackageHint();
         setConfirmEnabled(false);
         state.selectedRateId = '';
+        state.rates = [];
+        state.ratesLoading = true;
+        showRatesLoading();
+        setMsg('', 'info');
+
+        if (rateTimer) clearTimeout(rateTimer);
+        rateTimer = setTimeout(() => {
+            rateTimer = null;
+            fetchRates();
+        }, RATE_DEBOUNCE_MS);
+    }
+
+    async function fetchRates() {
+        if (!state.orderId || !state.prep) return;
+        const requestId = ++rateRequestId;
+        state.ratesLoading = true;
+        setConfirmEnabled(false);
+        state.selectedRateId = '';
+        showRatesLoading();
+
         const form = readForm();
         if (form.shipment_type === 'pallet') {
-            setMsg('Palletways is not configured yet. Use parcel or wait for your API key.', 'err');
+            if (requestId !== rateRequestId) return;
+            state.ratesLoading = false;
+            state.rates = [];
+            renderRates([], 'Palletways is not configured yet. Use parcel or wait for your API key.');
+            setMsg('Palletways is not configured yet.', 'err');
             return;
         }
+
         try {
             const res = await fetch('/api/shipping/quote', {
                 method: 'POST',
@@ -243,24 +331,54 @@
                 }),
             });
             const data = await res.json();
+            if (requestId !== rateRequestId) return;
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not get rates');
+
+            state.ratesLoading = false;
             state.rates = data.rates || [];
             if (state.rates.length) {
                 state.selectedRateId = state.rates[0].rate_id;
                 setConfirmEnabled(true);
             }
-            renderRates(state.rates, data.error_hint || '');
-            setMsg(
-                state.rates.length
-                    ? `${state.rates.length} rate(s) loaded.`
-                    : (data.error_hint || 'No rates returned for this package.'),
-                state.rates.length ? 'ok' : 'err'
-            );
+            const hint = data.error_hint || '';
+            const carrierNote = missingCarrierNote(data);
+            renderRates(state.rates, [hint, carrierNote].filter(Boolean).join(' '));
+            if (state.rates.length) {
+                setMsg(
+                    `${state.rates.length} rate(s) loaded.` + (carrierNote ? ` ${carrierNote}` : ''),
+                    carrierNote ? 'info' : 'ok'
+                );
+            } else {
+                setMsg(hint || 'No rates returned for this package.', 'err');
+            }
         } catch (err) {
+            if (requestId !== rateRequestId) return;
+            state.ratesLoading = false;
             state.rates = [];
-            renderRates([]);
+            renderRates([], err.message || 'Rate lookup failed');
             setMsg(err.message || 'Rate lookup failed', 'err');
         }
+    }
+
+    function missingCarrierNote(data) {
+        const queried = data.carriers_queried || [];
+        if (!queried.length || !(data.rates || []).length) return '';
+        const keptText = (data.rates || [])
+            .map(r => `${r.carrier_friendly_name || ''} ${r.carrier_code || ''}`.toLowerCase())
+            .join(' ');
+        const expected = [
+            { label: 'FedEx', needles: ['fedex'] },
+            { label: 'Royal Mail', needles: ['royal_mail', 'royal mail', 'stamps_com'] },
+        ];
+        const missing = expected.filter(c =>
+            queried.some(q => c.needles.some(n => String(q).toLowerCase().includes(n))) &&
+            !c.needles.some(n => keptText.includes(n))
+        );
+        if (!missing.length) return '';
+        return (
+            `${missing.map(m => m.label).join(' and ')} connected in ShipStation but returned no usable rates for this package — ` +
+            'try different weight/dims, or check those carrier services in ShipStation.'
+        );
     }
 
     async function confirmShip() {
@@ -313,16 +431,19 @@
     }
 
     function closeModal() {
+        cancelPendingRates();
         if (overlay) overlay.hidden = true;
         state = {
             orderId: '', orderName: '', itemId: '', productLabel: '',
             prep: null, rates: [], selectedRateId: '', providers: {},
+            ratesLoading: false,
         };
         document.body.style.overflow = '';
     }
 
     async function openShippingModal(orderId, orderName, itemId, productLabel) {
         ensureOverlay();
+        cancelPendingRates();
         state.orderId = String(orderId);
         state.orderName = orderName || '';
         state.itemId = (itemId || '').trim();
@@ -353,7 +474,6 @@
             const prep = await prepRes.json();
             const status = await statusRes.json();
             if (!prepRes.ok || !prep.success) throw new Error(prep.error || 'Could not load order');
-            // Guard: diary Ship always scopes to one line. If the server ignored item_id, refuse.
             if (state.itemId && (prep.items || []).length !== 1) {
                 throw new Error(
                     'This Ship action must cover one order line only, but the server returned ' +
@@ -372,6 +492,9 @@
                 );
             }
             renderBody();
+            if (state.providers.shipstation && state.providers.ship_from_ready !== false) {
+                scheduleRates();
+            }
         } catch (err) {
             overlay.querySelector('#ship-modal-body').innerHTML = '';
             setMsg(err.message || 'Could not open shipping', 'err');

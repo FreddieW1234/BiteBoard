@@ -129,6 +129,8 @@
 
     function filterRows(rows) {
         const range = getViewRange();
+        // Once any line for an order falls in the current view, show every line
+        // for that order (separate shipments for the same Shopify order).
         const ordersInRange = new Set();
         rows.forEach(row => {
             const iso = rowFilterDateIso(row);
@@ -136,13 +138,7 @@
                 ordersInRange.add(row.order_name);
             }
         });
-        return rows.filter(row => {
-            const iso = rowFilterDateIso(row);
-            if (!iso) {
-                return ordersInRange.has(row.order_name);
-            }
-            return iso >= range.start && iso <= range.end;
-        });
+        return rows.filter(row => ordersInRange.has(row.order_name));
     }
 
     function sortRows(rows) {

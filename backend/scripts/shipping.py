@@ -52,6 +52,12 @@ def shipping_status() -> dict:
             out["ship_from_ready"] = bool(ship_from.get("address_line1"))
             if warehouse:
                 out["warehouse_name"] = (warehouse.get("name") or "").strip() or None
+            carriers = shipstation_api.list_quote_carriers()
+            out["carriers"] = [
+                shipstation_api.carrier_label(c)
+                for c in carriers
+                if shipstation_api.carrier_label(c)
+            ]
         except Exception as exc:
             logger.debug("Ship-from status check failed: %s", exc)
             out["ship_from_ready"] = False
@@ -190,9 +196,21 @@ def quote_shipment(payload: dict) -> dict:
         from scripts.shipstation_api import ShipStationError  # type: ignore
 
         shipment = _build_shipstation_shipment(prep, payload)
-        rate_resp = shipstation_api.get_rates(shipment)
+        quoted_carriers = shipstation_api.list_quote_carriers(shipment)
+        carrier_ids = [
+            str(c.get("carrier_id") or "")
+            for c in quoted_carriers
+            if c.get("carrier_id")
+        ]
+        carriers_queried = [
+            shipstation_api.carrier_label(c)
+            for c in quoted_carriers
+            if shipstation_api.carrier_label(c)
+        ]
+        rate_resp = shipstation_api.get_rates(shipment, carrier_ids=carrier_ids or None)
         dest_country = (prep.get("ship_to") or {}).get("country_code") or "GB"
         rates, rate_meta = _normalize_rates(rate_resp, dest_country=dest_country)
+        rate_meta["carriers_queried"] = carriers_queried
         result = {
             "success": True,
             "shipment_type": "parcel",
@@ -200,10 +218,14 @@ def quote_shipment(payload: dict) -> dict:
             "item_id": prep.get("item_id"),
             "items": prep.get("items") or [],
             "rates": rates,
+            "carriers_queried": carriers_queried,
         }
         if not rates:
             result["rate_meta"] = rate_meta
             result["error_hint"] = _empty_rates_hint(rate_meta, payload)
+        elif _missing_expected_carriers(rates, carriers_queried):
+            # Still return rates; UI can surface a soft note.
+            result["rate_meta"] = rate_meta
         return result
     except ShipStationError as exc:
         logger.warning("Shipping quote failed: %s", exc)
@@ -525,12 +547,38 @@ def _rate_total(r: dict) -> tuple[float | None, str | None]:
 
 
 def _looks_international(service_text: str) -> bool:
-    text = (service_text or "").lower()
+    """True for clearly international services (UK domestic quotes should drop these)."""
+    text = f" {(service_text or '').lower()} "
     return any(hint in text for hint in (
-        "international", "global", "worldwide", "export", "import",
-        "overseas", "cross border", "cross-border", "ddp", "ddu",
-        "eu ", " europe", "usa ", " united states",
+        " international", "international ",
+        " worldwide", "worldwide ",
+        " overseas", "overseas ",
+        " cross border", " cross-border",
+        " export ", " import ",
+        " ddp ", " ddu ",
+        " global express", "globalexpress",
+        " united states", " usa ",
     ))
+
+
+def _missing_expected_carriers(rates: list[dict], carriers_queried: list[str]) -> list[str]:
+    """Return expected UK carriers that were queried but produced no kept rates."""
+    kept = " ".join(
+        f"{r.get('carrier_friendly_name') or ''} {r.get('carrier_code') or ''}".lower()
+        for r in rates
+    )
+    queried = " ".join(carriers_queried).lower()
+    expected = [
+        ("FedEx", ("fedex",)),
+        ("Royal Mail", ("royal_mail", "royal mail", "stamps_com")),
+    ]
+    missing: list[str] = []
+    for label, needles in expected:
+        was_queried = any(n in queried for n in needles)
+        kept_any = any(n in kept for n in needles)
+        if was_queried and not kept_any:
+            missing.append(label)
+    return missing
 
 
 def _rate_error_messages(rate: dict) -> list[str]:
@@ -554,6 +602,9 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> tuple[list
     rates = rate_block.get("rates") if rate_block else None
     if rates is None:
         rates = rate_resp.get("rates") or []
+    invalid_rates = rate_block.get("invalid_rates") if rate_block else None
+    if invalid_rates is None:
+        invalid_rates = rate_resp.get("invalid_rates") or []
     domestic_uk = (dest_country or "GB").upper() == "GB"
 
     meta = {
@@ -563,6 +614,7 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> tuple[list
         "international_filtered": 0,
         "invalid_messages": [],
         "api_errors": [],
+        "carriers_in_response": [],
     }
     for key in ("errors", "messages"):
         for src in (rate_block, rate_resp):
@@ -577,14 +629,40 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> tuple[list
                 if text and text not in meta["api_errors"]:
                     meta["api_errors"].append(text)
 
+    for r in invalid_rates or []:
+        if not isinstance(r, dict):
+            continue
+        meta["invalid"] += 1
+        label = (
+            r.get("carrier_friendly_name")
+            or r.get("carrier_nickname")
+            or r.get("carrier_code")
+            or "carrier"
+        )
+        for msg in _rate_error_messages(r):
+            line = f"{label}: {msg}"
+            if line not in meta["invalid_messages"]:
+                meta["invalid_messages"].append(line)
+
     out: list[dict] = []
+    seen_carriers: list[str] = []
     for r in rates or []:
+        carrier_name = (
+            r.get("carrier_friendly_name")
+            or r.get("carrier_nickname")
+            or r.get("carrier_code")
+            or ""
+        )
+        if carrier_name and carrier_name not in seen_carriers:
+            seen_carriers.append(str(carrier_name))
+
         status = str(r.get("validation_status") or "valid").lower()
         if status == "invalid":
             meta["invalid"] += 1
             for msg in _rate_error_messages(r):
-                if msg not in meta["invalid_messages"]:
-                    meta["invalid_messages"].append(msg)
+                line = f"{carrier_name or 'carrier'}: {msg}" if msg else ""
+                if line and line not in meta["invalid_messages"]:
+                    meta["invalid_messages"].append(line)
             continue
 
         price, currency = _rate_total(r)
@@ -611,6 +689,7 @@ def _normalize_rates(rate_resp: dict, *, dest_country: str = "GB") -> tuple[list
         })
     out.sort(key=lambda x: (x.get("price") is None, x.get("price") or 999999))
     meta["kept"] = len(out)
+    meta["carriers_in_response"] = seen_carriers
     return out, meta
 
 
@@ -659,6 +738,12 @@ def _empty_rates_hint(meta: dict, payload: dict) -> str:
                 )
     if weight >= PALLET_WEIGHT_KG:
         parts.append(f"Weight ≥ {PALLET_WEIGHT_KG:g} kg usually needs pallet, not parcel.")
+    missing = _missing_expected_carriers([], meta.get("carriers_queried") or [])
+    if missing and int(meta.get("raw_count") or 0) == 0:
+        parts.append(
+            f"{' and '.join(missing)} may be connected but returned no rates — "
+            "check those carriers in ShipStation."
+        )
     return " ".join(parts)
 
 
