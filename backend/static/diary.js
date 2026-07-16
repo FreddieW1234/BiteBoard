@@ -534,7 +534,18 @@
                 seen.add(`${row.order_name}::${row.item_id}`);
                 row.can_print_label = !!result.has_label;
                 row.can_reprint = !!result.has_label;
+                row.label_filename = result.filename || '';
                 row.label_status_pending = false;
+                if (result.has_label) {
+                    console.info(
+                        'Office label found',
+                        result.order_name,
+                        result.item_id,
+                        result.filename || result.source || ''
+                    );
+                } else {
+                    console.warn('No office label for', result.order_name, result.item_id);
+                }
             }
             shipped.forEach(r => {
                 if (!seen.has(`${r.order_name}::${r.item_id}`)) {

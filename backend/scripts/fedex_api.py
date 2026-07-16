@@ -19,6 +19,9 @@ from config import (  # type: ignore
     FEDEX_API_URL,
     FEDEX_CLIENT_ID,
     FEDEX_CLIENT_SECRET,
+    FEDEX_LABEL_PRINTING_ORIENTATION,
+    FEDEX_LABEL_ROTATION,
+    FEDEX_LABEL_STOCK_TYPE,
 )
 
 logger = logging.getLogger(__name__)
@@ -623,6 +626,35 @@ def describe_empty_rates(data: dict) -> str:
     return "FedEx returned no rates for this package/route."
 
 
+def _label_specification(image_type: str) -> dict[str, Any]:
+    """Build FedEx LabelSpecification for thermal/laser labels.
+
+    Physical office stock is 9.7 cm wide × 14.8 cm tall (portrait). That is
+    FedEx's standard 4×6 thermal size (STOCK_4X6 / PAPER_4X6) — FedEx does not
+    accept custom millimetre dimensions.
+    """
+    is_zpl = image_type.upper().startswith("ZPL")
+    stock = (FEDEX_LABEL_STOCK_TYPE or "").strip()
+    if not stock:
+        stock = "STOCK_4X6" if is_zpl else "PAPER_4X6"
+    elif not is_zpl and stock.startswith("STOCK_"):
+        # Laser/PDF needs PAPER_* enums
+        stock = "PAPER_4X6"
+
+    spec: dict[str, Any] = {
+        "labelFormatType": "COMMON2D",
+        "imageType": image_type,
+        "labelStockType": stock,
+    }
+    orientation = (FEDEX_LABEL_PRINTING_ORIENTATION or "").strip()
+    if orientation:
+        spec["labelPrintingOrientation"] = orientation
+    rotation = (FEDEX_LABEL_ROTATION or "").strip()
+    if rotation:
+        spec["labelRotation"] = rotation
+    return spec
+
+
 def create_label(
     *,
     ship_from: dict,
@@ -644,6 +676,7 @@ def create_label(
     shipper = _addr_party(ship_from)
     recipient = _addr_party(ship_to)
     label_resp_format = "ZPLII" if label_format.upper().startswith("ZPL") else "PDF"
+    label_spec = _label_specification(label_resp_format)
 
     payload = {
         "labelResponseOptions": "LABEL",
@@ -662,10 +695,7 @@ def create_label(
                     }
                 },
             },
-            "labelSpecification": {
-                "imageType": label_resp_format,
-                "labelStockType": "STOCK_4X6" if label_resp_format == "ZPLII" else "PAPER_4X6",
-            },
+            "labelSpecification": label_spec,
             "requestedPackageLineItems": [
                 _package_line(
                     weight_kg=weight_kg,

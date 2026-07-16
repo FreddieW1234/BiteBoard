@@ -662,10 +662,16 @@ def labels_status(payload: dict) -> dict:
     results = []
     for order, item in pairs:
         key = f"{order}\t{item}"
+        info = status.get(key) or {}
+        if isinstance(info, bool):
+            info = {"has_label": info}
         results.append({
             "order_name": order,
             "item_id": item,
-            "has_label": bool(status.get(key)),
+            "has_label": bool(info.get("has_label")),
+            "filename": info.get("filename"),
+            "source": info.get("source"),
+            "version": info.get("version"),
         })
     return {"success": True, "results": results}
 

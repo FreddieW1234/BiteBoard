@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 
 from config import OFFICE_API_KEY, OFFICE_API_URL  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-# FedEx 4x6 ZPL is typically 203 dpi; 2mm ≈ 16 dots.
-_FEDEX_SHIFT_MM = 2.0
-_FEDEX_DPI = 203
+# Office thermal stock: 9.7 cm wide × 14.8 cm tall, portrait (≈ 4×6 in).
+_LABEL_WIDTH_MM = float(os.environ.get("LABEL_WIDTH_MM") or "97")
+_LABEL_HEIGHT_MM = float(os.environ.get("LABEL_HEIGHT_MM") or "148")
+_FEDEX_DPI = int(os.environ.get("LABEL_DPI") or "203")
+_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "2")
+# Print-time 180° — set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
+_FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 
 class PrintClientError(Exception):
@@ -52,28 +61,44 @@ def first_zpl_label(zpl: str) -> str:
     return matches[0].group(0)
 
 
+def _mm_to_dots(mm: float, dpi: int) -> int:
+    return max(1, int(round(mm * dpi / 25.4)))
+
+
 def adjust_fedex_zpl(
     zpl: str,
     *,
     shift_mm: float = _FEDEX_SHIFT_MM,
     dpi: int = _FEDEX_DPI,
+    width_mm: float = _LABEL_WIDTH_MM,
+    height_mm: float = _LABEL_HEIGHT_MM,
+    rotate_180: bool = _FEDEX_ROTATE_180,
 ) -> str:
-    """Print-time FedEx tweaks: rotate 180° and shift left. Does not alter stored ZPL.
+    """Print-time FedEx tweaks for 9.7×14.8 cm portrait stock.
 
-    FedEx ZPL usually contains its own ``^LS0`` / ``^PON`` later in the format.
-    Those override an inject-after-``^XA``, so we strip every ``^PO``/``^LS`` and
-    place ours immediately before ``^XZ`` so they win.
+    - Force ``^PW`` / ``^LL`` to physical label size (FedEx ships ~4×6 / 812×1218).
+    - Optional 180° (``^POI``) and left shift (``^LS``).
+    Does not alter stored ZPL.
+
+    FedEx ZPL usually contains its own ``^LS0`` / ``^PON`` / ``^PW`` later.
+    Those override inject-after-``^XA``, so we strip them and inject before ``^XZ``.
     """
     text = first_zpl_label(zpl)
     if not text:
         return text
 
+    pw = _mm_to_dots(width_mm, dpi)
+    ll = _mm_to_dots(height_mm, dpi)
     dots = max(0, int(round(shift_mm * dpi / 25.4)))
-    # Remove ALL orientation/shift commands FedEx (or we) embedded.
+
     text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^PW\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LL\d+", "", text, flags=re.IGNORECASE)
 
-    injection = "^POI"
+    injection = f"^PW{pw}^LL{ll}"
+    if rotate_180:
+        injection += "^POI"
     if dots > 0:
         injection += f"^LS{dots}"
 
@@ -93,10 +118,15 @@ def adjust_fedex_zpl(
             text = injection + text
 
     logger.warning(
-        "FedEx ZPL adjust applied: rotate=180 shift_left=%smm (%s dots) tail=%r",
+        "FedEx ZPL adjust: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift_left=%smm tail=%r",
+        width_mm,
+        height_mm,
+        pw,
+        ll,
+        dpi,
+        rotate_180,
         shift_mm,
-        dots,
-        text[-80:],
+        text[-100:],
     )
     return text
 

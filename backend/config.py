@@ -90,6 +90,15 @@ FEDEX_METER_NUMBER = os.environ.get("FEDEX_METER_NUMBER") or ""
 # OAuth: Client ID = FedEx "API Key"; Client Secret = FedEx "Secret Key"
 FEDEX_CLIENT_ID = os.environ.get("FEDEX_CLIENT_ID") or FEDEX_API_KEY or ""
 FEDEX_CLIENT_SECRET = os.environ.get("FEDEX_CLIENT_SECRET") or ""
+# Label generation (thermal ZPL). Stock 9.7×14.8 cm portrait ≈ STOCK_4X6 —
+# FedEx has no custom-mm enum; closest thermal stock is 4×6.
+FEDEX_LABEL_STOCK_TYPE = (os.environ.get("FEDEX_LABEL_STOCK_TYPE") or "STOCK_4X6").strip()
+# TOP_EDGE_OF_TEXT_FIRST | BOTTOM_EDGE_OF_TEXT_FIRST
+FEDEX_LABEL_PRINTING_ORIENTATION = (
+    os.environ.get("FEDEX_LABEL_PRINTING_ORIENTATION") or "TOP_EDGE_OF_TEXT_FIRST"
+).strip()
+# NONE | LEFT | RIGHT | UPSIDE_DOWN (empty = omit from request)
+FEDEX_LABEL_ROTATION = (os.environ.get("FEDEX_LABEL_ROTATION") or "").strip()
 
 # Palletways — pallet consignments
 PALLETWAYS_API_KEY = os.environ.get("PALLETWAYS_API_KEY") or ""

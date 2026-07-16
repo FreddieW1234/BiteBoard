@@ -46,6 +46,13 @@ services:
         sync: false
       - key: FEDEX_CLIENT_SECRET
         sync: false
+      # Optional FedEx label tuning (defaults: STOCK_4X6, TOP_EDGE_OF_TEXT_FIRST)
+      - key: FEDEX_LABEL_STOCK_TYPE
+        sync: false
+      - key: FEDEX_LABEL_PRINTING_ORIENTATION
+        sync: false
+      - key: FEDEX_LABEL_ROTATION
+        sync: false
       - key: PALLETWAYS_API_KEY
         sync: false
       - key: SHIP_FROM_NAME

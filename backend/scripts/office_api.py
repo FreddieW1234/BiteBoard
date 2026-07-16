@@ -434,83 +434,8 @@ def list_labels(order: str, item: str) -> dict:
     return result
 
 
-def get_label(order: str, item: str, version: int | None = None) -> dict:
-    """``GET /orders/{order}/items/{item}/label`` — latest ZPL, or ``?version=N``."""
-    _require_config()
-    url = f"{_url(order, item)}/label"
-    params = {}
-    if version is not None:
-        params["version"] = int(version)
-    resp = _request("GET", url, params=params or None, timeout=_TIMEOUT)
-    result = _handle_response(resp, allow_404=True)
-    if result is None:
-        raise OfficeApiError("No stored label for this order line")
-    if not isinstance(result, dict):
-        raise OfficeApiError("Unexpected response from label fetch")
-    zpl = _as_zpl_text(result.get("zpl") or "")
-    if not zpl:
-        raise OfficeApiError("Stored label has no ZPL content")
-    return {**result, "zpl": zpl}
-
-
-def _list_indicates_label(data: dict | None) -> bool:
-    if not isinstance(data, dict):
-        return False
-    if data.get("latest") or data.get("filename") or data.get("ok") is True:
-        if data.get("latest") or data.get("filename"):
-            return True
-        # {"ok": true, "count": N} style
-        count = data.get("count") or data.get("total")
-        if isinstance(count, int) and count > 0:
-            return True
-    labels = data.get("labels")
-    if labels is None:
-        labels = data.get("files") or data.get("items") or data.get("label")
-    if isinstance(labels, list) and len(labels) > 0:
-        return True
-    if isinstance(labels, dict) and labels:
-        return True
-    if isinstance(labels, str) and labels.strip():
-        return True
-    return False
-
-
-def _filename_looks_like_label(name: str) -> bool:
-    text = (name or "").strip().lower()
-    if not text:
-        return False
-    base = text.rsplit("/", 1)[-1]
-    return base.startswith("label-") or base.endswith(".zpl")
-
-
-def _files_include_label(payload) -> bool:
-    """True when office ``/files`` lists a stored shipping label."""
-    files = []
-    if isinstance(payload, dict):
-        files = payload.get("files") or payload.get("items") or payload.get("labels") or []
-    elif isinstance(payload, list):
-        files = payload
-    for entry in files:
-        if isinstance(entry, str):
-            if _filename_looks_like_label(entry):
-                return True
-            continue
-        if not isinstance(entry, dict):
-            continue
-        name = (
-            entry.get("filename")
-            or entry.get("name")
-            or entry.get("file")
-            or entry.get("path")
-            or ""
-        )
-        if _filename_looks_like_label(str(name)):
-            return True
-    return False
-
-
 def _order_key_variants(order: str) -> list[str]:
-    """Try both ``#S1065`` and ``S1065`` — office folders vary."""
+    """Try both ``#S1065`` and ``S1065`` — disk folders vary."""
     text = (order or "").strip()
     if not text:
         return []
@@ -528,100 +453,228 @@ def _order_key_variants(order: str) -> list[str]:
     return out
 
 
-def _probe_label_endpoint(order: str, item: str) -> bool | None:
-    """Return True/False if we got a clear answer, None if inconclusive."""
-    url = f"{_url(order, item)}/label"
-    try:
-        resp = _request("GET", url, timeout=12, stream=True)
-    except Exception as exc:
-        logger.warning("Office GET /label probe failed for %s / %s: %s", order, item, exc)
-        return None
-    try:
-        code = resp.status_code
-        if code == 200:
-            # Confirm body looks like a label without reading the whole ZPL.
-            ctype = (resp.headers.get("Content-Type") or "").lower()
-            if "json" in ctype:
-                try:
-                    body = resp.json()
-                except Exception:
-                    body = {}
-                if isinstance(body, dict) and (
-                    body.get("zpl")
-                    or body.get("filename")
-                    or body.get("latest")
-                    or body.get("ok") is True
-                ):
-                    return True
-                # 200 JSON without those keys — still treat as present.
-                return True
-            return True
-        if code == 404:
-            return False
-        logger.warning(
-            "Office GET /label probe HTTP %s for %s / %s: %s",
-            code,
-            order,
-            item,
-            (resp.text or "")[:160],
-        )
-        return None
-    finally:
-        resp.close()
+def _entry_name(entry) -> str:
+    if isinstance(entry, str):
+        return entry.strip()
+    if not isinstance(entry, dict):
+        return ""
+    return str(
+        entry.get("name")
+        or entry.get("filename")
+        or entry.get("file")
+        or entry.get("path")
+        or entry.get("latest")
+        or ""
+    ).strip()
 
 
-def _has_label_one(order: str, item: str) -> bool:
-    """Check one order/item key pair on the office server."""
-    # 1) Dedicated labels list.
-    try:
-        data = list_labels(order, item)
-        if _list_indicates_label(data):
-            logger.warning("has_label True via /labels for %s / %s", order, item)
-            return True
-        logger.warning(
-            "has_label /labels empty for %s / %s keys=%s",
-            order,
-            item,
-            list(data.keys()) if isinstance(data, dict) else type(data),
-        )
-    except Exception as exc:
-        logger.warning("Office list_labels in has_label for %s / %s: %s", order, item, exc)
+def _entry_kind(entry) -> str:
+    if not isinstance(entry, dict):
+        return ""
+    return str(entry.get("kind") or entry.get("type") or entry.get("role") or "").strip().lower()
 
-    # 2) Item files folder (labels live next to artwork/proofs).
-    try:
-        files = list_files(order, item)
-        if _files_include_label(files):
-            logger.warning("has_label True via /files for %s / %s", order, item)
-            return True
-        names = []
-        raw = (files or {}).get("files") if isinstance(files, dict) else files
-        if isinstance(raw, list):
-            for entry in raw[:8]:
-                if isinstance(entry, str):
-                    names.append(entry)
-                elif isinstance(entry, dict):
-                    names.append(str(entry.get("filename") or entry.get("name") or ""))
-        logger.warning(
-            "has_label /files no label match for %s / %s sample=%s",
-            order,
-            item,
-            names,
-        )
-    except Exception as exc:
-        logger.warning("Office list_files in has_label for %s / %s: %s", order, item, exc)
 
-    # 3) GET /label existence probe (do not download full ZPL into memory).
-    probed = _probe_label_endpoint(order, item)
-    if probed is True:
-        logger.warning("has_label True via GET /label for %s / %s", order, item)
+def _filename_looks_like_label(name: str, kind: str = "") -> bool:
+    """Match label files in the order/item folder (same place as artwork)."""
+    kind_l = (kind or "").strip().lower()
+    if kind_l in ("label", "shipping_label", "shipping-label", "zpl"):
         return True
-    if probed is False:
+    text = (name or "").strip().lower()
+    if not text:
         return False
+    base = text.rsplit("/", 1)[-1]
+    if base.startswith("label-") or base.startswith("label_"):
+        return True
+    if base.endswith(".zpl") or base.endswith(".zplii"):
+        return True
+    if "label" in base and (base.endswith(".txt") or base.endswith(".raw")):
+        return True
     return False
 
 
+def _version_from_name(name: str) -> int:
+    match = re.search(r"-v(\d+)\.(?:zpl|zplii|txt|raw)?$", (name or "").lower())
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return 0
+    return 0
+
+
+def _collect_names_from_payload(payload) -> list[tuple[str, str]]:
+    """Return [(filename, kind), ...] from labels/files list payloads."""
+    rows = []
+    if isinstance(payload, dict):
+        latest = payload.get("latest")
+        if isinstance(latest, str) and latest.strip():
+            rows.append((latest.strip(), "label"))
+        for key in ("labels", "files", "items"):
+            block = payload.get(key)
+            if isinstance(block, list):
+                rows.extend(_collect_names_from_payload(block))
+            elif isinstance(block, dict):
+                rows.extend(_collect_names_from_payload([block]))
+        # Single-file style dict
+        name = _entry_name(payload)
+        if name and name != latest:
+            rows.append((name, _entry_kind(payload)))
+    elif isinstance(payload, list):
+        for entry in payload:
+            if isinstance(entry, str):
+                rows.append((entry.strip(), ""))
+            elif isinstance(entry, dict):
+                name = _entry_name(entry)
+                if name:
+                    rows.append((name, _entry_kind(entry)))
+    return [(n, k) for n, k in rows if n]
+
+
+def find_label_files(order: str, item: str) -> list[dict]:
+    """Find shipping label files in the office order/item folder.
+
+    Disk layout (via Office API):
+      Online Store/orders/{order}/{item}/label-*.zpl
+    HTTP:
+      GET /orders/{order}/items/{item}/files
+      GET /orders/{order}/items/{item}/labels  (optional)
+    """
+    order = (order or "").strip()
+    item = (item or "").strip()
+    found: list[dict] = []
+    seen: set[str] = set()
+
+    def _add(name: str, *, source: str, kind: str = "", order_key: str = "") -> None:
+        if not name or name in seen:
+            return
+        if not _filename_looks_like_label(name, kind):
+            return
+        seen.add(name)
+        found.append({
+            "filename": name,
+            "source": source,
+            "kind": kind,
+            "order_key": order_key or order,
+            "version": _version_from_name(name),
+        })
+
+    for order_key in _order_key_variants(order):
+        # Primary: same /files listing used for artwork/proofs in that folder.
+        try:
+            listed = list_files(order_key, item)
+            for name, kind in _collect_names_from_payload(listed):
+                _add(name, source="files", kind=kind, order_key=order_key)
+            raw_files = (listed or {}).get("files") if isinstance(listed, dict) else listed
+            sample = []
+            if isinstance(raw_files, list):
+                for entry in raw_files[:12]:
+                    sample.append(_entry_name(entry) or str(entry)[:40])
+            logger.warning(
+                "label scan /files order=%s item=%s count=%s sample=%s",
+                order_key,
+                item,
+                len(raw_files) if isinstance(raw_files, list) else 0,
+                sample,
+            )
+        except Exception as exc:
+            logger.warning("label scan /files failed for %s / %s: %s", order_key, item, exc)
+
+        # Optional dedicated labels index.
+        try:
+            labels = list_labels(order_key, item)
+            for name, kind in _collect_names_from_payload(labels):
+                _add(name, source="labels", kind=kind or "label", order_key=order_key)
+        except Exception as exc:
+            logger.warning("label scan /labels failed for %s / %s: %s", order_key, item, exc)
+
+    # Newest version first, then filename.
+    found.sort(key=lambda row: (row.get("version") or 0, row.get("filename") or ""), reverse=True)
+    return found
+
+
+def get_label(order: str, item: str, version: int | None = None) -> dict:
+    """Load ZPL for an order line from the office order/item folder.
+
+    Prefers dedicated ``GET …/label``, then falls back to ``GET …/files/{filename}``
+    for ``label-*.zpl`` files sitting beside artwork/proofs.
+    """
+    _require_config()
+    order = (order or "").strip()
+    item = (item or "").strip()
+    if not order or not item:
+        raise OfficeApiError("order and item are required")
+
+    # 1) Dedicated label endpoint (when office implements it).
+    for order_key in _order_key_variants(order):
+        url = f"{_url(order_key, item)}/label"
+        params = {"version": int(version)} if version is not None else None
+        try:
+            resp = _request("GET", url, params=params, timeout=_TIMEOUT)
+        except Exception as exc:
+            logger.warning("GET /label failed for %s / %s: %s", order_key, item, exc)
+            continue
+        if resp.status_code == 404:
+            continue
+        if not resp.ok:
+            logger.warning(
+                "GET /label HTTP %s for %s / %s: %s",
+                resp.status_code,
+                order_key,
+                item,
+                (resp.text or "")[:160],
+            )
+            continue
+        ctype = (resp.headers.get("Content-Type") or "").lower()
+        if "json" in ctype:
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            if isinstance(body, dict):
+                zpl = _as_zpl_text(body.get("zpl") or "")
+                if zpl:
+                    return {**body, "zpl": zpl, "order_key": order_key, "source": "label"}
+        else:
+            zpl = _as_zpl_text(resp.content or b"")
+            if zpl:
+                return {
+                    "zpl": zpl,
+                    "filename": "",
+                    "order_key": order_key,
+                    "source": "label-raw",
+                }
+
+    # 2) Read label-*.zpl from the item files folder (disk source of truth).
+    candidates = find_label_files(order, item)
+    if version is not None:
+        versioned = [c for c in candidates if c.get("version") == int(version)]
+        if versioned:
+            candidates = versioned
+    if not candidates:
+        raise OfficeApiError(
+            "No stored label in office folder "
+            f"orders/{order}/{item}/ (looked for label-*.zpl via /files)"
+        )
+
+    chosen = candidates[0]
+    order_key = chosen.get("order_key") or order
+    filename = chosen["filename"]
+    resp = fetch_file(order_key, item, filename)
+    zpl = _as_zpl_text(resp.content or b"")
+    if not zpl:
+        raise OfficeApiError(f"Office file {filename!r} is not valid ZPL")
+    return {
+        "zpl": zpl,
+        "filename": filename,
+        "version": chosen.get("version"),
+        "order_key": order_key,
+        "source": "files",
+        "carrier": "fedex" if "fedex" in filename.lower() else "",
+    }
+
+
 def has_label(order: str, item: str) -> bool:
-    """True when the office server has a stored label for this order line."""
+    """True when a label file exists in the office order/item folder."""
     item = (item or "").strip()
     if not item:
         return False
@@ -629,18 +682,41 @@ def has_label(order: str, item: str) -> bool:
         _require_config()
     except OfficeApiError:
         return False
-
-    for order_key in _order_key_variants(order):
-        if _has_label_one(order_key, item):
+    try:
+        found = find_label_files(order, item)
+        if found:
+            logger.warning(
+                "has_label True for %s / %s via %s (%s)",
+                order,
+                item,
+                found[0].get("source"),
+                found[0].get("filename"),
+            )
             return True
+    except Exception as exc:
+        logger.warning("has_label scan failed for %s / %s: %s", order, item, exc)
+
+    # Last resort: dedicated GET /label
+    for order_key in _order_key_variants(order):
+        url = f"{_url(order_key, item)}/label"
+        try:
+            resp = _request("GET", url, timeout=12, stream=True)
+        except Exception:
+            continue
+        try:
+            if resp.status_code == 200:
+                logger.warning("has_label True via GET /label for %s / %s", order_key, item)
+                return True
+        finally:
+            resp.close()
     return False
 
 
-def labels_status(pairs: list[tuple[str, str]]) -> dict[str, bool]:
-    """Batch ``has_label`` keyed by ``order\\titem`` (parallel probes)."""
+def labels_status(pairs: list[tuple[str, str]]) -> dict[str, dict]:
+    """Batch label presence keyed by ``order\\titem``."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    out: dict[str, bool] = {}
+    out: dict[str, dict] = {}
     cleaned: list[tuple[str, str, str]] = []
     for order, item in pairs:
         order_s = (order or "").strip()
@@ -653,19 +729,42 @@ def labels_status(pairs: list[tuple[str, str]]) -> dict[str, bool]:
     if not cleaned:
         return out
 
+    def _probe(order: str, item: str) -> dict:
+        found = find_label_files(order, item)
+        if found:
+            return {
+                "has_label": True,
+                "filename": found[0].get("filename"),
+                "source": found[0].get("source"),
+                "version": found[0].get("version"),
+            }
+        # Dedicated /label route only (files already scanned).
+        for order_key in _order_key_variants(order):
+            url = f"{_url(order_key, item)}/label"
+            try:
+                resp = _request("GET", url, timeout=12, stream=True)
+            except Exception:
+                continue
+            try:
+                if resp.status_code == 200:
+                    return {"has_label": True, "source": "label", "filename": None}
+            finally:
+                resp.close()
+        return {"has_label": False}
+
     workers = min(6, len(cleaned))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(has_label, order, item): key
+            pool.submit(_probe, order, item): key
             for key, order, item in cleaned
         }
         for fut in as_completed(futures):
             key = futures[fut]
             try:
-                out[key] = bool(fut.result())
+                out[key] = fut.result()
             except Exception as exc:
                 logger.warning("labels_status failed for %s: %s", key, exc)
-                out[key] = False
+                out[key] = {"has_label": False, "error": str(exc)}
     return out
 
 
