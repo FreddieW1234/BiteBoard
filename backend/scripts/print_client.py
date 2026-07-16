@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 _LABEL_WIDTH_MM = float(os.environ.get("LABEL_WIDTH_MM") or "97")
 _LABEL_HEIGHT_MM = float(os.environ.get("LABEL_HEIGHT_MM") or "148")
 _FEDEX_DPI = int(os.environ.get("LABEL_DPI") or "203")
-_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "2")
+# Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Was +2 mm; now −5 mm.
+_FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-5")
 # Print-time 180° — set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
 _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
     "1",
@@ -104,6 +105,7 @@ def adjust_fedex_zpl(
 ) -> str:
     """FedEx ZPL tweaks for 9.7×14.8 cm portrait stock.
 
+    ``shift_mm``: positive = left, negative = right (via ``^LS`` / ``^LS-``).
     Strips FedEx ``^PO``/``^LS``/``^PW``/``^LL`` then injects our values
     immediately after ``^XA`` so nothing later in the file overrides them.
     """
@@ -113,7 +115,7 @@ def adjust_fedex_zpl(
 
     pw = _mm_to_dots(width_mm, dpi)
     ll = _mm_to_dots(height_mm, dpi)
-    dots = max(0, int(round(shift_mm * dpi / 25.4)))
+    dots = int(round(shift_mm * dpi / 25.4))
 
     text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
@@ -129,7 +131,7 @@ def adjust_fedex_zpl(
     injection = f"^PW{pw}^LL{ll}"
     if rotate_180:
         injection += "^POI"
-    if dots > 0:
+    if dots != 0:
         injection += f"^LS{dots}"
     if mark_prepared:
         injection += f"^FX {_PREPARED_MARKER}"
@@ -140,15 +142,16 @@ def adjust_fedex_zpl(
     else:
         text = "^XA" + injection + text
 
+    shift_desc = f"{abs(shift_mm)}mm {'left' if shift_mm > 0 else 'right'}" if shift_mm else "0"
     logger.info(
-        "FedEx ZPL prepared: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift_left=%smm stored=%s",
+        "FedEx ZPL prepared: size=%s×%smm (%sx%s dots@%sdpi) rotate180=%s shift=%s stored=%s",
         width_mm,
         height_mm,
         pw,
         ll,
         dpi,
         rotate_180,
-        shift_mm,
+        shift_desc,
         mark_prepared,
     )
     return text
