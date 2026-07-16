@@ -306,6 +306,16 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
     if not cleaned.get("packages"):
         raise ShipStationError("Package weight is required")
 
+    # Normalise UK → GB on both addresses (carriers reject "UK").
+    for key in ("ship_to", "ship_from"):
+        addr = cleaned.get(key)
+        if isinstance(addr, dict):
+            cc = _country_code(addr)
+            if cc in ("UK", "GBR", "UNITED KINGDOM"):
+                addr["country_code"] = "GB"
+            elif cc:
+                addr["country_code"] = cc
+
     if carrier_ids:
         rate_options: dict[str, Any] = {"carrier_ids": [str(c) for c in carrier_ids if c]}
         if _country_code(cleaned.get("ship_to")) == "GB":
@@ -318,10 +328,13 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
         "shipment": cleaned,
     }
     logger.info(
-        "ShipStation rates request: shipment_keys=%s ship_to_keys=%s ship_from_keys=%s",
-        sorted(cleaned.keys()),
-        sorted(cleaned.get("ship_to", {}).keys()),
-        sorted(cleaned.get("ship_from", {}).keys()),
+        "ShipStation rates request: carriers=%s ship_to=%s/%s ship_from=%s/%s pkg=%s",
+        rate_options.get("carrier_ids"),
+        cleaned.get("ship_to", {}).get("postal_code"),
+        cleaned.get("ship_to", {}).get("country_code"),
+        cleaned.get("ship_from", {}).get("postal_code"),
+        cleaned.get("ship_from", {}).get("country_code"),
+        cleaned.get("packages"),
     )
     resp = _request("POST", "/v2/rates", json=payload)
     if not resp.ok:
@@ -333,6 +346,41 @@ def get_rates(shipment: dict, *, carrier_ids: list[str] | None = None) -> dict:
         except Exception:
             pass
     return _handle_response(resp)
+
+
+def merge_rate_responses(*responses: dict) -> dict:
+    """Merge multiple /v2/rates responses into one rate_response shape."""
+    rates: list[dict] = []
+    invalid: list[dict] = []
+    errors: list = []
+    seen_rate_ids: set[str] = set()
+
+    for resp in responses:
+        if not isinstance(resp, dict):
+            continue
+        block = resp.get("rate_response") if isinstance(resp.get("rate_response"), dict) else resp
+        for r in block.get("rates") or []:
+            if not isinstance(r, dict):
+                continue
+            rid = str(r.get("rate_id") or "")
+            if rid and rid in seen_rate_ids:
+                continue
+            if rid:
+                seen_rate_ids.add(rid)
+            rates.append(r)
+        for r in block.get("invalid_rates") or []:
+            if isinstance(r, dict):
+                invalid.append(r)
+        for err in block.get("errors") or []:
+            errors.append(err)
+
+    return {
+        "rate_response": {
+            "rates": rates,
+            "invalid_rates": invalid,
+            "errors": errors,
+        }
+    }
 
 
 def create_label_from_rate(rate_id: str, *, label_format: str = "zpl") -> dict:

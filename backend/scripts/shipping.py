@@ -207,8 +207,19 @@ def quote_shipment(payload: dict) -> dict:
             for c in quoted_carriers
             if shipstation_api.carrier_label(c)
         ]
+
+        # Primary quote: all connected carriers together.
         rate_resp = shipstation_api.get_rates(shipment, carrier_ids=carrier_ids or None)
-        dest_country = (prep.get("ship_to") or {}).get("country_code") or "GB"
+
+        # FedEx (and similar) sometimes return nothing in a multi-carrier shop
+        # but succeed when quoted alone — retry those carriers individually.
+        rate_resp = _retry_missing_carrier_rates(
+            shipstation_api, shipment, quoted_carriers, rate_resp
+        )
+
+        dest_country = _normalize_country_code(
+            (prep.get("ship_to") or {}).get("country_code") or "GB"
+        )
         rates, rate_meta = _normalize_rates(rate_resp, dest_country=dest_country)
         rate_meta["carriers_queried"] = carriers_queried
         carrier_notes = _carrier_availability_notes(carriers_queried, rates, rate_meta)
@@ -221,12 +232,10 @@ def quote_shipment(payload: dict) -> dict:
             "rates": rates,
             "carriers_queried": carriers_queried,
             "carrier_notes": carrier_notes,
+            "rate_meta": rate_meta,
         }
         if not rates:
-            result["rate_meta"] = rate_meta
             result["error_hint"] = _empty_rates_hint(rate_meta, payload)
-        elif carrier_notes or _missing_expected_carriers(rates, carriers_queried):
-            result["rate_meta"] = rate_meta
         return result
     except ShipStationError as exc:
         logger.warning("Shipping quote failed: %s", exc)
@@ -340,6 +349,13 @@ def _parse_dim(value) -> float | None:
         return None
 
 
+def _normalize_country_code(code: str) -> str:
+    cc = (code or "").strip().upper()
+    if cc in ("UK", "GBR", "UNITED KINGDOM", "GREAT BRITAIN"):
+        return "GB"
+    return cc or "GB"
+
+
 def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
     from scripts import shipstation_api  # type: ignore
 
@@ -355,13 +371,16 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
         "weight": {"value": max(0.01, weight_kg), "unit": "kilogram"},
     }
     if length_cm and width_cm and height_cm:
+        # Carriers expect length = longest side.
+        dims = sorted([length_cm, width_cm, height_cm], reverse=True)
         package["dimensions"] = {
-            "length": length_cm,
-            "width": width_cm,
-            "height": height_cm,
+            "length": dims[0],
+            "width": dims[1],
+            "height": dims[2],
             "unit": "centimeter",
         }
-    package["package_code"] = "package"
+    # Do not force package_code — a hard-coded "package" can make some
+    # carriers (esp. FedEx UK / Royal Mail) return no usable rates.
 
     ship_from = _resolve_ship_from(warehouse)
     if not ship_from.get("address_line1"):
@@ -371,9 +390,13 @@ def _build_shipstation_shipment(prep: dict, payload: dict) -> dict:
             "Warehouses and add your dispatch address, or set SHIPSTATION_ORIGIN_* env vars on Render."
         )
 
+    to_addr = _to_shipstation_address(ship_to)
+    to_addr["country_code"] = _normalize_country_code(to_addr.get("country_code") or "GB")
+    ship_from["country_code"] = _normalize_country_code(ship_from.get("country_code") or "GB")
+
     return {
         "validate_address": "no_validation",
-        "ship_to": _to_shipstation_address(ship_to),
+        "ship_to": to_addr,
         "ship_from": ship_from,
         "packages": [package],
     }
@@ -599,6 +622,40 @@ def _missing_expected_carriers(rates: list[dict], carriers_queried: list[str]) -
     return missing
 
 
+def _retry_missing_carrier_rates(shipstation_api, shipment: dict, quoted_carriers: list, rate_resp: dict) -> dict:
+    """Re-quote carriers that often fail inside a multi-carrier rate shop (FedEx)."""
+    block = rate_resp.get("rate_response") if isinstance(rate_resp.get("rate_response"), dict) else {}
+    raw_rates = block.get("rates") if block else rate_resp.get("rates") or []
+    kept_text = " ".join(
+        f"{(r or {}).get('carrier_friendly_name') or ''} {(r or {}).get('carrier_code') or ''}".lower()
+        for r in (raw_rates or [])
+        if isinstance(r, dict)
+    )
+
+    extras: list[dict] = []
+    for carrier in quoted_carriers or []:
+        label = shipstation_api.carrier_label(carrier).lower()
+        cid = str(carrier.get("carrier_id") or "")
+        if not cid:
+            continue
+        # Royal Mail: ShipStation API cannot return live rates — don't bother retrying.
+        if any(n in label for n in ("royal_mail", "royal mail", "stamps")):
+            continue
+        if "fedex" not in label:
+            continue
+        if "fedex" in kept_text:
+            continue
+        try:
+            logger.info("Retrying ShipStation rates for carrier alone: %s (%s)", label, cid)
+            extras.append(shipstation_api.get_rates(shipment, carrier_ids=[cid]))
+        except Exception as exc:
+            logger.warning("Solo rate retry failed for %s: %s", label, exc)
+
+    if not extras:
+        return rate_resp
+    return shipstation_api.merge_rate_responses(rate_resp, *extras)
+
+
 def _carrier_availability_notes(
     carriers_queried: list[str],
     rates: list[dict],
@@ -620,9 +677,11 @@ def _carrier_availability_notes(
             "carrier": "Royal Mail",
             "kind": "no_api_rates",
             "message": (
-                "Royal Mail does not give ShipStation live rates "
-                "(their Rates API is closed to third-party apps). "
-                "Buy RM labels in ShipStation with your contracted prices."
+                "Royal Mail blocks live rate shopping over the ShipStation API "
+                "(documented ShipStation limitation — not something we can pull). "
+                "Rates you see in the ShipStation website/app use your RM contract tables; "
+                "those prices are not exposed to API keys. Buy RM labels in ShipStation, "
+                "or we can add a manual RM service picker later (no live price)."
             ),
         })
 
@@ -630,15 +689,17 @@ def _carrier_availability_notes(
         detail = ""
         fedex_msgs = [m for m in invalid_messages if "fedex" in m.lower()]
         if fedex_msgs:
-            detail = " " + "; ".join(fedex_msgs[:2])
+            detail = " Carrier said: " + "; ".join(fedex_msgs[:2])
+        else:
+            detail = (
+                " No FedEx quotes came back from the API for this ship-from/ship-to/package. "
+                "Confirm the FedEx account on this API key is FedEx UK (not US FedEx), "
+                "and that the same warehouse address works in the ShipStation API rate tool."
+            )
         notes.append({
             "carrier": "FedEx",
             "kind": "no_rates",
-            "message": (
-                "FedEx is connected but returned no usable rates for this package."
-                + detail
-                + " Try a different size/weight, or check FedEx UK services in ShipStation."
-            ),
+            "message": "FedEx is on this API key but returned no purchasable rates." + detail,
         })
     return notes
 

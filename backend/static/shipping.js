@@ -3,57 +3,7 @@
 
     const RATE_DEBOUNCE_MS = 450;
 
-    // UK-style size presets (max dims). Used instead of freeform L/W/H inputs.
-    const SIZE_PRESETS = [
-        {
-            id: 'letter',
-            label: 'Letter',
-            length_cm: 24,
-            width_cm: 16.5,
-            height_cm: 0.5,
-            max_kg: 0.1,
-            examples: 'Cards & documents',
-        },
-        {
-            id: 'large_letter',
-            label: 'Large letter',
-            length_cm: 35.3,
-            width_cm: 25,
-            height_cm: 2.5,
-            max_kg: 1,
-            examples: 'Small postable items',
-        },
-        {
-            id: 'small_parcel',
-            label: 'Small parcel',
-            length_cm: 45,
-            width_cm: 35,
-            height_cm: 16,
-            max_kg: 2,
-            examples: 'Shoes & clothing',
-            popular: true,
-        },
-        {
-            id: 'medium_parcel',
-            label: 'Medium parcel',
-            length_cm: 61,
-            width_cm: 46,
-            height_cm: 46,
-            max_kg: 20,
-            examples: 'Small appliances',
-        },
-        {
-            id: 'large_parcel',
-            label: 'Large parcel',
-            length_cm: 70,
-            width_cm: 50,
-            height_cm: 40,
-            max_kg: 30,
-            examples: 'Larger items',
-        },
-    ];
-
-    const CARRIER_ORDER_HINTS = [
+    const CARRIER_HINTS = [
         { label: 'Evri', needles: ['evri', 'hermes'] },
         { label: 'DPD', needles: ['dpd'] },
         { label: 'Royal Mail', needles: ['royal_mail', 'royal mail', 'stamps_com'] },
@@ -73,7 +23,6 @@
         selectedRateId: '',
         providers: {},
         ratesLoading: false,
-        sizePreset: 'small_parcel',
         carrierNotes: [],
         carriersQueried: [],
     };
@@ -98,10 +47,6 @@
         } catch (_) {
             return `£${n.toFixed(2)}`;
         }
-    }
-
-    function getSizePreset(id) {
-        return SIZE_PRESETS.find(p => p.id === id) || SIZE_PRESETS.find(p => p.id === 'small_parcel');
     }
 
     function ensureOverlay() {
@@ -157,34 +102,22 @@
     function readForm() {
         const body = overlay?.querySelector('#ship-modal-body');
         if (!body) return {};
+        const parseDim = id => {
+            const raw = body.querySelector(id)?.value;
+            if (raw === '' || raw == null) return null;
+            const n = parseFloat(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        };
         const weightRaw = body.querySelector('#ship-weight')?.value;
         const weightFallback = state.prep?.defaults?.weight_kg || 1;
         const weight = parseFloat(weightRaw);
-        const preset = getSizePreset(state.sizePreset);
         return {
             shipment_type: body.querySelector('[name="shipment_type"]:checked')?.value || 'parcel',
             weight_kg: Number.isFinite(weight) && weight > 0 ? weight : weightFallback,
-            length_cm: preset.length_cm,
-            width_cm: preset.width_cm,
-            height_cm: preset.height_cm,
-            size_preset: preset.id,
+            length_cm: parseDim('#ship-length'),
+            width_cm: parseDim('#ship-width'),
+            height_cm: parseDim('#ship-height'),
         };
-    }
-
-    function renderSizePresets() {
-        return SIZE_PRESETS.map(p => {
-            const active = p.id === state.sizePreset ? ' selected' : '';
-            const popular = p.popular ? '<span class="ship-size-badge">Most popular</span>' : '';
-            const dims = `${p.height_cm} × ${p.width_cm} × ${p.length_cm} cm`;
-            return `
-                <button type="button" class="ship-size-card${active}" data-size-id="${escapeHtml(p.id)}">
-                    ${popular}
-                    <span class="ship-size-label">${escapeHtml(p.label)}</span>
-                    <span class="ship-size-dims">${escapeHtml(dims)}</span>
-                    <span class="ship-size-weight">up to ${p.max_kg < 1 ? `${Math.round(p.max_kg * 1000)} g` : `${p.max_kg} kg`}</span>
-                    <span class="ship-size-examples">${escapeHtml(p.examples)}</span>
-                </button>`;
-        }).join('');
     }
 
     function renderBody() {
@@ -219,15 +152,28 @@
                         </label>
                     </div>
                     ${palletHint}
-                    <div class="ship-weight-row">
-                        <label for="ship-weight">Weight (kg)</label>
-                        <input type="number" id="ship-weight" min="0.01" step="0.001" value="${weightVal}">
-                    </div>
                 </div>
             </div>
             <div class="ship-section">
-                <div class="ship-section-title">What do you want to send? <span class="ship-section-sub">(max dimensions)</span></div>
-                <div class="ship-size-row" id="ship-size-row">${renderSizePresets()}</div>
+                <div class="ship-section-title">Package</div>
+                <div class="ship-fields">
+                    <div class="ship-field">
+                        <label for="ship-weight">Weight (kg)</label>
+                        <input type="number" id="ship-weight" min="0.01" step="0.001" value="${weightVal}">
+                    </div>
+                    <div class="ship-field">
+                        <label for="ship-length">Length (cm)</label>
+                        <input type="number" id="ship-length" min="0.1" step="0.1" placeholder="optional">
+                    </div>
+                    <div class="ship-field">
+                        <label for="ship-width">Width (cm)</label>
+                        <input type="number" id="ship-width" min="0.1" step="0.1" placeholder="optional">
+                    </div>
+                    <div class="ship-field">
+                        <label for="ship-height">Height (cm)</label>
+                        <input type="number" id="ship-height" min="0.1" step="0.1" placeholder="optional">
+                    </div>
+                </div>
             </div>
             <div class="ship-section ship-rates">
                 <div class="ship-section-title">Rates by carrier</div>
@@ -250,17 +196,11 @@
             });
         });
 
-        body.querySelector('#ship-weight')?.addEventListener('input', scheduleRates);
-        body.querySelector('#ship-weight')?.addEventListener('change', scheduleRates);
-
-        body.querySelectorAll('.ship-size-card').forEach(card => {
-            card.addEventListener('click', () => {
-                state.sizePreset = card.dataset.sizeId || 'small_parcel';
-                body.querySelectorAll('.ship-size-card').forEach(c => {
-                    c.classList.toggle('selected', c === card);
-                });
-                scheduleRates();
-            });
+        ['#ship-weight', '#ship-length', '#ship-width', '#ship-height'].forEach(sel => {
+            const input = body.querySelector(sel);
+            if (!input) return;
+            input.addEventListener('input', scheduleRates);
+            input.addEventListener('change', scheduleRates);
         });
     }
 
@@ -276,20 +216,19 @@
 
     function carrierGroupLabel(rate) {
         const text = `${rate.carrier_friendly_name || ''} ${rate.carrier_code || ''}`.toLowerCase();
-        for (const hint of CARRIER_ORDER_HINTS) {
+        for (const hint of CARRIER_HINTS) {
             if (hint.needles.some(n => text.includes(n))) return hint.label;
         }
-        return (rate.carrier_friendly_name || rate.carrier_code || 'Other').replace(
-            /\s*-\s*ShipStation Carrier Services/i,
-            ''
-        ).trim() || 'Other';
+        return (rate.carrier_friendly_name || rate.carrier_code || 'Other')
+            .replace(/\s*-\s*ShipStation Carrier Services/i, '')
+            .trim() || 'Other';
     }
 
     function matchesCarrier(label, haystack) {
         const text = String(haystack || '').toLowerCase();
-        const hint = CARRIER_ORDER_HINTS.find(h => h.label === label);
+        const hint = CARRIER_HINTS.find(h => h.label === label);
         if (hint) return hint.needles.some(n => text.includes(n));
-        return text.includes(label.toLowerCase());
+        return text.includes(String(label).toLowerCase());
     }
 
     function groupRatesByCarrier(rates, carrierNotes, carriersQueried) {
@@ -310,14 +249,13 @@
             const label = note.carrier || 'Other';
             if (!groups.has(label)) {
                 groups.set(label, { label, rates: [], note: note.message || '', minPrice: Infinity });
-            } else if (!groups.get(label).rates.length) {
-                groups.get(label).note = note.message || '';
+            } else if (!groups.get(label).rates.length && note.message) {
+                groups.get(label).note = note.message;
             }
         });
 
-        // Ensure connected expected carriers appear even with no rates/notes yet.
         const queriedText = (carriersQueried || []).join(' ');
-        CARRIER_ORDER_HINTS.forEach(hint => {
+        CARRIER_HINTS.forEach(hint => {
             if (!matchesCarrier(hint.label, queriedText)) return;
             if (!groups.has(hint.label)) {
                 groups.set(hint.label, {
@@ -360,7 +298,9 @@
             }
             const cards = sorted.map(r => {
                 const selected = r.rate_id === state.selectedRateId ? ' selected' : '';
-                const days = r.delivery_days != null ? `<span class="ship-rate-days">${escapeHtml(String(r.delivery_days))} day${r.delivery_days === 1 ? '' : 's'}</span>` : '';
+                const days = r.delivery_days != null
+                    ? `<span class="ship-rate-days">${escapeHtml(String(r.delivery_days))} day${r.delivery_days === 1 ? '' : 's'}</span>`
+                    : '';
                 return `
                     <button type="button" class="ship-rate-card${selected}" data-rate-id="${escapeHtml(r.rate_id)}">
                         <span class="ship-rate-card-service">${escapeHtml(r.service_type || r.service_code || 'Service')}</span>
@@ -524,8 +464,7 @@
         state = {
             orderId: '', orderName: '', itemId: '', productLabel: '',
             prep: null, rates: [], selectedRateId: '', providers: {},
-            ratesLoading: false, sizePreset: 'small_parcel',
-            carrierNotes: [], carriersQueried: [],
+            ratesLoading: false, carrierNotes: [], carriersQueried: [],
         };
         document.body.style.overflow = '';
     }
@@ -539,7 +478,6 @@
         state.productLabel = (productLabel || '').trim();
         state.rates = [];
         state.selectedRateId = '';
-        state.sizePreset = 'small_parcel';
         state.carrierNotes = [];
         state.carriersQueried = [];
         setConfirmEnabled(false);
