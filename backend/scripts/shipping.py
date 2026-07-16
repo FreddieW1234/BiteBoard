@@ -644,6 +644,32 @@ def save_manual_dispatch(
     return result if isinstance(result, dict) else {"success": True}
 
 
+def labels_status(payload: dict) -> dict:
+    """Return which diary lines have a stored office ZPL label."""
+    from scripts import office_api  # type: ignore
+
+    items = payload.get("items") or []
+    pairs: list[tuple[str, str]] = []
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        order = (entry.get("order_name") or entry.get("order") or "").strip()
+        item = (entry.get("item_id") or entry.get("item") or "").strip()
+        if order and item:
+            pairs.append((order, item))
+
+    status = office_api.labels_status(pairs)
+    results = []
+    for order, item in pairs:
+        key = f"{order}\t{item}"
+        results.append({
+            "order_name": order,
+            "item_id": item,
+            "has_label": bool(status.get(key)),
+        })
+    return {"success": True, "results": results}
+
+
 def reprint_label(payload: dict) -> dict:
     """Fetch latest ZPL from the office server, then POST it to ``/print``."""
     from scripts import office_api, print_client  # type: ignore

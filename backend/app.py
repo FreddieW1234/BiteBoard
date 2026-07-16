@@ -2662,6 +2662,19 @@ def api_shipping_reprint():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/shipping/labels-status', methods=['POST'])
+def api_shipping_labels_status():
+    """Probe office server for stored ZPL labels (metadata only)."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.shipping import labels_status  # type: ignore
+        return jsonify(labels_status(data))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     """Return recent Shopify orders for the staff Orders page."""

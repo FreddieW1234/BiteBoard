@@ -496,6 +496,42 @@
         window.print();
     }
 
+    async function refreshLabelStatus() {
+        const shipped = allRows.filter(r => r.shipped && r.order_name && r.item_id);
+        if (!shipped.length) return;
+        try {
+            const res = await fetch('/api/shipping/labels-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    items: shipped.map(r => ({
+                        order_name: r.order_name,
+                        item_id: r.item_id,
+                    })),
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) return;
+            let changed = false;
+            for (const result of data.results || []) {
+                const row = allRows.find(
+                    r => r.order_name === result.order_name && r.item_id === result.item_id
+                );
+                if (!row) continue;
+                const has = !!result.has_label;
+                if (row.can_print_label !== has || row.can_reprint !== has) {
+                    row.can_print_label = has;
+                    row.can_reprint = has;
+                    changed = true;
+                }
+            }
+            if (changed) renderTable();
+        } catch (_) {
+            // Keep whatever the diary API already returned.
+        }
+    }
+
     async function loadDiary() {
         const pill = document.getElementById('diary-count-pill');
         const content = document.getElementById('diary-content');
@@ -514,6 +550,9 @@
                 pill.textContent = `${allRows.length} line${allRows.length === 1 ? '' : 's'}`;
             }
             renderTable();
+            // Office label presence is checked separately so refresh doesn't miss
+            // labels already on the office server (and doesn't download full ZPL).
+            refreshLabelStatus();
         } catch (err) {
             if (pill) pill.textContent = 'Error';
             if (content) {
