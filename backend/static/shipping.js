@@ -5,6 +5,8 @@
     let state = {
         orderId: '',
         orderName: '',
+        itemId: '',
+        productLabel: '',
         prep: null,
         rates: [],
         selectedRateId: '',
@@ -133,7 +135,7 @@
                         <div class="ship-address">${escapeHtml(addressText)}</div>
                     </div>
                     <div class="ship-section">
-                        <div class="ship-section-title">Order lines</div>
+                        <div class="ship-section-title">${state.itemId ? 'Shipping this line' : 'Order lines'}</div>
                         <ul class="ship-items">${itemsHtml}</ul>
                     </div>
                 </div>
@@ -231,7 +233,11 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ order_id: state.orderId, ...form }),
+                body: JSON.stringify({
+                    order_id: state.orderId,
+                    item_id: state.itemId || undefined,
+                    ...form,
+                }),
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not get rates');
@@ -265,6 +271,7 @@
                 credentials: 'same-origin',
                 body: JSON.stringify({
                     order_id: state.orderId,
+                    item_id: state.itemId || undefined,
                     rate_id: state.selectedRateId,
                     ...form,
                 }),
@@ -299,29 +306,40 @@
 
     function closeModal() {
         if (overlay) overlay.hidden = true;
-        state = { orderId: '', orderName: '', prep: null, rates: [], selectedRateId: '', providers: {} };
+        state = {
+            orderId: '', orderName: '', itemId: '', productLabel: '',
+            prep: null, rates: [], selectedRateId: '', providers: {},
+        };
         document.body.style.overflow = '';
     }
 
-    async function openShippingModal(orderId, orderName) {
+    async function openShippingModal(orderId, orderName, itemId, productLabel) {
         ensureOverlay();
         state.orderId = String(orderId);
         state.orderName = orderName || '';
+        state.itemId = (itemId || '').trim();
+        state.productLabel = (productLabel || '').trim();
         state.rates = [];
         state.selectedRateId = '';
         setConfirmEnabled(false);
 
         overlay.hidden = false;
         document.body.style.overflow = 'hidden';
-        overlay.querySelector('#ship-modal-title').textContent =
-            orderName ? `Ship ${orderName}` : 'Ship order';
+        const titleParts = [orderName ? `Ship ${orderName}` : 'Ship order'];
+        if (state.productLabel) {
+            titleParts.push(state.productLabel);
+        }
+        overlay.querySelector('#ship-modal-title').textContent = titleParts.join(' — ');
         overlay.querySelector('#ship-modal-body').innerHTML =
             '<p class="ship-msg info">Loading order…</p>';
         setMsg('', 'info');
 
         try {
+            const itemQuery = state.itemId
+                ? `?item_id=${encodeURIComponent(state.itemId)}`
+                : '';
             const [prepRes, statusRes] = await Promise.all([
-                fetch(`/api/shipping/prepare/${encodeURIComponent(orderId)}`, { credentials: 'same-origin' }),
+                fetch(`/api/shipping/prepare/${encodeURIComponent(orderId)}${itemQuery}`, { credentials: 'same-origin' }),
                 fetch('/api/shipping/status', { credentials: 'same-origin' }),
             ]);
             const prep = await prepRes.json();

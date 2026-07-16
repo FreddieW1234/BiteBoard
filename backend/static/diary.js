@@ -129,9 +129,18 @@
 
     function filterRows(rows) {
         const range = getViewRange();
+        const ordersInRange = new Set();
+        rows.forEach(row => {
+            const iso = rowFilterDateIso(row);
+            if (iso && iso >= range.start && iso <= range.end) {
+                ordersInRange.add(row.order_name);
+            }
+        });
         return rows.filter(row => {
             const iso = rowFilterDateIso(row);
-            if (!iso) return false;
+            if (!iso) {
+                return ordersInRange.has(row.order_name);
+            }
             return iso >= range.start && iso <= range.end;
         });
     }
@@ -218,18 +227,11 @@
             <th>Ship</th>
             </tr></thead><tbody>`;
 
-        const firstShipRowByOrder = {};
-        displayRows.forEach((row, idx) => {
-            if (!firstShipRowByOrder[row.order_name]) {
-                firstShipRowByOrder[row.order_name] = idx;
-            }
-        });
-
         displayRows.forEach((row, idx) => {
             const key = rowKey(row);
             const dispatchPrint = formatDisplayDate(row.dispatch_date_iso);
             const carrierPrint = carrierLabel(row.carrier);
-            const showShipBtn = !row.shipped && firstShipRowByOrder[row.order_name] === idx;
+            const showShipBtn = !row.shipped;
             html += `<tr data-idx="${idx}" data-key="${escapeHtml(key)}" data-row-id="${escapeHtml(key)}">`;
             html += `<td class="diary-dispatch-cell">
                 <div class="diary-date-wrap diary-screen-only">
@@ -256,7 +258,11 @@
                     ${row.tracking_number ? `<div class="diary-shipped-tracking">${escapeHtml(row.tracking_number)}</div>` : ''}
                 </div>`;
             } else if (showShipBtn) {
-                html += `<button type="button" class="diary-ship-btn" data-ship-order-id="${escapeHtml(row.order_id)}" data-ship-order-name="${escapeHtml(row.order_name)}">
+                html += `<button type="button" class="diary-ship-btn"
+                    data-ship-order-id="${escapeHtml(row.order_id)}"
+                    data-ship-order-name="${escapeHtml(row.order_name)}"
+                    data-ship-item-id="${escapeHtml(row.item_id)}"
+                    data-ship-product="${escapeHtml(row.product_label)}">
                     <i class="fas fa-truck"></i> Ship
                 </button>`;
             } else {
@@ -365,7 +371,12 @@
             const orderId = shipBtn.dataset.shipOrderId;
             const orderName = shipBtn.dataset.shipOrderName || '';
             if (orderId && typeof window.openShippingModal === 'function') {
-                window.openShippingModal(orderId, orderName);
+                window.openShippingModal(
+                    orderId,
+                    orderName,
+                    shipBtn.dataset.shipItemId || '',
+                    shipBtn.dataset.shipProduct || ''
+                );
             }
             return;
         }

@@ -2606,9 +2606,10 @@ def api_shipping_status():
 def api_shipping_prepare(order_id):
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
+    item_id = (request.args.get("item_id") or "").strip() or None
     try:
         from scripts.shipping import prepare_shipment  # type: ignore
-        result = prepare_shipment(order_id)
+        result = prepare_shipment(order_id, item_id=item_id)
         if not result.get("success"):
             return jsonify(result), 404
         return jsonify(result)

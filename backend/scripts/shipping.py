@@ -66,7 +66,37 @@ def _print_configured() -> bool:
         return False
 
 
-def prepare_shipment(order_id: str | int) -> dict:
+def _line_item_id(line: dict) -> str:
+    from scripts.office_api import item_key  # type: ignore
+
+    ln = line.get("line_number")
+    title = line.get("title") or ""
+    if line.get("office_item_id"):
+        return str(line["office_item_id"])
+    if ln is not None:
+        return item_key(int(ln), title)
+    return ""
+
+
+def _filter_ship_items(items: list[dict], item_id: str | None) -> list[dict]:
+    """When item_id is set, return only that diary line (single-item shipment)."""
+    target = (item_id or "").strip()
+    if not target:
+        return items
+    for item in items:
+        if item.get("item_id") == target:
+            return [item]
+    from scripts.diary_helpers import item_slug  # type: ignore
+
+    target_slug = item_slug(target)
+    if target_slug:
+        for item in items:
+            if item_slug(item.get("item_id") or "") == target_slug:
+                return [item]
+    return []
+
+
+def prepare_shipment(order_id: str | int, *, item_id: str | None = None) -> dict:
     """Load order details for the shipping modal."""
     order = fetch_order_by_id(order_id)
     if not order:
@@ -78,6 +108,7 @@ def prepare_shipment(order_id: str | int) -> dict:
 
     items = [
         {
+            "item_id": _line_item_id(li),
             "line_number": li.get("line_number"),
             "title": li.get("title") or "",
             "sku": li.get("sku") or "",
@@ -87,6 +118,11 @@ def prepare_shipment(order_id: str | int) -> dict:
         for li in (order.get("order_items") or [])
         if not li.get("is_fee")
     ]
+
+    if item_id:
+        items = _filter_ship_items(items, item_id)
+        if not items:
+            return {"success": False, "error": "Line item not found on this order"}
 
     total_weight_kg = sum(
         (li.get("weight_kg") or 0) * max(1, int(li.get("quantity") or 1))
@@ -99,6 +135,7 @@ def prepare_shipment(order_id: str | int) -> dict:
         "success": True,
         "order_id": str(order.get("id") or order_id),
         "order_name": order.get("name") or "",
+        "item_id": (item_id or "").strip() or None,
         "company": order.get("company") or "",
         "customer_email": order.get("customer_email") or "",
         "ship_to": ship_to,
@@ -144,7 +181,7 @@ def quote_shipment(payload: dict) -> dict:
     if not _shipstation_configured():
         return {"success": False, "error": "ShipStation is not configured (set SHIPSTATION_API_KEY)"}
 
-    prep = prepare_shipment(order_id)
+    prep = prepare_shipment(order_id, item_id=payload.get("item_id"))
     if not prep.get("success"):
         return prep
 
@@ -189,7 +226,7 @@ def ship_order(payload: dict) -> dict:
     if not _shipstation_configured():
         return {"success": False, "error": "ShipStation is not configured"}
 
-    prep = prepare_shipment(order_id)
+    prep = prepare_shipment(order_id, item_id=payload.get("item_id"))
     if not prep.get("success"):
         return prep
 
@@ -227,12 +264,14 @@ def ship_order(payload: dict) -> dict:
         today_iso = date.today().isoformat()
 
         for item in prep.get("items") or []:
-            ln = item.get("line_number")
-            title = item.get("title") or ""
-            if ln is None:
-                continue
-            from scripts.office_api import item_key  # type: ignore
-            item_id = item_key(int(ln), title)
+            item_id = (item.get("item_id") or "").strip()
+            if not item_id:
+                ln = item.get("line_number")
+                title = item.get("title") or ""
+                if ln is None:
+                    continue
+                from scripts.office_api import item_key  # type: ignore
+                item_id = item_key(int(ln), title)
             save_diary_entry({
                 "order_name": order_name,
                 "item_id": item_id,

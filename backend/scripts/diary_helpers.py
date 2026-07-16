@@ -86,13 +86,17 @@ def _match_field_for_line(line: dict, fields: list[dict]) -> dict | None:
     if sku:
         for field in fields:
             label = _field_label(field).upper()
-            if f"({sku})" in label:
+            if f"({sku})" in label or sku in label:
                 return field
     if title:
         for field in fields:
             label = _field_label(field).upper()
             if title in label:
                 return field
+    line_num = line.get("line_number")
+    if not isinstance(line_num, int) or line_num <= 0:
+        return None
+
     generic = [
         f for f in fields
         if (f.get("key") or "").upper().startswith("REQUESTED DELIVERY DATE")
@@ -100,9 +104,12 @@ def _match_field_for_line(line: dict, fields: list[dict]) -> dict | None:
     product_specific = [f for f in fields if f not in generic]
     if not product_specific and len(generic) == 1:
         return generic[0]
-    line_num = line.get("line_number")
-    if isinstance(line_num, int) and line_num > 0 and len(product_specific) >= line_num:
+    if not product_specific and len(generic) >= line_num:
+        return generic[line_num - 1]
+    if len(product_specific) >= line_num:
         return product_specific[line_num - 1]
+    if len(fields) >= line_num:
+        return fields[line_num - 1]
     return None
 
 
