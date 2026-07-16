@@ -64,7 +64,8 @@ def _url(order: str, *parts: str) -> str:
 
 def _request(method: str, url: str, **kwargs) -> requests.Response:
     try:
-        return _session_get().request(method, url, timeout=_TIMEOUT, **kwargs)
+        kwargs.setdefault("timeout", _TIMEOUT)
+        return _session_get().request(method, url, **kwargs)
     except requests.RequestException as exc:
         logger.error("Office API request failed: %s", exc)
         raise OfficeApiError("Order tracking service unavailable") from exc
