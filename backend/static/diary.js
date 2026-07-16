@@ -259,6 +259,9 @@
                     title = 'Checking office server for a saved label…';
                     label = 'Checking…';
                     disabled = true;
+                } else if (row.label_check_failed) {
+                    title = 'Label check missed it — click to reprint from office server';
+                    disabled = false;
                 } else if (!hasStored) {
                     title = 'No ZPL stored on the office server yet — ship again to save the label';
                     disabled = true;
@@ -532,11 +535,11 @@
                 );
                 if (!row) continue;
                 seen.add(`${row.order_name}::${row.item_id}`);
-                row.can_print_label = !!result.has_label;
-                row.can_reprint = !!result.has_label;
-                row.label_filename = result.filename || '';
-                row.label_status_pending = false;
                 if (result.has_label) {
+                    row.can_print_label = true;
+                    row.can_reprint = true;
+                    row.label_check_failed = false;
+                    row.label_filename = result.filename || '';
                     console.info(
                         'Office label found',
                         result.order_name,
@@ -544,8 +547,20 @@
                         result.filename || result.source || ''
                     );
                 } else {
-                    console.warn('No office label for', result.order_name, result.item_id);
+                    // Shipped lines may still have a label on disk — don't hard-disable Print.
+                    const shippedLine = !!(row.tracking_number || row.label_id);
+                    if (shippedLine) {
+                        row.can_print_label = true;
+                        row.can_reprint = true;
+                        row.label_check_failed = true;
+                    } else {
+                        row.can_print_label = false;
+                        row.can_reprint = false;
+                        row.label_check_failed = false;
+                    }
+                    console.warn('No office label for', result.order_name, result.item_id, result.error || '');
                 }
+                row.label_status_pending = false;
             }
             shipped.forEach(r => {
                 if (!seen.has(`${r.order_name}::${r.item_id}`)) {
@@ -630,7 +645,11 @@
         row.label_id = info?.label_id || row.label_id || '';
         row.can_print_label = !!(info?.label_stored || info?.has_zpl || info?.label_zpl_base64);
         row.can_reprint = row.can_print_label;
+        row.label_status_pending = !!row.can_print_label;
         renderTable();
+        if (row.can_print_label) {
+            refreshLabelStatus();
+        }
         return true;
     }
 

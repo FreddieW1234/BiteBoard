@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from urllib.parse import quote
 
 import requests
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = 30
 _session: requests.Session | None = None
+_session_lock = threading.Lock()
 
 
 class OfficeApiError(Exception):
@@ -65,7 +67,9 @@ def _url(order: str, *parts: str) -> str:
 def _request(method: str, url: str, **kwargs) -> requests.Response:
     try:
         kwargs.setdefault("timeout", _TIMEOUT)
-        return _session_get().request(method, url, **kwargs)
+        # requests.Session is not thread-safe — diary label probes run in parallel.
+        with _session_lock:
+            return _session_get().request(method, url, **kwargs)
     except requests.RequestException as exc:
         logger.error("Office API request failed: %s", exc)
         raise OfficeApiError("Order tracking service unavailable") from exc
@@ -474,6 +478,16 @@ def _entry_kind(entry) -> str:
     return str(entry.get("kind") or entry.get("type") or entry.get("role") or "").strip().lower()
 
 
+def _unwrap_payload(payload):
+    """Office API sometimes nests payloads under data/result."""
+    if isinstance(payload, dict):
+        for key in ("data", "result", "payload"):
+            inner = payload.get(key)
+            if isinstance(inner, dict):
+                return inner
+    return payload
+
+
 def _filename_looks_like_label(name: str, kind: str = "") -> bool:
     """Match label files in the order/item folder (same place as artwork)."""
     kind_l = (kind or "").strip().lower()
@@ -482,7 +496,7 @@ def _filename_looks_like_label(name: str, kind: str = "") -> bool:
     text = (name or "").strip().lower()
     if not text:
         return False
-    base = text.rsplit("/", 1)[-1]
+    base = text.replace("\\", "/").rsplit("/", 1)[-1]
     if base.startswith("label-") or base.startswith("label_"):
         return True
     if base.endswith(".zpl") or base.endswith(".zplii"):
@@ -505,17 +519,26 @@ def _version_from_name(name: str) -> int:
 def _collect_names_from_payload(payload) -> list[tuple[str, str]]:
     """Return [(filename, kind), ...] from labels/files list payloads."""
     rows = []
+    payload = _unwrap_payload(payload)
     if isinstance(payload, dict):
         latest = payload.get("latest")
         if isinstance(latest, str) and latest.strip():
             rows.append((latest.strip(), "label"))
-        for key in ("labels", "files", "items"):
+        for key in ("labels", "files", "items", "label_files"):
             block = payload.get(key)
             if isinstance(block, list):
                 rows.extend(_collect_names_from_payload(block))
             elif isinstance(block, dict):
-                rows.extend(_collect_names_from_payload([block]))
-        # Single-file style dict
+                if _entry_name(block):
+                    rows.extend(_collect_names_from_payload([block]))
+                else:
+                    for val in block.values():
+                        if isinstance(val, list):
+                            rows.extend(_collect_names_from_payload(val))
+                        elif isinstance(val, dict):
+                            rows.extend(_collect_names_from_payload([val]))
+                        elif isinstance(val, str) and val.strip():
+                            rows.append((val.strip(), key))
         name = _entry_name(payload)
         if name and name != latest:
             rows.append((name, _entry_kind(payload)))
@@ -530,64 +553,167 @@ def _collect_names_from_payload(payload) -> list[tuple[str, str]]:
     return [(n, k) for n, k in rows if n]
 
 
+def _labels_from_payload(payload, *, order_key: str, source: str) -> list[dict]:
+    """Turn a labels/files payload into normalized label file rows."""
+    found: list[dict] = []
+    seen: set[str] = set()
+    for name, kind in _collect_names_from_payload(payload):
+        if not _filename_looks_like_label(name, kind):
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        found.append({
+            "filename": name,
+            "source": source,
+            "kind": kind,
+            "order_key": order_key,
+            "version": _version_from_name(name),
+        })
+    found.sort(key=lambda row: (row.get("version") or 0, row.get("filename") or ""), reverse=True)
+    return found
+
+
+def _label_get_metadata(order_key: str, item: str) -> dict | None:
+    """``GET …/label`` — authoritative when labels exist on the office server."""
+    url = f"{_url(order_key, item)}/label"
+    try:
+        resp = _request("GET", url, timeout=15)
+    except Exception as exc:
+        logger.warning("GET /label failed for %s / %s: %s", order_key, item, exc)
+        return None
+    if resp.status_code == 404:
+        return None
+    if not resp.ok:
+        logger.warning(
+            "GET /label HTTP %s for %s / %s: %s",
+            resp.status_code,
+            order_key,
+            item,
+            (resp.text or "")[:160],
+        )
+        return None
+
+    ctype = (resp.headers.get("Content-Type") or "").lower()
+    if "json" in ctype:
+        try:
+            body = resp.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            body = _unwrap_payload(body)
+            filename = str(body.get("filename") or body.get("latest") or "").strip()
+            zpl = _as_zpl_text(body.get("zpl") or "")
+            if zpl or filename:
+                return {
+                    "has_label": True,
+                    "filename": filename or None,
+                    "source": "label",
+                    "version": body.get("version") or _version_from_name(filename),
+                    "order_key": order_key,
+                }
+        return None
+
+    text = (resp.text or "").strip()
+    if text and ("^XA" in text.upper() or "^XZ" in text.upper()):
+        return {
+            "has_label": True,
+            "filename": None,
+            "source": "label-raw",
+            "order_key": order_key,
+        }
+    return None
+
+
 def find_label_files(order: str, item: str) -> list[dict]:
     """Find shipping label files in the office order/item folder.
 
     Disk layout (via Office API):
-      Online Store/orders/{order}/{item}/label-*.zpl
-    HTTP:
+      Online Store/Orders/{order}/{item}/label-*.zpl
+    HTTP (in priority order):
+      GET /orders/{order}/items/{item}/labels
+      GET /orders/{order}/items/{item}/label
       GET /orders/{order}/items/{item}/files
-      GET /orders/{order}/items/{item}/labels  (optional)
+      GET /orders/{order}/items/{item}
     """
     order = (order or "").strip()
     item = (item or "").strip()
     found: list[dict] = []
     seen: set[str] = set()
 
-    def _add(name: str, *, source: str, kind: str = "", order_key: str = "") -> None:
-        if not name or name in seen:
-            return
-        if not _filename_looks_like_label(name, kind):
-            return
-        seen.add(name)
-        found.append({
-            "filename": name,
-            "source": source,
-            "kind": kind,
-            "order_key": order_key or order,
-            "version": _version_from_name(name),
-        })
+    def _merge(rows: list[dict]) -> None:
+        for row in rows:
+            name = row.get("filename") or ""
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            found.append(row)
 
     for order_key in _order_key_variants(order):
-        # Primary: same /files listing used for artwork/proofs in that folder.
+        # 1) Dedicated labels index (office API spec).
+        try:
+            labels = list_labels(order_key, item)
+            merged = _labels_from_payload(labels, order_key=order_key, source="labels")
+            _merge(merged)
+            if merged:
+                logger.info(
+                    "label scan /labels order=%s item=%s latest=%s",
+                    order_key,
+                    item,
+                    merged[0].get("filename"),
+                )
+        except Exception as exc:
+            logger.warning("label scan /labels failed for %s / %s: %s", order_key, item, exc)
+
+        # 2) Authoritative GET /label metadata.
+        meta = _label_get_metadata(order_key, item)
+        if meta and meta.get("filename"):
+            _merge([{
+                "filename": meta["filename"],
+                "source": meta.get("source") or "label",
+                "kind": "label",
+                "order_key": order_key,
+                "version": meta.get("version") or _version_from_name(meta["filename"]),
+            }])
+        elif meta and meta.get("has_label"):
+            # Label exists but filename unknown — still counts for has_label().
+            _merge([{
+                "filename": f"__label__{order_key}__{item}",
+                "source": meta.get("source") or "label",
+                "kind": "label",
+                "order_key": order_key,
+                "version": 0,
+            }])
+
+        # 3) Same /files listing used for artwork/proofs in that folder.
         try:
             listed = list_files(order_key, item)
-            for name, kind in _collect_names_from_payload(listed):
-                _add(name, source="files", kind=kind, order_key=order_key)
+            merged = _labels_from_payload(listed, order_key=order_key, source="files")
+            _merge(merged)
             raw_files = (listed or {}).get("files") if isinstance(listed, dict) else listed
             sample = []
             if isinstance(raw_files, list):
                 for entry in raw_files[:12]:
                     sample.append(_entry_name(entry) or str(entry)[:40])
-            logger.warning(
-                "label scan /files order=%s item=%s count=%s sample=%s",
+            logger.info(
+                "label scan /files order=%s item=%s label_hits=%s sample=%s",
                 order_key,
                 item,
-                len(raw_files) if isinstance(raw_files, list) else 0,
+                len(merged),
                 sample,
             )
         except Exception as exc:
             logger.warning("label scan /files failed for %s / %s: %s", order_key, item, exc)
 
-        # Optional dedicated labels index.
+        # 4) Item view sometimes lists files when /files does not.
         try:
-            labels = list_labels(order_key, item)
-            for name, kind in _collect_names_from_payload(labels):
-                _add(name, source="labels", kind=kind or "label", order_key=order_key)
+            item_view = get_item(order_key, item)
+            if isinstance(item_view, dict):
+                merged = _labels_from_payload(item_view, order_key=order_key, source="item")
+                _merge(merged)
         except Exception as exc:
-            logger.warning("label scan /labels failed for %s / %s: %s", order_key, item, exc)
+            logger.warning("label scan get_item failed for %s / %s: %s", order_key, item, exc)
 
-    # Newest version first, then filename.
     found.sort(key=lambda row: (row.get("version") or 0, row.get("filename") or ""), reverse=True)
     return found
 
@@ -631,6 +757,7 @@ def get_label(order: str, item: str, version: int | None = None) -> dict:
             except Exception:
                 body = {}
             if isinstance(body, dict):
+                body = _unwrap_payload(body)
                 zpl = _as_zpl_text(body.get("zpl") or "")
                 if zpl:
                     return {**body, "zpl": zpl, "order_key": order_key, "source": "label"}
@@ -659,6 +786,38 @@ def get_label(order: str, item: str, version: int | None = None) -> dict:
     chosen = candidates[0]
     order_key = chosen.get("order_key") or order
     filename = chosen["filename"]
+    if filename.startswith("__label__"):
+        url = f"{_url(order_key, item)}/label"
+        resp = _request("GET", url, timeout=_TIMEOUT)
+        if not resp.ok:
+            raise OfficeApiError(
+                "No stored label in office folder "
+                f"orders/{order}/{item}/ (GET /label failed)"
+            )
+        if "json" in (resp.headers.get("Content-Type") or "").lower():
+            body = resp.json()
+            if isinstance(body, dict):
+                body = _unwrap_payload(body)
+                zpl = _as_zpl_text(body.get("zpl") or "")
+                if zpl:
+                    return {
+                        **body,
+                        "zpl": zpl,
+                        "order_key": order_key,
+                        "source": "label",
+                        "carrier": "fedex",
+                    }
+        zpl = _as_zpl_text(resp.content or b"")
+        if not zpl:
+            raise OfficeApiError("Office label endpoint returned no ZPL")
+        return {
+            "zpl": zpl,
+            "filename": "",
+            "order_key": order_key,
+            "source": "label-raw",
+            "carrier": "fedex",
+        }
+
     resp = fetch_file(order_key, item, filename)
     zpl = _as_zpl_text(resp.content or b"")
     if not zpl:
@@ -684,31 +843,27 @@ def has_label(order: str, item: str) -> bool:
         return False
     try:
         found = find_label_files(order, item)
-        if found:
-            logger.warning(
+        real = [row for row in found if not str(row.get("filename") or "").startswith("__label__")]
+        if real:
+            logger.info(
                 "has_label True for %s / %s via %s (%s)",
                 order,
                 item,
-                found[0].get("source"),
-                found[0].get("filename"),
+                real[0].get("source"),
+                real[0].get("filename"),
             )
+            return True
+        if found:
+            logger.info("has_label True for %s / %s via GET /label", order, item)
             return True
     except Exception as exc:
         logger.warning("has_label scan failed for %s / %s: %s", order, item, exc)
 
-    # Last resort: dedicated GET /label
     for order_key in _order_key_variants(order):
-        url = f"{_url(order_key, item)}/label"
-        try:
-            resp = _request("GET", url, timeout=12, stream=True)
-        except Exception:
-            continue
-        try:
-            if resp.status_code == 200:
-                logger.warning("has_label True via GET /label for %s / %s", order_key, item)
-                return True
-        finally:
-            resp.close()
+        meta = _label_get_metadata(order_key, item)
+        if meta and meta.get("has_label"):
+            logger.info("has_label True via GET /label for %s / %s", order_key, item)
+            return True
     return False
 
 
@@ -731,28 +886,27 @@ def labels_status(pairs: list[tuple[str, str]]) -> dict[str, dict]:
 
     def _probe(order: str, item: str) -> dict:
         found = find_label_files(order, item)
-        if found:
+        real = [row for row in found if not str(row.get("filename") or "").startswith("__label__")]
+        pick = real[0] if real else (found[0] if found else None)
+        if pick:
             return {
                 "has_label": True,
-                "filename": found[0].get("filename"),
-                "source": found[0].get("source"),
-                "version": found[0].get("version"),
+                "filename": pick.get("filename") if not str(pick.get("filename") or "").startswith("__label__") else None,
+                "source": pick.get("source"),
+                "version": pick.get("version"),
             }
-        # Dedicated /label route only (files already scanned).
         for order_key in _order_key_variants(order):
-            url = f"{_url(order_key, item)}/label"
-            try:
-                resp = _request("GET", url, timeout=12, stream=True)
-            except Exception:
-                continue
-            try:
-                if resp.status_code == 200:
-                    return {"has_label": True, "source": "label", "filename": None}
-            finally:
-                resp.close()
+            meta = _label_get_metadata(order_key, item)
+            if meta and meta.get("has_label"):
+                return {
+                    "has_label": True,
+                    "filename": meta.get("filename"),
+                    "source": meta.get("source") or "label",
+                    "version": meta.get("version"),
+                }
         return {"has_label": False}
 
-    workers = min(6, len(cleaned))
+    workers = min(4, len(cleaned))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(_probe, order, item): key
