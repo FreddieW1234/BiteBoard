@@ -24,9 +24,44 @@
         });
     }
 
+    function injectCommitInfo(footer) {
+        if (footer.querySelector('.sidebar-commit-info')) return;
+
+        var el = document.createElement('div');
+        el.className = 'sidebar-commit-info';
+        el.setAttribute('aria-live', 'polite');
+        el.innerHTML =
+            '<span class="sidebar-commit-prefix">Commit: </span>' +
+            '<span class="sidebar-commit-sha">…</span>';
+
+        var before = footer.querySelector('.sidebar-theme-toggle') || footer.querySelector('.dashboard-tab') || footer.firstChild;
+        if (before) footer.insertBefore(el, before);
+        else footer.appendChild(el);
+
+        fetch('/api/build-info', { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                var span = el.querySelector('.sidebar-commit-sha');
+                if (!span) return;
+                var label = data.label || data.commit_short || '';
+                span.textContent = label || 'unknown';
+                if (data.commit) {
+                    el.title = data.commit + (data.branch ? ' (' + data.branch + ')' : '');
+                }
+            })
+            .catch(function () {
+                var span = el.querySelector('.sidebar-commit-sha');
+                if (span) span.textContent = 'unknown';
+            });
+    }
+
     function injectThemeToggle() {
         var footer = document.querySelector('.sidebar .sidebar-footer');
-        if (!footer || footer.querySelector('.sidebar-theme-toggle')) return;
+        if (!footer) return;
+
+        injectCommitInfo(footer);
+
+        if (footer.querySelector('.sidebar-theme-toggle')) return;
 
         var btn = document.createElement('button');
         btn.type = 'button';
@@ -42,6 +77,8 @@
         var dash = footer.querySelector('.dashboard-tab');
         if (dash) footer.insertBefore(btn, dash);
         else footer.insertBefore(btn, footer.firstChild);
+
+        injectCommitInfo(footer);
         syncToggleButtons();
     }
 

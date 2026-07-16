@@ -22,6 +22,37 @@ html[data-theme="dark"] {
     --bb-shadow: rgba(0, 0, 0, 0.35);
 }
 
+/* ── Sidebar deploy commit (above theme toggle) ── */
+.sidebar-commit-info {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 0 12px 2px;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: #6b7280;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+.sidebar:hover .sidebar-commit-info {
+    opacity: 1;
+    visibility: visible;
+}
+.sidebar-commit-info .sidebar-commit-sha {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #4b5563;
+}
+html[data-theme="dark"] .sidebar-commit-info {
+    color: var(--bb-muted);
+}
+html[data-theme="dark"] .sidebar-commit-info .sidebar-commit-sha {
+    color: var(--bb-text-secondary);
+}
+.sidebar.collapsed .sidebar-commit-prefix { display: none; }
+.sidebar.collapsed:hover .sidebar-commit-prefix { display: inline; }
+
 /* ── Sidebar theme toggle (visible on sidebar hover only) ── */
 .sidebar-theme-toggle {
     display: flex;

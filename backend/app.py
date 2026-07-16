@@ -2591,6 +2591,16 @@ def api_diary_entry():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/build-info', methods=['GET'])
+def api_build_info():
+    """Git commit for the running deploy (Render env or local .git)."""
+    try:
+        from scripts.build_info import get_build_info  # type: ignore
+        return jsonify({"success": True, **get_build_info()})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "label": "unknown"}), 500
+
+
 @app.route('/api/shipping/status', methods=['GET'])
 def api_shipping_status():
     if not is_staff_authenticated():
