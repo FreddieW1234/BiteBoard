@@ -32,17 +32,34 @@ def _office_diary_available() -> bool:
     return office_api is not None and bool(getattr(office_api, "OFFICE_API_URL", None))
 
 
+def _merge_diary_entry(base: dict, overlay: dict) -> dict:
+    """Merge two diary entries; prefer non-empty shipping fields from overlay."""
+    out = dict(base or {})
+    for key, value in (overlay or {}).items():
+        if value in (None, ""):
+            continue
+        if key == "dispatch_manual":
+            out[key] = bool(value) or bool(out.get(key))
+            continue
+        if not out.get(key):
+            out[key] = value
+        elif key in ("tracking_number", "label_id", "carrier", "service_code", "shipment_type"):
+            # Local/shipping writes win for label metadata when office is incomplete.
+            out[key] = value
+    return out
+
+
 def _load_saved_entries() -> dict[tuple[str, str], dict]:
     """Return saved diary entries keyed by (order_name, item_id).
 
-    Tries the Office API first; on any error (endpoint missing, unreachable),
-    falls back to the local SQLite store.
+    Prefers Office API when available, then merges local SQLite so shipping
+    stamps (tracking/label) are not lost if Office omits those fields.
     """
+    out: dict[tuple[str, str], dict] = {}
     if _office_diary_available():
         try:
             data = office_api.get_diary_entries()
             entries = (data or {}).get("entries") or []
-            out: dict[tuple[str, str], dict] = {}
             for e in entries:
                 order = str(e.get("order") or e.get("order_name") or "").strip()
                 item = str(e.get("item") or e.get("item_id") or "").strip()
@@ -58,23 +75,23 @@ def _load_saved_entries() -> dict[tuple[str, str], dict]:
                     "shipment_type": e.get("shipment_type") or "",
                     "updated_at": e.get("updated_at") or "",
                 }
-            enrich_saved_index(out)
-            if _DEBUG_DIARY_KEYS:
-                exact_keys = [k for k in out if not str(k[1]).startswith("slug:")]
-                logger.warning(
-                    "Diary DEBUG office entry_count=%d exact_keys=%r",
-                    len(exact_keys),
-                    exact_keys,
-                )
-            return out
         except Exception as exc:
             logger.warning("Diary: Office API unavailable, using local store (%s)", exc)
-    out = get_all_entries()
+
+    local = get_all_entries()
+    for key, local_entry in (local or {}).items():
+        if str(key[1]).startswith("slug:"):
+            continue
+        if key in out:
+            out[key] = _merge_diary_entry(out[key], local_entry)
+        else:
+            out[key] = dict(local_entry)
+
     enrich_saved_index(out)
     if _DEBUG_DIARY_KEYS:
         exact_keys = [k for k in out if not str(k[1]).startswith("slug:")]
         logger.warning(
-            "Diary DEBUG sqlite entry_count=%d exact_keys=%r",
+            "Diary DEBUG entry_count=%d exact_keys=%r",
             len(exact_keys),
             exact_keys,
         )
@@ -118,7 +135,7 @@ def save_diary_entry(payload: dict) -> dict:
 
     if _office_diary_available():
         try:
-            entry = office_api.set_diary_entry(
+            office_api.set_diary_entry(
                 order_name,
                 item_id,
                 dispatch_date=dispatch_date if dispatch_date is not None else None,
@@ -129,10 +146,10 @@ def save_diary_entry(payload: dict) -> dict:
                 service_code=service_code if service_code is not None else None,
                 shipment_type=shipment_type if shipment_type is not None else None,
             )
-            return {"success": True, "entry": entry}
         except Exception as exc:
-            logger.warning("Diary: Office API save failed, using local store (%s)", exc)
+            logger.warning("Diary: Office API save failed, continuing with local store (%s)", exc)
 
+    # Always write local SQLite so shipping stamps survive Office gaps / reload.
     try:
         entry = upsert_entry(
             order_name,

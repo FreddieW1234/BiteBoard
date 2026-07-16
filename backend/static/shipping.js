@@ -109,15 +109,30 @@
             return Number.isFinite(n) && n > 0 ? n : null;
         };
         const weightRaw = body.querySelector('#ship-weight')?.value;
-        const weightFallback = state.prep?.defaults?.weight_kg || 1;
         const weight = parseFloat(weightRaw);
         return {
             shipment_type: body.querySelector('[name="shipment_type"]:checked')?.value || 'parcel',
-            weight_kg: Number.isFinite(weight) && weight > 0 ? weight : weightFallback,
+            weight_kg: Number.isFinite(weight) && weight > 0 ? weight : null,
             length_cm: parseDim('#ship-length'),
             width_cm: parseDim('#ship-width'),
             height_cm: parseDim('#ship-height'),
         };
+    }
+
+    function hasWeight(form) {
+        return form && Number.isFinite(form.weight_kg) && form.weight_kg > 0;
+    }
+
+    function showNeedWeight() {
+        const area = overlay?.querySelector('#ship-rates-area');
+        if (area) {
+            area.innerHTML = '<p class="ship-msg info">Enter the package weight (kg) to load rates.</p>';
+        }
+        setConfirmEnabled(false);
+        state.ratesLoading = false;
+        state.rates = [];
+        state.selectedRateId = '';
+        setMsg('Weight is required before rates can load.', 'info');
     }
 
     function renderBody() {
@@ -132,7 +147,13 @@
         const palletHint = palletDisabled
             ? '<p class="ship-pallet-notice">Palletways direct API not connected yet.</p>'
             : '<p class="ship-pallet-notice">Palletways key present — direct integration pending.</p>';
-        const weightVal = defs.weight_kg != null ? defs.weight_kg : '';
+        const knownWeight = Number.isFinite(Number(defs.weight_kg)) && Number(defs.weight_kg) > 0
+            ? Number(defs.weight_kg)
+            : null;
+        const weightVal = knownWeight != null ? knownWeight : '';
+        const weightHint = knownWeight == null
+            ? '<p class="ship-weight-hint">Shopify has no weight for this line — enter it before rates load.</p>'
+            : '';
 
         body.innerHTML = `
             <div id="ship-modal-msg" hidden></div>
@@ -158,8 +179,8 @@
                 <div class="ship-section-title">Package</div>
                 <div class="ship-fields">
                     <div class="ship-field">
-                        <label for="ship-weight">Weight (kg)</label>
-                        <input type="number" id="ship-weight" min="0.01" step="0.001" value="${weightVal}">
+                        <label for="ship-weight">Weight (kg) <span class="ship-required">required</span></label>
+                        <input type="number" id="ship-weight" min="0.01" step="0.001" value="${weightVal}" placeholder="e.g. 2.5" required>
                     </div>
                     <div class="ship-field">
                         <label for="ship-length">Length (cm)</label>
@@ -174,14 +195,12 @@
                         <input type="number" id="ship-height" min="0.1" step="0.1" placeholder="optional">
                     </div>
                 </div>
+                ${weightHint}
             </div>
             <div class="ship-section ship-rates">
                 <div class="ship-section-title">Rates by carrier</div>
                 <div id="ship-rates-area">
-                    <div class="ship-rates-loading">
-                        <span class="ship-spinner" aria-hidden="true"></span>
-                        <span>Loading rates…</span>
-                    </div>
+                    <p class="ship-msg info">Enter the package weight (kg) to load rates.</p>
                 </div>
             </div>`;
 
@@ -339,6 +358,18 @@
         setConfirmEnabled(false);
         state.selectedRateId = '';
         state.rates = [];
+
+        const form = readForm();
+        if (!hasWeight(form)) {
+            if (rateTimer) {
+                clearTimeout(rateTimer);
+                rateTimer = null;
+            }
+            rateRequestId += 1;
+            showNeedWeight();
+            return;
+        }
+
         state.ratesLoading = true;
         showRatesLoading();
         setMsg('', 'info');
@@ -352,13 +383,18 @@
 
     async function fetchRates() {
         if (!state.orderId || !state.prep) return;
+        const form = readForm();
+        if (!hasWeight(form)) {
+            showNeedWeight();
+            return;
+        }
+
         const requestId = ++rateRequestId;
         state.ratesLoading = true;
         setConfirmEnabled(false);
         state.selectedRateId = '';
         showRatesLoading();
 
-        const form = readForm();
         if (form.shipment_type === 'pallet') {
             if (requestId !== rateRequestId) return;
             state.ratesLoading = false;
@@ -478,6 +514,11 @@
             return;
         }
         const form = readForm();
+        if (!hasWeight(form)) {
+            showNeedWeight();
+            setMsg('Enter the package weight in kg before creating a label.', 'err');
+            return;
+        }
         const btn = overlay.querySelector('[data-ship-action="confirm"]');
         if (btn) btn.disabled = true;
         setMsg('Purchasing label…', 'info');
@@ -495,6 +536,13 @@
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Ship failed');
+            if (typeof window.__diaryMarkShipped === 'function') {
+                window.__diaryMarkShipped(
+                    data.order_name || state.orderName,
+                    data.item_id || state.itemId,
+                    data
+                );
+            }
             renderShipSuccess(data);
             if (typeof window.__diaryReload === 'function') {
                 window.__diaryReload();

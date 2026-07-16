@@ -223,6 +223,9 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
 
             carrier = entry.get("carrier") or ""
             tracking_number = entry.get("tracking_number") or ""
+            label_id = entry.get("label_id") or ""
+            # Treat label purchase as shipped even if sandbox omitted a tracking number.
+            shipped = bool(tracking_number or label_id)
 
             rows.append({
                 "order_id": order_id,
@@ -238,8 +241,9 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "dispatch_manual": dispatch_manual,
                 "carrier": carrier,
                 "carrier_label": _CARRIER_LABELS.get(carrier, carrier),
-                "tracking_number": tracking_number,
-                "shipped": bool(tracking_number),
+                "tracking_number": tracking_number or label_id,
+                "label_id": label_id,
+                "shipped": shipped,
             })
 
     def sort_key(row: dict):

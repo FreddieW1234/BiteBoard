@@ -343,6 +343,23 @@
     font-size: 0.875rem;
 }
 
+.ship-required {
+    font-weight: 600;
+    color: #b45309;
+    text-transform: lowercase;
+}
+
+.ship-weight-hint {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+}
+
 .ship-type-toggle {
     display: flex;
     gap: 8px;

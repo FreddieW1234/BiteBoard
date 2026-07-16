@@ -452,7 +452,23 @@
     document.getElementById('diary-content')?.addEventListener('change', onTableChange);
     document.getElementById('diary-content')?.addEventListener('click', onTableClickShip);
 
+    function markRowShipped(orderName, itemId, info) {
+        const name = (orderName || '').trim();
+        const id = (itemId || '').trim();
+        if (!name || !id) return false;
+        const row = allRows.find(r => r.order_name === name && r.item_id === id);
+        if (!row) return false;
+        row.shipped = true;
+        row.carrier = info?.carrier || row.carrier || 'fedex';
+        row.carrier_label = info?.carrier_label || carrierLabel(row.carrier);
+        row.tracking_number = info?.tracking_number || info?.label_id || row.tracking_number || '';
+        row.label_id = info?.label_id || row.label_id || '';
+        renderTable();
+        return true;
+    }
+
     window.__diaryReload = loadDiary;
+    window.__diaryMarkShipped = markRowShipped;
 
     const sortSelect = document.getElementById('diary-sort-select');
     if (sortSelect) {

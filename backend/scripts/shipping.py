@@ -164,8 +164,8 @@ def prepare_shipment(order_id: str | int, *, item_id: str | None = None) -> dict
         (li.get("weight_kg") or 0) * max(1, int(li.get("quantity") or 1))
         for li in items
     )
-    if total_weight_kg <= 0:
-        total_weight_kg = 1.0
+    # Only prefill when Shopify has a real weight — never invent 1 kg.
+    known_weight = round(total_weight_kg, 3) if total_weight_kg > 0 else None
 
     return {
         "success": True,
@@ -178,7 +178,7 @@ def prepare_shipment(order_id: str | int, *, item_id: str | None = None) -> dict
         "ship_from": ship_from_address(),
         "items": items,
         "defaults": {
-            "weight_kg": round(total_weight_kg, 3),
+            "weight_kg": known_weight,
             "length_cm": None,
             "width_cm": None,
             "height_cm": None,
@@ -220,6 +220,20 @@ def _parse_dim(value) -> float | None:
         return n if n > 0 else None
     except (TypeError, ValueError):
         return None
+
+
+def _parse_weight_kg(value) -> float | None:
+    return _parse_dim(value)
+
+
+def _weight_from_payload(payload: dict, prep: dict | None = None) -> float | None:
+    """Require an explicit positive weight — never invent a default kg."""
+    weight = _parse_weight_kg(payload.get("weight_kg"))
+    if weight is not None:
+        return weight
+    if prep:
+        return _parse_weight_kg((prep.get("defaults") or {}).get("weight_kg"))
+    return None
 
 
 def _pending_notes_for_others(shipment_type: str, *, fedex_ok: bool) -> list[dict]:
@@ -274,7 +288,14 @@ def quote_shipment(payload: dict) -> dict:
     if not prep.get("success"):
         return prep
 
-    shipment_type = _resolve_shipment_type(payload)
+    weight = _weight_from_payload(payload, prep)
+    if weight is None:
+        return {
+            "success": False,
+            "error": "Enter the package weight in kg before getting rates.",
+        }
+
+    shipment_type = _resolve_shipment_type({**payload, "weight_kg": weight})
     rates: list[dict] = []
     carrier_notes: list[dict] = []
     carriers_queried: list[str] = []
@@ -286,7 +307,6 @@ def quote_shipment(payload: dict) -> dict:
             from scripts import fedex_api  # type: ignore
             from scripts.fedex_api import FedExError  # type: ignore
 
-            weight = float(payload.get("weight_kg") or prep.get("defaults", {}).get("weight_kg") or 1)
             rates = fedex_api.get_rates(
                 ship_from=prep.get("ship_from") or ship_from_address(),
                 ship_to=prep.get("ship_to") or {},
@@ -375,12 +395,18 @@ def ship_order(payload: dict) -> dict:
     if not prep.get("success"):
         return prep
 
+    weight = _weight_from_payload(payload, prep)
+    if weight is None:
+        return {
+            "success": False,
+            "error": "Enter the package weight in kg before creating a label.",
+        }
+
     try:
         from scripts import fedex_api, print_client  # type: ignore
         from scripts.fedex_api import FedExError  # type: ignore
 
         service_type, packaging = fedex_api.parse_rate_id(rate_id)
-        weight = float(payload.get("weight_kg") or prep.get("defaults", {}).get("weight_kg") or 1)
         label = fedex_api.create_label(
             ship_from=prep.get("ship_from") or ship_from_address(),
             ship_to=prep.get("ship_to") or {},
@@ -394,9 +420,14 @@ def ship_order(payload: dict) -> dict:
             label_format="ZPLII",
         )
 
-        tracking = str(label.get("tracking_number") or "")
-        label_id = str(label.get("label_id") or tracking)
+        tracking = str(label.get("tracking_number") or "").strip()
+        label_id = str(label.get("label_id") or tracking or "").strip()
         service_code = str(label.get("service_code") or service_type)
+        # Sandbox sometimes returns a label with no tracking — still stamp the row.
+        if not tracking:
+            tracking = label_id or f"FEDEX-{service_code}-{date.today().isoformat()}"
+        if not label_id:
+            label_id = tracking
         label_bytes = label.get("label_bytes") or b""
         label_url = str(label.get("label_url") or "")
 
@@ -417,16 +448,27 @@ def ship_order(payload: dict) -> dict:
             print_result = {"success": True, "skipped": True, "reason": "print_server_not_configured"}
 
         order_name = prep.get("order_name") or ""
-        for item in prep.get("items") or []:
-            item_id = (item.get("item_id") or "").strip()
-            if not item_id:
-                ln = item.get("line_number")
-                title = item.get("title") or ""
-                if ln is None:
-                    continue
-                from scripts.office_api import item_key  # type: ignore
-                item_id = item_key(int(ln), title)
-            save_manual_dispatch(
+        # Prefer the Diary row's item_id so the Ship column updates the same key.
+        diary_item_id = (payload.get("item_id") or prep.get("item_id") or "").strip()
+        stamp_ids: list[str] = []
+        if diary_item_id:
+            stamp_ids.append(diary_item_id)
+        else:
+            for item in prep.get("items") or []:
+                item_id = (item.get("item_id") or "").strip()
+                if not item_id:
+                    ln = item.get("line_number")
+                    title = item.get("title") or ""
+                    if ln is None:
+                        continue
+                    from scripts.office_api import item_key  # type: ignore
+                    item_id = item_key(int(ln), title)
+                if item_id and item_id not in stamp_ids:
+                    stamp_ids.append(item_id)
+
+        stamped = 0
+        for item_id in stamp_ids:
+            saved = save_manual_dispatch(
                 order_name=order_name,
                 item_id=item_id,
                 carrier="fedex",
@@ -435,12 +477,27 @@ def ship_order(payload: dict) -> dict:
                 label_id=label_id,
                 shipment_type="parcel",
             )
+            if not saved.get("success"):
+                logger.warning("Diary stamp failed for %s / %s: %s", order_name, item_id, saved)
+            else:
+                stamped += 1
+        if stamped == 0:
+            return {
+                "success": False,
+                "error": (
+                    "Label may have been created, but Diary could not be updated "
+                    f"(order={order_name!r}, items={len(stamp_ids)}). "
+                    "Refresh and check tracking before shipping again."
+                ),
+                "tracking_number": tracking,
+            }
 
         import base64
 
         return {
             "success": True,
             "order_name": order_name,
+            "item_id": diary_item_id or (stamp_ids[0] if stamp_ids else ""),
             "tracking_number": tracking,
             "label_id": label_id,
             "carrier": "fedex",
@@ -483,7 +540,7 @@ def save_manual_dispatch(
         return {"success": False, "error": "order_name and item_id are required"}
 
     today_iso = date.today().isoformat()
-    save_diary_entry({
+    result = save_diary_entry({
         "order_name": order_name,
         "item_id": item_id,
         "carrier": (carrier or "").strip(),
@@ -494,4 +551,4 @@ def save_manual_dispatch(
         "service_code": (service_code or "").strip(),
         "shipment_type": shipment_type or "parcel",
     })
-    return {"success": True}
+    return result if isinstance(result, dict) else {"success": True}
