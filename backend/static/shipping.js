@@ -130,8 +130,8 @@
         const defs = prep.defaults || {};
         const palletDisabled = !state.providers.palletways;
         const palletHint = palletDisabled
-            ? '<p class="ship-pallet-notice">Palletways API key pending — pallet shipping unavailable.</p>'
-            : '';
+            ? '<p class="ship-pallet-notice">Palletways direct API not connected yet.</p>'
+            : '<p class="ship-pallet-notice">Palletways key present — direct integration pending.</p>';
         const weightVal = defs.weight_kg != null ? defs.weight_kg : '';
 
         body.innerHTML = `
@@ -220,7 +220,6 @@
             if (hint.needles.some(n => text.includes(n))) return hint.label;
         }
         return (rate.carrier_friendly_name || rate.carrier_code || 'Other')
-            .replace(/\s*-\s*ShipStation Carrier Services/i, '')
             .trim() || 'Other';
     }
 
@@ -434,11 +433,14 @@
             if (!res.ok || !data.success) throw new Error(data.error || 'Ship failed');
 
             let msg = `Label created. Tracking: ${data.tracking_number || '—'}`;
+            if (data.sandbox_note) {
+                msg += ` (${data.sandbox_note})`;
+            }
             const print = data.print || {};
             if (print.skipped) {
-                msg += ' (Print server not configured — label saved in ShipStation.)';
+                msg += ' (Print server not configured.)';
             } else if (print.success === false) {
-                msg += ` Print failed: ${print.error || 'unknown'}. Reprint from ShipStation if needed.`;
+                msg += ` Print failed: ${print.error || 'unknown'}.`;
             } else {
                 msg += ' Sent to office printer.';
             }
@@ -512,20 +514,28 @@
             }
             state.prep = prep;
             state.providers = (status.providers || prep.providers || {});
-            state.carriersQueried = state.providers.carriers || [];
-            if (!state.providers.shipstation) {
-                setMsg('ShipStation is not configured. Set SHIPSTATION_API_KEY on the server.', 'err');
-            } else if (state.providers.ship_from_ready === false) {
+            const carrierMap = state.providers.carriers || {};
+            state.carriersQueried = Object.values(carrierMap)
+                .map(c => (c && c.label) || '')
+                .filter(Boolean);
+            if (!state.carriersQueried.length) {
+                state.carriersQueried = ['Royal Mail', 'FedEx', 'Palletways'];
+            }
+
+            const fedexReady = !!(state.providers.carriers?.fedex?.ready || state.providers.fedex);
+            if (state.providers.ship_from_ready === false) {
                 setMsg(
-                    'Ship-from address is missing. In ShipStation: Settings → Shipping → Warehouses, ' +
-                    'or set SHIPSTATION_ORIGIN_* env vars on Render.',
+                    'Ship-from address is missing. Set SHIP_FROM_LINE1 and SHIP_FROM_POSTCODE on Render.',
                     'err'
+                );
+            } else if (!fedexReady && !state.providers.royal_mail && !state.providers.palletways) {
+                setMsg(
+                    'No carrier APIs ready yet. Add FedEx / Royal Mail / Palletways credentials on Render.',
+                    'info'
                 );
             }
             renderBody();
-            if (state.providers.shipstation && state.providers.ship_from_ready !== false) {
-                scheduleRates();
-            }
+            scheduleRates();
         } catch (err) {
             overlay.querySelector('#ship-modal-body').innerHTML = '';
             setMsg(err.message || 'Could not open shipping', 'err');

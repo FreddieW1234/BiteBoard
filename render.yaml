@@ -32,14 +32,38 @@ services:
         value: "https://bitepromotions.uk/pages/portal"
       - key: CUSTOMER_LOGIN_RETURN_TO
         value: "/pages/portal"
-      - key: SHIPSTATION_API_KEY
+      - key: ROYAL_MAIL_API_KEY
         sync: false
-      - key: SHIPSTATION_API_URL
-        value: "https://api.shipstation.com"
-      - key: SHIPSTATION_WAREHOUSE_ID
+      - key: ROYAL_MAIL_API_URL
+        sync: false
+      - key: FEDEX_API_KEY
+        sync: false
+      - key: FEDEX_API_URL
+        sync: false
+      - key: FEDEX_ACCOUNT_NUMBER
+        sync: false
+      - key: FEDEX_CLIENT_ID
+        sync: false
+      - key: FEDEX_CLIENT_SECRET
         sync: false
       - key: PALLETWAYS_API_KEY
         sync: false
+      - key: SHIP_FROM_NAME
+        sync: false
+      - key: SHIP_FROM_PHONE
+        sync: false
+      - key: SHIP_FROM_LINE1
+        sync: false
+      - key: SHIP_FROM_LINE2
+        sync: false
+      - key: SHIP_FROM_CITY
+        sync: false
+      - key: SHIP_FROM_STATE
+        sync: false
+      - key: SHIP_FROM_POSTCODE
+        sync: false
+      - key: SHIP_FROM_COUNTRY
+        value: "GB"
       - key: OFFICE_PRINT_SERVER_URL
         sync: false
       - key: OFFICE_PRINT_SERVER_KEY

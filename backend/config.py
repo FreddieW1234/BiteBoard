@@ -78,26 +78,32 @@ KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME = os.environ.get(
     "KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME", "Bite Customer Registered"
 )
 
-# ShipStation — parcel labels (Royal Mail, FedEx, etc.)
-SHIPSTATION_API_KEY = os.environ.get("SHIPSTATION_API_KEY") or ""
-SHIPSTATION_API_URL = (os.environ.get("SHIPSTATION_API_URL") or "https://api.shipstation.com").rstrip("/")
-# Optional — if unset, the first warehouse from GET /v2/warehouses is used for ship-from
-SHIPSTATION_WAREHOUSE_ID = os.environ.get("SHIPSTATION_WAREHOUSE_ID") or ""
-# Optional comma-separated carrier_code substrings to limit quotes (empty = all carriers).
-SHIPSTATION_CARRIER_CODES = os.environ.get("SHIPSTATION_CARRIER_CODES") or ""
-# Optional manual ship-from fallback when no warehouse is configured in ShipStation
-SHIPSTATION_ORIGIN_NAME = os.environ.get("SHIPSTATION_ORIGIN_NAME") or ""
-SHIPSTATION_ORIGIN_PHONE = os.environ.get("SHIPSTATION_ORIGIN_PHONE") or ""
-SHIPSTATION_ORIGIN_LINE1 = os.environ.get("SHIPSTATION_ORIGIN_LINE1") or ""
-SHIPSTATION_ORIGIN_LINE2 = os.environ.get("SHIPSTATION_ORIGIN_LINE2") or ""
-SHIPSTATION_ORIGIN_CITY = os.environ.get("SHIPSTATION_ORIGIN_CITY") or ""
-SHIPSTATION_ORIGIN_STATE = os.environ.get("SHIPSTATION_ORIGIN_STATE") or ""
-SHIPSTATION_ORIGIN_POSTCODE = os.environ.get("SHIPSTATION_ORIGIN_POSTCODE") or ""
-SHIPSTATION_ORIGIN_COUNTRY = os.environ.get("SHIPSTATION_ORIGIN_COUNTRY") or "GB"
+# Direct carrier APIs (ShipStation removed)
+ROYAL_MAIL_API_KEY = os.environ.get("ROYAL_MAIL_API_KEY") or ""
+ROYAL_MAIL_API_URL = (os.environ.get("ROYAL_MAIL_API_URL") or "").rstrip("/")
+FEDEX_API_KEY = os.environ.get("FEDEX_API_KEY") or ""
+FEDEX_API_URL = (
+    os.environ.get("FEDEX_API_URL") or "https://apis-sandbox.fedex.com"
+).rstrip("/")
+FEDEX_ACCOUNT_NUMBER = os.environ.get("FEDEX_ACCOUNT_NUMBER") or ""
+FEDEX_METER_NUMBER = os.environ.get("FEDEX_METER_NUMBER") or ""
+# OAuth: Client ID = FedEx "API Key"; Client Secret = FedEx "Secret Key"
+FEDEX_CLIENT_ID = os.environ.get("FEDEX_CLIENT_ID") or FEDEX_API_KEY or ""
+FEDEX_CLIENT_SECRET = os.environ.get("FEDEX_CLIENT_SECRET") or ""
 
-# Palletways — pallet consignments (optional until API key is issued)
+# Palletways — pallet consignments
 PALLETWAYS_API_KEY = os.environ.get("PALLETWAYS_API_KEY") or ""
 PALLETWAYS_API_URL = (os.environ.get("PALLETWAYS_API_URL") or "https://api.palletways.com").rstrip("/")
+
+# Warehouse / ship-from address used by direct carrier integrations
+SHIP_FROM_NAME = os.environ.get("SHIP_FROM_NAME") or os.environ.get("SHIPSTATION_ORIGIN_NAME") or ""
+SHIP_FROM_PHONE = os.environ.get("SHIP_FROM_PHONE") or os.environ.get("SHIPSTATION_ORIGIN_PHONE") or ""
+SHIP_FROM_LINE1 = os.environ.get("SHIP_FROM_LINE1") or os.environ.get("SHIPSTATION_ORIGIN_LINE1") or ""
+SHIP_FROM_LINE2 = os.environ.get("SHIP_FROM_LINE2") or os.environ.get("SHIPSTATION_ORIGIN_LINE2") or ""
+SHIP_FROM_CITY = os.environ.get("SHIP_FROM_CITY") or os.environ.get("SHIPSTATION_ORIGIN_CITY") or ""
+SHIP_FROM_STATE = os.environ.get("SHIP_FROM_STATE") or os.environ.get("SHIPSTATION_ORIGIN_STATE") or ""
+SHIP_FROM_POSTCODE = os.environ.get("SHIP_FROM_POSTCODE") or os.environ.get("SHIPSTATION_ORIGIN_POSTCODE") or ""
+SHIP_FROM_COUNTRY = os.environ.get("SHIP_FROM_COUNTRY") or os.environ.get("SHIPSTATION_ORIGIN_COUNTRY") or "GB"
 
 # Office LAN print server — receives ZPL/PDF jobs from Render (optional in phase 1)
 OFFICE_PRINT_SERVER_URL = (os.environ.get("OFFICE_PRINT_SERVER_URL") or "").rstrip("/")
