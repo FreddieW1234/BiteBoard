@@ -576,7 +576,6 @@ def ship_order(payload: dict) -> dict:
                     order_name=order_name,
                     tracking_number=tracking,
                     carrier="fedex",
-                    adjust=False,
                 )
             except Exception as print_exc:
                 logger.warning("Label print failed (label still stored): %s", print_exc)
@@ -736,8 +735,6 @@ def reprint_label(payload: dict) -> dict:
             order_name=order_name,
             tracking_number=label_ref,
             carrier=carrier,
-            # Stored labels are print-ready; legacy unmarked copies still get one adjust.
-            adjust=False if print_client.is_prepared_fedex_zpl(zpl) else None,
         )
     except PrintClientError as print_exc:
         logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)

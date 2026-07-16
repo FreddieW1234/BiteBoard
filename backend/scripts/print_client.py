@@ -27,6 +27,22 @@ _LABEL_SCALE = float(os.environ.get("FEDEX_LABEL_SCALE") or "0.9653")
 _PREPARED_MARKER = "bite-label-adjusted"
 
 
+def _fedex_label_settings() -> dict:
+    """Read label tuning from env on each use (Render env changes need no redeploy code)."""
+    return {
+        "shift_mm": float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-7"),
+        "dpi": int(os.environ.get("LABEL_DPI") or "203"),
+        "width_mm": float(os.environ.get("LABEL_WIDTH_MM") or "97"),
+        "height_mm": float(os.environ.get("LABEL_HEIGHT_MM") or "148"),
+        "rotate_180": os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
+            "1",
+            "true",
+            "yes",
+        ),
+        "scale": float(os.environ.get("FEDEX_LABEL_SCALE") or "0.9653"),
+    }
+
+
 class PrintClientError(Exception):
     pass
 
@@ -160,35 +176,72 @@ def is_prepared_fedex_zpl(zpl: str) -> bool:
 def prepare_fedex_zpl(
     zpl: str,
     *,
-    shift_mm: float = _FEDEX_SHIFT_MM,
-    dpi: int = _FEDEX_DPI,
-    width_mm: float = _LABEL_WIDTH_MM,
-    height_mm: float = _LABEL_HEIGHT_MM,
-    rotate_180: bool = _FEDEX_ROTATE_180,
-    scale: float = _LABEL_SCALE,
+    shift_mm: float | None = None,
+    dpi: int | None = None,
+    width_mm: float | None = None,
+    height_mm: float | None = None,
+    rotate_180: bool | None = None,
+    scale: float | None = None,
 ) -> str:
-    """Adjust FedEx ZPL once before saving on the office server."""
+    """Adjust FedEx ZPL before saving on the office server (includes content scale)."""
+    cfg = _fedex_label_settings()
     return adjust_fedex_zpl(
         zpl,
-        shift_mm=shift_mm,
-        dpi=dpi,
-        width_mm=width_mm,
-        height_mm=height_mm,
-        rotate_180=rotate_180,
-        scale=scale,
+        shift_mm=cfg["shift_mm"] if shift_mm is None else shift_mm,
+        dpi=cfg["dpi"] if dpi is None else dpi,
+        width_mm=cfg["width_mm"] if width_mm is None else width_mm,
+        height_mm=cfg["height_mm"] if height_mm is None else height_mm,
+        rotate_180=cfg["rotate_180"] if rotate_180 is None else rotate_180,
+        scale=cfg["scale"] if scale is None else scale,
         mark_prepared=True,
     )
+
+
+def finalize_fedex_zpl_for_print(zpl: str) -> str:
+    """Apply current env shift/size/rotation at print time.
+
+    Stored labels already have scaled coordinates (``bite-label-adjusted``).
+    Re-applying content scale would shrink twice, so prepared labels only
+    refresh layout commands (^LS, ^PO, ^PW, ^LL, ^LH) from today's env.
+    """
+    text = first_zpl_label(zpl)
+    if not text:
+        return text
+    cfg = _fedex_label_settings()
+    if is_prepared_fedex_zpl(text):
+        return adjust_fedex_zpl(
+            text,
+            shift_mm=cfg["shift_mm"],
+            dpi=cfg["dpi"],
+            width_mm=cfg["width_mm"],
+            height_mm=cfg["height_mm"],
+            rotate_180=cfg["rotate_180"],
+            scale=1.0,
+            mark_prepared=False,
+        )
+    if "FEDEX" in text.upper() or "FDX" in text.upper():
+        return adjust_fedex_zpl(
+            text,
+            shift_mm=cfg["shift_mm"],
+            dpi=cfg["dpi"],
+            width_mm=cfg["width_mm"],
+            height_mm=cfg["height_mm"],
+            rotate_180=cfg["rotate_180"],
+            scale=cfg["scale"],
+            mark_prepared=False,
+        )
+    return text
 
 
 def adjust_fedex_zpl(
     zpl: str,
     *,
-    shift_mm: float = _FEDEX_SHIFT_MM,
-    dpi: int = _FEDEX_DPI,
-    width_mm: float = _LABEL_WIDTH_MM,
-    height_mm: float = _LABEL_HEIGHT_MM,
-    rotate_180: bool = _FEDEX_ROTATE_180,
-    scale: float = _LABEL_SCALE,
+    shift_mm: float | None = None,
+    dpi: int | None = None,
+    width_mm: float | None = None,
+    height_mm: float | None = None,
+    rotate_180: bool | None = None,
+    scale: float | None = None,
     mark_prepared: bool = False,
 ) -> str:
     """FedEx ZPL tweaks for 9.7×14.8 cm portrait stock.
@@ -196,6 +249,14 @@ def adjust_fedex_zpl(
     ``shift_mm``: positive = left, negative = right (via ``^LS`` / ``^LS-``).
     ``scale``: uniform shrink/grow of fields (default 0.98 = 2% smaller).
     """
+    cfg = _fedex_label_settings()
+    shift_mm = cfg["shift_mm"] if shift_mm is None else shift_mm
+    dpi = cfg["dpi"] if dpi is None else dpi
+    width_mm = cfg["width_mm"] if width_mm is None else width_mm
+    height_mm = cfg["height_mm"] if height_mm is None else height_mm
+    rotate_180 = cfg["rotate_180"] if rotate_180 is None else rotate_180
+    scale = cfg["scale"] if scale is None else scale
+
     text = first_zpl_label(zpl)
     if not text:
         return text
@@ -271,13 +332,11 @@ def send_print_job(
     order_name: str = "",
     tracking_number: str = "",
     carrier: str = "",
-    adjust: bool | None = None,
 ) -> dict:
     """POST raw ZPL to ``{OFFICE_API_URL}/print``.
 
-    By default prints the ZPL as stored on the office server (no extra tweaks).
-    Legacy labels saved before store-time adjustment are auto-adjusted once unless
-    ``adjust=False``.
+    FedEx labels always pass through ``finalize_fedex_zpl_for_print`` so
+    ``FEDEX_LABEL_SHIFT_MM`` / scale env vars apply on every print/reprint.
     """
     del profile  # unused — office API only accepts raw ZPL
     if not configured():
@@ -308,11 +367,8 @@ def send_print_job(
     else:
         zpl_text = str(data)
 
-    if is_prepared_fedex_zpl(zpl_text):
-        zpl_text = first_zpl_label(zpl_text)
-    elif adjust is not False and _should_adjust_fedex(carrier, zpl_text):
-        # Old labels stored before we adjusted at save time.
-        zpl_text = adjust_fedex_zpl(zpl_text, mark_prepared=False)
+    if _should_adjust_fedex(carrier, zpl_text):
+        zpl_text = finalize_fedex_zpl_for_print(zpl_text)
     else:
         zpl_text = first_zpl_label(zpl_text)
 
