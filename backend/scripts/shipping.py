@@ -211,6 +211,7 @@ def quote_shipment(payload: dict) -> dict:
         dest_country = (prep.get("ship_to") or {}).get("country_code") or "GB"
         rates, rate_meta = _normalize_rates(rate_resp, dest_country=dest_country)
         rate_meta["carriers_queried"] = carriers_queried
+        carrier_notes = _carrier_availability_notes(carriers_queried, rates, rate_meta)
         result = {
             "success": True,
             "shipment_type": "parcel",
@@ -219,12 +220,12 @@ def quote_shipment(payload: dict) -> dict:
             "items": prep.get("items") or [],
             "rates": rates,
             "carriers_queried": carriers_queried,
+            "carrier_notes": carrier_notes,
         }
         if not rates:
             result["rate_meta"] = rate_meta
             result["error_hint"] = _empty_rates_hint(rate_meta, payload)
-        elif _missing_expected_carriers(rates, carriers_queried):
-            # Still return rates; UI can surface a soft note.
+        elif carrier_notes or _missing_expected_carriers(rates, carriers_queried):
             result["rate_meta"] = rate_meta
         return result
     except ShipStationError as exc:
@@ -526,6 +527,7 @@ def _rate_total(r: dict) -> tuple[float | None, str | None]:
     """Sum shipping + fees; return (total, currency)."""
     total = 0.0
     currency: str | None = None
+    found = False
     for key in ("shipping_amount", "insurance_amount", "confirmation_amount", "other_amount"):
         block = r.get(key)
         if not isinstance(block, dict):
@@ -539,8 +541,24 @@ def _rate_total(r: dict) -> tuple[float | None, str | None]:
         currency = currency or cur
         try:
             total += float(amount)
+            found = True
         except (TypeError, ValueError):
             return None, None
+    if not found:
+        # Some carriers put the total on the rate object itself.
+        for key in ("amount", "shipment_amount", "total_amount"):
+            block = r.get(key)
+            if isinstance(block, dict) and block.get("amount") is not None:
+                try:
+                    return float(block["amount"]), str(block.get("currency") or "GBP").upper()
+                except (TypeError, ValueError):
+                    return None, None
+            if block is not None and not isinstance(block, dict):
+                try:
+                    return float(block), str(r.get("currency") or "GBP").upper()
+                except (TypeError, ValueError):
+                    pass
+        return None, None
     if currency is None:
         return None, None
     return total, currency
@@ -579,6 +597,50 @@ def _missing_expected_carriers(rates: list[dict], carriers_queried: list[str]) -
         if was_queried and not kept_any:
             missing.append(label)
     return missing
+
+
+def _carrier_availability_notes(
+    carriers_queried: list[str],
+    rates: list[dict],
+    rate_meta: dict,
+) -> list[dict]:
+    """Explain carriers that are connected but have no selectable rates."""
+    queried = " ".join(carriers_queried).lower()
+    kept = " ".join(
+        f"{r.get('carrier_friendly_name') or ''} {r.get('carrier_code') or ''}".lower()
+        for r in rates
+    )
+    invalid_messages = rate_meta.get("invalid_messages") or []
+    notes: list[dict] = []
+
+    if any(n in queried for n in ("royal_mail", "royal mail", "stamps_com")) and not any(
+        n in kept for n in ("royal_mail", "royal mail", "stamps_com")
+    ):
+        notes.append({
+            "carrier": "Royal Mail",
+            "kind": "no_api_rates",
+            "message": (
+                "Royal Mail does not give ShipStation live rates "
+                "(their Rates API is closed to third-party apps). "
+                "Buy RM labels in ShipStation with your contracted prices."
+            ),
+        })
+
+    if "fedex" in queried and "fedex" not in kept:
+        detail = ""
+        fedex_msgs = [m for m in invalid_messages if "fedex" in m.lower()]
+        if fedex_msgs:
+            detail = " " + "; ".join(fedex_msgs[:2])
+        notes.append({
+            "carrier": "FedEx",
+            "kind": "no_rates",
+            "message": (
+                "FedEx is connected but returned no usable rates for this package."
+                + detail
+                + " Try a different size/weight, or check FedEx UK services in ShipStation."
+            ),
+        })
+    return notes
 
 
 def _rate_error_messages(rate: dict) -> list[str]:
@@ -727,15 +789,15 @@ def _empty_rates_hint(meta: dict, payload: dict) -> str:
     length = _parse_dim(payload.get("length_cm"))
     width = _parse_dim(payload.get("width_cm"))
     height = _parse_dim(payload.get("height_cm"))
-    if length and width and height and weight > 0:
+    # Only flag clearly impossible parcels (e.g. 40 kg in a 10 cm cube) — dense
+    # small products like lollipop packs are fine.
+    if length and width and height and weight >= 10:
         volume_m3 = (length * width * height) / 1_000_000.0
-        if volume_m3 > 0:
-            density = weight / volume_m3
-            if density > 500:  # kg/m³ — absurdly dense for a parcel
-                parts.append(
-                    f"Package looks unrealistic ({weight:g} kg in {length:g}×{width:g}×{height:g} cm) — "
-                    "carriers often reject this. Check weight/dims for this line only."
-                )
+        if volume_m3 > 0 and (weight / volume_m3) > 2500:
+            parts.append(
+                f"Package looks unrealistic ({weight:g} kg in {length:g}×{width:g}×{height:g} cm) — "
+                "double-check weight and size."
+            )
     if weight >= PALLET_WEIGHT_KG:
         parts.append(f"Weight ≥ {PALLET_WEIGHT_KG:g} kg usually needs pallet, not parcel.")
     missing = _missing_expected_carriers([], meta.get("carriers_queried") or [])

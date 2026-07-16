@@ -18,8 +18,8 @@
 .ship-modal {
     background: #fff;
     border-radius: 12px;
-    width: min(960px, 100%);
-    max-height: min(92vh, 900px);
+    width: min(1100px, 100%);
+    max-height: min(92vh, 960px);
     display: flex;
     flex-direction: column;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
@@ -75,16 +75,203 @@
     background: #fafbff;
 }
 
-.ship-grid {
+.ship-top-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.4fr 1fr;
     gap: 18px;
 }
 
 @media (max-width: 720px) {
-    .ship-grid {
+    .ship-top-row {
         grid-template-columns: 1fr;
     }
+}
+
+.ship-section-sub {
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #9ca3af;
+}
+
+.ship-weight-row {
+    margin-top: 14px;
+}
+
+.ship-weight-row label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.ship-weight-row input {
+    width: 140px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.ship-size-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 900px) {
+    .ship-size-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.ship-size-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px 12px 12px;
+    cursor: pointer;
+    min-height: 118px;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.ship-size-card:hover {
+    border-color: #9ca3af;
+}
+
+.ship-size-card.selected {
+    border-color: #059669;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 1px #059669 inset;
+}
+
+.ship-size-badge {
+    position: absolute;
+    top: -9px;
+    left: 10px;
+    background: #059669;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 2px 7px;
+    border-radius: 999px;
+}
+
+.ship-size-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #111827;
+}
+
+.ship-size-dims {
+    font-size: 0.78rem;
+    color: #374151;
+}
+
+.ship-size-weight {
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+
+.ship-size-examples {
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: #9ca3af;
+}
+
+.ship-carrier-row {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.ship-carrier-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.ship-carrier-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 8px;
+}
+
+.ship-carrier-note {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #6b7280;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.ship-carrier-empty .ship-carrier-name {
+    color: #6b7280;
+}
+
+.ship-rate-cards {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.ship-rate-card {
+    flex: 0 0 170px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: left;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px;
+    cursor: pointer;
+    min-height: 96px;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.ship-rate-card:hover {
+    border-color: #9ca3af;
+}
+
+.ship-rate-card.selected {
+    border-color: #059669;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 1px #059669 inset;
+}
+
+.ship-rate-card-service {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.3;
+}
+
+.ship-rate-days {
+    font-size: 0.72rem;
+    color: #6b7280;
+}
+
+.ship-rate-card-price {
+    margin-top: auto;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #059669;
 }
 
 .ship-section {
