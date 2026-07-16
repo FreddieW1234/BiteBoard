@@ -100,6 +100,8 @@ def shipping_status() -> dict:
     }
     print_api = _print_api_configured()
     printer_ready = _printer_ready() if print_api else False
+    from scripts import print_client  # type: ignore
+
     return {
         "royal_mail": carriers["royal_mail"]["configured"],
         "fedex": carriers["fedex"]["configured"],
@@ -110,6 +112,7 @@ def shipping_status() -> dict:
         "print_server": printer_ready,
         "print_api_configured": print_api,
         "printer_ready": printer_ready,
+        "fedex_label_settings": print_client.get_fedex_label_settings(),
         "any_carrier_configured": any(c["configured"] for c in carriers.values()),
         "shipstation": False,
     }
@@ -446,10 +449,12 @@ def ship_order(payload: dict) -> dict:
         if label_bytes:
             try:
                 raw_zpl = label_bytes.decode("utf-8", errors="replace")
-                prepared_zpl = print_client.prepare_fedex_zpl(raw_zpl)
-                label_bytes = prepared_zpl.encode("utf-8")
+                # Store raw FedEx ZPL on the office server; scale/shift/rotate apply at print time
+                # via finalize_fedex_zpl_for_print (FEDEX_LABEL_SCALE / FEDEX_LABEL_SHIFT_MM env).
+                raw_zpl = print_client.first_zpl_label(raw_zpl)
+                label_bytes = raw_zpl.encode("utf-8")
             except Exception as prep_exc:
-                logger.warning("FedEx ZPL prepare failed (using raw ZPL): %s", prep_exc)
+                logger.warning("FedEx ZPL trim failed (using raw ZPL): %s", prep_exc)
 
         order_name = prep.get("order_name") or ""
         # Prefer the Diary row's item_id so the Ship column updates the same key.
@@ -727,6 +732,8 @@ def reprint_label(payload: dict) -> dict:
     label_ref = tracking or str(stored.get("filename") or "")
     carrier = str(stored.get("carrier") or payload.get("carrier") or "fedex").strip().lower()
 
+    label_settings = print_client.get_fedex_label_settings()
+
     try:
         print_result = print_client.send_print_job(
             profile="parcel-4x6-zpl",
@@ -767,6 +774,7 @@ def reprint_label(payload: dict) -> dict:
         "label_filename": stored.get("filename"),
         "label_version": stored.get("version"),
         "print": print_result,
+        "label_settings": label_settings,
         "message": "Sent to printer",
         "has_zpl": True,
     }

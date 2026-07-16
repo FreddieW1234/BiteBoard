@@ -53,6 +53,14 @@ services:
         sync: false
       - key: FEDEX_LABEL_ROTATION
         sync: false
+      # Print layout tuning (applied on every print/reprint; restart after changing)
+      - key: FEDEX_LABEL_SHIFT_MM
+        sync: false
+      - key: FEDEX_LABEL_SCALE
+        sync: false
+      # Print-time 180° flip (^POI). Use this OR FEDEX_LABEL_ROTATION below — not both.
+      - key: FEDEX_LABEL_PRINT_ROTATE_180
+        sync: false
       - key: PALLETWAYS_API_KEY
         sync: false
       - key: SHIP_FROM_NAME

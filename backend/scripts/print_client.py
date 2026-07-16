@@ -25,6 +25,28 @@ _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() 
 # Uniform content scale (1.0 = none). Default 0.9653 ≈ 3.5% smaller (was 2%, then −1.5% more).
 _LABEL_SCALE = float(os.environ.get("FEDEX_LABEL_SCALE") or "0.9653")
 _PREPARED_MARKER = "bite-label-adjusted"
+_LEGACY_PREPARED_SCALE = 0.9653
+_PREPARED_MARKER_RE = re.compile(
+    r"bite-label-adjusted(?:\s+s=([\d.]+))?",
+    re.IGNORECASE,
+)
+
+
+def _parse_rotate_180() -> bool:
+    """Print-time 180° rotation.
+
+    Prefer ``FEDEX_LABEL_PRINT_ROTATE_180`` (1/0). Fall back to
+    ``FEDEX_LABEL_ROTATION`` (FedEx ship API enum) when print var is unset.
+    """
+    explicit = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180")
+    if explicit is not None and str(explicit).strip() != "":
+        return str(explicit).strip().lower() in ("1", "true", "yes")
+    rotation = (os.environ.get("FEDEX_LABEL_ROTATION") or "").strip().upper()
+    if rotation in ("UPSIDE_DOWN", "180", "ROTATE_180", "INVERTED"):
+        return True
+    if rotation in ("NONE", "0", "NORMAL", "UPRIGHT", "LEFT", "RIGHT"):
+        return False
+    return True
 
 
 def _fedex_label_settings() -> dict:
@@ -34,12 +56,22 @@ def _fedex_label_settings() -> dict:
         "dpi": int(os.environ.get("LABEL_DPI") or "203"),
         "width_mm": float(os.environ.get("LABEL_WIDTH_MM") or "97"),
         "height_mm": float(os.environ.get("LABEL_HEIGHT_MM") or "148"),
-        "rotate_180": os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
-            "1",
-            "true",
-            "yes",
-        ),
+        "rotate_180": _parse_rotate_180(),
         "scale": float(os.environ.get("FEDEX_LABEL_SCALE") or "0.9653"),
+    }
+
+
+def get_fedex_label_settings() -> dict:
+    """Public snapshot of active FedEx label print tuning (for status/diagnostics)."""
+    cfg = _fedex_label_settings()
+    return {
+        **cfg,
+        "env": {
+            "FEDEX_LABEL_SHIFT_MM": os.environ.get("FEDEX_LABEL_SHIFT_MM"),
+            "FEDEX_LABEL_SCALE": os.environ.get("FEDEX_LABEL_SCALE"),
+            "FEDEX_LABEL_PRINT_ROTATE_180": os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180"),
+            "FEDEX_LABEL_ROTATION": os.environ.get("FEDEX_LABEL_ROTATION"),
+        },
     }
 
 
@@ -173,6 +205,38 @@ def is_prepared_fedex_zpl(zpl: str) -> bool:
     return _PREPARED_MARKER in (zpl or "")
 
 
+def _parse_stored_scale(zpl: str) -> float:
+    """Scale factor baked into a prepared label (legacy labels assumed 0.9653)."""
+    match = _PREPARED_MARKER_RE.search(zpl or "")
+    if not match:
+        return _LEGACY_PREPARED_SCALE
+    if match.group(1):
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return _LEGACY_PREPARED_SCALE
+    return _LEGACY_PREPARED_SCALE
+
+
+def _strip_label_layout(zpl: str) -> str:
+    """Remove print-time layout commands and the prepared marker."""
+    text = first_zpl_label(zpl)
+    if not text:
+        return text
+    text = re.sub(r"\^PO[A-Z0-9]*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LH\d+,\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^PW\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LL\d+", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\^FX[^\r\n]*bite-label-adjusted[^\r\n]*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text
+
+
 def prepare_fedex_zpl(
     zpl: str,
     *,
@@ -198,39 +262,31 @@ def prepare_fedex_zpl(
 
 
 def finalize_fedex_zpl_for_print(zpl: str) -> str:
-    """Apply current env shift/size/rotation at print time.
+    """Apply current env scale/shift/size/rotation at print time.
 
-    Stored labels already have scaled coordinates (``bite-label-adjusted``).
-    Re-applying content scale would shrink twice, so prepared labels only
-    refresh layout commands (^LS, ^PO, ^PW, ^LL, ^LH) from today's env.
+    Raw FedEx ZPL and legacy prepared labels (``bite-label-adjusted``) both
+    end up fully adjusted from today's env. Prepared labels are un-scaled
+    first so ``FEDEX_LABEL_SCALE`` changes apply on reprint without re-ship.
     """
     text = first_zpl_label(zpl)
     if not text:
         return text
     cfg = _fedex_label_settings()
     if is_prepared_fedex_zpl(text):
-        return adjust_fedex_zpl(
-            text,
-            shift_mm=cfg["shift_mm"],
-            dpi=cfg["dpi"],
-            width_mm=cfg["width_mm"],
-            height_mm=cfg["height_mm"],
-            rotate_180=cfg["rotate_180"],
-            scale=1.0,
-            mark_prepared=False,
-        )
-    if "FEDEX" in text.upper() or "FDX" in text.upper():
-        return adjust_fedex_zpl(
-            text,
-            shift_mm=cfg["shift_mm"],
-            dpi=cfg["dpi"],
-            width_mm=cfg["width_mm"],
-            height_mm=cfg["height_mm"],
-            rotate_180=cfg["rotate_180"],
-            scale=cfg["scale"],
-            mark_prepared=False,
-        )
-    return text
+        stored_scale = _parse_stored_scale(text)
+        text = _strip_label_layout(text)
+        if abs(stored_scale - 1.0) >= 0.0001:
+            text = scale_zpl_content(text, scale=1.0 / stored_scale)
+    return adjust_fedex_zpl(
+        text,
+        shift_mm=cfg["shift_mm"],
+        dpi=cfg["dpi"],
+        width_mm=cfg["width_mm"],
+        height_mm=cfg["height_mm"],
+        rotate_180=cfg["rotate_180"],
+        scale=cfg["scale"],
+        mark_prepared=False,
+    )
 
 
 def adjust_fedex_zpl(
@@ -265,17 +321,7 @@ def adjust_fedex_zpl(
     ll = _mm_to_dots(height_mm, dpi)
     dots = int(round(shift_mm * dpi / 25.4))
 
-    text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\^LH\d+,\d+", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\^PW\d+", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\^LL\d+", "", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"\^FX[^\r\n]*" + re.escape(_PREPARED_MARKER),
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
+    text = _strip_label_layout(text)
 
     text = scale_zpl_content(text, scale=scale)
 
@@ -285,12 +331,11 @@ def adjust_fedex_zpl(
         lh_y = int(round(ll * (1.0 - scale) / 2.0))
         if lh_x or lh_y:
             injection += f"^LH{lh_x},{lh_y}"
-    if rotate_180:
-        injection += "^POI"
+    injection += "^POI" if rotate_180 else "^PON"
     if dots != 0:
         injection += f"^LS{dots}"
     if mark_prepared:
-        injection += f"^FX {_PREPARED_MARKER}"
+        injection += f"^FX {_PREPARED_MARKER} s={scale:.4f}"
 
     match = re.search(r"\^XA", text, flags=re.IGNORECASE)
     if match:
