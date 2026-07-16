@@ -323,6 +323,118 @@ def print_health() -> dict:
     return {**body, "configured": configured, "ok": True}
 
 
+def _as_zpl_text(zpl: str | bytes) -> str:
+    """Normalize FedEx/office label bytes into raw ZPL text (^XA…^XZ)."""
+    if isinstance(zpl, bytes):
+        text = zpl.decode("utf-8", errors="replace")
+    else:
+        text = str(zpl or "")
+    text = text.strip()
+    if not text:
+        return ""
+
+    upper = text.upper()
+    if "^XA" in upper and "^XZ" in upper:
+        return text
+
+    # FedEx sometimes leaves us with base64 text instead of decoded ZPL.
+    try:
+        import base64
+        import re
+
+        compact = re.sub(r"\s+", "", text)
+        decoded = base64.b64decode(compact, validate=False)
+        as_text = decoded.decode("utf-8", errors="replace").strip()
+        as_upper = as_text.upper()
+        if "^XA" in as_upper and "^XZ" in as_upper:
+            return as_text
+    except Exception:
+        pass
+    return text
+
+
+def store_label(
+    order: str,
+    item: str,
+    zpl: str | bytes,
+    *,
+    tracking: str | None = None,
+    carrier: str | None = None,
+) -> dict:
+    """``POST /orders/{order}/items/{item}/label`` — persist ZPL on office disk."""
+    _require_config()
+    zpl_text = _as_zpl_text(zpl)
+    if not zpl_text:
+        raise OfficeApiError("No ZPL label data to store")
+    upper = zpl_text.upper()
+    if "^XA" not in upper or "^XZ" not in upper:
+        raise OfficeApiError("Label data is not valid ZPL (missing ^XA/^XZ)")
+
+    payload: dict = {"zpl": zpl_text}
+    if tracking:
+        payload["tracking"] = str(tracking).strip()
+    if carrier:
+        payload["carrier"] = str(carrier).strip().lower()
+
+    url = f"{_url(order, item)}/label"
+    resp = _request("POST", url, json=payload, timeout=_TIMEOUT)
+    if not resp.ok:
+        msg = _print_error_message(resp)
+        logger.error("Office store_label failed HTTP %s: %s", resp.status_code, msg)
+        raise OfficeApiError(msg)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from label store")
+    return result
+
+
+def list_labels(order: str, item: str) -> dict:
+    """``GET /orders/{order}/items/{item}/labels`` — newest first."""
+    _require_config()
+    url = f"{_url(order, item)}/labels"
+    resp = _request("GET", url, timeout=_TIMEOUT)
+    result = _handle_response(resp, allow_404=True)
+    if result is None:
+        return {"labels": [], "latest": None}
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from labels list")
+    return result
+
+
+def get_label(order: str, item: str, version: int | None = None) -> dict:
+    """``GET /orders/{order}/items/{item}/label`` — latest ZPL, or ``?version=N``."""
+    _require_config()
+    url = f"{_url(order, item)}/label"
+    params = {}
+    if version is not None:
+        params["version"] = int(version)
+    resp = _request("GET", url, params=params or None, timeout=_TIMEOUT)
+    result = _handle_response(resp, allow_404=True)
+    if result is None:
+        raise OfficeApiError("No stored label for this order line")
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from label fetch")
+    zpl = _as_zpl_text(result.get("zpl") or "")
+    if not zpl:
+        raise OfficeApiError("Stored label has no ZPL content")
+    return {**result, "zpl": zpl}
+
+
+def has_label(order: str, item: str) -> bool:
+    """True when the office server has at least one stored label for the line."""
+    try:
+        data = list_labels(order, item)
+    except OfficeApiError:
+        return False
+    except Exception as exc:
+        logger.warning("Office has_label check failed for %s / %s: %s", order, item, exc)
+        return False
+    if data.get("latest"):
+        return True
+    labels = data.get("labels") or []
+    return bool(labels)
+
+
 def print_label(
     zpl: str | bytes,
     order: str | None = None,
@@ -333,11 +445,7 @@ def print_label(
     Body: ``{zpl, order?, label_ref?}``. Raises OfficeApiError on non-200.
     """
     _require_config()
-    if isinstance(zpl, bytes):
-        zpl_text = zpl.decode("utf-8", errors="replace")
-    else:
-        zpl_text = str(zpl or "")
-    zpl_text = zpl_text.strip()
+    zpl_text = _as_zpl_text(zpl)
     if not zpl_text:
         raise OfficeApiError("No ZPL label data to print")
 

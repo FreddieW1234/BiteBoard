@@ -229,8 +229,10 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
             can_print_label = False
             if shipped:
                 try:
-                    from scripts import label_store  # type: ignore
-                    can_print_label = label_store.has_zpl(order_name, item_id)
+                    from scripts import office_api  # type: ignore
+                    from config import OFFICE_API_URL, OFFICE_API_KEY  # type: ignore
+                    if OFFICE_API_URL and OFFICE_API_KEY:
+                        can_print_label = office_api.has_label(order_name, item_id)
                 except Exception:
                     can_print_label = False
 

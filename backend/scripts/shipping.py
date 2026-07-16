@@ -443,22 +443,6 @@ def ship_order(payload: dict) -> dict:
         label_bytes = label.get("label_bytes") or b""
         label_url = str(label.get("label_url") or "")
 
-        print_result: dict = {"skipped": True, "reason": "no_label_bytes"}
-        if label_bytes:
-            try:
-                print_result = print_client.send_print_job(
-                    profile="parcel-4x6-zpl",
-                    label_format="zpl",
-                    data=label_bytes,
-                    order_name=prep.get("order_name") or "",
-                    tracking_number=tracking,
-                )
-            except Exception as print_exc:
-                logger.warning("Label print failed (label still created): %s", print_exc)
-                print_result = {"success": False, "error": str(print_exc)}
-        elif not print_client.configured():
-            print_result = {"success": True, "skipped": True, "reason": "print_server_not_configured"}
-
         order_name = prep.get("order_name") or ""
         # Prefer the Diary row's item_id so the Ship column updates the same key.
         diary_item_id = (payload.get("item_id") or prep.get("item_id") or "").strip()
@@ -493,26 +477,6 @@ def ship_order(payload: dict) -> dict:
                 logger.warning("Diary stamp failed for %s / %s: %s", order_name, item_id, saved)
             else:
                 stamped += 1
-            try:
-                from scripts import label_store  # type: ignore
-                label_store.save_label(
-                    order_name=order_name,
-                    item_id=item_id,
-                    label_bytes=label_bytes,
-                    label_url=label_url,
-                    label_format="zpl" if label_bytes else "url",
-                    tracking_number=tracking,
-                    label_id=label_id,
-                    carrier="fedex",
-                    service_code=service_code,
-                )
-            except Exception as store_exc:
-                logger.warning(
-                    "Could not persist label for reprint (%s / %s): %s",
-                    order_name,
-                    item_id,
-                    store_exc,
-                )
         if stamped == 0:
             return {
                 "success": False,
@@ -522,6 +486,63 @@ def ship_order(payload: dict) -> dict:
                     "Refresh and check tracking before shipping again."
                 ),
                 "tracking_number": tracking,
+            }
+
+        # Office server is the source of truth for label ZPL (not Render disk).
+        label_stored = False
+        label_store_meta: dict = {}
+        store_errors: list[str] = []
+        if label_bytes:
+            from scripts import office_api  # type: ignore
+            from scripts.office_api import OfficeApiError  # type: ignore
+
+            for item_id in stamp_ids:
+                try:
+                    label_store_meta = office_api.store_label(
+                        order_name,
+                        item_id,
+                        label_bytes,
+                        tracking=tracking,
+                        carrier="fedex",
+                    )
+                    label_stored = True
+                except OfficeApiError as store_exc:
+                    logger.warning(
+                        "Office label store failed for %s / %s: %s",
+                        order_name,
+                        item_id,
+                        store_exc,
+                    )
+                    store_errors.append(str(store_exc))
+                except Exception as store_exc:
+                    logger.warning(
+                        "Office label store failed for %s / %s: %s",
+                        order_name,
+                        item_id,
+                        store_exc,
+                    )
+                    store_errors.append(str(store_exc))
+        elif label_url:
+            store_errors.append("FedEx returned a label URL but no ZPL bytes to store")
+
+        print_result: dict = {"skipped": True, "reason": "no_label_bytes"}
+        if label_bytes:
+            try:
+                print_result = print_client.send_print_job(
+                    profile="parcel-4x6-zpl",
+                    label_format="zpl",
+                    data=label_bytes,
+                    order_name=order_name,
+                    tracking_number=tracking,
+                )
+            except Exception as print_exc:
+                logger.warning("Label print failed (label still created): %s", print_exc)
+                print_result = {"success": False, "error": str(print_exc)}
+        elif not print_client.configured():
+            print_result = {
+                "success": True,
+                "skipped": True,
+                "reason": "print_server_not_configured",
             }
 
         import base64
@@ -536,6 +557,10 @@ def ship_order(payload: dict) -> dict:
             "carrier_label": "FedEx",
             "service_code": service_code,
             "print": print_result,
+            "label_stored": label_stored,
+            "label_filename": label_store_meta.get("filename"),
+            "label_version": label_store_meta.get("version"),
+            "label_store_error": store_errors[0] if store_errors and not label_stored else None,
             "has_zpl": bool(label_bytes),
             "label_download_url": label_url or None,
             "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii") if label_bytes else None,
@@ -587,57 +612,53 @@ def save_manual_dispatch(
 
 
 def reprint_label(payload: dict) -> dict:
-    """Print a stored ZPL label on the office Zebra via Office API ``/print``."""
-    import base64
-
-    from scripts import label_store, print_client  # type: ignore
+    """Fetch latest ZPL from the office server, then POST it to ``/print``."""
+    from scripts import office_api, print_client  # type: ignore
+    from scripts.office_api import OfficeApiError  # type: ignore
     from scripts.print_client import PrintClientError  # type: ignore
 
     order_name = (payload.get("order_name") or "").strip()
     item_id = (payload.get("item_id") or "").strip()
+    version = payload.get("version")
     if not order_name or not item_id:
         return {"success": False, "error": "order_name and item_id are required"}
-
-    stored = label_store.load_label(order_name, item_id)
-    if not stored:
-        return {
-            "success": False,
-            "error": (
-                "No saved ZPL label for this line. "
-                "Ship the line first so a label is stored, then use Print label."
-            ),
-        }
-
-    label_bytes = stored.get("label_bytes") or b""
-    label_url = str(stored.get("label_url") or "")
-    tracking = str(stored.get("tracking_number") or "")
-    label_id = str(stored.get("label_id") or "")
-
-    if not label_bytes:
-        return {
-            "success": False,
-            "error": (
-                "This shipment has no stored ZPL to send to the Zebra. "
-                + (f"Label URL available: {label_url}" if label_url else "Re-ship to create a ZPL label.")
-            ),
-            "label_download_url": label_url or None,
-        }
 
     if not print_client.configured():
         return {
             "success": False,
             "error": "Office API is not configured (OFFICE_API_URL / OFFICE_API_KEY).",
-            "has_zpl": True,
-            "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii"),
         }
+
+    try:
+        ver = int(version) if version is not None and str(version).strip() != "" else None
+    except (TypeError, ValueError):
+        return {"success": False, "error": "Invalid label version"}
+
+    try:
+        stored = office_api.get_label(order_name, item_id, version=ver)
+    except OfficeApiError as exc:
+        return {
+            "success": False,
+            "error": str(exc) or (
+                "No saved ZPL label on the office server for this line. "
+                "Ship the line first, then use Print label."
+            ),
+        }
+    except Exception as exc:
+        logger.warning("Office get_label failed for %s / %s: %s", order_name, item_id, exc)
+        return {"success": False, "error": str(exc)}
+
+    zpl = stored.get("zpl") or ""
+    tracking = str(stored.get("tracking") or stored.get("tracking_number") or "").strip()
+    label_ref = tracking or str(stored.get("filename") or "")
 
     try:
         print_result = print_client.send_print_job(
             profile="parcel-4x6-zpl",
             label_format="zpl",
-            data=label_bytes,
+            data=zpl.encode("utf-8") if isinstance(zpl, str) else zpl,
             order_name=order_name,
-            tracking_number=tracking or label_id,
+            tracking_number=label_ref,
         )
     except PrintClientError as print_exc:
         logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
@@ -647,8 +668,9 @@ def reprint_label(payload: dict) -> dict:
             "order_name": order_name,
             "item_id": item_id,
             "tracking_number": tracking,
+            "label_filename": stored.get("filename"),
+            "label_version": stored.get("version"),
             "has_zpl": True,
-            "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii"),
         }
     except Exception as print_exc:
         logger.warning("Label print failed for %s / %s: %s", order_name, item_id, print_exc)
@@ -666,13 +688,8 @@ def reprint_label(payload: dict) -> dict:
         "order_name": order_name,
         "item_id": item_id,
         "tracking_number": tracking,
-        "label_id": label_id,
-        "carrier": stored.get("carrier") or "",
-        "carrier_label": (
-            "FedEx" if (stored.get("carrier") or "") == "fedex"
-            else (stored.get("carrier") or "")
-        ),
-        "service_code": stored.get("service_code") or "",
+        "label_filename": stored.get("filename"),
+        "label_version": stored.get("version"),
         "print": print_result,
         "message": "Sent to printer",
         "has_zpl": True,

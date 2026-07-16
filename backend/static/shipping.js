@@ -450,14 +450,20 @@
 
         const print = data.print || {};
         let printLine = 'Label ready.';
+        if (data.label_stored) {
+            const ver = data.label_version != null ? ` (v${data.label_version})` : '';
+            printLine = `Label stored on office server${ver}.`;
+        } else if (data.label_store_error) {
+            printLine = `Label not stored on office server: ${data.label_store_error}`;
+        }
         if (print.skipped) {
-            printLine = print.reason === 'print_server_not_configured'
-                ? 'Label saved. Office printer API is not configured — use Print label later if needed.'
-                : 'Label saved. Nothing was sent to the Zebra automatically.';
+            printLine += print.reason === 'print_server_not_configured'
+                ? ' Printer API not configured — use Print label later if needed.'
+                : ' Nothing was sent to the Zebra automatically.';
         } else if (print.success === false) {
-            printLine = `Print failed: ${print.error || 'unknown'}. Use Print label on the Diary row to retry.`;
-        } else {
-            printLine = 'Sent to office Zebra printer.';
+            printLine += ` Print failed: ${print.error || 'unknown'}. Use Print label on the Diary row to retry.`;
+        } else if (!print.skipped) {
+            printLine += ' Sent to office Zebra printer.';
         }
 
         const downloadBtn = data.label_download_url

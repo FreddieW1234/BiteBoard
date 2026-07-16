@@ -558,7 +558,7 @@
         row.carrier_label = info?.carrier_label || carrierLabel(row.carrier);
         row.tracking_number = info?.tracking_number || info?.label_id || row.tracking_number || '';
         row.label_id = info?.label_id || row.label_id || '';
-        row.can_print_label = !!(info?.label_zpl_base64 || info?.has_zpl);
+        row.can_print_label = !!(info?.label_stored || info?.has_zpl || info?.label_zpl_base64);
         row.can_reprint = row.can_print_label;
         renderTable();
         return true;
