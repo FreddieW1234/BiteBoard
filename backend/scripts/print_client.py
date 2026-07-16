@@ -9,6 +9,10 @@ from config import OFFICE_API_KEY, OFFICE_API_URL  # type: ignore
 
 logger = logging.getLogger(__name__)
 
+# FedEx 4x6 ZPL is typically 203 dpi; 2mm ≈ 16 dots.
+_FEDEX_SHIFT_MM = 2.0
+_FEDEX_DPI = 203
+
 
 class PrintClientError(Exception):
     pass
@@ -48,6 +52,32 @@ def first_zpl_label(zpl: str) -> str:
     return matches[0].group(0)
 
 
+def adjust_fedex_zpl(
+    zpl: str,
+    *,
+    shift_mm: float = _FEDEX_SHIFT_MM,
+    dpi: int = _FEDEX_DPI,
+) -> str:
+    """Print-time FedEx tweaks: rotate 180° and shift left. Does not alter stored ZPL."""
+    text = first_zpl_label(zpl)
+    if not text:
+        return text
+
+    dots = max(0, int(round(shift_mm * dpi / 25.4)))
+    # Strip any existing orientation / shift so we force a known result.
+    text = re.sub(r"\^PO[NI]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\^LS-?\d+", "", text, flags=re.IGNORECASE)
+
+    injection = "^POI"
+    if dots > 0:
+        injection += f"^LS{dots}"
+
+    match = re.search(r"\^XA", text, flags=re.IGNORECASE)
+    if not match:
+        return text
+    return text[: match.end()] + injection + text[match.end() :]
+
+
 def send_print_job(
     *,
     profile: str = "parcel-4x6-zpl",
@@ -59,7 +89,6 @@ def send_print_job(
 ) -> dict:
     """POST raw ZPL to ``{OFFICE_API_URL}/print``."""
     del profile  # unused — office API only accepts raw ZPL
-    del carrier  # reserved for future carrier-specific print tweaks
     if not configured():
         logger.info(
             "Office API not configured — skipping print for %s (%s)",
@@ -88,7 +117,15 @@ def send_print_job(
     else:
         zpl_text = str(data)
 
-    zpl_text = first_zpl_label(zpl_text)
+    if (carrier or "").strip().lower() == "fedex":
+        zpl_text = adjust_fedex_zpl(zpl_text)
+        logger.info(
+            "Applied FedEx print adjust: 180° + %.1fmm left for %s",
+            _FEDEX_SHIFT_MM,
+            order_name or tracking_number,
+        )
+    else:
+        zpl_text = first_zpl_label(zpl_text)
 
     try:
         result = office_api.print_label(
