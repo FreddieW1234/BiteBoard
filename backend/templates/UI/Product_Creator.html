@@ -4414,8 +4414,8 @@ Dietary</textarea>
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
                 'description': 'Description',
-                'leadtime1': 'Lead Time >5000 units (Days)',
-                'leadtime2': 'Lead Time 5000-10000 units (Days)',
+                'leadtime1': 'Lead Time <5000 units (Working Days)',
+                'leadtime2': 'Lead Time 5000-10000 units (Working Days)',
                 'packingfee': 'Packing Fee',
                 'sku': 'Product Code',
                 'recycle_info': 'Recycle Info',
@@ -4452,11 +4452,6 @@ Dietary</textarea>
                 metafields = metafields.concat([{ namespace: 'custom', key: 'categorysub', type: 'list.single_line_text_field', value: '', id: null }]);
             }
 
-            // Ensure the filters dropdown always renders, even if the product has no filters metafield yet
-            if (!metafields.some(m => m && m.key === 'filters' && (m.namespace || 'custom') === 'custom')) {
-                metafields = metafields.concat([{ namespace: 'custom', key: 'filters', type: 'list.single_line_text_field', value: '', id: null }]);
-            }
-
             // Ensure packing fee always renders (custom.packingfee — number_integer)
             if (!metafields.some(m => m && m.key === 'packingfee' && (m.namespace || 'custom') === 'custom')) {
                 metafields = metafields.concat([{ namespace: 'custom', key: 'packingfee', type: 'number_integer', value: '', id: null }]);
@@ -4470,7 +4465,6 @@ Dietary</textarea>
             // Default metafield order (hardcoded fallback)
             const DEFAULT_METAFIELD_ORDER = [
                 "categorysub",
-                "filters",
                 "description",
                 "ingredients",
                 "nutritional_info",
@@ -4557,6 +4551,7 @@ Dietary</textarea>
                     if (key.startsWith('pricejson') && !key.includes('.')) return false;
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
                     if (namespace === 'custom' && key === 'sku') return false;
+                    if (namespace === 'custom' && key === 'filters') return false;
                     if (namespace === 'custom' && (key === 'parent_child' || key === 'parent_child2')) return false;
                     // Category + subcategory are merged into one combined "Category & Subcategory" dropdown
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
