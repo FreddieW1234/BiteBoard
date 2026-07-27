@@ -10,7 +10,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/page_preload.js?v=1"></script>
+    <script src="/static/data_cache.js?v=1"></script>
+    <script src="/static/page_preload.js?v=2"></script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -408,7 +409,7 @@
             const el = document.getElementById('live-products-count');
             if (!el) return;
             try {
-                const response = await fetch('/api/live-products-count');
+                const response = await (window.BiteDataCache ? BiteDataCache.fetch : fetch)('/api/live-products-count', { credentials: 'same-origin' });
                 const data = await response.json();
                 el.textContent = data.success ? Math.max(0, (data.count || 0) - 5) : '–';
             } catch (e) {
@@ -424,7 +425,7 @@
             const appTabsEl = document.getElementById('app-tabs');
             if (!appTabsEl) return;
             try {
-                const response = await fetch('/api/tools');
+                const response = await (window.BiteDataCache ? BiteDataCache.fetch : fetch)('/api/tools', { credentials: 'same-origin' });
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
                 const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
@@ -521,7 +522,8 @@
         window.__productFamilyTreeCache = null;
         window.__productFamilyTreeCacheTime = 0;
         function prefetchProductFamilyTree() {
-            fetch('/api/products-parent-child-tree')
+            var fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
+            fetchFn('/api/products-parent-child-tree', { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     if (data && data.tree) {

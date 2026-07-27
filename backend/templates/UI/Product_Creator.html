@@ -10,7 +10,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/page_preload.js?v=1"></script>
+    <script src="/static/data_cache.js?v=1"></script>
+    <script src="/static/page_preload.js?v=2"></script>
     
     <style>
         * {
@@ -2642,7 +2643,7 @@ Dietary</textarea>
             selectedGuideline = null;
             try {
                 if (!artworkGuidelinesFilesCache.length) {
-                    const resp = await fetch('/api/shopify/files');
+                    const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/shopify/files', { credentials: 'same-origin' });
                     artworkGuidelinesFilesCache = (await resp.json()) || [];
                 }
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
@@ -2856,7 +2857,7 @@ Dietary</textarea>
 
         document.addEventListener('DOMContentLoaded', async function () {
             try {
-                const resp = await fetch('/api/shopify/files');
+                const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/shopify/files', { credentials: 'same-origin' });
                 const files = await resp.json();
                 artworkGuidelinesFilesCache = files || [];
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
@@ -2939,7 +2940,7 @@ Dietary</textarea>
                 } else {
                     diagramEl.innerHTML = '<span class="muted">Loading product families…</span>';
                 }
-                fetch('/api/products-parent-child-tree')
+                ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products-parent-child-tree', { credentials: 'same-origin' })
                     .then(r => r.json())
                     .then(fullTree => {
                         if (fullTree && fullTree.tree) {
@@ -3380,7 +3381,7 @@ Dietary</textarea>
         // Fetch pricing quantity bands from backend
         async function fetchPricingQtyBands() {
             try {
-                const response = await fetch('/api/pricing-qty-bands');
+                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/pricing-qty-bands', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success) {
                     pricingQtyBands = data.bands;
@@ -4318,7 +4319,7 @@ Dietary</textarea>
                 const templateProductId = 15285916696954;
                 
                 // Fetch detailed product information including metafields
-                const productResponse = await fetch(`/api/product/${templateProductId}`);
+                const productResponse = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)(`/api/product/${templateProductId}`, { credentials: 'same-origin' });
                 console.log('Template product API response status:', productResponse.status);
                 
                 if (productResponse.ok) {
@@ -6001,7 +6002,7 @@ Dietary</textarea>
 
             // Load products for search (cached)
             try {
-                const resp = await fetch('/api/products');
+                const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products', { credentials: 'same-origin' });
                 pcAllProducts = await resp.json();
             } catch (e) { pcAllProducts = []; }
 

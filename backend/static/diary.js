@@ -412,8 +412,9 @@
     }
 
     async function refreshPrinterHealth() {
+        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         try {
-            const res = await fetch('/api/shipping/status', { credentials: 'same-origin' });
+            const res = await fetchFn('/api/shipping/status', { credentials: 'same-origin' });
             const data = await res.json();
             if (!res.ok || !data.success) {
                 printerReady = false;
@@ -596,7 +597,8 @@
         }
     }
 
-    async function loadDiary() {
+    async function loadDiary(forceRefresh) {
+        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         const pill = document.getElementById('diary-count-pill');
         const content = document.getElementById('diary-content');
         if (content) {
@@ -604,7 +606,7 @@
         }
         try {
             const [res] = await Promise.all([
-                fetch('/api/diary', { credentials: 'same-origin' }),
+                fetchFn('/api/diary', { credentials: 'same-origin', bypassCache: !!forceRefresh }),
                 refreshPrinterHealth(),
             ]);
             const data = await res.json();
@@ -625,7 +627,7 @@
         }
     }
 
-    document.getElementById('diary-refresh-btn')?.addEventListener('click', loadDiary);
+    document.getElementById('diary-refresh-btn')?.addEventListener('click', function () { loadDiary(true); });
     document.getElementById('diary-print-btn')?.addEventListener('click', printDiary);
     document.getElementById('diary-prev-btn')?.addEventListener('click', () => navigatePeriod(-1));
     document.getElementById('diary-next-btn')?.addEventListener('click', () => navigatePeriod(1));

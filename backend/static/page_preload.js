@@ -170,7 +170,11 @@
 
     function startPreload() {
         snapshotCurrentPage();
-        prefetchOthersInBackground();
+        prefetchOthersInBackground().then(function () {
+            if (window.BiteDataCache && typeof window.BiteDataCache.prefetchAllBackground === 'function') {
+                window.BiteDataCache.prefetchAllBackground(normPath(window.location.pathname));
+            }
+        });
     }
 
     if (document.readyState === 'complete') {

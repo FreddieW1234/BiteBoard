@@ -1380,7 +1380,9 @@
     }
 
     async function fetchOrderTrackingPayload(orderId, apiPrefix) {
-        const res = await fetch(`${apiPrefix}/${encodeURIComponent(orderId)}/tracking`, { credentials: 'same-origin' });
+        const url = `${apiPrefix}/${encodeURIComponent(orderId)}/tracking`;
+        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
+        const res = await fetchFn(url, { credentials: 'same-origin' });
         const data = await parseJsonResponse(res);
         if (!res.ok || !data.success) throw new Error(data.error || 'Tracking unavailable');
         return data;

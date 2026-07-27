@@ -8,7 +8,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/page_preload.js?v=1"></script>
+    <script src="/static/data_cache.js?v=1"></script>
+    <script src="/static/page_preload.js?v=2"></script>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1194,7 +1195,8 @@
             }
         }
 
-        async function loadProducts() {
+        async function loadProducts(forceRefresh) {
+            const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
             const content = document.getElementById('ap-content');
             const gapsEl = document.getElementById('ap-pc-gaps');
             editingColumn = null;
@@ -1208,7 +1210,11 @@
             try {
                 const ctrl = new AbortController();
                 const timeout = setTimeout(() => ctrl.abort(), 180000);
-                const resp = await fetch('/api/all-products', { signal: ctrl.signal });
+                const resp = await fetchFn('/api/all-products', {
+                    signal: ctrl.signal,
+                    credentials: 'same-origin',
+                    bypassCache: !!forceRefresh,
+                });
                 clearTimeout(timeout);
                 clearTimeout(slowTimer);
                 const data = await resp.json().catch(() => ({}));
@@ -1230,7 +1236,7 @@
             setupColumnResizers();
             loadProducts();
             document.getElementById('ap-search').addEventListener('input', applySearch);
-            document.getElementById('ap-refresh').addEventListener('click', loadProducts);
+            document.getElementById('ap-refresh').addEventListener('click', function() { loadProducts(true); });
             document.getElementById('ap-edit-cancel').addEventListener('click', cancelColumnEdit);
             document.getElementById('ap-edit-save').addEventListener('click', saveColumnEdit);
             document.getElementById('ap-expand').addEventListener('click', function() {
