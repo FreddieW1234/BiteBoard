@@ -71,7 +71,7 @@ Key behaviours to verify locally:
 
 1. Push the repository to GitHub.
 2. In Render, create a **New Web Service** and connect the GitHub repo.
-3. When prompted, Render reads `render.yaml` to configure the service (builds with `pip install -r backend/requirements.txt`, starts `gunicorn app:app --chdir backend --bind 0.0.0.0:$PORT`).
+3. When prompted, Render reads `render.yaml` to configure the service (builds with `pip install -r backend/requirements.txt`, starts Gunicorn with threaded workers for concurrent requests).
 4. Set `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_API_VERSION`, and `SHOPIFY_ACCESS_TOKEN` as environment variables in the service settings (keep tokens hidden).
 5. Deploy. After each build, run smoke tests for OAuth, GraphQL file management, Component CRUD, and the nav layout before promoting to production.
 

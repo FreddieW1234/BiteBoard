@@ -883,45 +883,28 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=37"></script>
+    <script src="/static/office_tracking.js?v=38"></script>
     <script>
         (function () {
-            function prefetchClientOrderTracking() {
-                const orderIds = [];
-                document.querySelectorAll('.orders-wrap .data-row[data-order-id]').forEach(row => {
-                    if (row.dataset.orderId) orderIds.push(row.dataset.orderId);
-                });
-                if (!orderIds.length || !window.OfficeTracking) return;
-                const wrap = document.querySelector('.orders-wrap');
-                OfficeTracking.prefetchAllOrderTracking(orderIds, '/api/client/orders', 'client', function (orderId) {
-                    if (!wrap || !OfficeTracking.applyCachedTrackingIn) return;
-                    const row = document.getElementById('details-' + orderId);
-                    if (row) OfficeTracking.applyCachedTrackingIn(row, '/api/client/orders', 'client');
-                    if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+            /** Tracking loads when a customer expands an order (see toggleDetails). Deep links still prefetch one order. */
+            function initClientPortalTracking() {
+                if (!window.OfficeTracking || !OfficeTracking.applyPortalDeepLink) return;
+                const dl = window.__PORTAL_DEEP_LINK__ || {};
+                const orderId = (dl.order || '').trim();
+                if (!orderId) return;
+                OfficeTracking.applyPortalDeepLink({
+                    apiPrefix: '/api/client/orders',
+                    role: 'client',
+                    toggleDetails: toggleDetails,
+                    onBeforeExpand: function () { switchClientTab('orders'); },
                 }).then(function () {
-                    if (wrap && OfficeTracking.applyCachedTrackingIn) {
-                        OfficeTracking.applyCachedTrackingIn(wrap, '/api/client/orders', 'client');
-                    }
-                    if (wrap && OfficeTracking.refreshOrderStatusLabelsIn) {
-                        OfficeTracking.refreshOrderStatusLabelsIn(wrap);
-                    }
                     if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
-                    if (OfficeTracking.applyPortalDeepLink) {
-                        OfficeTracking.applyPortalDeepLink({
-                            apiPrefix: '/api/client/orders',
-                            role: 'client',
-                            toggleDetails: toggleDetails,
-                            onBeforeExpand: function () { switchClientTab('orders'); },
-                        }).then(function () {
-                            if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
-                        });
-                    }
                 });
             }
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', prefetchClientOrderTracking);
+                document.addEventListener('DOMContentLoaded', initClientPortalTracking);
             } else {
-                prefetchClientOrderTracking();
+                initClientPortalTracking();
             }
         })();
     </script>

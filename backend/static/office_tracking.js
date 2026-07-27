@@ -1448,7 +1448,7 @@
         return promise;
     }
 
-    function prefetchAllOrderTracking(orderIds, apiPrefix, role, onSettled, concurrency = 8) {
+    function prefetchAllOrderTracking(orderIds, apiPrefix, role, onSettled, concurrency = 3) {
         const ids = [...new Set((orderIds || []).filter(Boolean).map(String))];
         if (!ids.length) return Promise.resolve();
         const queue = [...ids];

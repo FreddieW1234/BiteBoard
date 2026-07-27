@@ -14,8 +14,7 @@ from config import OFFICE_API_URL, OFFICE_API_KEY  # type: ignore
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 30
-_session: requests.Session | None = None
-_session_lock = threading.Lock()
+_thread_local = threading.local()
 
 
 class OfficeApiError(Exception):
@@ -28,12 +27,13 @@ def _require_config() -> None:
 
 
 def _session_get() -> requests.Session:
-    global _session
     _require_config()
-    if _session is None:
-        _session = requests.Session()
-        _session.headers["X-API-Key"] = OFFICE_API_KEY
-    return _session
+    session = getattr(_thread_local, "session", None)
+    if session is None:
+        session = requests.Session()
+        session.headers["X-API-Key"] = OFFICE_API_KEY
+        _thread_local.session = session
+    return session
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -67,9 +67,8 @@ def _url(order: str, *parts: str) -> str:
 def _request(method: str, url: str, **kwargs) -> requests.Response:
     try:
         kwargs.setdefault("timeout", _TIMEOUT)
-        # requests.Session is not thread-safe — diary label probes run in parallel.
-        with _session_lock:
-            return _session_get().request(method, url, **kwargs)
+        # One Session per thread (requests.Session is not thread-safe across threads).
+        return _session_get().request(method, url, **kwargs)
     except requests.RequestException as exc:
         logger.error("Office API request failed: %s", exc)
         raise OfficeApiError("Order tracking service unavailable") from exc

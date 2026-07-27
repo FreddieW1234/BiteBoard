@@ -1047,26 +1047,48 @@ def attach_office_tracking(order: dict, *, seed: bool = True) -> dict:
     """Attach Office API status views to each product line item."""
     import logging
 
-    from scripts.office_api import ensure_item, item_key, OfficeApiError  # type: ignore
+    from scripts.office_api import ensure_item, get_order, item_key, OfficeApiError  # type: ignore
 
     log = logging.getLogger(__name__)
     order_name = order.get("name") or ""
-    for item in order.get("order_items") or []:
+    order_items = order.get("order_items") or []
+    for item in order_items:
         ln = item.get("line_number")
         if ln is None:
             continue
         if not item.get("office_item_id"):
             item["office_item_id"] = item_key(ln, item.get("title") or "")
-        if seed:
-            try:
-                item["office"] = ensure_item(
-                    order_name,
-                    item["office_item_id"],
-                    item.get("title") or "",
-                )
-            except OfficeApiError as exc:
-                log.warning("Office ensure_item failed for %s: %s", item["office_item_id"], exc)
-                item["office"] = None
+
+    if not seed:
+        return order
+
+    office_by_item: dict[str, dict] = {}
+    try:
+        data = get_order(order_name)
+        if data and data.get("items"):
+            for view in data["items"]:
+                key = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
+                if key:
+                    office_by_item[key] = view
+    except OfficeApiError as exc:
+        log.warning("Office get_order failed for %s: %s", order_name, exc)
+
+    for item in order_items:
+        if item.get("line_number") is None:
+            continue
+        oid = item.get("office_item_id") or ""
+        if oid in office_by_item:
+            item["office"] = office_by_item[oid]
+            continue
+        try:
+            item["office"] = ensure_item(
+                order_name,
+                oid,
+                item.get("title") or "",
+            )
+        except OfficeApiError as exc:
+            log.warning("Office ensure_item failed for %s: %s", oid, exc)
+            item["office"] = None
     return order
 
 
