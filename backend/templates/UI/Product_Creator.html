@@ -3320,6 +3320,19 @@ Dietary</textarea>
         }
 
         function resetForm() {
+            if (window.__PRODUCTS_EMBED__) {
+                void (async function () {
+                    await resetProductFormToBlank();
+                    try {
+                        history.replaceState(null, '', window.location.pathname + '?embed=1');
+                        if (window.parent && window.parent.ProductsShell
+                            && typeof window.parent.ProductsShell.syncManagerFrameUrl === 'function') {
+                            window.parent.ProductsShell.syncManagerFrameUrl();
+                        }
+                    } catch (e) { /* ignore */ }
+                })();
+                return;
+            }
             // Reload as a blank form by dropping any ?edit=<id> deep-link param,
             // otherwise the same product would just be reloaded into edit mode.
             window.location.href = window.location.pathname;

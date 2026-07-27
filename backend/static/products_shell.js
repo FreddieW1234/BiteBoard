@@ -72,6 +72,19 @@
         return DEFAULT_VIEW;
     }
 
+    function syncManagerFrameUrl() {
+        var homeSrc = '/app/Product_Creator?embed=1';
+        var frame = document.getElementById('products-manager-frame');
+        if (frame) frame.setAttribute('data-src', homeSrc);
+        try {
+            var url = new URL(window.location.href);
+            url.searchParams.set('view', 'manager');
+            url.searchParams.delete('edit');
+            url.searchParams.delete('return');
+            history.replaceState({ productsView: 'manager' }, '', url.pathname + url.search);
+        } catch (_) { /* ignore */ }
+    }
+
     function resetManagerFrame() {
         var frame = document.getElementById('products-manager-frame');
         if (!frame) return;
@@ -148,6 +161,7 @@
         backFromEditor: backFromEditor,
         setReturnView: setReturnView,
         getReturnView: getReturnView,
+        syncManagerFrameUrl: syncManagerFrameUrl,
     };
 
     if (document.readyState === 'loading') {
