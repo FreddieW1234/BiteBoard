@@ -5206,18 +5206,25 @@ Dietary</textarea>
 
         // Load metafields when the page loads
         document.addEventListener('DOMContentLoaded', async function() {
-            await loadMetafields();
             initializePriceManager();
-            await fetchPricingQtyBands();
-            autofillQuantities();
+            const editId = new URLSearchParams(window.location.search).get('edit');
+            const pricingTask = fetchPricingQtyBands().then(function () {
+                if (typeof autofillQuantities === 'function') autofillQuantities();
+            });
 
-            // Deep-link: /app/Product_Creator?edit=<productId> opens that product in edit mode
-            try {
-                const editId = new URLSearchParams(window.location.search).get('edit');
-                if (editId && typeof pcPopulateFromProduct === 'function') {
-                    pcPopulateFromProduct(editId, '');
-                }
-            } catch (e) { console.log('Edit deep-link failed', e); }
+            if (editId && typeof pcPopulateFromProduct === 'function') {
+                await Promise.all([
+                    loadMetafields(),
+                    fetchProductDetailForEditor(editId).catch(function () { return null; }),
+                    pricingTask,
+                ]);
+                try {
+                    await pcPopulateFromProduct(editId, '');
+                } catch (e) { console.log('Edit deep-link failed', e); }
+            } else {
+                await loadMetafields();
+                await pricingTask;
+            }
         });
 
         function toggleConverter() {
@@ -6188,6 +6195,9 @@ Dietary</textarea>
                 item.className = 'autocomplete-item';
                 const sku = (p.variants && p.variants[0] && p.variants[0].sku) || '';
                 item.innerHTML = `<div class=\"product-name\">${p.title}</div><div class=\"product-id\">${sku}</div>`;
+                item.addEventListener('mouseenter', function () {
+                    if (window.pcPrefetchProductDetail) window.pcPrefetchProductDetail(p.id);
+                });
                 item.onclick = () => pcPopulateFromProduct(p.id, p.title);
                 pcDrop.appendChild(item);
             });
@@ -6197,6 +6207,80 @@ Dietary</textarea>
         function pcHideAutocomplete(){
             const pcDrop = document.getElementById('pc-autocomplete-dropdown');
             pcDrop.style.display = 'none';
+        }
+
+        const pcProductDetailMemoryCache = Object.create(null);
+        const PC_PRODUCT_PREFETCH_PREFIX = 'pcProductPrefetch:';
+        const PC_PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+        function storeProductDetailCache(productId, data) {
+            const key = String(productId);
+            pcProductDetailMemoryCache[key] = { at: Date.now(), data: data };
+            try {
+                sessionStorage.setItem(PC_PRODUCT_PREFETCH_PREFIX + key, JSON.stringify({ at: Date.now(), data: data }));
+            } catch (_) { /* ignore quota */ }
+        }
+
+        function getCachedProductDetail(productId) {
+            const key = String(productId);
+            const mem = pcProductDetailMemoryCache[key];
+            if (mem && (Date.now() - mem.at) < PC_PRODUCT_CACHE_TTL_MS) return mem.data;
+            try {
+                const raw = sessionStorage.getItem(PC_PRODUCT_PREFETCH_PREFIX + key);
+                if (!raw) return null;
+                const parsed = JSON.parse(raw);
+                if (!parsed || !parsed.data || (Date.now() - parsed.at) >= PC_PRODUCT_CACHE_TTL_MS) return null;
+                pcProductDetailMemoryCache[key] = { at: parsed.at, data: parsed.data };
+                return parsed.data;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        async function fetchProductDetailForEditor(productId, opts) {
+            opts = opts || {};
+            if (!opts.forceRefresh) {
+                const cached = getCachedProductDetail(productId);
+                if (cached) return cached;
+            }
+            const resp = await fetch(`/api/product/${productId}/prices`, opts.signal ? { signal: opts.signal } : {});
+            const data = await resp.json().catch(function () { return {}; });
+            if (!resp.ok || !data || !data.id) {
+                let msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);
+                if (data && data.detail) msg += ' — ' + (typeof data.detail === 'string' ? data.detail.substring(0, 200) : '');
+                throw new Error(msg);
+            }
+            storeProductDetailCache(productId, data);
+            return data;
+        }
+
+        function loadArtworkTemplatesDeferred(mfs, data, title) {
+            void (async function () {
+                try {
+                    const atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
+                    pcCurrentTemplatesFileGlobalId = atMf || '';
+                    pcStagedRemoteEntries = [];
+                    if (atMf) {
+                        const respZip = await fetch('/api/templates-uploader/zip-contents', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ file_global_id: atMf })
+                        });
+                        const zipData = await respZip.json();
+                        if (zipData && zipData.success) {
+                            pcStagedRemoteEntries = (zipData.entries || []).map(it => ({ name: it.name, size: it.size, is_image: it.is_image }));
+                        }
+                        try {
+                            const skuFromMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'sku') || {}).value || '';
+                            const variantSku = (Array.isArray(data.variants) && data.variants[0] && data.variants[0].sku) ? data.variants[0].sku : '';
+                            const skuGuess = sanitizeBase(variantSku || skuFromMf || 'NOSKU');
+                            await pcLoadVersionsDirect(atMf, skuGuess, sanitizeBase(data.title || title || 'product'));
+                        } catch (e) { console.log('Version list load failed', e); }
+                    }
+                    stageArtworkTemplates([]);
+                    updateTemplateStatus();
+                } catch (e) { console.log('Templates prefill failed', e); }
+            })();
         }
 
         async function pcPopulateFromProduct(productId, title, opts) {
@@ -6230,8 +6314,9 @@ Dietary</textarea>
                     if (_loadingTextEl) _loadingTextEl.textContent = 'Still loading — server may be waking up…';
                 }, 8000);
                 let resp;
+                let data;
                 try {
-                    resp = await fetch(`/api/product/${productId}/prices`, { signal: _fetchCtrl.signal });
+                    data = await fetchProductDetailForEditor(productId, { signal: _fetchCtrl.signal });
                 } catch (fetchErr) {
                     clearTimeout(_fetchTimeout);
                     clearTimeout(_slowTimer);
@@ -6240,12 +6325,6 @@ Dietary</textarea>
                 clearTimeout(_fetchTimeout);
                 clearTimeout(_slowTimer);
                 if (_loadingTextEl) _loadingTextEl.textContent = 'Loading product…';
-                const data = await resp.json().catch(function() { return {}; });
-                if (!resp.ok) {
-                    var msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);
-                    if (data && data.detail) msg += ' — ' + (typeof data.detail === 'string' ? data.detail.substring(0, 200) : '');
-                    throw new Error(msg);
-                }
                 if (!data || !data.id) throw new Error('Failed to load product');
 
                 // Title: when create-from-parent with versionName use "Base - Version"; else when duplicating use "Base (Copy)"
@@ -6324,9 +6403,6 @@ Dietary</textarea>
 
                 // Ensure options are loaded, then set values
                 await ensureCategoryOptionsLoaded();
-                
-                // Wait a bit more to ensure options are fully loaded
-                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 // Find the metafield select elements by data-key attribute
                 const catSel = document.querySelector('select[data-key="custom_category"]');
@@ -6582,32 +6658,7 @@ Dietary</textarea>
                     updateGuidelineStatus();
                 } catch (e) { console.log('Guideline reflect failed', e); }
 
-                // Load product artwork templates like Templates Uploader
-                try {
-                    const atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
-                    pcCurrentTemplatesFileGlobalId = atMf || '';
-                    pcStagedRemoteEntries = [];
-                    if (atMf) {
-                        const respZip = await fetch('/api/templates-uploader/zip-contents', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ file_global_id: atMf })
-                        });
-                        const zipData = await respZip.json();
-                        if (zipData && zipData.success) {
-                            pcStagedRemoteEntries = (zipData.entries || []).map(it => ({ name: it.name, size: it.size, is_image: it.is_image }));
-                        }
-                        // Load versions list by scanning Shopify Files directly (mirror Templates Uploader behavior)
-                        try {
-                            const skuFromMf = (mfs.find(m => m.namespace==='custom' && m.key==='sku')||{}).value || '';
-                            const variantSku = (Array.isArray(data.variants) && data.variants[0] && data.variants[0].sku) ? data.variants[0].sku : '';
-                            const skuGuess = sanitizeBase(variantSku || skuFromMf || 'NOSKU');
-                            await pcLoadVersionsDirect(atMf, skuGuess, sanitizeBase(data.title||title||'product'));
-                        } catch (e) { console.log('Version list load failed', e); }
-                    }
-                    stageArtworkTemplates([]);
-                    updateTemplateStatus();
-                } catch (e) { console.log('Templates prefill failed', e); }
+                loadArtworkTemplatesDeferred(mfs, data, title);
 
                 if (isDuplicate) {
                     isEditingProduct = false;
@@ -6653,6 +6704,10 @@ Dietary</textarea>
                 if (loadingEl) loadingEl.classList.remove('visible');
             }
         }
+        window.pcPopulateFromProduct = pcPopulateFromProduct;
+        window.pcPrefetchProductDetail = function (productId) {
+            void fetchProductDetailForEditor(productId).catch(function () { /* ignore */ });
+        };
 
         function openDuplicateModal() {
             const modal = document.getElementById('duplicateProductModal');

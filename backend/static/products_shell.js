@@ -3,9 +3,56 @@
 
     var STORAGE_RETURN = 'productsReturnView';
     var DEFAULT_VIEW = 'all';
+    var PREFETCH_PREFIX = 'pcProductPrefetch:';
+    var PREFETCH_TTL_MS = 5 * 60 * 1000;
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
+    }
+
+    function prefetchProductForEditor(productId) {
+        var id = String(productId || '').trim();
+        if (!id) return;
+        try {
+            var key = PREFETCH_PREFIX + id;
+            var existing = sessionStorage.getItem(key);
+            if (existing) {
+                var parsed = JSON.parse(existing);
+                if (parsed && parsed.at && (Date.now() - parsed.at) < PREFETCH_TTL_MS) return;
+            }
+        } catch (_) { /* ignore */ }
+        fetch('/api/product/' + encodeURIComponent(id) + '/prices', { credentials: 'same-origin' })
+            .then(function (resp) { return resp.ok ? resp.json() : null; })
+            .then(function (data) {
+                if (!data || !data.id) return;
+                try {
+                    sessionStorage.setItem(PREFETCH_PREFIX + id, JSON.stringify({ at: Date.now(), data: data }));
+                } catch (_) { /* ignore quota */ }
+            })
+            .catch(function () { /* ignore */ });
+    }
+
+    function tryOpenProductInFrame(frame, productId) {
+        if (!frame || !productId) return false;
+        try {
+            var win = frame.contentWindow;
+            if (!win || typeof win.pcPopulateFromProduct !== 'function') return false;
+            if (!win.document || win.document.readyState !== 'complete') return false;
+            var current = frame.getAttribute('data-src') || '';
+            if (!current.startsWith(MANAGER_BASE_SRC)) return false;
+            win.pcPopulateFromProduct(String(productId), '');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function warmManagerFrame() {
+        var frame = document.getElementById('products-manager-frame');
+        if (!frame || frame.getAttribute('data-src')) return;
+        frame.src = MANAGER_BASE_SRC;
+        frame.setAttribute('data-src', MANAGER_BASE_SRC);
     }
 
     function setView(view, options) {
@@ -28,10 +75,13 @@
 
         if (view === 'manager' && frame) {
             var editId = options.editId != null ? String(options.editId) : getParam('edit');
-            var src = '/app/Product_Creator?embed=1';
+            var src = MANAGER_BASE_SRC;
             if (editId) src += '&edit=' + encodeURIComponent(editId);
-            if (frame.getAttribute('data-src') !== src) {
+            var openedInPlace = editId && tryOpenProductInFrame(frame, editId);
+            if (!openedInPlace && frame.getAttribute('data-src') !== src) {
                 frame.src = src;
+                frame.setAttribute('data-src', src);
+            } else if (openedInPlace) {
                 frame.setAttribute('data-src', src);
             }
         }
@@ -42,6 +92,8 @@
             url.searchParams.set('view', view);
             if (view === 'manager' && options.editId) {
                 url.searchParams.set('edit', String(options.editId));
+            } else if (view === 'manager' && getParam('edit')) {
+                url.searchParams.set('edit', getParam('edit'));
             } else {
                 url.searchParams.delete('edit');
             }
@@ -114,6 +166,7 @@
     }
 
     function openEditor(productId) {
+        prefetchProductForEditor(productId);
         setReturnView('all');
         setView('manager', { editId: productId, returnView: 'all' });
     }
@@ -162,15 +215,22 @@
         setReturnView: setReturnView,
         getReturnView: getReturnView,
         syncManagerFrameUrl: syncManagerFrameUrl,
+        prefetchProductForEditor: prefetchProductForEditor,
     };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             initToggle();
             initFromUrl();
+            if (getParam('view') !== 'manager') {
+                setTimeout(warmManagerFrame, 1500);
+            }
         });
     } else {
         initToggle();
         initFromUrl();
+        if (getParam('view') !== 'manager') {
+            setTimeout(warmManagerFrame, 1500);
+        }
     }
 })();

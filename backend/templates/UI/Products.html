@@ -271,7 +271,7 @@
         <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
     </div>
 
-    <script src="/static/products_shell.js?v=2"></script>
+    <script src="/static/products_shell.js?v=3"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
 
@@ -1267,6 +1267,18 @@
                 document.querySelectorAll('#ap-content .category-card').forEach(c => c.classList.add('collapsed'));
                 requestAnimationFrame(updateHorizontalScrollBar);
             });
+            document.getElementById('ap-content').addEventListener('mouseover', function(e) {
+                var link = e.target.closest('a.edit-btn');
+                if (!link || !window.ProductsShell || !window.ProductsShell.prefetchProductForEditor) return;
+                var m = (link.getAttribute('href') || '').match(/[?&]edit=([^&]+)/);
+                if (m) window.ProductsShell.prefetchProductForEditor(decodeURIComponent(m[1]));
+            }, true);
+            document.getElementById('ap-content').addEventListener('pointerdown', function(e) {
+                var link = e.target.closest('a.edit-btn');
+                if (!link || !window.ProductsShell || !window.ProductsShell.prefetchProductForEditor) return;
+                var m = (link.getAttribute('href') || '').match(/[?&]edit=([^&]+)/);
+                if (m) window.ProductsShell.prefetchProductForEditor(decodeURIComponent(m[1]));
+            }, true);
         });
     </script>
 </body>
