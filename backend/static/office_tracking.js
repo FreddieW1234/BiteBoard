@@ -847,10 +847,12 @@
         if (role === 'staff') {
             html += '<div class="office-tracking-body">';
             html += renderFileSections(office.files, orderId, itemId, apiPrefix, role, office);
+            html += '<div class="office-staff-controls">';
+            html += renderStaffProofUpload(office, orderId, itemId, apiPrefix);
             html += renderStaffStatusControls(office, orderId, itemId, apiPrefix);
             html += '</div>';
+            html += '</div>';
             html += '<div class="office-tracking-actions office-staff-actions">';
-            html += renderStaffProofUpload(office, orderId, itemId, apiPrefix);
             html += '<span class="office-tracking-msg" hidden></span></div>';
         } else {
             html += renderFileSections(office.files, orderId, itemId, apiPrefix, role, office);

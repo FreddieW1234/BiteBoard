@@ -219,11 +219,18 @@
     flex: 1 1 160px;
     min-width: 0;
 }
+.office-tracking-body .office-staff-controls {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px 20px;
+    margin-left: auto;
+}
 .office-tracking-body .office-staff-status {
     flex: 0 0 auto;
     min-width: 160px;
     max-width: 200px;
-    margin-left: auto;
 }
 
 .office-tracking-actions {
@@ -243,9 +250,33 @@
 .office-staff-uploads {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: stretch;
     gap: 8px;
 }
+.office-staff-uploads label.office-upload-btn,
+.office-staff-uploads button.office-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #4f46e5;
+    cursor: pointer;
+    padding: 8px 14px;
+    border: 1px solid #c7d2fe;
+    border-radius: 8px;
+    background: #eef2ff;
+    transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.office-staff-uploads label.office-upload-btn:hover,
+.office-staff-uploads button.office-upload-btn:hover {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+}
+.office-staff-uploads label.office-upload-btn input { display: none; }
 .office-tracking-actions label.office-upload-btn,
 .office-tracking-actions button.office-upload-btn {
     display: inline-flex;
@@ -757,5 +788,12 @@ html.co-embed .office-changes-contact-link:hover {
     .office-status-step { flex: 1 1 45%; }
     .office-status-connector { display: none; }
     .office-tracking-body { flex-direction: column; }
+    .office-tracking-body .office-staff-controls {
+        margin-left: 0;
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
     .office-tracking-body .office-staff-status { max-width: none; width: 100%; }
+    .office-staff-uploads { width: 100%; }
 }

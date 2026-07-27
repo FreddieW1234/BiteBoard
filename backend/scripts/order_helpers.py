@@ -251,17 +251,62 @@ def _clean_fee_title(title: str) -> str:
     return re.sub(r"\s*\(\d+\)\s*$", "", (title or "").strip()).strip()
 
 
+def _display_fee_label(fee_name: str) -> str:
+    """Short label for fee lines (Origination Fee keeps suffix; others drop trailing ' Fee')."""
+    name = (fee_name or "").strip()
+    if not name:
+        return ""
+    if "origination" in name.lower():
+        return "Origination Fee"
+    if name.lower().endswith(" fee"):
+        return name[:-4].strip()
+    return name
+
+
+def _fee_product_name(fee: dict) -> str:
+    for_product = (fee.get("for_product") or "").strip()
+    if for_product:
+        return for_product
+    title = (fee.get("title") or "").strip()
+    if " - " in title:
+        return title.rsplit(" - ", 1)[-1].strip()
+    return "Other fees"
+
+
+def group_fees_by_product(fees: list[dict]) -> list[dict]:
+    """Group fee line items under their parent product for display."""
+    groups: dict[str, list[dict]] = {}
+    order: list[str] = []
+    for fee in fees or []:
+        product = _fee_product_name(fee)
+        if product not in groups:
+            groups[product] = []
+            order.append(product)
+        fee_name = (fee.get("fee_name") or _clean_fee_title(fee.get("title") or "")).strip()
+        groups[product].append({
+            "fee_name": fee_name,
+            "fee_label": fee.get("fee_label") or _display_fee_label(fee_name),
+            "total": fee.get("total"),
+            "total_display": fee.get("total_display"),
+            "is_origination": "origination" in fee_name.lower(),
+        })
+    return [{"product": name, "fees": groups[name]} for name in order]
+
+
 def _is_hidden_fee_property(key: str) -> bool:
     k = (key or "").strip()
     return k in ("_for_product", "_pl") or k.startswith("_pl")
 
 
 def _format_fee_item(item: dict) -> dict:
-    """Fees: '{name} - {product}', hide _pl / _for_product and variant suffix."""
+    """Fees grouped by product in UI; hide _pl / _for_product and variant suffix."""
     properties = item.get("properties") or []
     by_key = {p["key"]: p["value"] for p in properties}
     fee_name = _clean_fee_title(item.get("title") or "")
     for_product = (by_key.get("_for_product") or "").strip()
+    item["fee_name"] = fee_name
+    item["for_product"] = for_product
+    item["fee_label"] = _display_fee_label(fee_name)
     item["title"] = f"{fee_name} - {for_product}" if for_product else fee_name
     item["meta_line"] = ""
     item["variant_title"] = ""
@@ -875,6 +920,7 @@ def enrich_order(node: dict, base: dict) -> dict:
     base["line_items"] = line_items
     base["order_items"] = items
     base["fees"] = fees
+    base["fees_by_product"] = group_fees_by_product(fees)
     base["shipping_address"] = format_mailing_address(node.get("shippingAddress"))
     base["billing_address"] = format_mailing_address(node.get("billingAddress"))
     base["payment"] = format_payment_method(node)
