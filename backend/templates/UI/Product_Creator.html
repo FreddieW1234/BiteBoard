@@ -2289,7 +2289,6 @@ Dietary</textarea>
                                 <div class="form-group form-group-colour-options form-group-product-colours">
                                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                         <label class="form-label" style="margin: 0;">Product Colours</label>
-                                        <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Foil Colours</button>
                                         <button type="button" id="reset-product-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
                                     </div>
                                     <div id="product-colour-inputs-container" class="colour-inputs-container">
@@ -2309,7 +2308,6 @@ Dietary</textarea>
                                 <div class="form-group form-group-colour-options form-group-packaging-colours">
                                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                         <label class="form-label" style="margin: 0;">Packaging Colours</label>
-                                        <button type="button" id="fill-bag-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Bag Colours</button>
                                         <button type="button" id="reset-packaging-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
                                     </div>
                                     <div id="packaging-colour-inputs-container" class="colour-inputs-container">
@@ -2324,6 +2322,64 @@ Dietary</textarea>
                                             <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="1" data-part="code" style="border: none;">
                                         </div>
                                         <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
+                                    </div>
+                                </div>
+                                <div class="form-group form-group-colour-options form-group-foil-colours">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                        <label class="form-label" style="margin: 0;">Foil Colours</label>
+                                        <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Foil Colours</button>
+                                        <button type="button" id="reset-foil-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                    </div>
+                                    <div id="foil-colour-inputs-container" class="colour-inputs-container">
+                                        <div class="colour-cell">
+                                            <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="0" data-part="name" style="border: none;">
+                                            <span class="colour-cell-divider"></span>
+                                            <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="0" data-part="code" style="border: none;">
+                                        </div>
+                                        <div class="colour-cell">
+                                            <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="1" data-part="name" style="border: none;">
+                                            <span class="colour-cell-divider"></span>
+                                            <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="1" data-part="code" style="border: none;">
+                                        </div>
+                                        <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
+                                    </div>
+                                </div>
+                                <div class="form-group form-group-colour-options form-group-bag-colours">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                        <label class="form-label" style="margin: 0;">Bag Colours</label>
+                                        <button type="button" id="fill-bag-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Bag Colours</button>
+                                        <button type="button" id="reset-bag-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                    </div>
+                                    <div id="bag-colour-inputs-container" class="colour-inputs-container">
+                                        <div class="colour-cell">
+                                            <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="0" data-part="name" style="border: none;">
+                                            <span class="colour-cell-divider"></span>
+                                            <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="0" data-part="code" style="border: none;">
+                                        </div>
+                                        <div class="colour-cell">
+                                            <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="1" data-part="name" style="border: none;">
+                                            <span class="colour-cell-divider"></span>
+                                            <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="1" data-part="code" style="border: none;">
+                                        </div>
+                                        <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
+                                    </div>
+                                </div>
+                                <div class="form-group storefront-options-panel" id="storefront-options-panel">
+                                    <label class="form-label">Storefront options</label>
+                                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #6b7280;">Check an option to show it on the website. Fee prices come from Shopify fee products, not these fields.</p>
+                                    <div class="storefront-options-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px;">
+                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                            <input type="checkbox" id="storefront-option-print" data-option="print"> Print
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                            <input type="checkbox" id="storefront-option-foil" data-option="foil"> Foil (Yes / No)
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                            <input type="checkbox" id="storefront-option-mailer" data-option="mailer"> Mailer
+                                        </label>
+                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                            <input type="checkbox" id="storefront-option-mailerpacking" data-option="mailerpacking"> Mailer packing
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -3219,6 +3275,8 @@ Dietary</textarea>
             const metafieldItems = document.querySelectorAll('.metafield-item');
             
             metafieldItems.forEach(item => {
+                const key = item.getAttribute('data-metafield-key') || '';
+                if (key === 'packingfee') return;
                 // Special handling for product_size field with 3 separate inputs
                 const productSizeFields = item.querySelectorAll('.product-size-field');
                 if (productSizeFields.length > 0) {
@@ -4474,10 +4532,7 @@ Dietary</textarea>
                 metafields = metafields.concat([{ namespace: 'custom', key: 'categorysub', type: 'list.single_line_text_field', value: '', id: null }]);
             }
 
-            // Ensure packing fee always renders (custom.packingfee — number_integer)
-            if (!metafields.some(m => m && m.key === 'packingfee' && (m.namespace || 'custom') === 'custom')) {
-                metafields = metafields.concat([{ namespace: 'custom', key: 'packingfee', type: 'number_integer', value: '', id: null }]);
-            }
+            metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
 
             if (metafields.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-style: italic; grid-column: 1 / -1;">No metafields found</p>';
@@ -4503,7 +4558,6 @@ Dietary</textarea>
                 "case_weight",
                 "leadtime1",
                 "leadtime2",
-                "packingfee",
                 "commodity_code",
                 "vegan",
                 "vegetarian",
@@ -4528,11 +4582,6 @@ Dietary</textarea>
                     if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
                         order = parsedOrder; // Use saved order if valid
                     }
-                }
-                if (!order.includes('packingfee')) {
-                    const commodityIdx = order.indexOf('commodity_code');
-                    if (commodityIdx >= 0) order.splice(commodityIdx, 0, 'packingfee');
-                    else order.push('packingfee');
                 }
                 
                         const byKey = new Map();
@@ -4579,7 +4628,7 @@ Dietary</textarea>
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
-                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','packing_info'].includes(key)) return false;
+                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info'].includes(key)) return false;
                     return true;
                 });
             } catch (e) { /* ignore filter errors */ }
@@ -4706,15 +4755,6 @@ Dietary</textarea>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for filters`);
-                } else if (metafield.key === 'packingfee') {
-                    const packingFeeOptions = [15, 20, 25];
-                    const storedPackingFee = String(currentValue || '').trim();
-                    inputElement = `
-                        <select class="metafield-value list-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'number_integer'}">
-                            <option value="">-- Select --</option>
-                            ${packingFeeOptions.map(opt => `<option value="${opt}" ${storedPackingFee === String(opt) ? 'selected' : ''}>${opt}p</option>`).join('')}
-                        </select>
-                    `;
                 } else if (hasOptions) {
                     console.log(`🔧 Creating dropdown for ${metafield.key} (hasOptions)`);
                         // Use Shopify's predefined options
@@ -5212,6 +5252,9 @@ Dietary</textarea>
             if (!isChildProduct()) {
                 productData.product_colours = collectColoursString('product-colour-inputs-container');
                 productData.packaging_colours = collectColoursString('packaging-colour-inputs-container');
+                productData.foil_colours = collectColoursString('foil-colour-inputs-container');
+                productData.bag_colours = collectColoursString('bag-colour-inputs-container');
+                productData.storefront_options = collectStorefrontOptions();
 
                 const colourImages = {};
                 const productContainer = document.getElementById('product-colour-inputs-container');
@@ -5228,6 +5271,9 @@ Dietary</textarea>
 
                 console.log('🔍 Product colours:', productData.product_colours);
                 console.log('🔍 Packaging colours:', productData.packaging_colours);
+                console.log('🔍 Foil colours:', productData.foil_colours);
+                console.log('🔍 Bag colours:', productData.bag_colours);
+                console.log('🔍 Storefront options:', productData.storefront_options);
                 console.log('🔍 Colour images mapping:', colourImages);
             }
             
@@ -5306,27 +5352,7 @@ Dietary</textarea>
                 console.log('Set productData.subcategories:', productData.subcategories);
             }
             
-            // Add colour options to metafields (product_colours or packaging_colours; parent-only)
-            if (!isChildProduct()) {
-                if (productData.product_colours) {
-                    console.log('🔍 Adding product_colours to metafields:', productData.product_colours);
-                    productData.metafields.push({
-                        namespace: 'custom',
-                        key: 'product_colours',
-                        type: 'single_line_text_field',
-                        value: productData.product_colours
-                    });
-                }
-                if (productData.packaging_colours) {
-                    console.log('🔍 Adding packaging_colours to metafields:', productData.packaging_colours);
-                    productData.metafields.push({
-                        namespace: 'custom',
-                        key: 'packaging_colours',
-                        type: 'single_line_text_field',
-                        value: productData.packaging_colours
-                    });
-                }
-            }
+            // Colour + storefront option metafields are written server-side from top-level fields
             
             // Collect price data (parent products only — children inherit pricing from parent)
             if (!isChildProduct()) {
@@ -7663,6 +7689,36 @@ Dietary</textarea>
             return [String(v)];
         }
 
+        function collectStorefrontOptions() {
+            const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
+            const out = {};
+            keys.forEach(function (key) {
+                const el = document.getElementById('storefront-option-' + key);
+                out[key] = !!(el && el.checked);
+            });
+            return out;
+        }
+
+        function loadStorefrontOptionsFromMetafields(metafields) {
+            const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
+            keys.forEach(function (key) {
+                const el = document.getElementById('storefront-option-' + key);
+                if (!el) return;
+                const mf = (metafields || []).find(function (m) {
+                    return m && m.namespace === 'custom' && m.key === key;
+                });
+                const val = mf && mf.value != null ? String(mf.value).trim() : '';
+                el.checked = !!val && val !== '[]';
+            });
+        }
+
+        function resetStorefrontOptions() {
+            ['print', 'foil', 'mailer', 'mailerpacking'].forEach(function (key) {
+                const el = document.getElementById('storefront-option-' + key);
+                if (el) el.checked = false;
+            });
+        }
+
         function collectColoursString(containerId) {
             const container = document.getElementById(containerId);
             if (!container) return '';
@@ -7682,12 +7738,18 @@ Dietary</textarea>
         function loadColoursFromMetafields(metafields) {
             if (isChildProduct()) {
                 resetColourOptions();
+                resetStorefrontOptions();
                 return;
             }
             const productMf = (metafields || []).find(m => m.key === 'product_colours' && m.namespace === 'custom');
             const packagingMf = (metafields || []).find(m => m.key === 'packaging_colours' && m.namespace === 'custom');
+            const foilMf = (metafields || []).find(m => m.key === 'foil_colours' && m.namespace === 'custom');
+            const bagMf = (metafields || []).find(m => m.key === 'bag_colours' && m.namespace === 'custom');
             loadColoursIntoInputs(productMf && productMf.value ? productMf.value : '', 'product-colour-inputs-container');
             loadColoursIntoInputs(packagingMf && packagingMf.value ? packagingMf.value : '', 'packaging-colour-inputs-container');
+            loadColoursIntoInputs(foilMf && foilMf.value ? foilMf.value : '', 'foil-colour-inputs-container');
+            loadColoursIntoInputs(bagMf && bagMf.value ? bagMf.value : '', 'bag-colour-inputs-container');
+            loadStorefrontOptionsFromMetafields(metafields);
         }
 
         // Handle dynamic colour inputs
@@ -7712,16 +7774,22 @@ Dietary</textarea>
                 container.insertBefore(newCell, plusButton);
             } else if (e.target.id === 'fill-bag-colours-btn' || e.target.closest('#fill-bag-colours-btn')) {
                 e.preventDefault();
-                fillColourPreset('/api/bag-colours', 'packaging-colour-inputs-container');
+                fillColourPreset('/api/bag-colours', 'bag-colour-inputs-container');
             } else if (e.target.id === 'fill-foil-colours-btn' || e.target.closest('#fill-foil-colours-btn')) {
                 e.preventDefault();
-                fillColourPreset('/api/foil-colours', 'product-colour-inputs-container');
+                fillColourPreset('/api/foil-colours', 'foil-colour-inputs-container');
             } else if (e.target.id === 'reset-product-colours-btn' || e.target.closest('#reset-product-colours-btn')) {
                 e.preventDefault();
                 resetColourOptions('product');
             } else if (e.target.id === 'reset-packaging-colours-btn' || e.target.closest('#reset-packaging-colours-btn')) {
                 e.preventDefault();
                 resetColourOptions('packaging');
+            } else if (e.target.id === 'reset-foil-colours-btn' || e.target.closest('#reset-foil-colours-btn')) {
+                e.preventDefault();
+                resetColourOptions('foil');
+            } else if (e.target.id === 'reset-bag-colours-btn' || e.target.closest('#reset-bag-colours-btn')) {
+                e.preventDefault();
+                resetColourOptions('bag');
             }
         });
 
@@ -7733,6 +7801,15 @@ Dietary</textarea>
             }
             if (!type || type === 'packaging') {
                 loadColoursIntoInputs('', 'packaging-colour-inputs-container');
+            }
+            if (!type || type === 'foil') {
+                loadColoursIntoInputs('', 'foil-colour-inputs-container');
+            }
+            if (!type || type === 'bag') {
+                loadColoursIntoInputs('', 'bag-colour-inputs-container');
+            }
+            if (!type) {
+                resetStorefrontOptions();
             }
             console.log('✅ Reset colour options', type ? `(${type})` : '(all)');
         }

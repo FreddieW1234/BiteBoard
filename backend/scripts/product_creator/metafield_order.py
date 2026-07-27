@@ -20,7 +20,6 @@ DEFAULT_METAFIELD_ORDER = [
     "nutritional_info",
     "leadtime1",
     "leadtime2",
-    "packingfee",
     "whats_inside",
     "vegan",
     "vegetarian",

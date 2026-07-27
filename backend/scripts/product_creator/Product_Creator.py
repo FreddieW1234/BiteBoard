@@ -1918,14 +1918,29 @@ def get_parent_child_tree(parents_only=False):
         return {"tree": []}
 
 
+from .storefront_options import (
+    COLOUR_METAFIELD_KEYS,
+    STOREFRONT_OPTION_KEYS,
+    RETIRED_METAFIELD_KEYS,
+    build_colour_metafield_entries,
+    build_storefront_option_metafield_entries,
+    retired_metafield_clear_entries,
+    storefront_clearable_keys,
+    validate_storefront_options,
+)
+
+MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRONT_OPTION_KEYS) | frozenset(RETIRED_METAFIELD_KEYS)
+
 # Metafield keys that are "inherited" from parent to children (same as hidden on child form).
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
-    "case_weight", "leadtime1", "leadtime2", "packingfee", "commodity_code",
+    "case_weight", "leadtime1", "leadtime2", "commodity_code",
     "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame",
     "egg", "cereals", "soya", "milk",
-    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "product_colours", "packaging_colours",
+    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates",
+    "product_colours", "packaging_colours", "foil_colours", "bag_colours",
+    "print", "foil", "mailer", "mailerpacking",
 })
 
 
@@ -2111,6 +2126,8 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
         if mf_r.status_code == 200:
             for m in mf_r.json().get("metafields", []):
                 key = (m.get("key") or "").strip()
+                if key in RETIRED_METAFIELD_KEYS:
+                    continue
                 if key in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
                     metafields.append({
                         "namespace": m.get("namespace") or "custom",
@@ -2145,6 +2162,8 @@ def _fetch_parent_propagate_metafields(parent_product_id, shopify_domain=None):
             return metafields
         for m in mf_r.json().get("metafields", []):
             key = (m.get("key") or "").strip()
+            if key in RETIRED_METAFIELD_KEYS:
+                continue
             if key in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
                 metafields.append({
                     "namespace": m.get("namespace") or "custom",
@@ -2271,8 +2290,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "artworkguidelines", "artworktemplates", "custom_category", "subcategory",
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
-            "product_colours", "packaging_colours",
-        ]) | set(FILTER_GROUP_KEYS or [])
+        ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or [])
 
         def _is_clearable(ns, k):
             if ns != "custom":
@@ -2378,7 +2396,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 # Also skip if value is already a valid JSON array (for list types)
                 _skip_dash_placeholder = (
                     namespace == "custom"
-                    and key in ("product_colours", "packaging_colours")
+                    and key in COLOUR_METAFIELD_KEYS
                 )
                 if not mf_type.startswith('list.') and not _skip_dash_placeholder:
                     # For non-list types, check if value is blank
@@ -3153,6 +3171,10 @@ def create_product(product_data):
             
             # Step 3: Create metafields if provided
             metafields = product_data.get("metafields") or []
+            metafields = [
+                mf for mf in metafields
+                if not (mf.get("namespace") == "custom" and mf.get("key") in MANAGED_STOREFRONT_KEYS)
+            ]
             if not isinstance(metafields, list):
                 metafields = []
             
@@ -3339,26 +3361,38 @@ def create_product(product_data):
             elif subcategories:
                 print(f"⚠️ Subcategories from form but no subcategory metafields in list: {subcategories}", flush=True)
             
-            # Add colour options metafield if provided (product vs packaging; parent-only for children)
+            # Colour + storefront option metafields (parent-only input; children inherit)
             is_parent_product = _is_parent_child_type(parent_child_value, "parent")
             is_child_product = _is_parent_child_type(parent_child_value, "child")
 
             if not is_child_product:
-                for colour_key in ("product_colours", "packaging_colours"):
-                    raw = product_data.get(colour_key) or ""
-                    colour_val = str(raw).strip() if raw else ""
-                    if colour_val or is_parent_product:
-                        if colour_val:
-                            print(f"🎨 {colour_key} provided: {colour_val}", flush=True)
-                        elif is_parent_product:
-                            print(f"🎨 Clearing {colour_key} on parent (will propagate to children)", flush=True)
-                        metafields = [mf for mf in metafields if mf.get("key") != colour_key]
-                        metafields.append({
-                            "namespace": "custom",
-                            "key": colour_key,
-                            "value": colour_val,
-                            "type": "single_line_text_field",
-                        })
+                for entry in build_colour_metafield_entries(
+                    product_data,
+                    is_child=is_child_product,
+                ):
+                    key = entry["key"]
+                    if entry.get("value"):
+                        print(f"🎨 {key} provided: {entry['value']}", flush=True)
+                    else:
+                        print(f"🎨 Clearing {key}", flush=True)
+                    metafields = [mf for mf in metafields if mf.get("key") != key]
+                    metafields.append(entry)
+
+                for entry in build_storefront_option_metafield_entries(
+                    product_data.get("storefront_options"),
+                ):
+                    key = entry["key"]
+                    if entry.get("value"):
+                        print(f"🛒 Storefront option enabled: custom.{key}", flush=True)
+                    else:
+                        print(f"🛒 Clearing storefront option: custom.{key}", flush=True)
+                    metafields = [mf for mf in metafields if mf.get("key") != key]
+                    metafields.append(entry)
+
+                for entry in retired_metafield_clear_entries():
+                    key = entry["key"]
+                    metafields = [mf for mf in metafields if mf.get("key") != key]
+                    metafields.append(entry)
             
             # For child products, overwrite inherited metafields with parent's values
             parent_mfs = product_data.get("_parent_metafields")
@@ -3798,6 +3832,10 @@ def validate_product_data(product_data):
         dict: Validation result with success status and any errors
     """
     errors = []
+    
+    option_err = validate_storefront_options(product_data.get("storefront_options"))
+    if option_err:
+        errors.append(option_err)
     
     # Required fields
     if not product_data.get("title", "").strip():
