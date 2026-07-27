@@ -2380,25 +2380,6 @@ Dietary</textarea>
                                         <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
                                     </div>
                                 </div>
-                                <div class="form-group storefront-options-panel" id="storefront-options-panel">
-                                    <label class="form-label">Storefront options</label>
-                                    <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #6b7280;">Check an option to show it on the website. Fee prices come from Shopify fee products, not these fields.</p>
-                                    <p id="storefront-options-calendar-hint" style="display: none; margin: 0 0 10px 0; font-size: 0.85rem; color: #4f46e5;">Calendar products always show Print, Foil, Mailer, and Mailer packing on the storefront.</p>
-                                    <div class="storefront-options-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px;">
-                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
-                                            <input type="checkbox" id="storefront-option-print" data-option="print"> Print
-                                        </label>
-                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
-                                            <input type="checkbox" id="storefront-option-foil" data-option="foil"> Foil (Yes / No)
-                                        </label>
-                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
-                                            <input type="checkbox" id="storefront-option-mailer" data-option="mailer"> Mailer
-                                        </label>
-                                        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
-                                            <input type="checkbox" id="storefront-option-mailerpacking" data-option="mailerpacking"> Mailer packing
-                                        </label>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                         
@@ -2678,7 +2659,6 @@ Dietary</textarea>
             const calendarYes = document.getElementById('calendarYes');
             if (calendarNo) calendarNo.checked = true;
             if (calendarYes) calendarYes.checked = false;
-            syncStorefrontOptionsForCalendar();
 
             const parentNo = document.getElementById('parentNo');
             const parentYes = document.getElementById('parentYes');
@@ -3079,16 +3059,18 @@ Dietary</textarea>
             return !!(yes && yes.checked);
         }
 
-        function syncStorefrontOptionsForCalendar() {
-            const cal = isCalendarProduct();
-            ['print', 'foil', 'mailer', 'mailerpacking'].forEach(function (key) {
-                const el = document.getElementById('storefront-option-' + key);
-                if (!el) return;
-                if (cal) el.checked = true;
-                el.disabled = cal;
+        function storefrontOptionEnabledInMetafields(metafields, key) {
+            const mf = (metafields || []).find(function (m) {
+                return m && m.namespace === 'custom' && m.key === key;
             });
-            const hint = document.getElementById('storefront-options-calendar-hint');
-            if (hint) hint.style.display = cal ? 'block' : 'none';
+            const val = mf && mf.value != null ? String(mf.value).trim() : '';
+            return !!val && val !== '[]';
+        }
+
+        function inferCalendarFromMetafields(metafields) {
+            return ['print', 'foil', 'mailer', 'mailerpacking'].every(function (key) {
+                return storefrontOptionEnabledInMetafields(metafields, key);
+            });
         }
 
         function selectGuidelineRow(row, column) {
@@ -3139,7 +3121,6 @@ Dietary</textarea>
         }
 
         function onCalendarProductChange() {
-            syncStorefrontOptionsForCalendar();
             applyCalendarGuidelinePreference(true);
         }
 
@@ -3156,12 +3137,14 @@ Dietary</textarea>
                 return m && m.namespace === 'custom' && m.key === 'calendar';
             });
             const val = mf && mf.value != null ? String(mf.value).trim().toLowerCase() : '';
-            const isCal = val === 'true' || val === '1' || val === 'yes';
+            let isCal = val === 'true' || val === '1' || val === 'yes';
+            if (!isCal && !mf) {
+                isCal = inferCalendarFromMetafields(metafields);
+            }
             const yes = document.getElementById('calendarYes');
             const no = document.getElementById('calendarNo');
             if (yes) yes.checked = isCal;
             if (no) no.checked = !isCal;
-            syncStorefrontOptionsForCalendar();
         }
 
         function buildGuidelinesListHtml(arr, col) {
@@ -7792,41 +7775,17 @@ Dietary</textarea>
 
         function collectStorefrontOptions() {
             const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
+            const enabled = isCalendarProduct();
             const out = {};
-            if (isCalendarProduct()) {
-                keys.forEach(function (key) { out[key] = true; });
-                return out;
-            }
-            keys.forEach(function (key) {
-                const el = document.getElementById('storefront-option-' + key);
-                out[key] = !!(el && el.checked);
-            });
+            keys.forEach(function (key) { out[key] = enabled; });
             return out;
         }
 
-        function loadStorefrontOptionsFromMetafields(metafields) {
-            const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
-            keys.forEach(function (key) {
-                const el = document.getElementById('storefront-option-' + key);
-                if (!el) return;
-                const mf = (metafields || []).find(function (m) {
-                    return m && m.namespace === 'custom' && m.key === key;
-                });
-                const val = mf && mf.value != null ? String(mf.value).trim() : '';
-                el.checked = !!val && val !== '[]';
-            });
-        }
-
-        function resetStorefrontOptions() {
-            ['print', 'foil', 'mailer', 'mailerpacking'].forEach(function (key) {
-                const el = document.getElementById('storefront-option-' + key);
-                if (el) {
-                    el.checked = false;
-                    el.disabled = false;
-                }
-            });
-            const hint = document.getElementById('storefront-options-calendar-hint');
-            if (hint) hint.style.display = 'none';
+        function resetCalendarProductToggle() {
+            const yes = document.getElementById('calendarYes');
+            const no = document.getElementById('calendarNo');
+            if (yes) yes.checked = false;
+            if (no) no.checked = true;
         }
 
         function collectColoursString(containerId) {
@@ -7848,7 +7807,7 @@ Dietary</textarea>
         function loadColoursFromMetafields(metafields) {
             if (isChildProduct()) {
                 resetColourOptions();
-                resetStorefrontOptions();
+                resetCalendarProductToggle();
                 return;
             }
             const productMf = (metafields || []).find(m => m.key === 'product_colours' && m.namespace === 'custom');
@@ -7860,8 +7819,6 @@ Dietary</textarea>
             loadColoursIntoInputs(foilMf && foilMf.value ? foilMf.value : '', 'foil-colour-inputs-container');
             loadColoursIntoInputs(bagMf && bagMf.value ? bagMf.value : '', 'bag-colour-inputs-container');
             loadCalendarFromMetafields(metafields);
-            loadStorefrontOptionsFromMetafields(metafields);
-            if (isCalendarProduct()) syncStorefrontOptionsForCalendar();
         }
 
         // Handle dynamic colour inputs
@@ -7921,7 +7878,7 @@ Dietary</textarea>
                 loadColoursIntoInputs('', 'bag-colour-inputs-container');
             }
             if (!type) {
-                resetStorefrontOptions();
+                resetCalendarProductToggle();
             }
             console.log('✅ Reset colour options', type ? `(${type})` : '(all)');
         }
