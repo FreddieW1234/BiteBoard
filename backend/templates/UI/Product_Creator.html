@@ -2584,9 +2584,9 @@ Dietary</textarea>
 
                 <!-- Action Buttons -->
                 <div class="action-buttons" style="display: none;">
-                    <button type="button" class="btn btn-secondary" onclick="resetForm()">
-                        <i class="fas fa-undo"></i>
-                        Reset Form
+                    <button type="button" class="btn btn-secondary" onclick="backToProductCreatorHome()">
+                        <i class="fas fa-arrow-left"></i>
+                        Back
                     </button>
                     <button type="submit" class="btn btn-success">
                         <i class="fas fa-plus-circle"></i>
@@ -3317,25 +3317,6 @@ Dietary</textarea>
                 throw (data && data.error) || 'Upload failed';
             }
             return true;
-        }
-
-        function resetForm() {
-            if (window.__PRODUCTS_EMBED__) {
-                void (async function () {
-                    await resetProductFormToBlank();
-                    try {
-                        history.replaceState(null, '', window.location.pathname + '?embed=1');
-                        if (window.parent && window.parent.ProductsShell
-                            && typeof window.parent.ProductsShell.syncManagerFrameUrl === 'function') {
-                            window.parent.ProductsShell.syncManagerFrameUrl();
-                        }
-                    } catch (e) { /* ignore */ }
-                })();
-                return;
-            }
-            // Reload as a blank form by dropping any ?edit=<id> deep-link param,
-            // otherwise the same product would just be reloaded into edit mode.
-            window.location.href = window.location.pathname;
         }
 
         function getVatTag() {
