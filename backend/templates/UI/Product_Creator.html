@@ -5435,6 +5435,8 @@ Dietary</textarea>
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else if (key === 'colour_images' && typeof productData[key] === 'object') {
                                 formData.append(key, JSON.stringify(productData[key]));
+                            } else if (key === 'storefront_options' && typeof productData[key] === 'object') {
+                                formData.append(key, JSON.stringify(productData[key]));
                             } else if ((key === 'categories' || key === 'subcategories') && Array.isArray(productData[key])) {
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else {

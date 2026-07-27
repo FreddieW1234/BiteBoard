@@ -54,6 +54,13 @@ def validate_storefront_options(raw: Any) -> Optional[str]:
     """Return an error message if storefront_options payload is invalid."""
     if raw is None:
         return None
+    if isinstance(raw, str):
+        if not raw.strip():
+            return None
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return "storefront_options must be an object"
     if not isinstance(raw, dict):
         return "storefront_options must be an object"
     for key, enabled in raw.items():

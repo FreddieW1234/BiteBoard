@@ -1726,7 +1726,7 @@ def api_create_product():
                     continue  # Skip media files, they're in request.files
                 
                 # Parse JSON fields that come as strings from FormData
-                if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories']:
+                if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options']:
                     try:
                         if key == 'metafields':
                             if value and value.strip():
@@ -1746,6 +1746,12 @@ def api_create_product():
                                 data[key] = parsed if isinstance(parsed, list) else [parsed]
                             else:
                                 data[key] = []
+                        elif key == 'storefront_options':
+                            if value and value.strip():
+                                parsed = json.loads(value)
+                                data[key] = parsed if isinstance(parsed, dict) else {}
+                            else:
+                                data[key] = {}
                         else:
                             data[key] = value
                     except (json.JSONDecodeError, ValueError) as e:
