@@ -8,6 +8,24 @@
         return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function isMobileDevice() {
+        if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 768px)').matches) {
+            return true;
+        }
+        return /Android|webOS|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+    }
+
+    function renderTrackingErrorHtml(message) {
+        const base = message || 'Tracking unavailable';
+        const isAuthError = /not authorised for this order/i.test(base);
+        let html = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(base) + '</p>';
+        if (isAuthError && isMobileDevice()) {
+            html += '<p class="office-tracking-mobile-hint">If you\'re on a phone or tablet, please open this order on a computer.</p>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     const SALES_EMAIL = 'sales@bitepromotions.co.uk';
     const SALES_PHONE_DISPLAY = '01792 293689';
     const SALES_PHONE_TEL = '+441792293689';
@@ -1376,7 +1394,7 @@
         const el = detailsEl || trackingDetailsEl(orderId);
         if (!el) return;
         el.querySelectorAll('.office-tracking-host').forEach(h => {
-            h.innerHTML = '<div class="office-tracking"><p class="office-tracking-error">' + escapeHtml(message || 'Tracking unavailable') + '</p></div>';
+            h.innerHTML = renderTrackingErrorHtml(message);
         });
         el.dataset.trackingLoaded = '1';
     }

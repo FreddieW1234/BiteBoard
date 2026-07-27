@@ -241,67 +241,8 @@
             padding: 3px 0;
             border-bottom: none;
         }
-        .orders-wrap .fees-box {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 14px 16px 12px;
-            margin-bottom: 16px;
-        }
-        .orders-wrap .fees-box-title {
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: #9ca3af;
-            margin-bottom: 12px;
-        }
-        .orders-wrap .fees-product-group { margin-bottom: 14px; }
-        .orders-wrap .fees-product-group:last-child { margin-bottom: 0; }
-        .orders-wrap .fees-product-name {
-            font-style: italic;
-            font-weight: 500;
-            color: #374151;
-            font-size: 0.9rem;
+        .orders-wrap .detail-section-fees h4 {
             margin-bottom: 6px;
-            line-height: 1.35;
-        }
-        .orders-wrap .fees-product-lines { padding-left: 10px; }
-        .orders-wrap .fees-line {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 20px;
-            padding: 2px 0;
-            font-size: 0.86rem;
-            line-height: 1.45;
-        }
-        .orders-wrap .fees-line-label {
-            font-style: italic;
-            color: #6b7280;
-            min-width: 0;
-        }
-        .orders-wrap .fees-line-price {
-            font-style: italic;
-            color: #374151;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-        .orders-wrap .fees-help-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 14px;
-            height: 14px;
-            margin-left: 4px;
-            border: 1px solid #9ca3af;
-            border-radius: 50%;
-            font-size: 0.62rem;
-            font-style: normal;
-            font-weight: 700;
-            color: #9ca3af;
-            cursor: help;
-            vertical-align: middle;
-            line-height: 1;
         }
         .orders-wrap .line-fee-row {
             display: flex;
@@ -639,25 +580,22 @@
                                         {% endif %}
                                     </div>
 
-                                    {% if order.fees_by_product %}
-                                    <div class="fees-box">
-                                        <div class="fees-box-title">Fees</div>
-                                        {% for group in order.fees_by_product %}
-                                        <div class="fees-product-group">
-                                            <div class="fees-product-name">{{ group.product }}</div>
-                                            <div class="fees-product-lines">
-                                                {% for fee in group.fees %}
-                                                <div class="fees-line">
-                                                    <span class="fees-line-label">
-                                                        {{ fee.fee_label }}
-                                                        {% if fee.is_origination %}
-                                                        <span class="fees-help-icon" title="One-time charge covering artwork setup and production preparation.">?</span>
-                                                        {% endif %}
-                                                    </span>
-                                                    <span class="fees-line-price">{{ fee.total_display }}</span>
-                                                </div>
-                                                {% endfor %}
+                                    {% if order.fees %}
+                                    <div class="detail-section detail-section-fees">
+                                        <h4>Fees</h4>
+                                        {% for item in order.fees %}
+                                        <div class="detail-line detail-line-fee">
+                                            <div class="line-fee-row">
+                                                <span class="line-title">{{ item.title }}</span>
+                                                <span class="line-price">{{ item.total_display }}</span>
                                             </div>
+                                            {% if item.properties %}
+                                            <ul class="line-props">
+                                                {% for prop in item.properties %}
+                                                <li><strong>{{ prop.key }}:</strong> {{ prop.value }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
                                         </div>
                                         {% endfor %}
                                     </div>

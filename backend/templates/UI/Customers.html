@@ -322,67 +322,8 @@
             padding: 3px 0;
             border-bottom: none;
         }
-        .cu-orders-modal-body .fees-box {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 14px 16px 12px;
-            margin-bottom: 16px;
-        }
-        .cu-orders-modal-body .fees-box-title {
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: #9ca3af;
-            margin-bottom: 12px;
-        }
-        .cu-orders-modal-body .fees-product-group { margin-bottom: 14px; }
-        .cu-orders-modal-body .fees-product-group:last-child { margin-bottom: 0; }
-        .cu-orders-modal-body .fees-product-name {
-            font-style: italic;
-            font-weight: 500;
-            color: #374151;
-            font-size: 0.9rem;
+        .cu-orders-modal-body .detail-section-fees h4 {
             margin-bottom: 6px;
-            line-height: 1.35;
-        }
-        .cu-orders-modal-body .fees-product-lines { padding-left: 10px; }
-        .cu-orders-modal-body .fees-line {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            gap: 20px;
-            padding: 2px 0;
-            font-size: 0.86rem;
-            line-height: 1.45;
-        }
-        .cu-orders-modal-body .fees-line-label {
-            font-style: italic;
-            color: #6b7280;
-            min-width: 0;
-        }
-        .cu-orders-modal-body .fees-line-price {
-            font-style: italic;
-            color: #374151;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-        .cu-orders-modal-body .fees-help-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 14px;
-            height: 14px;
-            margin-left: 4px;
-            border: 1px solid #9ca3af;
-            border-radius: 50%;
-            font-size: 0.62rem;
-            font-style: normal;
-            font-weight: 700;
-            color: #9ca3af;
-            cursor: help;
-            vertical-align: middle;
-            line-height: 1;
         }
         .cu-orders-modal-body .line-fee-row {
             display: flex;
@@ -1228,23 +1169,27 @@
             return html + '</div>';
         }
 
-        function renderFeesSection(feesByProduct) {
-            if (!feesByProduct || !feesByProduct.length) return '';
-            const tooltip = 'One-time charge covering artwork setup and production preparation.';
-            let html = '<div class="fees-box"><div class="fees-box-title">Fees</div>';
-            feesByProduct.forEach(group => {
-                html += `<div class="fees-product-group"><div class="fees-product-name">${escapeHtml(group.product || '')}</div><div class="fees-product-lines">`;
-                (group.fees || []).forEach(fee => {
-                    const label = fee.fee_label || fee.fee_name || '';
-                    const price = fee.total_display || formatGbp(fee.total);
-                    let labelHtml = escapeHtml(label);
-                    if (fee.is_origination) {
-                        labelHtml += ` <span class="fees-help-icon" title="${escapeHtml(tooltip)}">?</span>`;
-                    }
-                    html += `<div class="fees-line"><span class="fees-line-label">${labelHtml}</span><span class="fees-line-price">${escapeHtml(price)}</span></div>`;
+        function renderFeeItem(li) {
+            const price = li.total_display || formatGbp(li.total);
+            let html = `<div class="detail-line detail-line-fee"><div class="line-fee-row">
+                <span class="line-title">${escapeHtml(li.title)}</span>
+                <span class="line-price">${escapeHtml(price)}</span>
+            </div>`;
+            if (li.properties && li.properties.length) {
+                html += '<ul class="line-props">';
+                li.properties.forEach(p => {
+                    html += `<li><strong>${escapeHtml(p.key)}:</strong> ${escapeHtml(p.value)}</li>`;
                 });
-                html += '</div></div>';
-            });
+                html += '</ul>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderFeesSection(fees) {
+            if (!fees || !fees.length) return '';
+            let html = '<div class="detail-section detail-section-fees"><h4>Fees</h4>';
+            fees.forEach(li => { html += renderFeeItem(li); });
             html += '</div>';
             return html;
         }
@@ -1533,7 +1478,7 @@
         function renderCustomerOrderDetails(o) {
             let html = '<div class="details-inner">';
             html += renderOrderLineSection('Items', o.order_items || [], 'No items');
-            html += renderFeesSection(o.fees_by_product);
+            html += renderFeesSection(o.fees);
             html += renderOrderCostSections(o);
             html += renderOrderAddressesSection(o);
             html += renderOrderInfoSection(o);
