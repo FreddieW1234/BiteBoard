@@ -2138,6 +2138,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
                         "value": m.get("value") or "",
                         "type": m.get("type") or "single_line_text_field",
                     })
+        metafields = _inherit_metafields_with_clears(metafields)
         return {
             "tags": tags,
             "charge_vat": taxable,
@@ -2180,6 +2181,38 @@ def _fetch_parent_propagate_metafields(parent_product_id, shopify_domain=None):
     return metafields
 
 
+def _inherit_metafields_with_clears(metafields):
+    """
+    When a clearable inherited field was removed from the parent, it is absent from
+    the fetched list. Children still need an explicit empty entry so create_metafields
+    deletes their copy (same as parent save).
+    """
+    present_keys = {(m.get("namespace") or "custom", m.get("key")) for m in (metafields or [])}
+    result = list(metafields or [])
+    clearable_inherited_types = [
+        *((key, "single_line_text_field") for key in COLOUR_METAFIELD_KEYS),
+        *((key, "list.single_line_text_field") for key in STOREFRONT_OPTION_KEYS),
+        (CALENDAR_METAFIELD_KEY, "boolean"),
+        ("artworkguidelines", "file_reference"),
+        ("artworktemplates", "file_reference"),
+        ("pricejsontr", "single_line_text_field"),
+        ("pricejsoner", "single_line_text_field"),
+    ]
+    for key, mf_type in clearable_inherited_types:
+        if key not in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
+            continue
+        if ("custom", key) in present_keys:
+            continue
+        result.append({
+            "namespace": "custom",
+            "key": key,
+            "value": "",
+            "type": mf_type,
+        })
+        print(f"📋 Parent cleared custom.{key} — will remove from children", flush=True)
+    return result
+
+
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
     """
     After saving a parent product, push the same inherited fields to all products
@@ -2204,8 +2237,10 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
             if m.get("namespace") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
         ]
 
+    mfs_to_propagate = _inherit_metafields_with_clears(mfs_to_propagate)
+
     propagated_keys = {m.get("key") for m in mfs_to_propagate}
-    for key in ("pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid"):
+    for key in ("pricejsontid", "pricejsoneid"):
         if key not in propagated_keys:
             mfs_to_propagate.append({
                 "namespace": "custom",
