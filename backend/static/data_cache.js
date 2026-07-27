@@ -155,6 +155,10 @@
         options = options || {};
         var key = cacheKey(url);
 
+        if (options.bypassCache && shouldCacheFetch(url, options)) {
+            delete cache[key];
+        }
+
         if (!shouldCacheFetch(url, options)) {
             return fetch(url, options);
         }

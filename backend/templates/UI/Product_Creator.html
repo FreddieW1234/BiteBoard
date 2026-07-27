@@ -5633,7 +5633,7 @@ Dietary</textarea>
         async function loadCategoryDropdownOptions(dropdown) {
             try {
                 console.log('🔍 Loading category options from API...');
-                const response = await fetch('/api/metafield-choices/custom.custom_category');
+                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/metafield-choices/custom.custom_category', { credentials: 'same-origin' });
                 console.log('📡 Category API response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Category API response data:', data);
@@ -5697,7 +5697,7 @@ Dietary</textarea>
             const url = allOptions ? `/api/metafield-choices/custom.subcategory?all=1` : `/api/metafield-choices/custom.${key}`;
             try {
                 console.log(`🔍 Loading subcategory options from API (all=${!!allOptions})...`);
-                const response = await fetch(url);
+                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)(url, { credentials: 'same-origin' });
                 console.log('📡 Subcategory API response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Subcategory API response data:', data);
@@ -5760,7 +5760,7 @@ Dietary</textarea>
         async function loadCategorySubDropdownOptions(dropdown) {
             try {
                 console.log('🔍 Loading category groups from API...');
-                const response = await fetch('/api/category-groups');
+                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/category-groups', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success && Array.isArray(data.groups)) {
                     CATEGORYSUB_SUB_COUNT = {};
@@ -6583,7 +6583,7 @@ Dietary</textarea>
                 let products = pcAllProducts || [];
                 if (products.length === 0) {
                     try {
-                        const r = await fetch('/api/products');
+                        const r = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products', { credentials: 'same-origin' });
                         products = await r.json();
                     } catch (e) {}
                 }
