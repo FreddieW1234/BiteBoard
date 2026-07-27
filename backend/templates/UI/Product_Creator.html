@@ -12,6 +12,14 @@
     <script src="/static/theme.js?v=2"></script>
     <script src="/static/data_cache.js?v=1"></script>
     <script src="/static/page_preload.js?v=2"></script>
+    <script>
+        (function () {
+            if (new URLSearchParams(window.location.search).get('embed') === '1') {
+                window.__PRODUCTS_EMBED__ = true;
+                document.documentElement.classList.add('products-embed');
+            }
+        })();
+    </script>
     
     <style>
         * {
@@ -184,6 +192,11 @@
         }
 
         .page-title i { color: #4f46e5; }
+
+        html.products-embed .sidebar { display: none !important; }
+        html.products-embed .app-layout { display: block; min-height: auto; }
+        html.products-embed .main-wrap { padding: 0; max-width: none; }
+        html.products-embed .page-title { display: none; }
 
         .main-content {
             position: relative;
@@ -2040,13 +2053,9 @@
             </div>
             <nav class="sidebar-nav">
                 <div class="app-tabs">
-                    <a href="/app/All_Products" class="app-tab">
-                        <i class="fas fa-list"></i>
-                        <span>All Products</span>
-                    </a>
-                    <a href="/app/Product_Creator" class="app-tab active">
-                        <i class="fas fa-plus-circle"></i>
-                        <span>Product Manager</span>
+                    <a href="/app/Products" class="app-tab active">
+                        <i class="fas fa-box-open"></i>
+                        <span>Products</span>
                     </a>
                     <a href="/app/Orders" class="app-tab">
                         <i class="fas fa-box"></i>
@@ -2677,6 +2686,9 @@ Dietary</textarea>
         }
 
         function showBackButtonAndHideActions() {
+            if (window.__PRODUCTS_EMBED__ && window.parent && window.parent.ProductsShell) {
+                try { window.parent.ProductsShell.setReturnView('manager'); } catch (_) { /* ignore */ }
+            }
             const actionBtns = document.getElementById('product-action-buttons');
             const backBtn = document.getElementById('product-back-button');
             const diagramSection = document.getElementById('parent-child-diagram-section');
@@ -2685,11 +2697,11 @@ Dietary</textarea>
             if (diagramSection) diagramSection.style.display = 'none';
         }
 
-        function backToProductCreatorHome() {
+        function resetProductCreatorHomeUI() {
             // Clear any ?edit=<id> deep-link from the URL so a later refresh starts blank
             // instead of reloading the product we just came from.
             try {
-                if (window.location.search) {
+                if (window.location.search && !window.__PRODUCTS_EMBED__) {
                     history.replaceState(null, '', window.location.pathname);
                 }
             } catch (e) {}
@@ -2709,6 +2721,16 @@ Dietary</textarea>
             // Clear form data so the next "Create New Product" starts blank (like Reset Form)
             void resetProductFormToBlank();
         }
+
+        function backToProductCreatorHome() {
+            if (window.__PRODUCTS_EMBED__ && window.parent && window.parent.ProductsShell) {
+                window.parent.ProductsShell.backFromEditor();
+                return;
+            }
+            resetProductCreatorHomeUI();
+        }
+
+        window.resetProductCreatorHomeUI = resetProductCreatorHomeUI;
 
         async function refreshParentChildDropdown(currentParentValue) {
             const selectEl = document.getElementById('parent-child-select');

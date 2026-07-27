@@ -4,8 +4,7 @@
     /** Staff app routes (sidebar tabs + dashboard). Current page loads first; others prefetch in background. */
     var ROUTES = [
         '/',
-        '/app/All_Products',
-        '/app/Product_Creator',
+        '/app/Products',
         '/app/Orders',
         '/app/Diary',
         '/app/Customers',
@@ -38,6 +37,7 @@
 
         var href = anchor.getAttribute('href') || '';
         if (!href || href.indexOf('javascript:') === 0) return false;
+        if (href.indexOf('?') >= 0) return false;
 
         var path = normPath(href);
         if (path === '/staff/logout') return false;

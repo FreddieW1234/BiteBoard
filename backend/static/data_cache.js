@@ -27,10 +27,8 @@
             '/api/live-products-count',
             '/api/products-parent-child-tree',
         ],
-        '/app/All_Products': [
+        '/app/Products': [
             '/api/all-products',
-        ],
-        '/app/Product_Creator': [
             '/api/shopify/files',
             '/api/products-parent-child-tree',
             '/api/product/15285916696954',

@@ -1198,10 +1198,25 @@ def api_run_price_bandit():
 
 @app.route('/app/<tool_name>')
 def load_tool(tool_name):
+    if tool_name == 'All_Products':
+        return redirect('/app/Products?view=all')
+
+    if tool_name == 'Product_Creator':
+        if request.args.get('embed') == '1':
+            return render_template('UI/Product_Creator.html')
+        qs = request.query_string.decode('utf-8')
+        target = '/app/Products?view=manager'
+        if qs:
+            target += '&' + qs
+        return redirect(target)
+
+    if tool_name == 'Products':
+        return render_template('UI/Products.html')
+
     template_path = f'UI/{tool_name}.html'
     try:
         return render_template(template_path)
-    except:
+    except Exception:
         return f"<p>Tool UI for '{tool_name}' not found.</p>"
 
 @app.route('/api/templates-uploader/upload-zip', methods=['POST'])

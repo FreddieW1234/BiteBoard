@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Products - Shopify Tools</title>
+    <title>Products - BiteBoard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
@@ -41,6 +41,18 @@
 
         .main-wrap { flex: 1; min-width: 0; padding: 24px; }
         .main-wrap.has-hscroll { padding-bottom: 28px; }
+        .page-title-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 0 20px 0; }
+        .page-title-row .page-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+        .products-view-toggle { display: inline-flex; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px; gap: 2px; flex-shrink: 0; }
+        .products-view-toggle button { border: none; background: transparent; color: #4338ca; font-size: 0.82rem; font-weight: 600; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-family: inherit; }
+        .products-view-toggle button:hover { background: rgba(255,255,255,0.55); }
+        .products-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
+        #products-view-manager { min-height: calc(100vh - 120px); }
+        #products-view-manager[hidden] { display: none !important; }
+        #products-view-all[hidden] { display: none !important; }
+        #products-manager-frame { width: 100%; min-height: calc(100vh - 120px); border: none; display: block; background: transparent; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
 
@@ -210,7 +222,16 @@
         <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
 
         <div class="main-wrap">
-            <h1 class="page-title"><i class="fas fa-list"></i> All Products</h1>
+            <div class="page-title-row">
+                <h1 class="page-title"><i class="fas fa-box-open"></i> Products</h1>
+                <div class="products-view-toggle" role="group" aria-label="Products view">
+                    <button type="button" data-view="all" class="active" aria-pressed="true">All</button>
+                    <button type="button" data-view="manager" aria-pressed="false">Manager</button>
+                </div>
+            </div>
+
+            <div id="products-view-all">
+            <h2 class="visually-hidden">All products</h2>
 
             <div class="toolbar">
                 <div class="search-box">
@@ -241,6 +262,11 @@
             </div>
 
             <div id="ap-pc-gaps" class="ap-pc-gaps" hidden></div>
+            </div>
+
+            <div id="products-view-manager" hidden>
+                <iframe id="products-manager-frame" title="Product Manager"></iframe>
+            </div>
         </div>
     </div>
 
@@ -248,6 +274,7 @@
         <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
     </div>
 
+    <script src="/static/products_shell.js?v=2"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
 
@@ -649,7 +676,7 @@
             const searchStr = ((p.title || '') + ' ' + (p.sku || '') + ' ' + (p.categories || []).join(' ') + ' ' + (p.subcategories || []).join(' ') + ' ' + fieldText).toLowerCase();
             return `<div class="product-row" data-search="${escapeHtml(searchStr)}">
                 ${cols}
-                <span class="cell-action"><a class="edit-btn" href="/app/Product_Creator?edit=${encodeURIComponent(p.id)}"><i class="fas fa-pen"></i> Edit</a></span>
+                <span class="cell-action"><a class="edit-btn" href="/app/Products?view=manager&edit=${encodeURIComponent(p.id)}&return=all"><i class="fas fa-pen"></i> Edit</a></span>
             </div>`;
         }
 
@@ -918,7 +945,7 @@
                 ${badgeHtml}
                 ${skuHtml}
                 <span class="product-name" title="${name}">${name}</span>
-                <a class="edit-btn" href="/app/Product_Creator?edit=${encodeURIComponent(p.id)}"><i class="fas fa-pen"></i> Edit</a>
+                <a class="edit-btn" href="/app/Products?view=manager&edit=${encodeURIComponent(p.id)}&return=all"><i class="fas fa-pen"></i> Edit</a>
             </div>`;
         }
 
