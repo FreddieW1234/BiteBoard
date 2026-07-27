@@ -25,6 +25,8 @@ STOREFRONT_OPTION_CHOICES: Dict[str, List[str]] = {
     "mailerpacking": ["Yes", "No"],
 }
 
+CALENDAR_METAFIELD_KEY = "calendar"
+
 RETIRED_METAFIELD_KEYS = ("packingfee",)
 
 
@@ -69,6 +71,24 @@ def validate_storefront_options(raw: Any) -> Optional[str]:
         if not isinstance(enabled, (bool, str, int)) and enabled is not None:
             return f"Invalid storefront option flag for {key}"
     return None
+
+
+def resolve_storefront_options(storefront_options: Any, is_calendar: Any) -> Dict[str, bool]:
+    """Calendar products always expose all fee toggles on the storefront."""
+    if _truthy(is_calendar):
+        return {key: True for key in STOREFRONT_OPTION_KEYS}
+    if not isinstance(storefront_options, dict):
+        return {}
+    return {key: _truthy(storefront_options.get(key)) for key in STOREFRONT_OPTION_KEYS if key in storefront_options}
+
+
+def build_calendar_metafield_entry(is_calendar: Any) -> dict:
+    return {
+        "namespace": "custom",
+        "key": CALENDAR_METAFIELD_KEY,
+        "value": "true" if _truthy(is_calendar) else "",
+        "type": "boolean",
+    }
 
 
 def build_colour_metafield_entries(
@@ -135,4 +155,4 @@ def retired_metafield_clear_entries() -> List[dict]:
 
 
 def storefront_clearable_keys() -> set:
-    return set(COLOUR_METAFIELD_KEYS) | set(STOREFRONT_OPTION_KEYS) | set(RETIRED_METAFIELD_KEYS)
+    return set(COLOUR_METAFIELD_KEYS) | set(STOREFRONT_OPTION_KEYS) | set(RETIRED_METAFIELD_KEYS) | {CALENDAR_METAFIELD_KEY}

@@ -153,8 +153,18 @@
         .line-price-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }
         .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; }
         .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
-        .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
-        .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
+        .line-props {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 8px 0 0;
+            border-top: 1px dashed #e5e7eb;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0;
+        }
+        .line-props li { font-size: 0.8rem; color: #374151; padding: 0; line-height: 1.4; }
+        .line-props li:not(:last-child)::after { content: ' · '; color: #9ca3af; font-weight: 400; }
         .line-props li strong { font-weight: 600; color: #6b7280; }
         .order-info-note { font-size: 0.86rem; line-height: 1.55; color: #374151; white-space: pre-wrap; margin-bottom: 8px; }
         .info-kv { font-size: 0.8rem; color: #374151; padding: 3px 0; line-height: 1.45; }

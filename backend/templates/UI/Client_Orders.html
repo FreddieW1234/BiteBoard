@@ -293,8 +293,13 @@
             margin: 8px 0 0;
             padding: 8px 0 0;
             border-top: 1px dashed #e5e7eb;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0;
         }
-        .orders-wrap .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
+        .orders-wrap .line-props li { font-size: 0.8rem; color: #374151; padding: 0; line-height: 1.4; }
+        .orders-wrap .line-props li:not(:last-child)::after { content: ' · '; color: #9ca3af; font-weight: 400; }
         .orders-wrap .line-props li strong { font-weight: 600; color: #6b7280; }
         .orders-wrap .order-info-note {
             font-size: 0.86rem;

@@ -1919,17 +1919,20 @@ def get_parent_child_tree(parents_only=False):
 
 
 from .storefront_options import (
+    CALENDAR_METAFIELD_KEY,
     COLOUR_METAFIELD_KEYS,
     STOREFRONT_OPTION_KEYS,
     RETIRED_METAFIELD_KEYS,
+    build_calendar_metafield_entry,
     build_colour_metafield_entries,
     build_storefront_option_metafield_entries,
+    resolve_storefront_options,
     retired_metafield_clear_entries,
     storefront_clearable_keys,
     validate_storefront_options,
 )
 
-MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRONT_OPTION_KEYS) | frozenset(RETIRED_METAFIELD_KEYS)
+MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRONT_OPTION_KEYS) | frozenset(RETIRED_METAFIELD_KEYS) | frozenset({CALENDAR_METAFIELD_KEY})
 
 # Metafield keys that are "inherited" from parent to children (same as hidden on child form).
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
@@ -1940,7 +1943,7 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "egg", "cereals", "soya", "milk",
     "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates",
     "product_colours", "packaging_colours", "foil_colours", "bag_colours",
-    "print", "foil", "mailer", "mailerpacking",
+    "print", "foil", "mailer", "mailerpacking", "calendar",
 })
 
 
@@ -3378,9 +3381,19 @@ def create_product(product_data):
                     metafields = [mf for mf in metafields if mf.get("key") != key]
                     metafields.append(entry)
 
-                for entry in build_storefront_option_metafield_entries(
+                calendar_entry = build_calendar_metafield_entry(product_data.get("is_calendar"))
+                metafields = [mf for mf in metafields if mf.get("key") != CALENDAR_METAFIELD_KEY]
+                metafields.append(calendar_entry)
+                if calendar_entry.get("value"):
+                    print("📅 Calendar product flag enabled", flush=True)
+                else:
+                    print("📅 Clearing calendar product flag", flush=True)
+
+                resolved_storefront_options = resolve_storefront_options(
                     product_data.get("storefront_options"),
-                ):
+                    product_data.get("is_calendar"),
+                )
+                for entry in build_storefront_option_metafield_entries(resolved_storefront_options):
                     key = entry["key"]
                     if entry.get("value"):
                         print(f"🛒 Storefront option enabled: custom.{key}", flush=True)

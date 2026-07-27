@@ -363,8 +363,18 @@
         .cu-orders-modal-body .line-price-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }
         .cu-orders-modal-body .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; }
         .cu-orders-modal-body .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
-        .cu-orders-modal-body .line-props { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px dashed #e5e7eb; }
-        .cu-orders-modal-body .line-props li { font-size: 0.8rem; color: #374151; padding: 2px 0; line-height: 1.4; }
+        .cu-orders-modal-body .line-props {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 8px 0 0;
+            border-top: 1px dashed #e5e7eb;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0;
+        }
+        .cu-orders-modal-body .line-props li { font-size: 0.8rem; color: #374151; padding: 0; line-height: 1.4; }
+        .cu-orders-modal-body .line-props li:not(:last-child)::after { content: ' · '; color: #9ca3af; font-weight: 400; }
         .cu-orders-modal-body .line-props li strong { font-weight: 600; color: #6b7280; }
         .cu-orders-modal-body .order-status-label-slot {
             font-size: 0.84rem;

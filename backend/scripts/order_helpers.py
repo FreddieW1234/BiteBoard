@@ -168,41 +168,82 @@ def _parse_attributes(raw: list | None) -> list[dict]:
     return out
 
 
-def _merge_property_pairs(properties: list[dict]) -> tuple[list[str], list[dict]]:
-    """Merge label + _label Code pairs into 'Label - value:code' strings."""
+# Storefront line-item option labels, in the same order as the Shopify product page.
+STOREFRONT_LINE_ITEM_PROPERTY_ORDER = (
+    "Product Colour",
+    "Packaging Colour",
+    "Foil Colour",
+    "Bag Colour",
+    "Print",
+    "Foil",
+    "Mailer",
+    "Mailer Packing",
+)
+
+
+def _normalize_property_label(key: str) -> str:
+    return (key or "").strip()
+
+
+def _is_internal_line_property_key(key: str) -> bool:
+    k = _normalize_property_label(key)
+    if not k or _is_hidden_item_property(k):
+        return True
+    return k.startswith("_")
+
+
+def _format_storefront_property_value(label: str, value: str, by_key: dict[str, str]) -> str:
+    code_key = f"_{label} Code"
+    if code_key in by_key:
+        val = (value or "").strip()
+        code = (by_key.get(code_key) or "").strip()
+        if val and code:
+            return f"{val}:{code}"
+        return val or code
+    return (value or "").strip()
+
+
+def _order_storefront_line_properties(properties: list[dict]) -> tuple[list[dict], list[dict]]:
+    """
+    Collect all storefront option properties into one stacked list (Shopify order).
+    Colour code keys (_Product Colour Code, etc.) are folded into the display value.
+    """
     if not properties:
         return [], []
-    by_key = {p["key"]: p["value"] for p in properties}
-    consumed: set[str] = set()
-    merged: list[str] = []
 
-    for prop in properties:
-        key = prop["key"]
-        if key in consumed or key.startswith("_"):
+    by_key = {_normalize_property_label(p["key"]): p["value"] for p in properties}
+    consumed: set[str] = set()
+    ordered: list[dict] = []
+
+    for label in STOREFRONT_LINE_ITEM_PROPERTY_ORDER:
+        if label not in by_key:
             continue
-        code_key = f"_{key} Code"
+        display_val = _format_storefront_property_value(label, by_key[label], by_key)
+        if display_val:
+            ordered.append({"key": label, "value": display_val})
+        consumed.add(label)
+        code_key = f"_{label} Code"
         if code_key in by_key:
-            merged.append(f"{key} - {prop['value']}:{by_key[code_key]}")
-            consumed.add(key)
             consumed.add(code_key)
-        elif key == "Mailer":
-            merged.append(f"{key} - {prop['value']}")
-            consumed.add(key)
 
     remaining = [
         p for p in properties
-        if p["key"] not in consumed and not _is_hidden_item_property(p["key"])
+        if _normalize_property_label(p["key"]) not in consumed
+        and not _is_internal_line_property_key(p["key"])
     ]
-    merged.sort(key=str.lower)
+    return ordered, remaining
+
+
+def _merge_property_pairs(properties: list[dict]) -> tuple[list[str], list[dict]]:
+    """Deprecated: kept for compatibility; storefront options now use _order_storefront_line_properties."""
+    ordered, remaining = _order_storefront_line_properties(properties)
+    merged = [f"{p['key']} - {p['value']}" for p in ordered]
     return merged, remaining
 
 
-def _build_meta_line(variant_title: str, merged_variants: list[str]) -> str:
-    """Colour/variant pairs · qty band / customer type (SKU shown separately)."""
-    parts: list[str] = list(merged_variants)
-    if variant_title:
-        parts.append(variant_title)
-    return " · ".join(parts)
+def _build_meta_line(variant_title: str) -> str:
+    """Qty band / customer type only — option choices are shown in the stacked property list."""
+    return (variant_title or "").strip()
 
 
 def _clean_fee_title(title: str) -> str:
@@ -260,7 +301,7 @@ def format_line_item(li: dict) -> dict:
     sku = (li.get("sku") or "").strip()
     variant_title = (li.get("variantTitle") or "").strip()
     properties = _parse_attributes(li.get("customAttributes"))
-    merged_variants, remaining = _merge_property_pairs(properties)
+    storefront_props, remaining = _order_storefront_line_properties(properties)
     is_fee = is_fee_item(title)
     unit_price = unit_money.get("amount") or "0.00"
     total = li_money.get("amount") or "0.00"
@@ -272,14 +313,14 @@ def format_line_item(li: dict) -> dict:
         "sku": sku,
         "variant_title": variant_title,
         "weight_kg": weight_kg,
-        "meta_line": _build_meta_line(variant_title, merged_variants),
+        "meta_line": _build_meta_line(variant_title),
         "unit_price": unit_price,
         "total": total,
         "unit_price_display": format_gbp(unit_price),
         "total_display": format_gbp(total),
         "price_display": format_line_price(unit_price, quantity, total),
         "currency": currency,
-        "properties": remaining,
+        "properties": storefront_props + remaining,
         "is_fee": is_fee,
     }
     if is_fee:

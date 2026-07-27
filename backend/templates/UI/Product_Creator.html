@@ -1302,6 +1302,7 @@
         .pc-create-from-parent .parent-option-only { display: none !important; }
         /* Create-from-parent mode: hide other duplicated-from-parent fields (values still saved) */
         .pc-create-from-parent .form-group-charge-vat,
+        .pc-create-from-parent .form-group-calendar,
         .pc-create-from-parent #pricing-section,
         .pc-create-from-parent #artwork-section,
         .pc-create-from-parent .colour-sections-stack { display: none !important; }
@@ -2240,6 +2241,21 @@ Dietary</textarea>
                                     </label>
                                 </div>
                             </div>
+                            <div class="form-group form-group-calendar calendar-option-row">
+                                <label class="form-label">Calendar?</label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" id="calendarYes" name="calendarProduct" value="yes" class="radio-input">
+                                        <span class="radio-custom"></span>
+                                        <span class="radio-text">Yes</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" id="calendarNo" name="calendarProduct" value="no" class="radio-input" checked>
+                                        <span class="radio-custom"></span>
+                                        <span class="radio-text">No</span>
+                                    </label>
+                                </div>
+                            </div>
                             <div class="form-group form-group-parent parent-child-option-row" style="display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 24px;">
                                 <div class="parent-option-only" id="parent-option-wrap">
                                     <label class="form-label">Parent?</label>
@@ -2367,6 +2383,7 @@ Dietary</textarea>
                                 <div class="form-group storefront-options-panel" id="storefront-options-panel">
                                     <label class="form-label">Storefront options</label>
                                     <p style="margin: 0 0 10px 0; font-size: 0.85rem; color: #6b7280;">Check an option to show it on the website. Fee prices come from Shopify fee products, not these fields.</p>
+                                    <p id="storefront-options-calendar-hint" style="display: none; margin: 0 0 10px 0; font-size: 0.85rem; color: #4f46e5;">Calendar products always show Print, Foil, Mailer, and Mailer packing on the storefront.</p>
                                     <div class="storefront-options-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px;">
                                         <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
                                             <input type="checkbox" id="storefront-option-print" data-option="print"> Print
@@ -2656,6 +2673,12 @@ Dietary</textarea>
 
             const chargeVatYes = document.getElementById('chargeVatYes');
             if (chargeVatYes) chargeVatYes.checked = true;
+
+            const calendarNo = document.getElementById('calendarNo');
+            const calendarYes = document.getElementById('calendarYes');
+            if (calendarNo) calendarNo.checked = true;
+            if (calendarYes) calendarYes.checked = false;
+            syncStorefrontOptionsForCalendar();
 
             const parentNo = document.getElementById('parentNo');
             const parentYes = document.getElementById('parentYes');
@@ -3048,23 +3071,97 @@ Dietary</textarea>
             const rightEl = document.getElementById('artworkGuidelinesRight');
             leftEl.innerHTML = buildGuidelinesListHtml(artworkGuidelinesLeft, 'left');
             rightEl.innerHTML = buildGuidelinesListHtml(artworkGuidelinesRight, 'right');
-            // Select first general (left-column) guideline by default when none selected
-            if (selectedGuideline == null && artworkGuidelinesLeft.length > 0) {
-                const firstRow = leftEl.querySelector('.guideline-row');
-                if (firstRow) {
-                    const gid = decodeURIComponent(firstRow.getAttribute('data-gid') || '');
-                    const nameEl = firstRow.querySelector('.guideline-name');
-                    const name = nameEl ? nameEl.textContent : '';
-                    const btn = firstRow.querySelector('.use-btn');
-                    selectedGuideline = { id: gid, name, column: 'left' };
-                    if (btn) {
-                        btn.classList.remove('btn-secondary');
-                        btn.classList.add('btn-success');
-                        btn.textContent = 'Selected';
-                    }
-                }
+            selectDefaultGuidelineIfNeeded();
+        }
+
+        function isCalendarProduct() {
+            const yes = document.getElementById('calendarYes');
+            return !!(yes && yes.checked);
+        }
+
+        function syncStorefrontOptionsForCalendar() {
+            const cal = isCalendarProduct();
+            ['print', 'foil', 'mailer', 'mailerpacking'].forEach(function (key) {
+                const el = document.getElementById('storefront-option-' + key);
+                if (!el) return;
+                if (cal) el.checked = true;
+                el.disabled = cal;
+            });
+            const hint = document.getElementById('storefront-options-calendar-hint');
+            if (hint) hint.style.display = cal ? 'block' : 'none';
+        }
+
+        function selectGuidelineRow(row, column) {
+            if (!row) return;
+            const gid = decodeURIComponent(row.getAttribute('data-gid') || '');
+            const nameEl = row.querySelector('.guideline-name');
+            const name = nameEl ? nameEl.textContent : '';
+            document.querySelectorAll('.guideline-row .use-btn').forEach(btn => {
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+                btn.textContent = 'Use';
+            });
+            selectedGuideline = { id: gid, name, column };
+            const btn = row.querySelector('.use-btn');
+            if (btn) {
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-success');
+                btn.textContent = 'Selected';
             }
             updateGuidelineStatus();
+        }
+
+        function selectDefaultGuidelineIfNeeded() {
+            if (selectedGuideline != null) return;
+            const preferAdvent = isCalendarProduct();
+            let list = preferAdvent ? artworkGuidelinesRight : artworkGuidelinesLeft;
+            let elId = preferAdvent ? 'artworkGuidelinesRight' : 'artworkGuidelinesLeft';
+            let column = preferAdvent ? 'right' : 'left';
+            if (preferAdvent && list.length === 0 && artworkGuidelinesLeft.length > 0) {
+                list = artworkGuidelinesLeft;
+                elId = 'artworkGuidelinesLeft';
+                column = 'left';
+            }
+            const el = document.getElementById(elId);
+            if (!el || list.length === 0) return;
+            selectGuidelineRow(el.querySelector('.guideline-row'), column);
+        }
+
+        function applyCalendarGuidelinePreference(forceReselect) {
+            if (!isCalendarProduct()) return;
+            if (!forceReselect && selectedGuideline && selectedGuideline.column === 'right') return;
+            const rightEl = document.getElementById('artworkGuidelinesRight');
+            if (artworkGuidelinesRight.length > 0 && rightEl) {
+                selectGuidelineRow(rightEl.querySelector('.guideline-row'), 'right');
+                return;
+            }
+            selectDefaultGuidelineIfNeeded();
+        }
+
+        function onCalendarProductChange() {
+            syncStorefrontOptionsForCalendar();
+            applyCalendarGuidelinePreference(true);
+        }
+
+        function setupCalendarRadioListeners() {
+            const calendarYes = document.getElementById('calendarYes');
+            const calendarNo = document.getElementById('calendarNo');
+            if (!calendarYes || !calendarNo) return;
+            calendarYes.addEventListener('change', onCalendarProductChange);
+            calendarNo.addEventListener('change', onCalendarProductChange);
+        }
+
+        function loadCalendarFromMetafields(metafields) {
+            const mf = (metafields || []).find(function (m) {
+                return m && m.namespace === 'custom' && m.key === 'calendar';
+            });
+            const val = mf && mf.value != null ? String(mf.value).trim().toLowerCase() : '';
+            const isCal = val === 'true' || val === '1' || val === 'yes';
+            const yes = document.getElementById('calendarYes');
+            const no = document.getElementById('calendarNo');
+            if (yes) yes.checked = isCal;
+            if (no) no.checked = !isCal;
+            syncStorefrontOptionsForCalendar();
         }
 
         function buildGuidelinesListHtml(arr, col) {
@@ -4628,7 +4725,7 @@ Dietary</textarea>
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
-                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info'].includes(key)) return false;
+                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar'].includes(key)) return false;
                     return true;
                 });
             } catch (e) { /* ignore filter errors */ }
@@ -5233,6 +5330,7 @@ Dietary</textarea>
             productData.status = formData.get('status') || 'active';
             productData.tags = getVatTag();
             productData.charge_vat = document.getElementById('chargeVatYes').checked;
+            productData.is_calendar = isCalendarProduct();
             const parentYesEl = document.getElementById('parentYes');
             const parentSelectEl = document.getElementById('parent-child-select');
             const childYesEl = document.getElementById('childYes');
@@ -6047,6 +6145,7 @@ Dietary</textarea>
             // Removed loadShopifyMedia() - no longer using Shopify media selection tab
 
             setupParentRadioListeners();
+            setupCalendarRadioListeners();
 
             // Load products for search (cached)
             try {
@@ -7694,6 +7793,10 @@ Dietary</textarea>
         function collectStorefrontOptions() {
             const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
             const out = {};
+            if (isCalendarProduct()) {
+                keys.forEach(function (key) { out[key] = true; });
+                return out;
+            }
             keys.forEach(function (key) {
                 const el = document.getElementById('storefront-option-' + key);
                 out[key] = !!(el && el.checked);
@@ -7717,8 +7820,13 @@ Dietary</textarea>
         function resetStorefrontOptions() {
             ['print', 'foil', 'mailer', 'mailerpacking'].forEach(function (key) {
                 const el = document.getElementById('storefront-option-' + key);
-                if (el) el.checked = false;
+                if (el) {
+                    el.checked = false;
+                    el.disabled = false;
+                }
             });
+            const hint = document.getElementById('storefront-options-calendar-hint');
+            if (hint) hint.style.display = 'none';
         }
 
         function collectColoursString(containerId) {
@@ -7751,7 +7859,9 @@ Dietary</textarea>
             loadColoursIntoInputs(packagingMf && packagingMf.value ? packagingMf.value : '', 'packaging-colour-inputs-container');
             loadColoursIntoInputs(foilMf && foilMf.value ? foilMf.value : '', 'foil-colour-inputs-container');
             loadColoursIntoInputs(bagMf && bagMf.value ? bagMf.value : '', 'bag-colour-inputs-container');
+            loadCalendarFromMetafields(metafields);
             loadStorefrontOptionsFromMetafields(metafields);
+            if (isCalendarProduct()) syncStorefrontOptionsForCalendar();
         }
 
         // Handle dynamic colour inputs
