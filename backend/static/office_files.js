@@ -256,21 +256,14 @@
     }
 
     async function loadFiles(search, forceRefresh) {
-        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         const panel = document.getElementById('of-panel');
         if (!panel) return;
-        const cacheReady = !forceRefresh && !search && window.BiteDataCache && BiteDataCache.has('/api/office-files');
-        if (!cacheReady) {
-            panel.innerHTML = '<div class="of-state"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>';
-        }
+        panel.innerHTML = '<div class="of-state"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>';
         setStats(null);
         const params = new URLSearchParams();
         if (search) params.set('search', search);
         try {
-            const res = await fetchFn('/api/office-files?' + params.toString(), {
-                credentials: 'same-origin',
-                bypassCache: !!forceRefresh && !search,
-            });
+            const res = await fetch('/api/office-files?' + params.toString(), { credentials: 'same-origin' });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || 'Could not load files');
             setStats(data);

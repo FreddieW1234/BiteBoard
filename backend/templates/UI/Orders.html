@@ -8,8 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=2"></script>
-    <script src="/static/page_preload.js?v=3"></script>
     <link href="/static/office_tracking.css?v=22" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -971,18 +969,11 @@
         }
 
         async function loadOrders(forceRefresh) {
-            const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
             const content = document.getElementById('content');
-            const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/orders');
-            if (!cacheReady) {
-                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
-            }
+            content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
             suppressOrdersRefresh = true;
             try {
-                const res = await fetchFn('/api/orders', {
-                    credentials: 'same-origin',
-                    bypassCache: !!forceRefresh,
-                });
+                const res = await fetch('/api/orders', { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load orders');
                 allOrders = data.orders || [];
@@ -991,12 +982,7 @@
                     OfficeTracking.clearOrderTrackingCache();
                 }
                 const filtered = filterOrders(document.getElementById('search-input').value);
-                var trackingWarm = window.BiteDataCache
-                    && typeof window.BiteDataCache.trackingCacheRatio === 'function'
-                    && window.BiteDataCache.trackingCacheRatio(filtered.map(function (o) { return o.id; })) >= 0.5;
-                if (!trackingWarm) {
-                    content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
-                }
+                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
                 await prefetchTrackingForOrders(filtered);
                 renderOrdersView(filtered);
             } catch (err) {

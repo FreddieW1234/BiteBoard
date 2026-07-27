@@ -8,8 +8,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=2"></script>
-    <script src="/static/page_preload.js?v=3"></script>
     <link href="/static/office_tracking.css?v=22" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1654,18 +1652,11 @@
         }
 
         async function loadCustomers(forceRefresh) {
-            const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
             const content = document.getElementById('cu-content');
             document.getElementById('cu-flagged').innerHTML = '';
-            const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/customers');
-            if (!cacheReady) {
-                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
-            }
+            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
             try {
-                const resp = await fetchFn('/api/customers', {
-                    credentials: 'same-origin',
-                    bypassCache: !!forceRefresh,
-                });
+                const resp = await fetch('/api/customers', { credentials: 'same-origin' });
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));

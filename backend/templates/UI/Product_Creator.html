@@ -10,8 +10,6 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=2"></script>
-    <script src="/static/page_preload.js?v=3"></script>
     <script>
         (function () {
             if (new URLSearchParams(window.location.search).get('embed') === '1') {
@@ -2652,7 +2650,7 @@ Dietary</textarea>
             selectedGuideline = null;
             try {
                 if (!artworkGuidelinesFilesCache.length) {
-                    const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/shopify/files', { credentials: 'same-origin' });
+                    const resp = await (fetch)('/api/shopify/files', { credentials: 'same-origin' });
                     artworkGuidelinesFilesCache = (await resp.json()) || [];
                 }
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
@@ -2879,7 +2877,7 @@ Dietary</textarea>
 
         document.addEventListener('DOMContentLoaded', async function () {
             try {
-                const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/shopify/files', { credentials: 'same-origin' });
+                const resp = await (fetch)('/api/shopify/files', { credentials: 'same-origin' });
                 const files = await resp.json();
                 artworkGuidelinesFilesCache = files || [];
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
@@ -2962,7 +2960,7 @@ Dietary</textarea>
                 } else {
                     diagramEl.innerHTML = '<span class="muted">Loading product families…</span>';
                 }
-                ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products-parent-child-tree', { credentials: 'same-origin' })
+                (fetch)('/api/products-parent-child-tree', { credentials: 'same-origin' })
                     .then(r => r.json())
                     .then(fullTree => {
                         if (fullTree && fullTree.tree) {
@@ -3403,7 +3401,7 @@ Dietary</textarea>
         // Fetch pricing quantity bands from backend
         async function fetchPricingQtyBands() {
             try {
-                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/pricing-qty-bands', { credentials: 'same-origin' });
+                const response = await (fetch)('/api/pricing-qty-bands', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success) {
                     pricingQtyBands = data.bands;
@@ -4341,7 +4339,7 @@ Dietary</textarea>
                 const templateProductId = 15285916696954;
                 
                 // Fetch detailed product information including metafields
-                const productResponse = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)(`/api/product/${templateProductId}`, { credentials: 'same-origin' });
+                const productResponse = await (fetch)(`/api/product/${templateProductId}`, { credentials: 'same-origin' });
                 console.log('Template product API response status:', productResponse.status);
                 
                 if (productResponse.ok) {
@@ -5655,7 +5653,7 @@ Dietary</textarea>
         async function loadCategoryDropdownOptions(dropdown) {
             try {
                 console.log('🔍 Loading category options from API...');
-                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/metafield-choices/custom.custom_category', { credentials: 'same-origin' });
+                const response = await (fetch)('/api/metafield-choices/custom.custom_category', { credentials: 'same-origin' });
                 console.log('📡 Category API response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Category API response data:', data);
@@ -5719,7 +5717,7 @@ Dietary</textarea>
             const url = allOptions ? `/api/metafield-choices/custom.subcategory?all=1` : `/api/metafield-choices/custom.${key}`;
             try {
                 console.log(`🔍 Loading subcategory options from API (all=${!!allOptions})...`);
-                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)(url, { credentials: 'same-origin' });
+                const response = await (fetch)(url, { credentials: 'same-origin' });
                 console.log('📡 Subcategory API response status:', response.status);
                 const data = await response.json();
                 console.log('📊 Subcategory API response data:', data);
@@ -5782,7 +5780,7 @@ Dietary</textarea>
         async function loadCategorySubDropdownOptions(dropdown) {
             try {
                 console.log('🔍 Loading category groups from API...');
-                const response = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/category-groups', { credentials: 'same-origin' });
+                const response = await (fetch)('/api/category-groups', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success && Array.isArray(data.groups)) {
                     CATEGORYSUB_SUB_COUNT = {};
@@ -6024,7 +6022,7 @@ Dietary</textarea>
 
             // Load products for search (cached)
             try {
-                const resp = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products', { credentials: 'same-origin' });
+                const resp = await (fetch)('/api/products', { credentials: 'same-origin' });
                 pcAllProducts = await resp.json();
             } catch (e) { pcAllProducts = []; }
 
@@ -6605,7 +6603,7 @@ Dietary</textarea>
                 let products = pcAllProducts || [];
                 if (products.length === 0) {
                     try {
-                        const r = await ((window.BiteDataCache && window.BiteDataCache.fetch) || fetch)('/api/products', { credentials: 'same-origin' });
+                        const r = await (fetch)('/api/products', { credentials: 'same-origin' });
                         products = await r.json();
                     } catch (e) {}
                 }

@@ -412,9 +412,8 @@
     }
 
     async function refreshPrinterHealth() {
-        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         try {
-            const res = await fetchFn('/api/shipping/status', { credentials: 'same-origin' });
+            const res = await fetch('/api/shipping/status', { credentials: 'same-origin' });
             const data = await res.json();
             if (!res.ok || !data.success) {
                 printerReady = false;
@@ -598,16 +597,14 @@
     }
 
     async function loadDiary(forceRefresh) {
-        const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         const pill = document.getElementById('diary-count-pill');
         const content = document.getElementById('diary-content');
-        const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/diary');
-        if (content && !cacheReady) {
+        if (content) {
             content.innerHTML = '<div class="diary-table-card"><div class="diary-empty"><i class="fas fa-spinner fa-spin"></i> Loading diary…</div></div>';
         }
         try {
             const [res] = await Promise.all([
-                fetchFn('/api/diary', { credentials: 'same-origin', bypassCache: !!forceRefresh }),
+                fetch('/api/diary', { credentials: 'same-origin' }),
                 refreshPrinterHealth(),
             ]);
             const data = await res.json();
