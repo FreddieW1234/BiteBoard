@@ -8,8 +8,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=1"></script>
-    <script src="/static/page_preload.js?v=2"></script>
+    <script src="/static/data_cache.js?v=2"></script>
+    <script src="/static/page_preload.js?v=3"></script>
     <link href="/static/office_tracking.css?v=22" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -371,7 +371,6 @@
         let orderIndicators = {};
         let sortMode = localStorage.getItem('orders-sort') || 'priority';
         const SORT_STORAGE_KEY = 'orders-sort';
-        const INITIAL_LOAD_BUFFER_MS = 2500;
         let trackingPrefetchToken = 0;
         let ordersRefreshTimer = null;
         let suppressOrdersRefresh = false;
@@ -974,7 +973,10 @@
         async function loadOrders(forceRefresh) {
             const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
+            const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/orders');
+            if (!cacheReady) {
+                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading orders…</div></div>';
+            }
             suppressOrdersRefresh = true;
             try {
                 const res = await fetchFn('/api/orders', {
@@ -989,16 +991,13 @@
                     OfficeTracking.clearOrderTrackingCache();
                 }
                 const filtered = filterOrders(document.getElementById('search-input').value);
-                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
                 var trackingWarm = window.BiteDataCache
                     && typeof window.BiteDataCache.trackingCacheRatio === 'function'
                     && window.BiteDataCache.trackingCacheRatio(filtered.map(function (o) { return o.id; })) >= 0.5;
-                await Promise.all([
-                    trackingWarm
-                        ? Promise.resolve()
-                        : new Promise(resolve => setTimeout(resolve, INITIAL_LOAD_BUFFER_MS)),
-                    prefetchTrackingForOrders(filtered),
-                ]);
+                if (!trackingWarm) {
+                    content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
+                }
+                await prefetchTrackingForOrders(filtered);
                 renderOrdersView(filtered);
             } catch (err) {
                 content.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;

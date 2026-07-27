@@ -20,6 +20,7 @@
 
     var DEFAULT_TTL_MS = 10 * 60 * 1000;
     var SHORT_TTL_MS = 3 * 60 * 1000;
+    var PREFETCH_CONCURRENCY = 6;
 
     var ROUTE_DATA_ENDPOINTS = {
         '/': [
@@ -31,7 +32,6 @@
             '/api/all-products',
             '/api/shopify/files',
             '/api/products-parent-child-tree',
-            '/api/product/15285916696954',
             '/api/pricing-qty-bands',
             '/api/products',
             '/api/metafield-choices/custom.custom_category',
@@ -129,6 +129,17 @@
         return isFresh(cache[cacheKey(url)]);
     }
 
+    function getCachedJson(url) {
+        var key = cacheKey(url);
+        var entry = cache[key];
+        if (!isFresh(entry)) return null;
+        try {
+            return JSON.parse(entry.body);
+        } catch (_) {
+            return null;
+        }
+    }
+
     function invalidate(url) {
         delete cache[cacheKey(url)];
     }
@@ -203,6 +214,27 @@
         return fetchCached(url, options).then(function () { return true; }).catch(function () { return false; });
     }
 
+    function runPool(tasks, concurrency) {
+        if (!tasks.length) return Promise.resolve();
+        concurrency = Math.max(1, concurrency || PREFETCH_CONCURRENCY);
+        var index = 0;
+
+        function worker() {
+            if (index >= tasks.length) return Promise.resolve();
+            var task = tasks[index++];
+            return Promise.resolve()
+                .then(task)
+                .catch(function () { /* ignore */ })
+                .then(worker);
+        }
+
+        var workers = [];
+        for (var i = 0; i < Math.min(concurrency, tasks.length); i++) {
+            workers.push(worker());
+        }
+        return Promise.all(workers);
+    }
+
     function warmOrderTracking(ordersPayload) {
         if (!ordersPayload || !ordersPayload.success) {
             return Promise.resolve();
@@ -212,21 +244,11 @@
             .filter(Boolean);
         if (!ids.length) return Promise.resolve();
 
-        var queue = ids.slice();
-        var workers = Math.min(4, queue.length);
-
-        function worker() {
-            return (function next() {
-                if (!queue.length) return Promise.resolve();
-                var id = queue.shift();
-                return prefetch('/api/orders/' + encodeURIComponent(id) + '/tracking', { credentials: 'same-origin' })
-                    .then(next);
-            })();
-        }
-
-        var tasks = [];
-        for (var i = 0; i < workers; i++) tasks.push(worker());
-        return Promise.all(tasks);
+        return runPool(ids.map(function (id) {
+            return function () {
+                return prefetch('/api/orders/' + encodeURIComponent(id) + '/tracking', { credentials: 'same-origin' });
+            };
+        }), 4);
     }
 
     function prefetchEndpoint(url) {
@@ -250,21 +272,9 @@
             return Promise.resolve();
         }
 
-        var chain = Promise.resolve();
-        endpoints.forEach(function (url) {
-            chain = chain.then(function () {
-                return prefetchEndpoint(url);
-            }).then(function () {
-                return new Promise(function (resolve) {
-                    if (window.requestIdleCallback) {
-                        requestIdleCallback(resolve, { timeout: 3000 });
-                    } else {
-                        setTimeout(resolve, 60);
-                    }
-                });
-            });
-        });
-        return chain;
+        return runPool(endpoints.map(function (url) {
+            return function () { return prefetchEndpoint(url); };
+        }), PREFETCH_CONCURRENCY);
     }
 
     function prefetchAllBackground(exceptPath) {
@@ -273,21 +283,17 @@
             return route !== exceptPath;
         });
 
-        var chain = Promise.resolve();
-        routes.forEach(function (route) {
-            chain = chain.then(function () {
-                return prefetchRouteData(route);
-            }).then(function () {
-                return new Promise(function (resolve) {
-                    if (window.requestIdleCallback) {
-                        requestIdleCallback(resolve, { timeout: 4000 });
-                    } else {
-                        setTimeout(resolve, 120);
-                    }
-                });
-            });
-        });
-        return chain;
+        return runPool(routes.map(function (route) {
+            return function () { return prefetchRouteData(route); };
+        }), 3);
+    }
+
+    function warmStaffApp(currentPath) {
+        currentPath = normPath(currentPath || window.location.pathname);
+        if (!ROUTE_DATA_ENDPOINTS[currentPath] && currentPath !== '/') return;
+
+        prefetchRouteData(currentPath);
+        prefetchAllBackground(currentPath);
     }
 
     function trackingCacheRatio(orderIds) {
@@ -299,16 +305,31 @@
         return cached / orderIds.length;
     }
 
+    function isStaffPath(path) {
+        path = normPath(path);
+        return path === '/' || path.indexOf('/app/') === 0;
+    }
+
+    function autoWarmIfStaffPage() {
+        var path = normPath(window.location.pathname);
+        if (!isStaffPath(path)) return;
+        warmStaffApp(path);
+    }
+
     window.BiteDataCache = {
         fetch: fetchCached,
         prefetch: prefetch,
         prefetchRouteData: prefetchRouteData,
         prefetchAllBackground: prefetchAllBackground,
+        warmStaffApp: warmStaffApp,
         has: has,
+        getCachedJson: getCachedJson,
         invalidate: invalidate,
         invalidatePrefix: invalidatePrefix,
         trackingCacheRatio: trackingCacheRatio,
         warmOrderTracking: warmOrderTracking,
         ROUTE_DATA_ENDPOINTS: ROUTE_DATA_ENDPOINTS,
     };
+
+    autoWarmIfStaffPage();
 })();

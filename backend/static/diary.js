@@ -601,7 +601,8 @@
         const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         const pill = document.getElementById('diary-count-pill');
         const content = document.getElementById('diary-content');
-        if (content) {
+        const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/diary');
+        if (content && !cacheReady) {
             content.innerHTML = '<div class="diary-table-card"><div class="diary-empty"><i class="fas fa-spinner fa-spin"></i> Loading diary…</div></div>';
         }
         try {

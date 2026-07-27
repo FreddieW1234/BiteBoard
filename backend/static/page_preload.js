@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    /** Staff app routes (sidebar tabs + dashboard). Current page loads first; others prefetch in background. */
+    /** Staff app routes — HTML is warmed via link prefetch + low-priority fetch (browser cache). */
     var ROUTES = [
         '/',
         '/app/Products',
@@ -12,12 +12,7 @@
         '/app/Files',
     ];
 
-    var CACHE_PROP = '__bitePageCache';
-    if (!window[CACHE_PROP]) {
-        window[CACHE_PROP] = new Map();
-    }
-    var cache = window[CACHE_PROP];
-    var inFlight = {};
+    var htmlInflight = Object.create(null);
 
     function normPath(path) {
         if (!path) return '/';
@@ -28,6 +23,10 @@
             path = path.slice(0, -1);
         }
         return path || '/';
+    }
+
+    function isStaffRoute(path) {
+        return ROUTES.indexOf(normPath(path)) >= 0;
     }
 
     function isStaffNavLink(anchor) {
@@ -41,7 +40,7 @@
 
         var path = normPath(href);
         if (path === '/staff/logout') return false;
-        if (ROUTES.indexOf(path) < 0) return false;
+        if (!isStaffRoute(path)) return false;
 
         if (anchor.classList.contains('app-tab')) return true;
         if (anchor.classList.contains('dashboard-tab') && path === '/') return true;
@@ -49,139 +48,64 @@
         return false;
     }
 
-    function prefetchOne(path) {
+    function warmHtml(path) {
         path = normPath(path);
-        var current = normPath(window.location.pathname);
-        if (path === current || cache.has(path)) {
-            return Promise.resolve();
-        }
-        if (inFlight[path]) {
-            return inFlight[path];
-        }
+        if (htmlInflight[path]) return htmlInflight[path];
 
-        inFlight[path] = fetch(path, { credentials: 'same-origin' })
-            .then(function (res) {
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                return res.text();
-            })
-            .then(function (html) {
-                if (html) cache.set(path, html);
-            })
-            .catch(function () { /* ignore — fall back to normal navigation */ })
+        htmlInflight[path] = fetch(path, { credentials: 'same-origin', priority: 'low' })
+            .catch(function () { /* ignore */ })
             .finally(function () {
-                delete inFlight[path];
+                delete htmlInflight[path];
             });
 
-        return inFlight[path];
+        return htmlInflight[path];
     }
 
-    function prefetchOthersInBackground() {
+    function injectPrefetchLinks() {
         var current = normPath(window.location.pathname);
-        var others = ROUTES.filter(function (route) { return route !== current; });
+        var head = document.head || document.getElementsByTagName('head')[0];
+        if (!head) return;
 
-        var chain = Promise.resolve();
-        others.forEach(function (path) {
-            chain = chain.then(function () {
-                return prefetchOne(path);
-            }).then(function () {
-                return new Promise(function (resolve) {
-                    if (window.requestIdleCallback) {
-                        requestIdleCallback(resolve, { timeout: 2500 });
-                    } else {
-                        setTimeout(resolve, 80);
-                    }
-                });
-            });
+        ROUTES.forEach(function (route) {
+            if (route === current) return;
+            var link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.href = route;
+            link.as = 'document';
+            head.appendChild(link);
         });
-        return chain;
     }
 
-    function snapshotCurrentPage() {
-        var path = normPath(window.location.pathname);
-        if (ROUTES.indexOf(path) < 0 || cache.has(path)) return;
-        try {
-            var html = document.documentElement.outerHTML;
-            if (html.indexOf('<!DOCTYPE') !== 0 && html.indexOf('<!doctype') !== 0) {
-                html = '<!DOCTYPE html>\n' + html;
-            }
-            cache.set(path, html);
-        } catch (_) { /* ignore */ }
-    }
-
-    function navigateFromCache(path) {
-        path = normPath(path);
-        var html = cache.get(path);
-        if (!html) return false;
-
-        window.__bitePendingUrl = path;
-        document.open();
-        document.write(html);
-        document.close();
-        return true;
-    }
-
-    function onDocumentClick(event) {
-        if (event.defaultPrevented) return;
-        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-            return;
-        }
-
-        var anchor = event.target.closest('a');
-        if (!isStaffNavLink(anchor)) return;
-
-        var path = normPath(anchor.getAttribute('href'));
-        if (path === normPath(window.location.pathname)) {
-            event.preventDefault();
-            return;
-        }
-
-        if (navigateFromCache(path)) {
-            event.preventDefault();
-            return;
-        }
-
-        prefetchOne(path);
+    function warmAllHtml(exceptPath) {
+        exceptPath = normPath(exceptPath || window.location.pathname);
+        ROUTES.forEach(function (route) {
+            if (route !== exceptPath) warmHtml(route);
+        });
     }
 
     function onLinkHover(event) {
         var anchor = event.target.closest('a');
         if (!isStaffNavLink(anchor)) return;
-        prefetchOne(normPath(anchor.getAttribute('href')));
+        warmHtml(normPath(anchor.getAttribute('href')));
     }
 
-    function onPopState() {
-        var path = normPath(window.location.pathname);
-        if (cache.has(path)) {
-            navigateFromCache(path);
+    function startWarmup() {
+        var current = normPath(window.location.pathname);
+        if (!isStaffRoute(current)) return;
+
+        injectPrefetchLinks();
+        warmAllHtml(current);
+
+        if (window.BiteDataCache && typeof window.BiteDataCache.warmStaffApp === 'function') {
+            window.BiteDataCache.warmStaffApp(current);
         }
     }
 
-    if (window.__bitePendingUrl) {
-        var pending = normPath(window.__bitePendingUrl);
-        delete window.__bitePendingUrl;
-        try {
-            history.replaceState({ biteNav: true }, '', pending);
-        } catch (_) { /* ignore */ }
-    }
-
-    document.addEventListener('click', onDocumentClick, true);
     document.addEventListener('mouseover', onLinkHover, true);
-    window.addEventListener('popstate', onPopState);
 
-    function startPreload() {
-        snapshotCurrentPage();
-        prefetchOthersInBackground().then(function () {
-            if (window.BiteDataCache && typeof window.BiteDataCache.prefetchAllBackground === 'function') {
-                window.BiteDataCache.prefetchAllBackground(normPath(window.location.pathname));
-            }
-        });
-    }
-
-    if (document.readyState === 'complete') {
-        setTimeout(startPreload, 0);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startWarmup, { once: true });
     } else {
-        window.addEventListener('load', function () {
-            setTimeout(startPreload, 0);
-        }, { once: true });
+        startWarmup();
     }
 })();

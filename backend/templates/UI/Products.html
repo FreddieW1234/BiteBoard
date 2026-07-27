@@ -8,8 +8,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=1"></script>
-    <script src="/static/page_preload.js?v=2"></script>
+    <script src="/static/data_cache.js?v=2"></script>
+    <script src="/static/page_preload.js?v=3"></script>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1228,8 +1228,11 @@
             editingColumn = null;
             updateEditBar();
             if (gapsEl) { gapsEl.hidden = true; gapsEl.innerHTML = ''; }
-            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
-            const slowTimer = setTimeout(() => {
+            const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/all-products');
+            if (!cacheReady) {
+                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            }
+            const slowTimer = cacheReady ? null : setTimeout(() => {
                 const el = document.getElementById('ap-slow');
                 if (el) el.textContent = '(fetching every product\u2019s details — this can take a couple of minutes)';
             }, 8000);
@@ -1242,7 +1245,7 @@
                     bypassCache: !!forceRefresh,
                 });
                 clearTimeout(timeout);
-                clearTimeout(slowTimer);
+                if (slowTimer) clearTimeout(slowTimer);
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
@@ -1251,7 +1254,7 @@
                 render(AP_DATA);
                 applySearch();
             } catch (err) {
-                clearTimeout(slowTimer);
+                if (slowTimer) clearTimeout(slowTimer);
                 const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(msg)}<br><br><button type="button" class="btn-ghost" onclick="loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
             }

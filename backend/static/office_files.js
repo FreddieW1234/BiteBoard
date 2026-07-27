@@ -259,7 +259,10 @@
         const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
         const panel = document.getElementById('of-panel');
         if (!panel) return;
-        panel.innerHTML = '<div class="of-state"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>';
+        const cacheReady = !forceRefresh && !search && window.BiteDataCache && BiteDataCache.has('/api/office-files');
+        if (!cacheReady) {
+            panel.innerHTML = '<div class="of-state"><i class="fas fa-spinner fa-spin"></i> Loading files…</div>';
+        }
         setStats(null);
         const params = new URLSearchParams();
         if (search) params.set('search', search);

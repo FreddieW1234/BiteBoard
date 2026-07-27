@@ -10,8 +10,8 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=5" rel="stylesheet">
     <script src="/static/theme.js?v=2"></script>
-    <script src="/static/data_cache.js?v=1"></script>
-    <script src="/static/page_preload.js?v=2"></script>
+    <script src="/static/data_cache.js?v=2"></script>
+    <script src="/static/page_preload.js?v=3"></script>
     
     <style>
         * {
@@ -1246,21 +1246,23 @@
             const fetchFn = (window.BiteDataCache && window.BiteDataCache.fetch) || fetch;
             const artworkGuidelinesList = document.getElementById('artworkGuidelinesList');
             const artworkGuidelinesAList = document.getElementById('artworkGuidelinesAList');
+            const cacheReady = !forceRefresh && window.BiteDataCache && BiteDataCache.has('/api/shopify/files');
             
-            // Show loading state
-            artworkGuidelinesList.innerHTML = `
-                <div class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Loading artwork guidelines...</p>
-                </div>
-            `;
-            
-            artworkGuidelinesAList.innerHTML = `
-                <div class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Loading artwork guidelines A...</p>
-                </div>
-            `;
+            if (!cacheReady) {
+                artworkGuidelinesList.innerHTML = `
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading artwork guidelines...</p>
+                    </div>
+                `;
+                
+                artworkGuidelinesAList.innerHTML = `
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Loading artwork guidelines A...</p>
+                    </div>
+                `;
+            }
             
             try {
                 const response = await fetchFn('/api/shopify/files', {
