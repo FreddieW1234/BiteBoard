@@ -2573,6 +2573,15 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
         by = "staff"
     if stage == "in_production" and not note:
         note = "In Production"
+    previous_stage = ""
+    if stage == "approved":
+        try:
+            from scripts.office_api import get_item  # type: ignore
+            current = get_item(order_name, item)
+            if current:
+                previous_stage = (current.get("current_stage") or "").strip()
+        except Exception:
+            pass
     try:
         from scripts.office_api import set_status, get_item, OfficeApiError  # type: ignore
         office = set_status(order_name, item, stage, note=note, by=by)
@@ -2587,7 +2596,54 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
         except OfficeApiError:
             office = current
     _rewrite_office_files(office, order_id, item, api_prefix)
+    if stage == "approved" and previous_stage != "approved":
+        _fire_proof_approved_klaviyo(order_id, entry, order_name, item, approved_by=by)
     return jsonify({"success": True, "office": office})
+
+
+def _fire_proof_approved_klaviyo(order_id, entry, order_name, item_id, *, approved_by=""):
+    """Send Klaviyo event when a line item reaches Proof Approved."""
+    import logging
+
+    try:
+        from scripts.klaviyo_api import KlaviyoError, klaviyo_configured, send_production_update
+        from scripts.office_api import get_notify  # type: ignore
+    except ImportError:
+        return
+    if not klaviyo_configured():
+        return
+
+    email = ""
+    try:
+        notify = get_notify(order_name) if order_name else {}
+        if notify.get("enabled"):
+            email = (notify.get("email") or "").strip()
+    except Exception:
+        pass
+    if not email:
+        order = entry.get("order") or {}
+        email = (order.get("customer_email") or "").strip()
+    if not email:
+        return
+
+    item_title = ""
+    for line in (entry.get("order") or {}).get("order_items") or []:
+        if (line.get("office_item_id") or "") == item_id:
+            item_title = (line.get("title") or "").strip()
+            break
+
+    try:
+        send_production_update(
+            email,
+            order_name,
+            "proof_approved",
+            order_id=str(order_id),
+            item_title=item_title,
+            item_id=item_id,
+            approved_by=(approved_by or "").strip(),
+        )
+    except KlaviyoError as exc:
+        logging.getLogger(__name__).warning("Klaviyo proof approved event not sent: %s", exc)
 
 
 @app.route("/api/client/orders/<order_id>/items/<path:item>/status", methods=["POST"])

@@ -1722,8 +1722,8 @@
 
     const INDICATOR_TITLES = {
         green: 'Shipped — order complete',
-        yellow: 'Waiting on customer (artwork or proof approval)',
-        red: 'Customer waiting on us (proof upload needed)',
+        yellow: 'Waiting on customer',
+        red: 'Customer waiting on us',
         printing: 'Printing',
         production: 'In production',
     };

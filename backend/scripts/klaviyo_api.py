@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 UPDATE_LABELS: dict[str, str] = {
     "proof_uploaded": "Proof ready for review",
+    "proof_approved": "Proof approved",
     "printing": "Printing",
     "in_production": "In production",
     "shipped": "Shipped",
@@ -117,6 +118,7 @@ def send_production_update(
     item_title: str = "",
     item_id: str = "",
     proof_filename: str = "",
+    approved_by: str = "",
 ) -> None:
     """Fire a Klaviyo metric event that triggers a transactional Flow."""
     if not klaviyo_configured():
@@ -138,20 +140,24 @@ def send_production_update(
 
     portal_url = build_portal_url(order_id, item_id=item_id, proof_filename=proof)
 
+    properties: dict[str, Any] = {
+        "order_name": order_name,
+        "order_id": (order_id or "").strip(),
+        "update_type": update_type,
+        "stage_label": stage_label,
+        "item_title": item_title or "",
+        "item_id": item_id or "",
+        "proof_filename": proof,
+        "portal_url": portal_url,
+    }
+    if approved_by:
+        properties["approved_by"] = approved_by
+
     payload: dict[str, Any] = {
         "data": {
             "type": "event",
             "attributes": {
-                "properties": {
-                    "order_name": order_name,
-                    "order_id": (order_id or "").strip(),
-                    "update_type": update_type,
-                    "stage_label": stage_label,
-                    "item_title": item_title or "",
-                    "item_id": item_id or "",
-                    "proof_filename": proof,
-                    "portal_url": portal_url,
-                },
+                "properties": properties,
                 "metric": {
                     "data": {
                         "type": "metric",
