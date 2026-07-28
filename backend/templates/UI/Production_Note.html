@@ -141,10 +141,7 @@
             font-size: 26pt;
         }
 
-        .split-right-spacer {
-            background: #fff;
-            vertical-align: top;
-        }
+        .full-row .lbl { font-size: 8.5pt; }
 
         .code {
             font-weight: 700;
@@ -152,8 +149,6 @@
             text-align: center;
             font-size: 8.5pt;
         }
-
-        .left-stack .lbl { font-size: 8.5pt; }
 
         .notes-body {
             min-height: 55mm;
@@ -261,52 +256,64 @@
                 <td class="lbl addr-lbl">Delivery Address<br>Confirmed</td>
                 <td class="val addr-val">{{ note.delivery_address_confirmed }}</td>
                 <td colspan="2" class="dispatch-box">
-                    <div class="dispatch-label">Expected Dispatch</div>
+                    <div class="dispatch-label">Dispatch</div>
                     <div class="dispatch-date">{{ note.expected_dispatch }}</div>
                 </td>
             </tr>
 
-            <tr class="left-stack"><th class="subhdr" colspan="2">Pallet Delivery Charge</th><td colspan="2" rowspan="19" class="split-right-spacer"></td></tr>
-            <tr class="left-stack"><td class="lbl">Next Day</td><td class="tick"></td></tr>
-            <tr class="left-stack"><td class="lbl">AM Delivery</td><td class="tick"></td></tr>
-            <tr class="left-stack"><td class="lbl">Timed Delivery</td><td class="tick"></td></tr>
-            <tr class="left-stack"><td class="tick"></td><td class="tick"></td></tr>
+            <tr class="full-row"><th class="subhdr" colspan="4">Pallet Delivery Charge</th></tr>
+            <tr class="full-row">
+                <td class="lbl">Next Day</td>
+                <td class="tick"></td>
+                <td class="lbl">AM Delivery</td>
+                <td class="tick"></td>
+            </tr>
+            <tr class="full-row">
+                <td class="lbl">Timed Delivery</td>
+                <td class="tick"></td>
+                <td class="tick"></td>
+                <td class="tick"></td>
+            </tr>
 
-            <tr class="left-stack"><th class="subhdr" colspan="2">Parcel Delivery Charge</th></tr>
-            <tr class="left-stack"><td class="code">A</td><td class="lbl">Next Day</td></tr>
-            <tr class="left-stack"><td class="code">NAM</td><td class="lbl">Next Day By 0900HRS</td></tr>
-            <tr class="left-stack"><td class="code">TAM</td><td class="lbl">Next Day By 1000HRS</td></tr>
-            <tr class="left-stack"><td class="code">TN</td><td class="lbl">Next Day By 1200HRS</td></tr>
+            <tr class="full-row"><th class="subhdr" colspan="4">Parcel Delivery Charge</th></tr>
+            <tr class="full-row">
+                <td class="code">A</td>
+                <td class="lbl">Next Day</td>
+                <td class="code">NAM</td>
+                <td class="lbl">Next Day By 0900HRS</td>
+            </tr>
+            <tr class="full-row">
+                <td class="code">TAM</td>
+                <td class="lbl">Next Day By 1000HRS</td>
+                <td class="code">TN</td>
+                <td class="lbl">Next Day By 1200HRS</td>
+            </tr>
 
-            <tr class="left-stack">
+            <tr class="full-row">
                 <td class="lbl">Use Customer's Delivery Note</td>
                 <td class="val tick">{{ note.use_customers_delivery_note }}</td>
-            </tr>
-            <tr class="left-stack">
                 <td class="lbl">Sample To Customer</td>
                 <td class="val tick">{{ note.sample_to_customer }}</td>
             </tr>
 
-            <tr class="left-stack"><th class="hdr" colspan="2">Proforma</th></tr>
-            <tr class="left-stack">
+            <tr class="full-row"><th class="hdr" colspan="4">Proforma</th></tr>
+            <tr class="full-row">
                 <td class="lbl">Proforma Emailed</td>
-                <td class="val tick">{{ note.proforma_emailed_person }}{% if note.proforma_emailed_date %} · {{ note.proforma_emailed_date }}{% endif %}</td>
+                <td class="val tick" colspan="3">{{ note.proforma_emailed_person }}{% if note.proforma_emailed_date %} · {{ note.proforma_emailed_date }}{% endif %}</td>
             </tr>
-            <tr class="left-stack">
+            <tr class="full-row">
                 <td class="lbl">Customer Phoned To Check They Have Received Proforma</td>
-                <td class="val tick">{{ note.proforma_phoned_person }}{% if note.proforma_phoned_date %} · {{ note.proforma_phoned_date }}{% endif %}</td>
+                <td class="val tick" colspan="3">{{ note.proforma_phoned_person }}{% if note.proforma_phoned_date %} · {{ note.proforma_phoned_date }}{% endif %}</td>
             </tr>
-            <tr class="left-stack">
+            <tr class="full-row">
                 <td class="lbl">Paid By</td>
-                <td class="val tick">{{ note.paid_by }}{% if note.paid_date %} · {{ note.paid_date }}{% endif %}</td>
+                <td class="val tick" colspan="3">{{ note.paid_by }}{% if note.paid_date %} · {{ note.paid_date }}{% endif %}</td>
             </tr>
 
-            <tr class="left-stack"><th class="hdr" colspan="2">Work In Progress</th></tr>
-            <tr class="left-stack">
+            <tr class="full-row"><th class="hdr" colspan="4">Work In Progress</th></tr>
+            <tr class="full-row">
                 <td class="lbl">No Of Shippers</td>
                 <td class="val tick">{{ note.no_of_shippers }}</td>
-            </tr>
-            <tr class="left-stack">
                 <td class="lbl">No Of Pallets</td>
                 <td class="val tick">{{ note.no_of_pallets }}</td>
             </tr>
