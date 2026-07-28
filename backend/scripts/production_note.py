@@ -15,7 +15,7 @@ from scripts.diary_helpers import (  # type: ignore
 from scripts.Diary import load_saved_entries  # type: ignore
 from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
 
-DEFAULT_SALES_PERSON = "DAVE"
+DEFAULT_SALES_PERSON = "Dave"
 
 
 def _format_order_date(processed_at: str) -> str:

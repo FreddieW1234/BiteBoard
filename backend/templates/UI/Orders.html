@@ -143,13 +143,16 @@
             padding: 3px 0;
             border-bottom: none;
         }
-        .order-summary-total .order-grand-total {
-            margin-top: 4px;
+        .order-summary-total .order-net-total {
+            margin-top: 0;
         }
-        .order-summary-total .order-grand-total .line-title,
-        .order-summary-total .order-grand-total .line-price {
+        .order-summary-total .order-net-total .line-title,
+        .order-summary-total .order-net-total .line-price {
             font-weight: 700;
             font-size: 0.92rem;
+        }
+        .order-summary-total .order-grand-total {
+            margin-top: 4px;
         }
         .line-main { font-size: 0.86rem; }
         .line-details { min-width: 0; }
@@ -528,8 +531,9 @@
             return `<div class="order-info-field"><label>${escapeHtml(label)}</label><div class="order-info-value order-address-value">${escapeHtml(text).replace(/\n/g, '<br>')}</div></div>`;
         }
 
-        function renderCostLine(label, priceDisplay) {
-            return `<div class="detail-line detail-line-cost">
+        function renderCostLine(label, priceDisplay, rowClass = '') {
+            const extra = rowClass ? ` ${rowClass}` : '';
+            return `<div class="detail-line detail-line-cost${extra}">
                 <div class="line-fee-row">
                     <span class="line-title">${escapeHtml(label)}</span>
                     <span class="line-price">${escapeHtml(priceDisplay)}</span>
@@ -558,7 +562,7 @@
             if (shipVal > 0) {
                 html += `<div class="detail-section detail-section-extra-costs">${renderCostLine('Shipping', ship)}</div>`;
             }
-            html += `<div class="order-summary-total">${renderCostLine('Total Net of VAT', net)}`;
+            html += `<div class="order-summary-total">${renderCostLine('Total Net of VAT', net, 'order-net-total')}`;
             if (taxVal > 0) html += renderCostLine('VAT', tax);
             html += renderOrderGrandTotal(o);
             html += '</div>';
