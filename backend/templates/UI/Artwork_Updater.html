@@ -1870,10 +1870,13 @@
             }
         }
         
-        function showProductUpdateButton(newFilename, column) {
+        function showProductUpdateButton(newFilename, column, fileGlobalId) {
             const terminal = document.getElementById('terminalOverlay');
             if (!terminal || terminal.style.display !== 'flex') return;
-            
+
+            const safeFilename = String(newFilename || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            const safeGlobalId = String(fileGlobalId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
             // Create product update button
             const updateButton = document.createElement('div');
             updateButton.className = 'product-update-section';
@@ -1888,7 +1891,7 @@
                             <i class="fas fa-times"></i>
                             Skip and close
                         </button>
-                        <button class="btn-update-products" onclick="updateProductsWithNewArtwork('${newFilename}', '${column}')">
+                        <button class="btn-update-products" onclick="updateProductsWithNewArtwork('${safeFilename}', '${column}', '${safeGlobalId}')">
                             <i class="fas fa-sync-alt"></i>
                             Update Products
                         </button>
@@ -1916,7 +1919,7 @@
             }, 1000);
         }
         
-        async function updateProductsWithNewArtwork(newFilename, column) {
+        async function updateProductsWithNewArtwork(newFilename, column, fileGlobalId) {
             // Hide the product update section while processing
             const updateSection = document.querySelector('.product-update-section');
             if (updateSection) {
@@ -1944,7 +1947,8 @@
                     },
                     body: JSON.stringify({
                         targetFilename: newFilename,
-                        column: column
+                        column: column,
+                        targetFileGlobalId: fileGlobalId || undefined,
                     })
                 });
                 
@@ -2205,10 +2209,13 @@
 
                 const uploadResult = await response.json();
                 updateTerminalOutput(`✅ Upload completed successfully!\n`);
+                if (uploadResult.global_id) {
+                    updateTerminalOutput(`🆔 Shopify file id: ${uploadResult.global_id}\n`);
+                }
                 updateTerminalOutput(`🔄 Refreshing file list...\n`);
-                
+
                 // Refresh file list to show new file
-                loadFiles();
+                await loadFiles(true);
                 
                 // Success message removed - terminal shows completion status
                 
@@ -2218,7 +2225,7 @@
                 showCloseButton();
                 
                 // Show product update button
-                showProductUpdateButton(file.name, column);
+                showProductUpdateButton(file.name, column, uploadResult.global_id || uploadResult.id || '');
                 
             } catch (error) {
                 console.error('💥 Upload error:', error);

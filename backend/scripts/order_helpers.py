@@ -939,7 +939,9 @@ query OrderById($id: ID!) {
     processedAt
     customer {
       legacyResourceId
+      displayName
       email
+      companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") { value }
     }
 """
     + ORDER_EXTRA_FIELDS
@@ -968,12 +970,17 @@ def fetch_order_by_id(order_id: str | int) -> dict | None:
     if not node:
         return None
     customer = node.get("customer") or {}
+    billing = node.get("billingAddress") or {}
+    company_mf = ((customer.get("companyNameNew") or {}).get("value") or "").strip()
+    company = company_mf or (billing.get("company") or "").strip()
     base = {
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
         "customer_id": customer.get("legacyResourceId"),
+        "customer_name": customer.get("displayName") or "",
         "customer_email": (customer.get("email") or "").strip(),
+        "company": company,
     }
     return enrich_order(node, base)
 

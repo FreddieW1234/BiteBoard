@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production notes — {{ order_name }}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 16px;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            color: #000;
+            background: #fff;
+        }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .toolbar button {
+            background: #4f46e5;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .toolbar button.secondary {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        .production-note-page {
+            width: 100%;
+            max-width: 980px;
+            margin: 0 auto 24px;
+            page-break-after: always;
+        }
+        .production-note-page:last-child { page-break-after: auto; margin-bottom: 0; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        td, th {
+            border: 1px solid #000;
+            vertical-align: middle;
+            padding: 4px 6px;
+        }
+        .section-title {
+            background: #d9e1e8;
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+            letter-spacing: 0.02em;
+        }
+        .label {
+            font-weight: 700;
+            text-transform: uppercase;
+            width: 22%;
+            white-space: nowrap;
+        }
+        .value {
+            min-height: 22px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .value.wide { min-height: 36px; }
+        .subhead {
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+            background: #eef2f5;
+        }
+        .hint {
+            font-style: italic;
+            font-weight: 400;
+            text-transform: none;
+            font-size: 10px;
+        }
+        .empty { min-height: 22px; }
+        .page-meta {
+            text-align: right;
+            font-size: 10px;
+            color: #555;
+            margin-bottom: 4px;
+        }
+        @media print {
+            body { padding: 0; }
+            .toolbar { display: none !important; }
+            .production-note-page {
+                max-width: none;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print</button>
+        <button type="button" class="secondary" onclick="window.close()">Close</button>
+        <span>{{ notes|length }} production note{{ '' if notes|length == 1 else 's' }} for {{ order_name }}</span>
+    </div>
+
+    {% for note in notes %}
+    <section class="production-note-page">
+        {% if notes|length > 1 %}
+        <div class="page-meta">Item {{ loop.index }} of {{ notes|length }}{% if note.product_title %} — {{ note.product_title }}{% endif %}</div>
+        {% endif %}
+        <table>
+            <tr><th class="section-title" colspan="4">Production note</th></tr>
+            <tr>
+                <td class="label">Double checked by</td>
+                <td class="value">{{ note.double_checked_by }}</td>
+                <td class="label">Approved to print</td>
+                <td class="value">{{ note.approved_to_print }}</td>
+            </tr>
+            <tr>
+                <td class="label">Date of order</td>
+                <td class="value">{{ note.date_of_order }}</td>
+                <td class="label">Sales person</td>
+                <td class="value">{{ note.sales_person }}</td>
+            </tr>
+            <tr>
+                <td class="label">Company name</td>
+                <td class="value">{{ note.company_name }}</td>
+                <td class="label">Client name / logo</td>
+                <td class="value">{{ note.client_name_logo }}</td>
+            </tr>
+            <tr>
+                <td class="label">Product code</td>
+                <td class="value">{{ note.product_code }}</td>
+                <td class="label">Product</td>
+                <td class="value">{{ note.product }}</td>
+            </tr>
+            <tr>
+                <td class="label">Total units ordered</td>
+                <td class="value">{{ note.total_units_ordered }}</td>
+                <td class="label">Total cases ordered</td>
+                <td class="value">{{ note.total_cases_ordered }}</td>
+            </tr>
+            <tr>
+                <td class="label">Pack size</td>
+                <td class="value">{{ note.pack_size }}</td>
+                <td class="label">Case price</td>
+                <td class="value">{{ note.case_price }}</td>
+            </tr>
+            <tr>
+                <td class="label">Origination charge</td>
+                <td class="value">{{ note.origination_charge }}</td>
+                <td class="label">Email address</td>
+                <td class="value">{{ note.email_address }}</td>
+            </tr>
+            <tr>
+                <td class="label">Dispatch date</td>
+                <td class="value">{{ note.dispatch_date }}</td>
+                <td class="label">Delivery date</td>
+                <td class="value">{{ note.delivery_date }}</td>
+            </tr>
+            <tr>
+                <td class="label">Delivery address confirmed</td>
+                <td class="value wide" colspan="3">{{ note.delivery_address_confirmed }}</td>
+            </tr>
+        </table>
+
+        <table style="margin-top:-1px;">
+            <tr>
+                <th class="subhead" colspan="2">Pallet delivery charge</th>
+                <th class="subhead" colspan="2">Parcel delivery charge</th>
+            </tr>
+            <tr>
+                <td class="label" style="width:18%;">Next day</td>
+                <td class="empty"></td>
+                <td class="label" style="width:10%;">A</td>
+                <td class="value">Next day</td>
+            </tr>
+            <tr>
+                <td class="label">AM delivery</td>
+                <td class="empty"></td>
+                <td class="label">NAM</td>
+                <td class="value">Next day by 0900hrs</td>
+            </tr>
+            <tr>
+                <td class="label">Timed delivery</td>
+                <td class="empty"></td>
+                <td class="label">TAM</td>
+                <td class="value">Next day by 1000hrs</td>
+            </tr>
+            <tr>
+                <td class="empty"></td>
+                <td class="empty"></td>
+                <td class="label">TN</td>
+                <td class="value">Next day by 1200hrs</td>
+            </tr>
+        </table>
+
+        <table style="margin-top:-1px;">
+            <tr>
+                <td class="label">Use customer's delivery note</td>
+                <td class="value">{{ note.use_customers_delivery_note }}</td>
+                <td class="label">Sample to customer</td>
+                <td class="value">{{ note.sample_to_customer }}</td>
+            </tr>
+        </table>
+
+        <table style="margin-top:-1px;">
+            <tr>
+                <th class="section-title" colspan="4">
+                    Proforma
+                    <span class="hint">If on proforma, complete the columns to the right. Once paid, complete the row below.</span>
+                </th>
+            </tr>
+            <tr>
+                <td class="label" colspan="2">Proforma emailed</td>
+                <td class="label">Person</td>
+                <td class="label">Date</td>
+            </tr>
+            <tr>
+                <td class="empty" colspan="2"></td>
+                <td class="value">{{ note.proforma_emailed_person }}</td>
+                <td class="value">{{ note.proforma_emailed_date }}</td>
+            </tr>
+            <tr>
+                <td class="label" colspan="2">Customer phoned to check they have received proforma</td>
+                <td class="label">Person</td>
+                <td class="label">Date</td>
+            </tr>
+            <tr>
+                <td class="empty" colspan="2"></td>
+                <td class="value">{{ note.proforma_phoned_person }}</td>
+                <td class="value">{{ note.proforma_phoned_date }}</td>
+            </tr>
+            <tr>
+                <td class="label">Paid by</td>
+                <td class="value">{{ note.paid_by }}</td>
+                <td class="label">Date</td>
+                <td class="value">{{ note.paid_date }}</td>
+            </tr>
+        </table>
+
+        <table style="margin-top:-1px;">
+            <tr><th class="section-title" colspan="4">Work in progress</th></tr>
+            <tr>
+                <td class="label">No of shippers</td>
+                <td class="value">{{ note.no_of_shippers }}</td>
+                <td class="label">No of pallets</td>
+                <td class="value">{{ note.no_of_pallets }}</td>
+            </tr>
+            <tr>
+                <td class="label">On</td>
+                <td class="value">{{ note.wip_on }}</td>
+                <td class="label">Dispatch date</td>
+                <td class="value">{{ note.wip_dispatch_date }}</td>
+            </tr>
+        </table>
+    </section>
+    {% endfor %}
+
+    {% if auto_print %}
+    <script>window.addEventListener('load', function () { window.print(); });</script>
+    {% endif %}
+</body>
+</html>

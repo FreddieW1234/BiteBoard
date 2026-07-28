@@ -438,21 +438,21 @@ def api_upload_file():
             # Upload the file to Shopify using the temporary file path
             print(f"🔄 Starting Shopify upload for: {file.filename}")
             result = upload_file_to_shopify(temp_file_path, file.filename)
-            
-            if result:
+
+            if isinstance(result, dict) and result.get('success'):
                 print(f"✅ Upload successful: {file.filename}")
                 return jsonify({
-                    'success': True, 
-                    'filename': file.filename,
+                    'success': True,
+                    'filename': result.get('filename') or file.filename,
                     'message': 'File uploaded successfully to Shopify',
-                    'id': '12345',  # Mock ID for testing
+                    'id': result.get('id'),
+                    'global_id': result.get('global_id'),
                     'content_type': file.content_type,
                     'size': os.path.getsize(temp_file_path),
                     'created_at': datetime.now().isoformat(),
-                    'url': f'https://example.com/files/{file.filename}'  # Mock URL
                 })
             else:
-                error_msg = 'Upload function returned no result'
+                error_msg = (result.get('error') if isinstance(result, dict) else None) or 'Upload function returned no result'
                 print(f"❌ Upload failed: {error_msg}")
                 return jsonify({'success': False, 'error': error_msg}), 400
                 
@@ -662,48 +662,47 @@ def check_file_usage():
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/update-products-to-file', methods=['POST'])
-def api_update_products_to_file():
-    """Update all products to use a specific file"""
+def update_products_to_file():
+    """Update products to use a specific file"""
     try:
-        data = request.get_json()
+        print(f"[API] Update products to file endpoint called")
+        data = request.get_json() or {}
+        print(f"[API] Received data: {data}")
+
         target_filename = data.get('targetFilename')
         column = data.get('column')
-        
-        if not target_filename:
-            return jsonify({'success': False, 'error': 'No target filename provided'}), 400
-        
-        print(f"🔄 Updating products to use file: {target_filename} (column: {column})")
-        
-        # Import the Artwork_Updater script to use its functions
-        import sys
-        sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
-        
-        try:
-            from Artwork_Updater import update_products_to_specific_file  # type: ignore
-        except ImportError as e:
-            error_msg = f"Failed to import Artwork_Updater: {str(e)}"
-            print(f"❌ {error_msg}")
-            return jsonify({'success': False, 'error': error_msg}), 500
-        
-        # Update products to use the target file
-        result = update_products_to_specific_file(target_filename, column)
-        
-        if 'error' in result:
-            print(f"❌ Product update failed: {result['error']}")
-            return jsonify({'success': False, 'error': result['error']}), 400
-        
-        print(f"✅ Product update successful: {result['message']}")
-        return jsonify({
-            'success': True,
-            'message': result['message'],
-            'updatedCount': result['updatedCount'],
-            'totalCount': result['totalCount']
-        })
-        
+        target_file_id = data.get('targetFileId')
+        target_file_global_id = data.get('targetFileGlobalId')
+
+        if not target_filename and not target_file_global_id and not target_file_id:
+            return jsonify({'success': False, 'error': 'No target filename or file id provided'}), 400
+
+        from scripts.Artwork_Updater import update_products_to_specific_file  # type: ignore
+
+        result = update_products_to_specific_file(
+            target_filename,
+            column,
+            target_file_id=target_file_id,
+            target_file_global_id=target_file_global_id,
+        )
+
+        print(f"[API] Update function returned: {result}")
+
+        if result.get('error'):
+            return jsonify({'success': False, **result}), 400
+
+        return jsonify({'success': True, **result})
+
     except Exception as e:
-        error_msg = str(e)
-        print(f"💥 Product update error: {error_msg}")
-        return jsonify({'success': False, 'error': error_msg}), 500
+        print(f"[ERROR] Update products to file failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'updatedCount': 0,
+            'totalCount': 0
+        }), 500
 
 def _parse_product_id(product_id):
     """Return positive int product ID or None if invalid."""
@@ -1672,44 +1671,6 @@ def update_products_artwork():
             'totalCount': 0
         }), 500
 
-@app.route('/api/update-products-to-file', methods=['POST'])
-def update_products_to_file():
-    """Update products to use a specific file"""
-    try:
-        print(f"[API] Update products to file endpoint called")
-        data = request.get_json()
-        print(f"[API] Received data: {data}")
-        
-        target_filename = data.get('targetFilename')
-        column = data.get('column')
-        
-        print(f"[API] Starting update process...")
-        print(f"[API] Target filename: {target_filename}")
-        print(f"[API] Column: {column}")
-        
-        # Import the artwork updater script
-        from scripts.Artwork_Updater import update_products_to_specific_file
-        
-        # Call the update function
-        print(f"[API] Calling update_products_to_specific_file...")
-        result = update_products_to_specific_file(
-            target_filename=target_filename,
-            column=column
-        )
-        
-        print(f"[API] Update function returned: {result}")
-        return jsonify(result)
-        
-    except Exception as e:
-        print(f"[ERROR] Update products to file failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'error': str(e),
-            'updatedCount': 0,
-            'totalCount': 0
-        }), 500
-
 @app.route('/api/create-product', methods=['POST'])
 def api_create_product():
     """Create a new product in Shopify with media uploads"""
@@ -2022,6 +1983,31 @@ def api_order_info_update(order_id):
         return jsonify(update_order_info(order_id, note, attributes, note_sections=note_sections))
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route("/orders/<order_id>/production-notes")
+def production_notes_page(order_id):
+    """Printable production notes — one page per product line item (staff only)."""
+    if not is_staff_authenticated():
+        return redirect(url_for("staff_login", next=request.path))
+    if not can_access_order(order_id):
+        return "Order not found", 404
+    from scripts.production_note import get_production_notes_for_order  # type: ignore
+
+    line_number = request.args.get("line", type=int)
+    auto_print = request.args.get("print", "1") != "0"
+    result = get_production_notes_for_order(order_id, line_number=line_number)
+    if not result.get("success"):
+        return result.get("error") or "Order not found", 404
+    notes = result.get("notes") or []
+    if not notes:
+        return "No product line items on this order", 404
+    return render_template(
+        "UI/Production_Note.html",
+        order_name=result.get("order_name") or "",
+        notes=notes,
+        auto_print=auto_print,
+    )
 
 
 @app.route("/api/client/orders/<order_id>/order-info", methods=["PUT"])

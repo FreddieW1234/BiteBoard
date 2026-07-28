@@ -334,6 +334,8 @@
         }
         .form-row-status-vat-colour .form-group-status,
         .form-row-status-vat-colour .form-group-charge-vat,
+        .form-row-status-vat-colour .form-group-calendar,
+        .form-row-status-vat-colour .form-group-calendar-foil,
         .form-row-status-vat-colour .form-group-parent {
             flex-shrink: 0;
         }
@@ -2259,11 +2261,18 @@ Dietary</textarea>
                             </div>
                             <div class="form-group form-group-calendar-foil calendar-foil-option-row" id="calendar-foil-option-wrap" hidden>
                                 <label class="form-label">Foil option</label>
-                                <label class="qty-match-checkbox" style="margin-top: 4px;">
-                                    <input type="checkbox" id="calendarFoilOption">
-                                    <span class="checkmark"></span>
-                                    Show foil choice on storefront
-                                </label>
+                                <div class="radio-group">
+                                    <label class="radio-label">
+                                        <input type="radio" id="calendarFoilYes" name="calendarFoilOption" value="yes" class="radio-input">
+                                        <span class="radio-custom"></span>
+                                        <span class="radio-text">Yes</span>
+                                    </label>
+                                    <label class="radio-label">
+                                        <input type="radio" id="calendarFoilNo" name="calendarFoilOption" value="no" class="radio-input" checked>
+                                        <span class="radio-custom"></span>
+                                        <span class="radio-text">No</span>
+                                    </label>
+                                </div>
                             </div>
                             <div class="form-group form-group-parent parent-child-option-row" style="display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 24px;">
                                 <div class="parent-option-only" id="parent-option-wrap">
@@ -3079,29 +3088,40 @@ Dietary</textarea>
             });
         }
 
+        function isCalendarFoilEnabled() {
+            const yes = document.getElementById('calendarFoilYes');
+            return !!(yes && yes.checked);
+        }
+
+        function setCalendarFoilEnabled(enabled, markLoaded) {
+            const yes = document.getElementById('calendarFoilYes');
+            const no = document.getElementById('calendarFoilNo');
+            if (yes) yes.checked = !!enabled;
+            if (no) no.checked = !enabled;
+            if (markLoaded) {
+                if (yes) yes.dataset.loaded = '1';
+            } else if (yes) {
+                delete yes.dataset.loaded;
+            }
+        }
+
         function syncCalendarFoilOptionVisibility() {
             const wrap = document.getElementById('calendar-foil-option-wrap');
-            const foilCb = document.getElementById('calendarFoilOption');
             if (!wrap) return;
             const show = isCalendarProduct() && !isChildProduct();
             wrap.hidden = !show;
             if (!show) {
-                if (foilCb) {
-                    foilCb.checked = false;
-                    delete foilCb.dataset.loaded;
-                }
+                setCalendarFoilEnabled(false, false);
                 return;
             }
-            if (foilCb && !foilCb.dataset.loaded) {
-                foilCb.checked = true;
+            const yes = document.getElementById('calendarFoilYes');
+            if (yes && !yes.dataset.loaded) {
+                setCalendarFoilEnabled(true, false);
             }
         }
 
         function loadCalendarFoilFromMetafields(metafields) {
-            const foilCb = document.getElementById('calendarFoilOption');
-            if (!foilCb) return;
-            foilCb.checked = storefrontOptionEnabledInMetafields(metafields, 'foil');
-            foilCb.dataset.loaded = '1';
+            setCalendarFoilEnabled(storefrontOptionEnabledInMetafields(metafields, 'foil'), true);
         }
 
         function selectGuidelineRow(row, column) {
@@ -3180,11 +3200,7 @@ Dietary</textarea>
             if (isCal) {
                 loadCalendarFoilFromMetafields(metafields);
             } else {
-                const foilCb = document.getElementById('calendarFoilOption');
-                if (foilCb) {
-                    foilCb.checked = false;
-                    delete foilCb.dataset.loaded;
-                }
+                setCalendarFoilEnabled(false, false);
             }
             syncCalendarFoilOptionVisibility();
         }
@@ -7871,21 +7887,16 @@ Dietary</textarea>
             out.print = true;
             out.mailer = true;
             out.mailerpacking = true;
-            const foilCb = document.getElementById('calendarFoilOption');
-            out.foil = !!(foilCb && foilCb.checked);
+            out.foil = isCalendarFoilEnabled();
             return out;
         }
 
         function resetCalendarProductToggle() {
             const yes = document.getElementById('calendarYes');
             const no = document.getElementById('calendarNo');
-            const foilCb = document.getElementById('calendarFoilOption');
             if (yes) yes.checked = false;
             if (no) no.checked = true;
-            if (foilCb) {
-                foilCb.checked = false;
-                delete foilCb.dataset.loaded;
-            }
+            setCalendarFoilEnabled(false, false);
             syncCalendarFoilOptionVisibility();
         }
 

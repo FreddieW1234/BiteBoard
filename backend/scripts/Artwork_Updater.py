@@ -64,11 +64,9 @@ def fetch_files_with_graphql():
     Fetch all files from Shopify Admin > Content > Files using GraphQL Admin API
     """
     try:
-        # GraphQL query to get files from Admin > Content > Files
-        # Using the correct query structure for Shopify files
         query = """
-        query getFiles($first: Int!) {
-            files(first: $first) {
+        query getFiles($first: Int!, $after: String) {
+            files(first: $first, after: $after) {
                 edges {
                     node {
                         id
@@ -97,108 +95,90 @@ def fetch_files_with_graphql():
             }
         }
         """
-        
-        variables = {
-            "first": 250
-        }
-        
-        # Use the helper function to handle redirects
-        response = make_graphql_request(query, variables)
-        
-        if response.status_code == 200:
+
+        files = []
+        cursor = None
+        while True:
+            variables = {"first": 250}
+            if cursor:
+                variables["after"] = cursor
+
+            response = make_graphql_request(query, variables)
+
+            if response.status_code != 200:
+                print(f"❌ GraphQL request failed with status {response.status_code}. Response: {response.text[:500]}", flush=True)
+                break
+
             data = response.json()
-            
-            # Check for GraphQL errors first
+
             if 'errors' in data:
                 print(f"❌ GraphQL errors: {json.dumps(data['errors'], indent=2)}")
-                return []
-            
-            if 'data' in data and 'files' in data['data']:
-                files_data = data['data']['files']
-                
-                if 'edges' in files_data:
-                    files = []
-                    for edge in files_data['edges']:
-                        file_info = edge['node']
-                        
-                        # Extract basic file information
-                        original_global_id = file_info.get('id', '')
-                        file_id = original_global_id.split('/')[-1] if '/' in original_global_id else original_global_id
-                        alt_text = file_info.get('alt', '')
-                        created_at = file_info.get('createdAt', '')
-                        file_status = file_info.get('fileStatus', '')
-                        
-                        # Initialize file data
-                        formatted_file = {
-                            'id': file_id,
-                            'original_global_id': original_global_id,
-                            'filename': alt_text or 'Untitled',  # Use alt text as the display filename
-                            'content_type': 'application/octet-stream',
-                            'size': 0,
-                            'created_at': created_at,
-                            'updated_at': created_at,
-                            'alt': alt_text,
-                            'url': '',
-                            'preview_url': None,
-                            'file_status': file_status,
-                            'original_filename': alt_text  # Store original filename for reference
-                        }
-                        
-                        # Handle different file types
-                        if 'image' in file_info and file_info['image']:
-                            # MediaImage type
-                            formatted_file['url'] = file_info['image'].get('url', '')
-                            formatted_file['preview_url'] = file_info['image'].get('url', '')
-                            formatted_file['content_type'] = file_info.get('mimeType', 'image/jpeg')
-                            # Calculate approximate size from width * height (no direct fileSize field)
-                            width = file_info['image'].get('width', 0)
-                            height = file_info['image'].get('height', 0)
-                            formatted_file['size'] = width * height if width and height else 0
-                            
-                            # Handle filename display logic
-                            if not formatted_file['filename'] or formatted_file['filename'] == 'Untitled':
-                                # If alt text is blank, try to extract from URL as fallback
-                                url = formatted_file['url']
-                                if url:
-                                    url_parts = url.split('/')
-                                    if len(url_parts) > 0:
-                                        filename_part = url_parts[-1]
-                                        formatted_file['filename'] = filename_part.split('?')[0] if '?' in filename_part else filename_part
-                                else:
-                                    # If no URL, use a generic name
-                                    formatted_file['filename'] = 'Uploaded File'
-                        
-                        elif 'url' in file_info:
-                            # GenericFile type
-                            formatted_file['url'] = file_info.get('url', '')
-                            formatted_file['content_type'] = file_info.get('mimeType', 'application/octet-stream')
-                            formatted_file['size'] = file_info.get('originalFileSize', 0)
-                            
-                            # Handle filename display logic
-                            if not formatted_file['filename'] or formatted_file['filename'] == 'Untitled':
-                                # If alt text is blank, try to extract from URL as fallback
-                                url = formatted_file['url']
-                                if url:
-                                    url_parts = url.split('/')
-                                    if len(url_parts) > 0:
-                                        filename_part = url_parts[-1]
-                                        formatted_file['filename'] = filename_part.split('?')[0] if '?' in filename_part else filename_part
-                                else:
-                                    # If no URL, use a generic name
-                                    formatted_file['filename'] = 'Uploaded File'
-                        
-                        files.append(formatted_file)
-                    
-                    return files
-                else:
-                    return []
-            else:
+                break
+
+            if 'data' not in data or 'files' not in data['data']:
                 print(f"⚠️ GraphQL response missing 'data.files' field. Response: {response.text[:500]}", flush=True)
-                return []
-        else:
-            print(f"❌ GraphQL request failed with status {response.status_code}. Response: {response.text[:500]}", flush=True)
-            return []
-            
+                break
+
+            files_data = data['data']['files']
+            edges = files_data.get('edges') or []
+
+            for edge in edges:
+                file_info = edge['node']
+
+                original_global_id = file_info.get('id', '')
+                file_id = original_global_id.split('/')[-1] if '/' in original_global_id else original_global_id
+                alt_text = file_info.get('alt', '')
+                created_at = file_info.get('createdAt', '')
+                file_status = file_info.get('fileStatus', '')
+
+                formatted_file = {
+                    'id': file_id,
+                    'original_global_id': original_global_id,
+                    'filename': alt_text or 'Untitled',
+                    'content_type': 'application/octet-stream',
+                    'size': 0,
+                    'created_at': created_at,
+                    'updated_at': created_at,
+                    'alt': alt_text,
+                    'url': '',
+                    'preview_url': None,
+                    'file_status': file_status,
+                    'original_filename': alt_text,
+                }
+
+                if 'image' in file_info and file_info['image']:
+                    formatted_file['url'] = file_info['image'].get('url', '')
+                    formatted_file['preview_url'] = file_info['image'].get('url', '')
+                    formatted_file['content_type'] = file_info.get('mimeType', 'image/jpeg')
+                    width = file_info['image'].get('width', 0)
+                    height = file_info['image'].get('height', 0)
+                    formatted_file['size'] = width * height if width and height else 0
+                elif 'url' in file_info:
+                    formatted_file['url'] = file_info.get('url', '')
+                    formatted_file['content_type'] = file_info.get('mimeType', 'application/octet-stream')
+                    formatted_file['size'] = file_info.get('originalFileSize', 0)
+
+                if not formatted_file['filename'] or formatted_file['filename'] == 'Untitled':
+                    url = formatted_file['url']
+                    if url:
+                        url_parts = url.split('/')
+                        if url_parts:
+                            filename_part = url_parts[-1]
+                            formatted_file['filename'] = filename_part.split('?')[0] if '?' in filename_part else filename_part
+                    else:
+                        formatted_file['filename'] = 'Uploaded File'
+
+                files.append(formatted_file)
+
+            page_info = files_data.get('pageInfo') or {}
+            if not page_info.get('hasNextPage'):
+                break
+            cursor = page_info.get('endCursor')
+            if not cursor:
+                break
+
+        return files
+
     except Exception as e:
         print(f"❌ Error fetching files from Shopify: {str(e)}", flush=True)
         import traceback
@@ -389,118 +369,53 @@ def upload_file_to_shopify(file_path, alt_text=""):
                 
             print(f"[UPLOAD] Step 3 complete: File record created successfully")
             print(f"[UPLOAD] PDF uploaded successfully: {filename}")
-            
-            # Step 4: Set alt text to blank after successful upload
-            print(f"[UPLOAD] Step 4: Setting alt text to blank...")
-            
-            try:
-                # Wait for Shopify to process the file and become READY
-                import time
-                max_attempts = 10
-                attempt = 0
-                target_file = None
-                
-                while attempt < max_attempts and target_file is None:
-                    attempt += 1
-                    
-                    # Fetch the updated file list to find our new file
-                    files_query = """
-                    query {
-                        files(first: 250) {
-                            edges {
-                                node {
-                                    id
-                                    alt
-                                    createdAt
-                                    fileStatus
-                                    ... on MediaImage {
-                                        image {
-                                            url
-                                        }
-                                    }
-                                    ... on GenericFile {
-                                        url
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    """
-                    
-                    # Use the helper function to handle redirects
-                    files_response = make_graphql_request(files_query)
-                    
-                    if files_response.status_code == 200:
-                        files_data = files_response.json()
-                        
-                        if 'data' in files_data and 'files' in files_data['data']:
-                            for edge in files_data['data']['files']['edges']:
-                                file_node = edge['node']
-                                file_alt = file_node.get('alt', '')
-                                file_status = file_node.get('fileStatus')
-                                
-                                # Look for file with matching alt text and READY status
-                                if file_alt == filename and file_status == 'READY':
-                                    target_file = file_node
-                                    break
-                    
-                    if target_file is None:
-                        time.sleep(3)
-                
-                if target_file:
-                    # Update the file to set alt text to blank
-                    update_mutation = """
-                    mutation fileUpdate($files: [FileUpdateInput!]!) {
-                        fileUpdate(files: $files) {
-                            files {
-                                id
-                                alt
-                }
-                userErrors {
-                    field
-                    message
-                }
+
+            created_files = file_data.get('data', {}).get('fileCreate', {}).get('files') or []
+            uploaded_global_id = created_files[0].get('id') if created_files else None
+            uploaded_id = uploaded_global_id.split('/')[-1] if uploaded_global_id and '/' in uploaded_global_id else uploaded_global_id
+
+            if not uploaded_global_id:
+                print(f"[WARNING] fileCreate succeeded but no file id returned")
+                return {'success': False, 'filename': filename, 'error': 'No file id returned from Shopify'}
+
+            # Keep alt text as the filename — Artwork Updater uses it to list and match files.
+            return {
+                'success': True,
+                'filename': filename,
+                'id': uploaded_id,
+                'global_id': uploaded_global_id,
             }
-        }
-        """
-        
-                    update_variables = {
-            "files": [{
-                            "id": target_file['id'],
-                            "alt": ""  # Set alt text to blank as requested
-                        }]
-                    }
-                    
-                    # Use the helper function to handle redirects
-                    update_response = make_graphql_request(update_mutation, update_variables)
-                    
-                    if update_response.status_code == 200:
-                        update_data = update_response.json()
-                        if 'errors' not in update_data and 'data' in update_data:
-                            print(f"[UPLOAD] Step 4 complete: Alt text set to blank")
-                        else:
-                            print(f"[WARNING] Update failed: {update_data}")
-                    else:
-                        print(f"[WARNING] Update request failed: {update_response.status_code}")
-                else:
-                    print(f"[WARNING] Could not find uploaded file after {max_attempts} attempts")
-                    
-            except Exception as cleanup_error:
-                print(f"[WARNING] Post-upload update error (non-critical): {cleanup_error}")
-            
-            return True
-            
+
         except Exception as e:
             print(f"[ERROR] Error in staged upload process: {str(e)}")
-            return False
-            
+            return {'success': False, 'error': str(e)}
+
     except Exception as e:
         print(f"[ERROR] Error in upload_file_to_shopify: {str(e)}")
         import traceback
         traceback.print_exc()
-        return False
+        return {'success': False, 'error': str(e)}
 
-def update_products_to_specific_file(target_filename, column):
+def _normalize_artwork_filename(name):
+    return (name or "").strip().lower()
+
+
+def _filename_matches(target, candidate):
+    """Match filenames with optional .pdf and case-insensitive compare."""
+    t = _normalize_artwork_filename(target)
+    c = _normalize_artwork_filename(candidate)
+    if not t or not c:
+        return False
+    if t == c:
+        return True
+    if t.endswith('.pdf'):
+        t = t[:-4]
+    if c.endswith('.pdf'):
+        c = c[:-4]
+    return t == c
+
+
+def update_products_to_specific_file(target_filename, column, target_file_id=None, target_file_global_id=None):
     """
     Update all products that have any Artwork_Guidelines file to use the specified target file
     """
@@ -521,17 +436,19 @@ def update_products_to_specific_file(target_filename, column):
         updated_count = 0
         total_count = len(products)
         
-        # Get the target file ID
-        target_file_id = get_file_id_from_filename(target_filename)
-        if not target_file_id:
-            return {
-                'updatedCount': 0,
-                'totalCount': total_count,
-                'error': f'Could not find file: {target_filename}'
-            }
-        
-        # Convert to Global ID format
-        target_file_global_id = f"gid://shopify/GenericFile/{target_file_id}"
+        # Resolve target file global ID (prefer explicit id from a fresh upload)
+        target_file_global_id = (target_file_global_id or "").strip() or None
+        if not target_file_global_id and target_file_id:
+            target_file_global_id = f"gid://shopify/GenericFile/{str(target_file_id).strip()}"
+        if not target_file_global_id:
+            resolved_id = get_file_id_from_filename(target_filename)
+            if not resolved_id:
+                return {
+                    'updatedCount': 0,
+                    'totalCount': total_count,
+                    'error': f'Could not find file: {target_filename}'
+                }
+            target_file_global_id = f"gid://shopify/GenericFile/{resolved_id}"
         
         # Check each product for artwork references in metafields
         for product in products:
@@ -639,8 +556,8 @@ if __name__ == "__main__":
             
             # Run the upload process
             success = upload_file_to_shopify(temp_file_path, args.upload)
-            
-            if success:
+
+            if isinstance(success, dict) and success.get('success'):
                 print(f"[UPLOAD] Upload completed successfully: {args.upload}")
                 print("[UPLOAD] File is now available in Shopify!")
             else:
@@ -840,17 +757,14 @@ def fetch_all_products():
 def get_filename_from_file_id(file_id):
     """Get the actual filename from a Shopify file ID"""
     try:
-        # Use the existing fetch_files_with_graphql function to get all files
         files = fetch_files_with_graphql()
-        
-        # Look for a file with matching ID
+
         for file_data in files:
-            if file_data.get('id') == file_id:
-                filename = file_data.get('alt') or file_data.get('filename', '')
-                return filename
-        
+            if str(file_data.get('id')) == str(file_id):
+                return file_data.get('alt') or file_data.get('filename') or file_data.get('original_filename') or ''
+
         return None
-        
+
     except Exception as e:
         print(f"[PRODUCT UPDATE] Error fetching file: {str(e)}")
         return None
@@ -858,29 +772,25 @@ def get_filename_from_file_id(file_id):
 def get_file_id_from_filename(filename):
     """Get the Shopify file ID from a filename"""
     try:
-        # Use the existing fetch_files_with_graphql function to get all files
         files = fetch_files_with_graphql()
-        
-        # Look for a file with matching alt text or filename
+        target = (filename or "").strip()
+        if not target:
+            return None
+
         for file_data in files:
             file_alt = file_data.get('alt', '')
             file_filename = file_data.get('filename', '')
-            
-            # Check exact match first
-            if file_alt == filename or file_filename == filename:
+            file_url = file_data.get('url', '')
+
+            if any(_filename_matches(target, candidate) for candidate in (file_alt, file_filename)):
                 return file_data.get('id')
-            
-            # Check if filename matches without extension
-            if file_alt == filename.replace('.pdf', '') or file_filename == filename.replace('.pdf', ''):
+
+            url_name = file_url.split('/')[-1].split('?')[0] if file_url else ''
+            if _filename_matches(target, url_name):
                 return file_data.get('id')
-            
-            # Check if filename matches with extension added
-            if file_alt == filename + '.pdf' or file_filename == filename + '.pdf':
-                return file_data.get('id')
-        
-        # File not found (removed verbose debug)
+
         return None
-        
+
     except Exception as e:
         print(f"[PRODUCT UPDATE] Error finding file: {str(e)}")
         return None

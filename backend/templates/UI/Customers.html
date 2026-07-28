@@ -543,6 +543,18 @@
         }
         .cu-orders-modal-body .btn-save-order-info:hover { background: #4338ca; }
         .cu-orders-modal-body .btn-save-order-info:disabled { opacity: 0.65; cursor: wait; }
+        .cu-orders-modal-body .btn-print-production-note {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .cu-orders-modal-body .btn-print-production-note:hover { background: #f9fafb; border-color: #9ca3af; }
         .cu-orders-modal-body .order-info-msg { font-size: 0.82rem; font-weight: 500; }
         .cu-orders-modal-body .order-info-msg.ok { color: #059669; }
         .cu-orders-modal-body .order-info-msg.err { color: #dc2626; }
@@ -1421,6 +1433,7 @@
             }
             html += `</div><div class="order-info-actions">
                     <button type="submit" class="btn-save-order-info">Save order info</button>
+                    <button type="button" class="btn-print-production-note" data-order-id="${escapeHtml(o.id)}">Print production note</button>
                     <span class="order-info-msg" hidden></span>
                 </div></form></div>`;
             return html;
@@ -1721,6 +1734,14 @@
                 e.preventDefault();
                 e.stopPropagation();
                 saveOrderInfoForm(form);
+            });
+            document.getElementById('cu-orders-modal-body').addEventListener('click', function(e) {
+                const btn = e.target.closest('.btn-print-production-note');
+                if (!btn) return;
+                e.preventDefault();
+                const orderId = btn.dataset.orderId;
+                if (!orderId) return;
+                window.open(`/orders/${encodeURIComponent(orderId)}/production-notes`, '_blank', 'noopener');
             });
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && document.getElementById('cu-orders-modal').classList.contains('open')) {
