@@ -76,12 +76,14 @@
             flex: 0 0 10%;
             min-height: 26mm;
             max-height: 12%;
+            margin-top: -1px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
+            border-spacing: 0;
         }
 
         td, th {
@@ -89,6 +91,7 @@
             vertical-align: middle;
             padding: 3px 5px;
             font-size: 9.5pt;
+            line-height: 1.15;
         }
 
         .hdr {
@@ -118,7 +121,7 @@
             vertical-align: top;
         }
 
-        .tick { min-height: 18px; }
+        .tick { min-height: 16px; }
 
         .addr .val {
             min-height: 44px;
@@ -212,16 +215,16 @@
                     <td class="val">{{ note.case_price }}</td>
                 </tr>
                 <tr>
-                    <td class="lbl" colspan="2">Origination Charge</td>
-                    <td class="val">{{ note.origination_charge }}</td>
+                    <td class="lbl" colspan="2">Origination Fee</td>
+                    <td class="val">{{ note.origination_fee }}</td>
                     <td class="lbl" colspan="2">Email Address</td>
                     <td class="val">{{ note.email_address }}</td>
                 </tr>
                 <tr>
-                    <td class="lbl" colspan="2">Dispatch Date</td>
-                    <td class="val">{{ note.dispatch_date }}</td>
-                    <td class="lbl" colspan="2">Delivery Date</td>
-                    <td class="val">{{ note.delivery_date }}</td>
+                    <td class="lbl" colspan="2">Expected Dispatch</td>
+                    <td class="val">{{ note.expected_dispatch }}</td>
+                    <td class="lbl" colspan="2">Requested Delivery</td>
+                    <td class="val">{{ note.requested_delivery }}</td>
                 </tr>
                 <tr class="addr">
                     <td class="lbl" colspan="2">Delivery Address Confirmed</td>
@@ -274,22 +277,12 @@
                 <tr>
                     <td class="lbl" colspan="2">Proforma Emailed</td>
                     <td class="tick"></td>
-                    <td class="lbl" style="text-align:center;">Person</td>
-                    <td class="lbl" style="text-align:center;" colspan="2">Date</td>
-                </tr>
-                <tr>
-                    <td class="tick" colspan="3"></td>
                     <td class="val tick">{{ note.proforma_emailed_person }}</td>
                     <td class="val tick" colspan="2">{{ note.proforma_emailed_date }}</td>
                 </tr>
                 <tr>
                     <td class="lbl" colspan="2">Customer Phoned To Check They Have Received Proforma</td>
                     <td class="tick"></td>
-                    <td class="lbl" style="text-align:center;">Person</td>
-                    <td class="lbl" style="text-align:center;" colspan="2">Date</td>
-                </tr>
-                <tr>
-                    <td class="tick" colspan="3"></td>
                     <td class="val tick">{{ note.proforma_phoned_person }}</td>
                     <td class="val tick" colspan="2">{{ note.proforma_phoned_date }}</td>
                 </tr>
@@ -314,8 +307,8 @@
                     <td class="val tick">{{ note.order_number_sage }}</td>
                 </tr>
                 <tr>
-                    <td class="lbl" colspan="2">Dispatch Date</td>
-                    <td class="val">{{ note.wip_dispatch_date }}</td>
+                    <td class="lbl" colspan="2">Actual</td>
+                    <td class="val tick">{{ note.actual_dispatch }}</td>
                     <td class="tick" colspan="2"></td>
                     <td class="tick"></td>
                 </tr>

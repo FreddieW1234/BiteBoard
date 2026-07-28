@@ -132,7 +132,13 @@ def _additional_notes(order_info: dict, product_section: dict | None) -> str:
     return _global_note_value(order_info, "additional notes", "notes", "comments")
 
 
-def _origination_for_product(order: dict, line: dict) -> str:
+def _origination_fee(line: dict, order: dict) -> str:
+    raw = line.get("origination")
+    if raw is not None:
+        try:
+            return format_gbp(float(raw))
+        except (TypeError, ValueError):
+            pass
     title = (line.get("title") or "").strip()
     sku = (line.get("sku") or "").strip()
     for group in order.get("fees_by_product") or []:
@@ -248,8 +254,8 @@ def build_production_note(order: dict, line: dict) -> dict:
         "product_code": (line.get("sku") or "").strip(),
         "total_units_ordered": qty_text,
         "case_quantity": _case_quantity_display(line),
-        "origination_charge": _origination_for_product(order, line),
-        "dispatch_date": format_display_date(dispatch_date),
+        "origination_fee": _origination_fee(line, order),
+        "expected_dispatch": format_display_date(dispatch_date),
         "delivery_address_confirmed": _delivery_address(order, product_section),
         "approved_to_print": "",
         "sales_person": DEFAULT_SALES_PERSON,
@@ -258,7 +264,7 @@ def build_production_note(order: dict, line: dict) -> dict:
         "total_cases_ordered": _total_cases(line),
         "case_price": _case_price(line),
         "email_address": (order.get("customer_email") or "").strip(),
-        "delivery_date": format_display_date(delivery_date),
+        "requested_delivery": format_display_date(delivery_date),
         "use_customers_delivery_note": _global_note_value(
             order_info,
             "use customer's delivery note",
@@ -276,7 +282,7 @@ def build_production_note(order: dict, line: dict) -> dict:
         "no_of_pallets": "",
         "order_number_shopify": (order.get("name") or "").strip(),
         "order_number_sage": "",
-        "wip_dispatch_date": format_display_date(dispatch_date),
+        "actual_dispatch": "",
         "notes": _additional_notes(order_info, product_section),
     }
 

@@ -65,6 +65,7 @@ LINE_ITEM_FIELDS = """
               variant {
                 product {
                   caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
+                  originationFee: metafield(namespace: "custom", key: "origination") { value }
                 }
                 inventoryItem {
                   measurement {
@@ -365,6 +366,13 @@ def format_line_item(li: dict) -> dict:
             case_quantity = int(float(case_qty_raw))
         except (TypeError, ValueError):
             case_quantity = None
+    origination_raw = ((product.get("originationFee") or {}).get("value") or "").strip()
+    origination = None
+    if origination_raw != "":
+        try:
+            origination = float(origination_raw.replace(",", ""))
+        except (TypeError, ValueError):
+            origination = None
     item = {
         "title": title,
         "quantity": quantity,
@@ -381,6 +389,7 @@ def format_line_item(li: dict) -> dict:
         "properties": storefront_props + remaining,
         "is_fee": is_fee,
         "case_quantity": case_quantity,
+        "origination": origination,
     }
     if is_fee:
         item = _format_fee_item(item)
