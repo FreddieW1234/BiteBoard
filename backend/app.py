@@ -2602,28 +2602,14 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
 
 
 def _fire_proof_approved_klaviyo(order_id, entry, order_name, item_id, *, approved_by=""):
-    """Send Klaviyo event when a line item reaches Proof Approved."""
+    """Notify staff via Klaviyo when a line item reaches Proof Approved."""
     import logging
 
     try:
-        from scripts.klaviyo_api import KlaviyoError, klaviyo_configured, send_production_update
-        from scripts.office_api import get_notify  # type: ignore
+        from scripts.klaviyo_api import KlaviyoError, klaviyo_proof_approved_configured, send_proof_approved
     except ImportError:
         return
-    if not klaviyo_configured():
-        return
-
-    email = ""
-    try:
-        notify = get_notify(order_name) if order_name else {}
-        if notify.get("enabled"):
-            email = (notify.get("email") or "").strip()
-    except Exception:
-        pass
-    if not email:
-        order = entry.get("order") or {}
-        email = (order.get("customer_email") or "").strip()
-    if not email:
+    if not klaviyo_proof_approved_configured():
         return
 
     item_title = ""
@@ -2633,10 +2619,8 @@ def _fire_proof_approved_klaviyo(order_id, entry, order_name, item_id, *, approv
             break
 
     try:
-        send_production_update(
-            email,
+        send_proof_approved(
             order_name,
-            "proof_approved",
             order_id=str(order_id),
             item_title=item_title,
             item_id=item_id,

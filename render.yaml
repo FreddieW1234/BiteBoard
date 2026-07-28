@@ -26,6 +26,8 @@ services:
         value: "Bite Customer Type Assigned"
       - key: KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME
         value: "Bite Customer Registered"
+      - key: KLAVIYO_PROOF_APPROVED_METRIC_NAME
+        value: "Bite Proof Approved"
       - key: KLAVIYO_API_REVISION
         value: "2025-01-15"
       - key: PORTAL_PAGE_URL

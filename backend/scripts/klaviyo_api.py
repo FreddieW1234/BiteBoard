@@ -15,6 +15,7 @@ from config import (  # type: ignore
     KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME,
     KLAVIYO_CUSTOMER_TYPE_METRIC_NAME,
     KLAVIYO_METRIC_NAME,
+    KLAVIYO_PROOF_APPROVED_METRIC_NAME,
     PORTAL_PAGE_URL,
     STOREFRONT_URL,
 )
@@ -23,7 +24,6 @@ log = logging.getLogger(__name__)
 
 UPDATE_LABELS: dict[str, str] = {
     "proof_uploaded": "Proof ready for review",
-    "proof_approved": "Proof approved",
     "printing": "Printing",
     "in_production": "In production",
     "shipped": "Shipped",
@@ -53,6 +53,10 @@ def klaviyo_customer_type_configured() -> bool:
 
 def klaviyo_customer_registered_configured() -> bool:
     return bool(KLAVIYO_API_KEY and KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME)
+
+
+def klaviyo_proof_approved_configured() -> bool:
+    return bool(KLAVIYO_API_KEY and KLAVIYO_PROOF_APPROVED_METRIC_NAME)
 
 
 def build_portal_url(
@@ -118,7 +122,6 @@ def send_production_update(
     item_title: str = "",
     item_id: str = "",
     proof_filename: str = "",
-    approved_by: str = "",
 ) -> None:
     """Fire a Klaviyo metric event that triggers a transactional Flow."""
     if not klaviyo_configured():
@@ -140,24 +143,20 @@ def send_production_update(
 
     portal_url = build_portal_url(order_id, item_id=item_id, proof_filename=proof)
 
-    properties: dict[str, Any] = {
-        "order_name": order_name,
-        "order_id": (order_id or "").strip(),
-        "update_type": update_type,
-        "stage_label": stage_label,
-        "item_title": item_title or "",
-        "item_id": item_id or "",
-        "proof_filename": proof,
-        "portal_url": portal_url,
-    }
-    if approved_by:
-        properties["approved_by"] = approved_by
-
     payload: dict[str, Any] = {
         "data": {
             "type": "event",
             "attributes": {
-                "properties": properties,
+                "properties": {
+                    "order_name": order_name,
+                    "order_id": (order_id or "").strip(),
+                    "update_type": update_type,
+                    "stage_label": stage_label,
+                    "item_title": item_title or "",
+                    "item_id": item_id or "",
+                    "proof_filename": proof,
+                    "portal_url": portal_url,
+                },
                 "metric": {
                     "data": {
                         "type": "metric",
@@ -191,6 +190,76 @@ def send_production_update(
     if resp.status_code not in (200, 202):
         detail = resp.text[:500] if resp.text else resp.reason
         log.warning("Klaviyo event failed (%s): %s", resp.status_code, detail)
+        raise KlaviyoError(f"Klaviyo returned {resp.status_code}")
+
+
+def send_proof_approved(
+    order_name: str,
+    *,
+    order_id: str = "",
+    item_title: str = "",
+    item_id: str = "",
+    approved_by: str = "",
+) -> None:
+    """Fire staff-only Klaviyo metric when proof is approved. Recipients are configured in Klaviyo."""
+    if not klaviyo_proof_approved_configured():
+        raise KlaviyoError(
+            "Klaviyo is not configured (KLAVIYO_API_KEY / KLAVIYO_PROOF_APPROVED_METRIC_NAME)"
+        )
+
+    order_name = (order_name or "").strip()
+    if not order_name:
+        raise KlaviyoError("Order name is required")
+
+    unique_id = f"proof-approved-{order_name}-{item_id}-{uuid.uuid4().hex}"
+    portal_url = build_portal_url(order_id, item_id=item_id)
+    profile_key = (order_id or order_name).strip()
+
+    payload: dict[str, Any] = {
+        "data": {
+            "type": "event",
+            "attributes": {
+                "properties": {
+                    "order_name": order_name,
+                    "order_id": (order_id or "").strip(),
+                    "item_title": (item_title or "").strip(),
+                    "item_id": (item_id or "").strip(),
+                    "approved_by": (approved_by or "").strip(),
+                    "portal_url": portal_url,
+                },
+                "metric": {
+                    "data": {
+                        "type": "metric",
+                        "attributes": {"name": KLAVIYO_PROOF_APPROVED_METRIC_NAME},
+                    }
+                },
+                "profile": {
+                    "data": {
+                        "type": "profile",
+                        "attributes": {"external_id": f"bite-order-{profile_key}"},
+                    }
+                },
+                "unique_id": unique_id,
+            },
+        }
+    }
+
+    url = "https://a.klaviyo.com/api/events"
+    headers = {
+        "Authorization": f"Klaviyo-API-Key {KLAVIYO_API_KEY}",
+        "accept": "application/json",
+        "content-type": "application/json",
+        "revision": KLAVIYO_API_REVISION,
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        raise KlaviyoError(f"Could not reach Klaviyo: {exc}") from exc
+
+    if resp.status_code not in (200, 202):
+        detail = resp.text[:500] if resp.text else resp.reason
+        log.warning("Klaviyo proof approved event failed (%s): %s", resp.status_code, detail)
         raise KlaviyoError(f"Klaviyo returned {resp.status_code}")
 
 
