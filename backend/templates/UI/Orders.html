@@ -387,7 +387,6 @@
         let orderIndicators = {};
         let sortMode = localStorage.getItem('orders-sort') || 'priority';
         const SORT_STORAGE_KEY = 'orders-sort';
-        let trackingPrefetchToken = 0;
         let ordersRefreshTimer = null;
         let suppressOrdersRefresh = false;
 
@@ -955,22 +954,24 @@
             }
         }
 
-        function prefetchTrackingForOrders(orders) {
-            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') {
-                return Promise.resolve();
+        let indicatorPrefetchToken = 0;
+
+        async function prefetchIndicatorsForOrders(orders) {
+            if (!window.OfficeTracking || typeof OfficeTracking.fetchOrderIndicators !== 'function') {
+                return;
             }
-            const token = ++trackingPrefetchToken;
-            const ids = orders.map(o => o.id);
-            return OfficeTracking.prefetchAllOrderTracking(ids, '/api/orders', 'staff', (orderId, entry) => {
-                if (token !== trackingPrefetchToken) return;
-                if (entry && entry.status === 'error') {
-                    onTrackingSettled(orderId, entry, false);
-                }
-            });
+            const token = ++indicatorPrefetchToken;
+            const ids = (orders || []).map(o => o.id).filter(Boolean);
+            if (!ids.length) return;
+            const indicators = await OfficeTracking.fetchOrderIndicators(ids, '/api/orders', 3);
+            if (token !== indicatorPrefetchToken) return;
+            Object.assign(orderIndicators, indicators);
+            if (suppressOrdersRefresh) return;
+            renderOrdersView(filterOrders(document.getElementById('search-input').value));
         }
 
-        function startBackgroundTrackingPrefetch(orders) {
-            void prefetchTrackingForOrders(orders);
+        function startBackgroundIndicatorPrefetch(orders) {
+            void prefetchIndicatorsForOrders(orders);
         }
 
         function filterOrders(q) {
@@ -1000,9 +1001,8 @@
                     OfficeTracking.clearOrderTrackingCache();
                 }
                 const filtered = filterOrders(document.getElementById('search-input').value);
-                content.innerHTML = '<div class="list-card"><div class="state-msg"><i class="fas fa-spinner fa-spin"></i> Loading order tracking…</div></div>';
-                await prefetchTrackingForOrders(filtered);
                 renderOrdersView(filtered);
+                void prefetchIndicatorsForOrders(filtered);
             } catch (err) {
                 content.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;
                 document.getElementById('count-pill').textContent = '0 orders';
@@ -1021,7 +1021,7 @@
         document.getElementById('search-input').addEventListener('input', function() {
             const filtered = filterOrders(this.value);
             renderOrdersView(filtered);
-            startBackgroundTrackingPrefetch(filtered);
+            startBackgroundIndicatorPrefetch(filtered);
         });
         document.getElementById('sort-select').value = sortMode;
         document.getElementById('sort-select').addEventListener('change', function() {
@@ -1041,6 +1041,6 @@
         loadOrders();
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
-    <script src="/static/office_tracking.js?v=38"></script>
+    <script src="/static/office_tracking.js?v=39"></script>
 </body>
 </html>

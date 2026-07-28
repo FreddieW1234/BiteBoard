@@ -1845,7 +1845,7 @@
         return INDICATOR_PRIORITY[type] ?? INDICATOR_PRIORITY.none;
     }
 
-    async function fetchOrderIndicators(orderIds, apiPrefix, concurrency = 12) {
+    async function fetchOrderIndicators(orderIds, apiPrefix, concurrency = 3) {
         const result = {};
         const ids = [...new Set((orderIds || []).filter(Boolean).map(String))];
         if (!ids.length) return result;

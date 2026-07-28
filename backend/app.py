@@ -2123,7 +2123,8 @@ def _office_item_context(order_id, item):
 def api_order_tracking(order_id):
     if not can_access_order(order_id):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
-    entry = _office_access(order_id, refresh=True)
+    refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+    entry = _office_access(order_id, refresh=refresh)
     if not entry:
         return jsonify({"success": False, "error": "Order not found"}), 404
     return _office_tracking_response(order_id, entry, "/api/orders")
@@ -2133,25 +2134,28 @@ def api_order_tracking(order_id):
 def api_client_order_tracking(order_id):
     if not can_access_order(order_id):
         return jsonify({"success": False, "error": "Not authorised for this order"}), 403
-    entry = _office_access(order_id, refresh=True)
+    refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+    entry = _office_access(order_id, refresh=refresh)
     if not entry:
         return jsonify({"success": False, "error": "Order not found"}), 404
     return _office_tracking_response(order_id, entry, "/api/client/orders")
 
 
 def _fetch_office_items_for_indicator(entry):
-    """One get_order call when possible; fall back to ensure_item per product line."""
-    from scripts.office_api import get_order, ensure_item, item_key, OfficeApiError  # type: ignore
+    """Lightweight status dots: one get_order read; never seeds items (expand order for that)."""
+    from scripts.office_api import get_order, item_key, OfficeApiError  # type: ignore
 
     order_name = entry.get("name") or ""
     order = entry.get("order") or {}
     items_out = []
+    office_by_item: dict[str, dict] = {}
     try:
         data = get_order(order_name)
         if data and data.get("items"):
             for view in data["items"]:
-                items_out.append({"office": view})
-            return items_out
+                key = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
+                if key:
+                    office_by_item[key] = view
     except OfficeApiError:
         pass
 
@@ -2160,10 +2164,7 @@ def _fetch_office_items_for_indicator(entry):
         if ln is None:
             continue
         oid = item.get("office_item_id") or item_key(ln, item.get("title") or "")
-        try:
-            items_out.append({"office": ensure_item(order_name, oid, item.get("title") or "")})
-        except OfficeApiError:
-            items_out.append({"office": None})
+        items_out.append({"office": office_by_item.get(oid)})
     return items_out
 
 

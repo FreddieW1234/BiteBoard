@@ -1534,24 +1534,6 @@
                 if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') {
                     OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
                 }
-                if (window.OfficeTracking && typeof OfficeTracking.prefetchAllOrderTracking === 'function') {
-                    const orderIds = customerModalOrders.map(o => o.id).filter(Boolean);
-                    if (orderIds.length) {
-                        OfficeTracking.prefetchAllOrderTracking(orderIds, '/api/orders', 'staff', function (orderId) {
-                            if (OfficeTracking.refreshOrderStatusLabelsIn) {
-                                OfficeTracking.refreshOrderStatusLabelsIn(body);
-                            }
-                            const row = body.querySelector('.data-row[data-order-id="' + CSS.escape(String(orderId)) + '"]');
-                            if (!row || !row.classList.contains('expanded')) return;
-                            const idx = row.getAttribute('data-order-idx');
-                            const dr = document.getElementById('cu-order-details-' + idx);
-                            const inner = dr && (dr.querySelector('.details-inner') || dr);
-                            if (inner && OfficeTracking.loadOrderTracking) {
-                                OfficeTracking.loadOrderTracking(orderId, '/api/orders', inner, 'staff');
-                            }
-                        });
-                    }
-                }
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');
@@ -1753,6 +1735,6 @@
             });
         });
     </script>
-    <script src="/static/office_tracking.js?v=38"></script>
+    <script src="/static/office_tracking.js?v=39"></script>
 </body>
 </html>

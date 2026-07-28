@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import time
 
 import requests
@@ -978,6 +979,16 @@ def fetch_order_by_id(order_id: str | int) -> dict | None:
 
 
 _order_access_cache: dict[str, tuple[float, dict]] = {}
+_order_access_cache_lock = threading.Lock()
+
+
+def invalidate_order_access_cache(order_id: str | int | None = None) -> None:
+    """Drop cached Shopify order payload(s) after a mutation."""
+    with _order_access_cache_lock:
+        if order_id is None:
+            _order_access_cache.clear()
+            return
+        _order_access_cache.pop(str(order_id).strip(), None)
 
 
 def _build_access_entry(order: dict) -> dict:
@@ -1018,7 +1029,8 @@ def resolve_order_access(
     oid = str(order_id).strip()
     now = time.time()
     if not refresh:
-        cached = _order_access_cache.get(oid)
+        with _order_access_cache_lock:
+            cached = _order_access_cache.get(oid)
         if cached and cached[0] > now:
             entry = cached[1]
             if client_customer_id is not None:
@@ -1035,7 +1047,8 @@ def resolve_order_access(
         owner = entry.get("customer_id")
         if not owner or str(owner) != str(client_customer_id):
             return None
-    _order_access_cache[oid] = (now + ORDER_ACCESS_CACHE_TTL_SEC, entry)
+    with _order_access_cache_lock:
+        _order_access_cache[oid] = (now + ORDER_ACCESS_CACHE_TTL_SEC, entry)
     return entry
 
 
@@ -1133,6 +1146,7 @@ def update_order_info(
         )
         raise RuntimeError(msg or "Order update failed")
     order = result.get("order") or {}
+    invalidate_order_access_cache(order_id)
     return {
         "success": True,
         "order_info": format_order_info(order),

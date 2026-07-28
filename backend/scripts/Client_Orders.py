@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import requests
 
@@ -13,6 +14,10 @@ HEADERS = {
 }
 
 from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, enrich_order  # type: ignore
+
+_CUSTOMER_CACHE_TTL_SEC = 90
+_customer_cache: dict[str, tuple[float, dict]] = {}
+_customer_cache_lock = threading.Lock()
 
 CUSTOMER_ORDERS_QUERY = f"""
 query CustomerOrders($id: ID!, $cursor: String) {{
@@ -90,6 +95,12 @@ def verify_customer(customer_id: str | int, email: str) -> bool:
 def get_customer_profile(customer_id: str | int) -> dict:
     """Return profile fields for one customer (same data as staff Customers expand panel)."""
     cid = str(customer_id).strip()
+    cache_key = f"profile:{cid}"
+    now = time.time()
+    with _customer_cache_lock:
+        cached = _customer_cache.get(cache_key)
+    if cached and cached[0] > now:
+        return cached[1]
     try:
         import os
         import sys
@@ -98,7 +109,7 @@ def get_customer_profile(customer_id: str | int) -> dict:
             sys.path.insert(0, scripts_dir)
         from Customers import _fetch_single_customer  # type: ignore
         profile = _fetch_single_customer(cid)
-        return {
+        result = {
             "success": True,
             "profile": {
                 "id": profile.get("id"),
@@ -112,6 +123,9 @@ def get_customer_profile(customer_id: str | int) -> dict:
                 "mobile_number": profile.get("mobile_number") or "",
             },
         }
+        with _customer_cache_lock:
+            _customer_cache[cache_key] = (now + _CUSTOMER_CACHE_TTL_SEC, result)
+        return result
     except Exception as e:
         return {"success": False, "error": str(e), "profile": None}
 
@@ -150,6 +164,8 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     safe["first_name"] = first_name
     safe["email"] = email
     update_customer_details(customer_id, safe)
+    with _customer_cache_lock:
+        _customer_cache.pop(f"profile:{str(customer_id).strip()}", None)
     return get_customer_profile(customer_id)
 
 
@@ -249,6 +265,12 @@ def register_client_customer(payload: dict) -> dict:
 def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
     """Return orders for one customer (paginated when fetch_all=True)."""
     cid = str(customer_id).strip()
+    cache_key = f"orders:{cid}:{fetch_all}"
+    now = time.time()
+    with _customer_cache_lock:
+        cached = _customer_cache.get(cache_key)
+    if cached and cached[0] > now:
+        return cached[1]
     gid = f"gid://shopify/Customer/{cid}"
     orders = []
     cursor = None
@@ -290,11 +312,14 @@ def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
             if not cursor:
                 break
 
-        return {
+        result = {
             "success": True,
             "customer": customer_info or {},
             "orders": orders,
             "total": len(orders),
         }
+        with _customer_cache_lock:
+            _customer_cache[cache_key] = (now + _CUSTOMER_CACHE_TTL_SEC, result)
+        return result
     except Exception as e:
         return {"success": False, "error": str(e), "orders": [], "total": 0}

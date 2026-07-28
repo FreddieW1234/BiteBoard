@@ -137,6 +137,8 @@ PARENT_CHILD_CHOICES = [
     "Child - Strawberry Millions Bag",
     "Parent - Jelly Bears Mini A Box",
     "Child - Jelly Bears Mini A Box",
+    "Parent - 12 Day Advent Calendar",
+    "Child - 12 Day Advent Calendar",
 ]
 
 # Overflow boundary: parent_child2 contains this item and everything after it in PARENT_CHILD_CHOICES.
@@ -210,6 +212,7 @@ PARENT_PRODUCTS = [
     {"title": "Jammie Dodger Bag", "parent_child_value": "Parent - Jammie Dodger Bag", "id": None},
     {"title": "Strawberry Millions Bag", "parent_child_value": "Parent - Strawberry Millions Bag", "id": None},
     {"title": "Jelly Bears Mini A Box", "parent_child_value": "Parent - Jelly Bears Mini A Box", "id": None},
+    {"title": "12 Day Advent Calendar", "parent_child_value": "Parent - 12 Day Advent Calendar", "id": None},
 ]
 
 # Filter groups: each is a SEPARATE Shopify metafield (List / choice list, single line text)
