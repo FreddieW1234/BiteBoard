@@ -1303,6 +1303,7 @@
         /* Create-from-parent mode: hide other duplicated-from-parent fields (values still saved) */
         .pc-create-from-parent .form-group-charge-vat,
         .pc-create-from-parent .form-group-calendar,
+        .pc-create-from-parent .form-group-calendar-foil,
         .pc-create-from-parent #pricing-section,
         .pc-create-from-parent #artwork-section,
         .pc-create-from-parent .colour-sections-stack { display: none !important; }
@@ -2256,6 +2257,14 @@ Dietary</textarea>
                                     </label>
                                 </div>
                             </div>
+                            <div class="form-group form-group-calendar-foil calendar-foil-option-row" id="calendar-foil-option-wrap" hidden>
+                                <label class="form-label">Foil option</label>
+                                <label class="qty-match-checkbox" style="margin-top: 4px;">
+                                    <input type="checkbox" id="calendarFoilOption">
+                                    <span class="checkmark"></span>
+                                    Show foil choice on storefront
+                                </label>
+                            </div>
                             <div class="form-group form-group-parent parent-child-option-row" style="display: flex; flex-direction: row; flex-wrap: nowrap; align-items: flex-start; gap: 24px;">
                                 <div class="parent-option-only" id="parent-option-wrap">
                                     <label class="form-label">Parent?</label>
@@ -2655,10 +2664,7 @@ Dietary</textarea>
             const chargeVatYes = document.getElementById('chargeVatYes');
             if (chargeVatYes) chargeVatYes.checked = true;
 
-            const calendarNo = document.getElementById('calendarNo');
-            const calendarYes = document.getElementById('calendarYes');
-            if (calendarNo) calendarNo.checked = true;
-            if (calendarYes) calendarYes.checked = false;
+            resetCalendarProductToggle();
 
             const parentNo = document.getElementById('parentNo');
             const parentYes = document.getElementById('parentYes');
@@ -3068,9 +3074,34 @@ Dietary</textarea>
         }
 
         function inferCalendarFromMetafields(metafields) {
-            return ['print', 'foil', 'mailer', 'mailerpacking'].every(function (key) {
+            return ['print', 'mailer', 'mailerpacking'].every(function (key) {
                 return storefrontOptionEnabledInMetafields(metafields, key);
             });
+        }
+
+        function syncCalendarFoilOptionVisibility() {
+            const wrap = document.getElementById('calendar-foil-option-wrap');
+            const foilCb = document.getElementById('calendarFoilOption');
+            if (!wrap) return;
+            const show = isCalendarProduct() && !isChildProduct();
+            wrap.hidden = !show;
+            if (!show) {
+                if (foilCb) {
+                    foilCb.checked = false;
+                    delete foilCb.dataset.loaded;
+                }
+                return;
+            }
+            if (foilCb && !foilCb.dataset.loaded) {
+                foilCb.checked = true;
+            }
+        }
+
+        function loadCalendarFoilFromMetafields(metafields) {
+            const foilCb = document.getElementById('calendarFoilOption');
+            if (!foilCb) return;
+            foilCb.checked = storefrontOptionEnabledInMetafields(metafields, 'foil');
+            foilCb.dataset.loaded = '1';
         }
 
         function selectGuidelineRow(row, column) {
@@ -3121,6 +3152,7 @@ Dietary</textarea>
         }
 
         function onCalendarProductChange() {
+            syncCalendarFoilOptionVisibility();
             applyCalendarGuidelinePreference(true);
         }
 
@@ -3145,6 +3177,16 @@ Dietary</textarea>
             const no = document.getElementById('calendarNo');
             if (yes) yes.checked = isCal;
             if (no) no.checked = !isCal;
+            if (isCal) {
+                loadCalendarFoilFromMetafields(metafields);
+            } else {
+                const foilCb = document.getElementById('calendarFoilOption');
+                if (foilCb) {
+                    foilCb.checked = false;
+                    delete foilCb.dataset.loaded;
+                }
+            }
+            syncCalendarFoilOptionVisibility();
         }
 
         function buildGuidelinesListHtml(arr, col) {
@@ -6130,6 +6172,7 @@ Dietary</textarea>
 
             setupParentRadioListeners();
             setupCalendarRadioListeners();
+            syncCalendarFoilOptionVisibility();
 
             // Load products for search (cached)
             try {
@@ -7823,18 +7866,27 @@ Dietary</textarea>
         }
 
         function collectStorefrontOptions() {
-            const keys = ['print', 'foil', 'mailer', 'mailerpacking'];
-            const enabled = isCalendarProduct();
-            const out = {};
-            keys.forEach(function (key) { out[key] = enabled; });
+            const out = { print: false, foil: false, mailer: false, mailerpacking: false };
+            if (!isCalendarProduct()) return out;
+            out.print = true;
+            out.mailer = true;
+            out.mailerpacking = true;
+            const foilCb = document.getElementById('calendarFoilOption');
+            out.foil = !!(foilCb && foilCb.checked);
             return out;
         }
 
         function resetCalendarProductToggle() {
             const yes = document.getElementById('calendarYes');
             const no = document.getElementById('calendarNo');
+            const foilCb = document.getElementById('calendarFoilOption');
             if (yes) yes.checked = false;
             if (no) no.checked = true;
+            if (foilCb) {
+                foilCb.checked = false;
+                delete foilCb.dataset.loaded;
+            }
+            syncCalendarFoilOptionVisibility();
         }
 
         function collectColoursString(containerId) {

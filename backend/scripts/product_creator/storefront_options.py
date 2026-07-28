@@ -74,9 +74,15 @@ def validate_storefront_options(raw: Any) -> Optional[str]:
 
 
 def resolve_storefront_options(storefront_options: Any, is_calendar: Any) -> Dict[str, bool]:
-    """Calendar products always expose all fee toggles on the storefront."""
+    """Calendar products always expose print/mailer toggles; foil is optional."""
     if _truthy(is_calendar):
-        return {key: True for key in STOREFRONT_OPTION_KEYS}
+        opts = storefront_options if isinstance(storefront_options, dict) else {}
+        return {
+            "print": True,
+            "foil": _truthy(opts.get("foil")),
+            "mailer": True,
+            "mailerpacking": True,
+        }
     if not isinstance(storefront_options, dict):
         return {}
     return {key: _truthy(storefront_options.get(key)) for key in STOREFRONT_OPTION_KEYS if key in storefront_options}
