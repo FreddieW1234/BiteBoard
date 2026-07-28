@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Personalised job sheet — {{ order_name }}</title>
+    <style>
+        @page { size: A4 portrait; margin: 12mm; }
+
+        :root {
+            --ink: #111111;
+            --rule: #111111;
+            --muted: #555555;
+            --tint: #f2f2f2;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            color: var(--ink);
+            background: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        body { padding: 12px; }
+        body.embed { padding: 0; }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .toolbar button {
+            background: #4f46e5;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .toolbar button.secondary {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .sheet {
+            width: 100%;
+            max-width: 186mm;
+            height: 273mm;
+            max-height: 273mm;
+            margin: 0 auto 16px;
+            background: #fff;
+            page-break-after: always;
+            page-break-inside: avoid;
+            overflow: hidden;
+        }
+
+        .sheet:last-child { page-break-after: auto; margin-bottom: 0; }
+
+        table {
+            width: 100%;
+            height: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        td {
+            border: 1.2px solid var(--rule);
+            padding: 3px 6px 4px;
+            vertical-align: top;
+            font-size: 10pt;
+            letter-spacing: 0.1px;
+            line-height: 1.15;
+        }
+
+        .label {
+            display: block;
+            font-weight: 700;
+            font-size: 9pt;
+            letter-spacing: 0.2px;
+        }
+
+        .value {
+            display: block;
+            margin-top: 2px;
+            font-weight: 400;
+            font-size: 10pt;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .title-cell { height: 13mm; vertical-align: middle; }
+
+        .title {
+            font-size: 13pt;
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .subtitle {
+            font-size: 9pt;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .h-md { height: 14mm; }
+        .h-lg { height: 21mm; }
+
+        .note {
+            display: block;
+            font-size: 8pt;
+            font-weight: 400;
+            line-height: 1.25;
+            margin-top: 4px;
+            color: var(--muted);
+        }
+
+        .note u { text-decoration: underline; }
+
+        .bar td {
+            background: var(--tint);
+            text-align: center;
+            font-weight: 700;
+            font-size: 10pt;
+            letter-spacing: 1px;
+            padding: 4px 6px;
+            height: 8mm;
+            vertical-align: middle;
+        }
+
+
+        @media print {
+            html, body { width: 100%; margin: 0; padding: 0; }
+            .toolbar { display: none !important; }
+            .sheet {
+                width: 100%;
+                max-width: 100%;
+                height: 273mm;
+                max-height: 273mm;
+                margin: 0;
+            }
+        }
+
+        @media screen {
+            .sheet { box-shadow: 0 0 0 1px #ccc; }
+        }
+    </style>
+</head>
+<body{% if embed %} class="embed"{% endif %}>
+    {% if not embed %}
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print</button>
+        <button type="button" class="secondary" onclick="window.close()">Close</button>
+        <span>{{ sheets|length }} job sheet{{ '' if sheets|length == 1 else 's' }} for {{ order_name }}</span>
+    </div>
+    {% endif %}
+
+    {% for sheet in sheets %}
+    <div class="sheet">
+        <table>
+            <colgroup>
+                <col style="width:33.34%">
+                <col style="width:33.33%">
+                <col style="width:33.33%">
+            </colgroup>
+
+            <tr>
+                <td colspan="2" class="title-cell">
+                    <span class="title">PERSONALISED JOB SHEET</span>
+                    <span class="subtitle">Please tick off each step to minimise mistakes</span>
+                </td>
+                <td class="title-cell">
+                    <span class="label">DESIGNER NAME</span>
+                    {% if sheet.designer_name %}<span class="value">{{ sheet.designer_name }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-md">
+                    <span class="label">PRODUCT</span>
+                    {% if sheet.product %}<span class="value">{{ sheet.product }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">NAME ON PRODUCT / LOGO</span>
+                    {% if sheet.name_on_product %}<span class="value">{{ sheet.name_on_product }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-md">
+                    <span class="label">DATE ORDER RECEIVED</span>
+                    {% if sheet.date_order_received %}<span class="value">{{ sheet.date_order_received }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">CUSTOMER / SUPPLIER</span>
+                    {% if sheet.customer_supplier %}<span class="value">{{ sheet.customer_supplier }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr>
+                <td class="h-md">
+                    <span class="label">UNIT QUANTITY REQUIRED</span>
+                    {% if sheet.unit_quantity %}<span class="value">{{ sheet.unit_quantity }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">DISPATCH DATE</span>
+                    {% if sheet.dispatch_date %}<span class="value">{{ sheet.dispatch_date }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">INITIAL PROOF DATE</span>
+                    {% if sheet.initial_proof_date %}<span class="value">{{ sheet.initial_proof_date }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-lg">
+                    <span class="label">CHECK LOT NUMBER</span>
+                    <span class="note">
+                        Visually check proof for quality.<br>
+                        Is the logotype readable.<br>
+                        Will the artwork print well.
+                    </span>
+                </td>
+                <td class="h-lg">
+                    <span class="label">CHECK BBE</span>
+                    <span class="note">
+                        <u>All products</u> 12 months<br>
+                        <u>Popcorn</u> 3 months<br>
+                        <u>Biscuit</u> 3 months
+                    </span>
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-lg">
+                    <span class="label">ADDITIONAL INFO</span>
+                    {% if sheet.additional_info %}<span class="value">{{ sheet.additional_info }}</span>{% endif %}
+                </td>
+                <td class="h-lg">
+                    <span class="label">RM NUMBER</span>
+                    {% if sheet.rm_number %}<span class="value">{{ sheet.rm_number }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr class="bar">
+                <td colspan="3">PRINT DETAILS</td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-md">
+                    <span class="label">UNITS PER SHEET</span>
+                    {% if sheet.units_per_sheet %}<span class="value">{{ sheet.units_per_sheet }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">NUMBER OF SHEETS PRINTED</span>
+                    {% if sheet.sheets_printed %}<span class="value">{{ sheet.sheets_printed }}</span>{% endif %}
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" class="h-md">
+                    <span class="label">TOTAL UNITS PRINTED</span>
+                    {% if sheet.total_units_printed %}<span class="value">{{ sheet.total_units_printed }}</span>{% endif %}
+                </td>
+                <td class="h-md">
+                    <span class="label">DATE PRINTED</span>
+                    {% if sheet.date_printed %}<span class="value">{{ sheet.date_printed }}</span>{% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endfor %}
+
+    {% if auto_print %}
+    <script>window.addEventListener('load', function () { window.print(); });</script>
+    {% endif %}
+</body>
+</html>

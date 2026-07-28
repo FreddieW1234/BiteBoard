@@ -2012,6 +2012,33 @@ def production_notes_page(order_id):
     )
 
 
+@app.route("/orders/<order_id>/art-job-sheet")
+def art_job_sheet_page(order_id):
+    """Printable personalised art job sheet — one page per product line (staff only)."""
+    if not is_staff_authenticated():
+        return redirect(url_for("staff_login", next=request.path))
+    if not can_access_order(order_id):
+        return "Order not found", 404
+    from scripts.art_job_sheet import get_art_job_sheets_for_order  # type: ignore
+
+    line_number = request.args.get("line", type=int)
+    embed = request.args.get("embed") == "1"
+    auto_print = request.args.get("print") == "1"
+    result = get_art_job_sheets_for_order(order_id, line_number=line_number)
+    if not result.get("success"):
+        return result.get("error") or "Order not found", 404
+    sheets = result.get("sheets") or []
+    if not sheets:
+        return "No product line items on this order", 404
+    return render_template(
+        "UI/Art_Job_Sheet.html",
+        order_name=result.get("order_name") or "",
+        sheets=sheets,
+        embed=embed,
+        auto_print=auto_print,
+    )
+
+
 @app.route("/api/client/orders/<order_id>/order-info", methods=["PUT"])
 def api_client_order_info_update(order_id):
     """Order info editing is staff-only."""
