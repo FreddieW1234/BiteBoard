@@ -276,6 +276,7 @@ def build_production_note(
         "case_price": _case_price(line),
         "email_address": (order.get("customer_email") or "").strip(),
         "requested_delivery": format_display_date(delivery_date),
+        "shipping_charged": (order.get("shipping_display") or "").strip(),
         "use_customers_delivery_note": _global_note_value(
             order_info,
             "use customer's delivery note",

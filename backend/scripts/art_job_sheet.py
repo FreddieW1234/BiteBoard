@@ -52,7 +52,7 @@ def build_art_job_sheet(
         "dispatch_date": dispatch_date,
         "initial_proof_date": "",
         "additional_info": "",
-        "rm_number": (line.get("sku") or "").strip(),
+        "rm_number": "",
         "units_per_sheet": "",
         "sheets_printed": "",
         "total_units_printed": "",

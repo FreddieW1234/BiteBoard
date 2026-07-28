@@ -265,7 +265,6 @@ CATEGORIES = [
     "Events",
     "Food & Pastry",
     "Branded Merchandise & Packaging",
-    "Favourites",
 ]
 
 # Subcategory choices for custom.subcategory metafield
@@ -274,6 +273,7 @@ CATEGORIES = [
 # appears once here but is mapped to both categories in CATEGORY_MAPPING.
 SUBCATEGORIES = [
     # Chocolate
+    "Favourites",
     "Bars",
     "Assorted",
     "Shapes & Novelties",
@@ -356,8 +356,6 @@ SUBCATEGORIES = [
     "Packaging",
     "Merchandise",
     "Fulfillment Service",
-    # Favourites
-    "Favourites",
 ]
 
 # Overflow boundary: subcategory_2 contains this item and everything after it in SUBCATEGORIES.
@@ -370,6 +368,7 @@ SUBCATEGORY_2_FIRST_ITEM = None
 # Format: {"Category Name": ["Subcategory1", "Subcategory2", ...]}
 CATEGORY_MAPPING = {
     "Chocolate": [
+        "Favourites",
         "Bars",
         "Assorted",
         "Shapes & Novelties",
@@ -463,9 +462,6 @@ CATEGORY_MAPPING = {
         "Packaging",
         "Merchandise",
         "Fulfillment Service",
-    ],
-    "Favourites": [
-        "Favourites",
     ],
 }
 

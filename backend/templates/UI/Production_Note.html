@@ -168,11 +168,21 @@
             font-size: 40pt;
         }
 
-        .code {
+        .shipping-box {
+            padding: 6px 8px;
+            vertical-align: top;
+        }
+
+        .shipping-box .val {
+            display: block;
+            margin-top: 4px;
+            font-size: 11pt;
             font-weight: 700;
-            text-transform: uppercase;
-            text-align: center;
-            font-size: 8.5pt;
+        }
+
+        .carrier-tick {
+            min-height: 18px;
+            width: 18mm;
         }
 
         .stack .lbl { font-size: 8.5pt; }
@@ -304,36 +314,16 @@
             </tr>
 
             <tr>
-                <th class="subhdr" colspan="3">Pallet Delivery Charge</th>
-                <th class="subhdr" colspan="3">Parcel Delivery Charge</th>
+                <td colspan="6" class="shipping-box">
+                    <span class="lbl">Shipping</span>
+                    <span class="val">{{ note.shipping_charged }}</span>
+                </td>
             </tr>
             <tr class="stack">
-                <td class="lbl" colspan="2">Next Day</td>
-                <td class="tick"></td>
-                <td class="code">A</td>
-                <td class="lbl">Next Day</td>
-                <td class="tick"></td>
-            </tr>
-            <tr class="stack">
-                <td class="lbl" colspan="2">AM Delivery</td>
-                <td class="tick"></td>
-                <td class="code">NAM</td>
-                <td class="lbl">Next Day By 0900HRS</td>
-                <td class="tick"></td>
-            </tr>
-            <tr class="stack">
-                <td class="lbl" colspan="2">Timed Delivery</td>
-                <td class="tick"></td>
-                <td class="code">TAM</td>
-                <td class="lbl">Next Day By 1000HRS</td>
-                <td class="tick"></td>
-            </tr>
-            <tr class="stack">
-                <td class="tick" colspan="2"></td>
-                <td class="tick"></td>
-                <td class="code">TN</td>
-                <td class="lbl">Next Day By 1200HRS</td>
-                <td class="tick"></td>
+                <td class="lbl" colspan="2">FedEx</td>
+                <td class="tick carrier-tick"></td>
+                <td class="lbl" colspan="2">Frenni</td>
+                <td class="tick carrier-tick"></td>
             </tr>
 
             <tr class="stack">

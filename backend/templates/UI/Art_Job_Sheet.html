@@ -98,6 +98,7 @@
         }
 
         .title-cell { height: 13mm; vertical-align: middle; }
+        .designer-cell { height: 13mm; vertical-align: top; }
 
         .title {
             font-size: 13pt;
@@ -177,7 +178,7 @@
                     <span class="title">PERSONALISED JOB SHEET</span>
                     <span class="subtitle">Please tick off each step to minimise mistakes</span>
                 </td>
-                <td class="title-cell">
+                <td class="designer-cell">
                     <span class="label">DESIGNER NAME</span>
                     {% if sheet.designer_name %}<span class="value">{{ sheet.designer_name }}</span>{% endif %}
                 </td>
@@ -246,7 +247,6 @@
                 </td>
                 <td class="h-lg">
                     <span class="label">RM NUMBER</span>
-                    {% if sheet.rm_number %}<span class="value">{{ sheet.rm_number }}</span>{% endif %}
                 </td>
             </tr>
 
