@@ -52,12 +52,33 @@
         .sheet {
             width: 100%;
             max-width: 186mm;
+            height: 273mm;
             margin: 0 auto 16px;
+            display: flex;
+            flex-direction: column;
             page-break-after: always;
+            page-break-inside: avoid;
             overflow: hidden;
         }
 
         .sheet:last-child { page-break-after: auto; margin-bottom: 0; }
+
+        .form-wrap {
+            flex: 0 0 auto;
+        }
+
+        .notes-wrap {
+            flex: 1 1 auto;
+            min-height: 32mm;
+            display: flex;
+            flex-direction: column;
+            margin-top: -1px;
+        }
+
+        .notes-wrap table {
+            flex: 1 1 auto;
+            height: 100%;
+        }
 
         table {
             width: 100%;
@@ -111,38 +132,40 @@
             line-height: 1.15;
             vertical-align: top;
             padding-top: 4px;
+            width: 12%;
         }
 
         .addr-dispatch-row .addr-lbl,
         .addr-dispatch-row .addr-val,
         .addr-dispatch-row .dispatch-box {
-            height: 34mm;
-            min-height: 34mm;
+            height: 42mm;
+            min-height: 42mm;
         }
 
         .addr-val {
             padding: 4px 5px;
             vertical-align: top;
+            font-size: 9pt;
         }
 
         .dispatch-box {
             vertical-align: middle;
             text-align: center;
-            padding: 6px 8px;
+            padding: 8px 10px;
         }
 
         .dispatch-label {
             font-weight: 700;
             text-transform: uppercase;
             font-size: 10pt;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
 
         .dispatch-date {
             font-weight: 700;
             line-height: 1;
             letter-spacing: -0.02em;
-            font-size: 26pt;
+            font-size: 40pt;
         }
 
         .code {
@@ -154,9 +177,13 @@
 
         .stack .lbl { font-size: 8.5pt; }
 
+        .notes-row {
+            height: 100%;
+        }
+
         .notes-body {
-            min-height: 70mm;
-            height: 70mm;
+            height: 100%;
+            min-height: 32mm;
             white-space: pre-wrap;
             word-break: break-word;
             vertical-align: top;
@@ -164,8 +191,8 @@
         }
 
         .sage-body {
-            min-height: 70mm;
-            height: 70mm;
+            height: 100%;
+            min-height: 32mm;
             vertical-align: top;
             padding: 6px 8px;
         }
@@ -179,9 +206,14 @@
         @media print {
             html, body { width: 100%; margin: 0; padding: 0; }
             .toolbar { display: none !important; }
-            .sheet { width: 100%; max-width: 100%; margin: 0; page-break-inside: avoid; }
-            .dispatch-date { font-size: 26pt; }
-            .notes-body, .sage-body { min-height: 70mm; height: 70mm; }
+            .sheet {
+                width: 100%;
+                max-width: 100%;
+                height: 273mm;
+                margin: 0;
+                page-break-inside: avoid;
+            }
+            .dispatch-date { font-size: 40pt; }
         }
 
         @media screen {
@@ -200,6 +232,7 @@
 
     {% for note in notes %}
     <div class="sheet">
+        <div class="form-wrap">
         <table>
             <colgroup>
                 <col style="width:16.66%">
@@ -262,9 +295,9 @@
             </tr>
 
             <tr class="addr-dispatch-row">
-                <td class="lbl addr-lbl" colspan="2">Delivery Address</td>
+                <td class="lbl addr-lbl">Delivery Address</td>
                 <td class="val addr-val" colspan="2">{{ note.delivery_address_confirmed }}</td>
-                <td colspan="2" class="dispatch-box">
+                <td colspan="3" class="dispatch-box">
                     <div class="dispatch-label">Dispatch</div>
                     <div class="dispatch-date">{{ note.expected_dispatch }}</div>
                 </td>
@@ -330,25 +363,34 @@
                 <td class="val tick">{{ note.paid_date }}</td>
             </tr>
 
-            <tr><th class="hdr" colspan="6">Work In Progress</th></tr>
+            <tr><th class="hdr" colspan="6">Shipments</th></tr>
             <tr class="stack">
-                <td class="lbl" colspan="2">No Of Shippers</td>
+                <td class="lbl" colspan="2">Number Of Shippers</td>
                 <td class="val tick">{{ note.no_of_shippers }}</td>
-                <td class="lbl" colspan="2">No Of Pallets</td>
+                <td class="lbl" colspan="2">Number Of Pallets</td>
                 <td class="val tick">{{ note.no_of_pallets }}</td>
             </tr>
-
-            <tr>
-                <th class="hdr" colspan="3">Notes</th>
-                <th class="hdr" colspan="3">Order Number Sage</th>
-            </tr>
-            <tr>
-                <td class="notes-body" colspan="3"></td>
-                <td class="sage-body" colspan="3">
-                    <div class="val">{{ note.order_number_sage }}</div>
-                </td>
-            </tr>
         </table>
+        </div>
+
+        <div class="notes-wrap">
+            <table>
+                <colgroup>
+                    <col span="3" style="width:16.66%">
+                    <col span="3" style="width:16.66%">
+                </colgroup>
+                <tr>
+                    <th class="hdr" colspan="3">Notes</th>
+                    <th class="hdr" colspan="3">Order Number Sage</th>
+                </tr>
+                <tr class="notes-row">
+                    <td class="notes-body" colspan="3"></td>
+                    <td class="sage-body" colspan="3">
+                        <div class="val">{{ note.order_number_sage }}</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
     </div>
     {% endfor %}
 
