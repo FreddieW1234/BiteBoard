@@ -12,7 +12,7 @@ from scripts.diary_helpers import (  # type: ignore
     parse_delivery_date,
     _match_field_for_line,
 )
-from scripts.order_helpers import fetch_order_by_id  # type: ignore
+from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
 
 DEFAULT_SALES_PERSON = "DAVE"
 
@@ -113,6 +113,25 @@ def _global_note_value(order_info: dict, *keys: str) -> str:
     return ""
 
 
+def _additional_notes(order_info: dict, product_section: dict | None) -> str:
+    for sec in order_info.get("note_sections") or []:
+        heading = _section_heading_norm(sec.get("heading"))
+        if heading == "ADDITIONAL NOTES":
+            val = _field_value(sec, "additional notes")
+            if val:
+                return val
+            for field in sec.get("fields") or []:
+                val = str(field.get("value") or "").strip()
+                if val:
+                    return val
+    if product_section:
+        for key in ("notes", "additional notes", "comments"):
+            val = _field_value(product_section, key)
+            if val:
+                return val
+    return _global_note_value(order_info, "additional notes", "notes", "comments")
+
+
 def _origination_for_product(order: dict, line: dict) -> str:
     title = (line.get("title") or "").strip()
     sku = (line.get("sku") or "").strip()
@@ -152,21 +171,18 @@ def _client_name(order: dict, product_section: dict | None) -> str:
     return (shipping.get("name") or "").strip()
 
 
-def _pack_size(line: dict) -> str:
-    variant = (line.get("variant_title") or "").strip()
-    if variant:
-        return variant
-    for prop in line.get("properties") or []:
-        key = _norm_key(prop.get("key") or "")
-        if "pack" in key or key in {"size", "product size"}:
-            return str(prop.get("value") or "").strip()
-    return ""
-
-
 def _parse_case_quantity(line: dict) -> int | None:
+    raw = line.get("case_quantity")
+    if raw is not None:
+        try:
+            val = int(float(raw))
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
     for prop in line.get("properties") or []:
         key = _norm_key(prop.get("key") or "")
-        if key in {"case quantity", "case_quantity", "units per case", "pack size"}:
+        if key in {"case quantity", "case_quantity", "units per case"}:
             try:
                 val = int(float(str(prop.get("value") or "").strip()))
                 if val > 0:
@@ -183,6 +199,11 @@ def _parse_case_quantity(line: dict) -> int | None:
     return None
 
 
+def _case_quantity_display(line: dict) -> str:
+    case_qty = _parse_case_quantity(line)
+    return str(case_qty) if case_qty else ""
+
+
 def _total_cases(line: dict) -> str:
     qty = line.get("quantity")
     case_qty = _parse_case_quantity(line)
@@ -191,6 +212,17 @@ def _total_cases(line: dict) -> str:
             return str(qty // case_qty)
         return f"{qty / case_qty:.2f}".rstrip("0").rstrip(".")
     return ""
+
+
+def _case_price(line: dict) -> str:
+    case_qty = _parse_case_quantity(line)
+    if not case_qty or case_qty <= 0:
+        return ""
+    try:
+        unit = float(str(line.get("unit_price") or "0").replace(",", "").strip())
+    except (TypeError, ValueError):
+        return ""
+    return format_gbp(unit * case_qty)
 
 
 def build_production_note(order: dict, line: dict) -> dict:
@@ -215,7 +247,7 @@ def build_production_note(order: dict, line: dict) -> dict:
         "company_name": (order.get("company") or "").strip(),
         "product_code": (line.get("sku") or "").strip(),
         "total_units_ordered": qty_text,
-        "pack_size": _pack_size(line),
+        "case_quantity": _case_quantity_display(line),
         "origination_charge": _origination_for_product(order, line),
         "dispatch_date": format_display_date(dispatch_date),
         "delivery_address_confirmed": _delivery_address(order, product_section),
@@ -224,7 +256,7 @@ def build_production_note(order: dict, line: dict) -> dict:
         "client_name_logo": _client_name(order, product_section),
         "product": (line.get("title") or "").strip(),
         "total_cases_ordered": _total_cases(line),
-        "case_price": line.get("unit_price_display") or line.get("unit_price") or "",
+        "case_price": _case_price(line),
         "email_address": (order.get("customer_email") or "").strip(),
         "delivery_date": format_display_date(delivery_date),
         "use_customers_delivery_note": _global_note_value(
@@ -242,8 +274,10 @@ def build_production_note(order: dict, line: dict) -> dict:
         "paid_date": "",
         "no_of_shippers": "",
         "no_of_pallets": "",
-        "wip_on": "",
+        "order_number_shopify": (order.get("name") or "").strip(),
+        "order_number_sage": "",
         "wip_dispatch_date": format_display_date(dispatch_date),
+        "notes": _additional_notes(order_info, product_section),
     }
 
 

@@ -5,21 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Production notes — {{ order_name }}</title>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            padding: 16px;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        @page {
+            size: A4 portrait;
+            margin: 8mm 10mm;
+        }
+
+        html, body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 11px;
+            font-size: 9.5pt;
+            line-height: 1.2;
             color: #000;
             background: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
+
+        body { padding: 10px; }
+
         .toolbar {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
+
         .toolbar button {
             background: #4f46e5;
             color: #fff;
@@ -30,73 +41,119 @@
             font-weight: 600;
             cursor: pointer;
         }
+
         .toolbar button.secondary {
             background: #fff;
             color: #374151;
             border: 1px solid #d1d5db;
         }
-        .production-note-page {
-            width: 100%;
-            max-width: 980px;
-            margin: 0 auto 24px;
+
+        .sheet {
+            width: 190mm;
+            max-width: 100%;
+            height: 277mm;
+            margin: 0 auto 16px;
+            display: flex;
+            flex-direction: column;
             page-break-after: always;
         }
-        .production-note-page:last-child { page-break-after: auto; margin-bottom: 0; }
+
+        .sheet:last-child { page-break-after: auto; margin-bottom: 0; }
+
+        .form-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-wrap table {
+            flex: 1 1 auto;
+            height: 100%;
+        }
+
+        .notes-wrap {
+            flex: 0 0 10%;
+            min-height: 26mm;
+            max-height: 12%;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
             table-layout: fixed;
         }
+
         td, th {
             border: 1px solid #000;
             vertical-align: middle;
-            padding: 4px 6px;
+            padding: 3px 5px;
+            font-size: 9.5pt;
         }
-        .section-title {
+
+        .hdr {
             background: #d9e1e8;
             font-weight: 700;
             text-transform: uppercase;
             text-align: center;
-            letter-spacing: 0.02em;
+            padding: 4px 5px;
         }
-        .label {
-            font-weight: 700;
-            text-transform: uppercase;
-            width: 22%;
-            white-space: nowrap;
-        }
-        .value {
-            min-height: 22px;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .value.wide { min-height: 36px; }
-        .subhead {
+
+        .subhdr {
+            background: #d9e1e8;
             font-weight: 700;
             text-transform: uppercase;
             text-align: center;
-            background: #eef2f5;
         }
-        .hint {
-            font-style: italic;
+
+        .lbl {
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .val {
             font-weight: 400;
-            text-transform: none;
-            font-size: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            vertical-align: top;
         }
-        .empty { min-height: 22px; }
-        .page-meta {
-            text-align: right;
-            font-size: 10px;
-            color: #555;
-            margin-bottom: 4px;
+
+        .tick { min-height: 18px; }
+
+        .addr .val {
+            min-height: 44px;
+            padding: 4px 5px;
         }
+
+        .code {
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+        }
+
+        .notes-body {
+            height: 100%;
+            min-height: 24mm;
+            white-space: pre-wrap;
+            word-break: break-word;
+            vertical-align: top;
+            padding: 4px 6px;
+        }
+
+        .notes-wrap table { height: 100%; }
+
         @media print {
             body { padding: 0; }
             .toolbar { display: none !important; }
-            .production-note-page {
-                max-width: none;
+            .sheet {
+                width: 100%;
+                height: 277mm;
                 margin: 0;
             }
+        }
+
+        @media screen {
+            .sheet { box-shadow: 0 0 0 1px #ccc; }
         }
     </style>
 </head>
@@ -108,157 +165,172 @@
     </div>
 
     {% for note in notes %}
-    <section class="production-note-page">
-        {% if notes|length > 1 %}
-        <div class="page-meta">Item {{ loop.index }} of {{ notes|length }}{% if note.product_title %} — {{ note.product_title }}{% endif %}</div>
-        {% endif %}
-        <table>
-            <tr><th class="section-title" colspan="4">Production note</th></tr>
-            <tr>
-                <td class="label">Double checked by</td>
-                <td class="value">{{ note.double_checked_by }}</td>
-                <td class="label">Approved to print</td>
-                <td class="value">{{ note.approved_to_print }}</td>
-            </tr>
-            <tr>
-                <td class="label">Date of order</td>
-                <td class="value">{{ note.date_of_order }}</td>
-                <td class="label">Sales person</td>
-                <td class="value">{{ note.sales_person }}</td>
-            </tr>
-            <tr>
-                <td class="label">Company name</td>
-                <td class="value">{{ note.company_name }}</td>
-                <td class="label">Client name / logo</td>
-                <td class="value">{{ note.client_name_logo }}</td>
-            </tr>
-            <tr>
-                <td class="label">Product code</td>
-                <td class="value">{{ note.product_code }}</td>
-                <td class="label">Product</td>
-                <td class="value">{{ note.product }}</td>
-            </tr>
-            <tr>
-                <td class="label">Total units ordered</td>
-                <td class="value">{{ note.total_units_ordered }}</td>
-                <td class="label">Total cases ordered</td>
-                <td class="value">{{ note.total_cases_ordered }}</td>
-            </tr>
-            <tr>
-                <td class="label">Pack size</td>
-                <td class="value">{{ note.pack_size }}</td>
-                <td class="label">Case price</td>
-                <td class="value">{{ note.case_price }}</td>
-            </tr>
-            <tr>
-                <td class="label">Origination charge</td>
-                <td class="value">{{ note.origination_charge }}</td>
-                <td class="label">Email address</td>
-                <td class="value">{{ note.email_address }}</td>
-            </tr>
-            <tr>
-                <td class="label">Dispatch date</td>
-                <td class="value">{{ note.dispatch_date }}</td>
-                <td class="label">Delivery date</td>
-                <td class="value">{{ note.delivery_date }}</td>
-            </tr>
-            <tr>
-                <td class="label">Delivery address confirmed</td>
-                <td class="value wide" colspan="3">{{ note.delivery_address_confirmed }}</td>
-            </tr>
-        </table>
+    <div class="sheet">
+        <div class="form-wrap">
+            <table>
+                <colgroup>
+                    <col span="2" style="width:16.66%">
+                    <col span="4" style="width:16.66%">
+                </colgroup>
 
-        <table style="margin-top:-1px;">
-            <tr>
-                <th class="subhead" colspan="2">Pallet delivery charge</th>
-                <th class="subhead" colspan="2">Parcel delivery charge</th>
-            </tr>
-            <tr>
-                <td class="label" style="width:18%;">Next day</td>
-                <td class="empty"></td>
-                <td class="label" style="width:10%;">A</td>
-                <td class="value">Next day</td>
-            </tr>
-            <tr>
-                <td class="label">AM delivery</td>
-                <td class="empty"></td>
-                <td class="label">NAM</td>
-                <td class="value">Next day by 0900hrs</td>
-            </tr>
-            <tr>
-                <td class="label">Timed delivery</td>
-                <td class="empty"></td>
-                <td class="label">TAM</td>
-                <td class="value">Next day by 1000hrs</td>
-            </tr>
-            <tr>
-                <td class="empty"></td>
-                <td class="empty"></td>
-                <td class="label">TN</td>
-                <td class="value">Next day by 1200hrs</td>
-            </tr>
-        </table>
+                <tr><th class="hdr" colspan="6">Production Note</th></tr>
 
-        <table style="margin-top:-1px;">
-            <tr>
-                <td class="label">Use customer's delivery note</td>
-                <td class="value">{{ note.use_customers_delivery_note }}</td>
-                <td class="label">Sample to customer</td>
-                <td class="value">{{ note.sample_to_customer }}</td>
-            </tr>
-        </table>
+                <tr>
+                    <td class="lbl" colspan="2">Double Checked By</td>
+                    <td class="val tick">{{ note.double_checked_by }}</td>
+                    <td class="lbl" colspan="2">Approved To Print</td>
+                    <td class="val tick">{{ note.approved_to_print }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Date Of Order</td>
+                    <td class="val">{{ note.date_of_order }}</td>
+                    <td class="lbl" colspan="2">Sales Person</td>
+                    <td class="val">{{ note.sales_person }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Company Name</td>
+                    <td class="val">{{ note.company_name }}</td>
+                    <td class="lbl" colspan="2">Client Name / Logo</td>
+                    <td class="val">{{ note.client_name_logo }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Product Code</td>
+                    <td class="val">{{ note.product_code }}</td>
+                    <td class="lbl" colspan="2">Product</td>
+                    <td class="val">{{ note.product }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Total Units Ordered</td>
+                    <td class="val">{{ note.total_units_ordered }}</td>
+                    <td class="lbl" colspan="2">Total Cases Ordered</td>
+                    <td class="val">{{ note.total_cases_ordered }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Case Quantity</td>
+                    <td class="val">{{ note.case_quantity }}</td>
+                    <td class="lbl" colspan="2">Case Price</td>
+                    <td class="val">{{ note.case_price }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Origination Charge</td>
+                    <td class="val">{{ note.origination_charge }}</td>
+                    <td class="lbl" colspan="2">Email Address</td>
+                    <td class="val">{{ note.email_address }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Dispatch Date</td>
+                    <td class="val">{{ note.dispatch_date }}</td>
+                    <td class="lbl" colspan="2">Delivery Date</td>
+                    <td class="val">{{ note.delivery_date }}</td>
+                </tr>
+                <tr class="addr">
+                    <td class="lbl" colspan="2">Delivery Address Confirmed</td>
+                    <td class="val" colspan="4">{{ note.delivery_address_confirmed }}</td>
+                </tr>
 
-        <table style="margin-top:-1px;">
-            <tr>
-                <th class="section-title" colspan="4">
-                    Proforma
-                    <span class="hint">If on proforma, complete the columns to the right. Once paid, complete the row below.</span>
-                </th>
-            </tr>
-            <tr>
-                <td class="label" colspan="2">Proforma emailed</td>
-                <td class="label">Person</td>
-                <td class="label">Date</td>
-            </tr>
-            <tr>
-                <td class="empty" colspan="2"></td>
-                <td class="value">{{ note.proforma_emailed_person }}</td>
-                <td class="value">{{ note.proforma_emailed_date }}</td>
-            </tr>
-            <tr>
-                <td class="label" colspan="2">Customer phoned to check they have received proforma</td>
-                <td class="label">Person</td>
-                <td class="label">Date</td>
-            </tr>
-            <tr>
-                <td class="empty" colspan="2"></td>
-                <td class="value">{{ note.proforma_phoned_person }}</td>
-                <td class="value">{{ note.proforma_phoned_date }}</td>
-            </tr>
-            <tr>
-                <td class="label">Paid by</td>
-                <td class="value">{{ note.paid_by }}</td>
-                <td class="label">Date</td>
-                <td class="value">{{ note.paid_date }}</td>
-            </tr>
-        </table>
+                <tr>
+                    <th class="subhdr" colspan="3">Pallet Delivery Charge</th>
+                    <th class="subhdr" colspan="3">Parcel Delivery Charge</th>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Next Day</td>
+                    <td class="tick"></td>
+                    <td class="code">A</td>
+                    <td class="lbl">Next Day</td>
+                    <td class="tick"></td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">AM Delivery</td>
+                    <td class="tick"></td>
+                    <td class="code">NAM</td>
+                    <td class="lbl">Next Day By 0900HRS</td>
+                    <td class="tick"></td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Timed Delivery</td>
+                    <td class="tick"></td>
+                    <td class="code">TAM</td>
+                    <td class="lbl">Next Day By 1000HRS</td>
+                    <td class="tick"></td>
+                </tr>
+                <tr>
+                    <td class="tick" colspan="2"></td>
+                    <td class="tick"></td>
+                    <td class="code">TN</td>
+                    <td class="lbl">Next Day By 1200HRS</td>
+                    <td class="tick"></td>
+                </tr>
 
-        <table style="margin-top:-1px;">
-            <tr><th class="section-title" colspan="4">Work in progress</th></tr>
-            <tr>
-                <td class="label">No of shippers</td>
-                <td class="value">{{ note.no_of_shippers }}</td>
-                <td class="label">No of pallets</td>
-                <td class="value">{{ note.no_of_pallets }}</td>
-            </tr>
-            <tr>
-                <td class="label">On</td>
-                <td class="value">{{ note.wip_on }}</td>
-                <td class="label">Dispatch date</td>
-                <td class="value">{{ note.wip_dispatch_date }}</td>
-            </tr>
-        </table>
-    </section>
+                <tr>
+                    <td class="lbl" colspan="2">Use Customer's Delivery Note</td>
+                    <td class="val tick">{{ note.use_customers_delivery_note }}</td>
+                    <td class="lbl" colspan="2">Sample To Customer</td>
+                    <td class="val tick">{{ note.sample_to_customer }}</td>
+                </tr>
+
+                <tr>
+                    <th class="hdr" colspan="6">Proforma</th>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Proforma Emailed</td>
+                    <td class="tick"></td>
+                    <td class="lbl" style="text-align:center;">Person</td>
+                    <td class="lbl" style="text-align:center;" colspan="2">Date</td>
+                </tr>
+                <tr>
+                    <td class="tick" colspan="3"></td>
+                    <td class="val tick">{{ note.proforma_emailed_person }}</td>
+                    <td class="val tick" colspan="2">{{ note.proforma_emailed_date }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Customer Phoned To Check They Have Received Proforma</td>
+                    <td class="tick"></td>
+                    <td class="lbl" style="text-align:center;">Person</td>
+                    <td class="lbl" style="text-align:center;" colspan="2">Date</td>
+                </tr>
+                <tr>
+                    <td class="tick" colspan="3"></td>
+                    <td class="val tick">{{ note.proforma_phoned_person }}</td>
+                    <td class="val tick" colspan="2">{{ note.proforma_phoned_date }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Paid By</td>
+                    <td class="val tick" colspan="2">{{ note.paid_by }}</td>
+                    <td class="lbl">Date</td>
+                    <td class="val tick">{{ note.paid_date }}</td>
+                </tr>
+
+                <tr><th class="hdr" colspan="6">Work In Progress</th></tr>
+                <tr>
+                    <td class="lbl" colspan="2">No Of Shippers</td>
+                    <td class="val tick">{{ note.no_of_shippers }}</td>
+                    <td class="lbl" colspan="2">No Of Pallets</td>
+                    <td class="val tick">{{ note.no_of_pallets }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Order No Shopify</td>
+                    <td class="val">{{ note.order_number_shopify }}</td>
+                    <td class="lbl" colspan="2">Order No Sage</td>
+                    <td class="val tick">{{ note.order_number_sage }}</td>
+                </tr>
+                <tr>
+                    <td class="lbl" colspan="2">Dispatch Date</td>
+                    <td class="val">{{ note.wip_dispatch_date }}</td>
+                    <td class="tick" colspan="2"></td>
+                    <td class="tick"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="notes-wrap">
+            <table>
+                <tr><th class="hdr" colspan="6">Notes</th></tr>
+                <tr>
+                    <td class="notes-body" colspan="6">{{ note.notes }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
     {% endfor %}
 
     {% if auto_print %}

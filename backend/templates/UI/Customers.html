@@ -358,10 +358,36 @@
         }
         .cu-orders-modal-body .line-main { font-size: 0.86rem; }
         .cu-orders-modal-body .line-details { min-width: 0; }
+        .cu-orders-modal-body .line-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+        .cu-orders-modal-body .line-head-left { min-width: 0; flex: 1 1 auto; }
+        .cu-orders-modal-body .line-head-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
         .cu-orders-modal-body .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
         .cu-orders-modal-body .line-title { font-weight: 600; color: #111827; display: block; }
-        .cu-orders-modal-body .line-price-row { display: flex; justify-content: flex-end; margin: 6px 0 10px; }
         .cu-orders-modal-body .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; }
+        .cu-orders-modal-body .btn-print-production-note {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            white-space: nowrap;
+        }
+        .cu-orders-modal-body .btn-print-production-note:hover { background: #f9fafb; border-color: #9ca3af; }
         .cu-orders-modal-body .line-meta { font-size: 0.8rem; color: #6b7280; margin-top: 3px; }
         .cu-orders-modal-body .line-props {
             list-style: none;
@@ -543,18 +569,6 @@
         }
         .cu-orders-modal-body .btn-save-order-info:hover { background: #4338ca; }
         .cu-orders-modal-body .btn-save-order-info:disabled { opacity: 0.65; cursor: wait; }
-        .cu-orders-modal-body .btn-print-production-note {
-            background: #fff;
-            color: #374151;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            padding: 8px 14px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .cu-orders-modal-body .btn-print-production-note:hover { background: #f9fafb; border-color: #9ca3af; }
         .cu-orders-modal-body .order-info-msg { font-size: 0.82rem; font-weight: 500; }
         .cu-orders-modal-body .order-info-msg.ok { color: #059669; }
         .cu-orders-modal-body .order-info-msg.err { color: #dc2626; }
@@ -1151,19 +1165,31 @@
             return `${formatGbp(li.unit_price)} × ${li.quantity} = ${formatGbp(li.total)}`;
         }
 
-        function renderOrderLineItem(li) {
-            let html = `<div class="detail-line"><div class="line-main"><div class="line-details">`;
+        function renderOrderLineItem(li, orderId) {
+            let html = `<div class="detail-line">
+                <div class="line-header-row">
+                    <div class="line-head-left">`;
             if (li.sku) html += `<div class="line-sku">${escapeHtml(li.sku)}</div>`;
-            html += `<span class="line-title">${escapeHtml(li.title)}</span>`;
-            if (li.meta_line) html += `<div class="line-meta">${escapeHtml(li.meta_line)}</div>`;
-            if (li.properties && li.properties.length) {
-                html += '<ul class="line-props">';
-                li.properties.forEach(p => {
-                    html += `<li><strong>${escapeHtml(p.key)}:</strong> ${escapeHtml(p.value)}</li>`;
-                });
-                html += '</ul>';
+            html += `<span class="line-title">${escapeHtml(li.title)}</span></div>
+                    <div class="line-head-right">
+                        <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>`;
+            if (orderId && li.line_number != null) {
+                html += `<button type="button" class="btn-print-production-note" data-order-id="${escapeHtml(orderId)}" data-line-number="${escapeHtml(li.line_number)}">Print production note</button>`;
             }
-            html += `</div></div><div class="line-price-row"><span class="line-price">${escapeHtml(formatLinePrice(li))}</span></div>`;
+            html += `</div>
+                </div>`;
+            if (li.meta_line || (li.properties && li.properties.length)) {
+                html += `<div class="line-main"><div class="line-details">`;
+                if (li.meta_line) html += `<div class="line-meta">${escapeHtml(li.meta_line)}</div>`;
+                if (li.properties && li.properties.length) {
+                    html += '<ul class="line-props">';
+                    li.properties.forEach(p => {
+                        html += `<li><strong>${escapeHtml(p.key)}:</strong> ${escapeHtml(p.value)}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                html += `</div></div>`;
+            }
             if (li.line_number != null) {
                 html += `<div class="office-tracking-host" data-line-number="${escapeHtml(li.line_number)}"><div class="office-tracking-loading"><i class="fas fa-spinner fa-spin"></i> Loading tracking…</div></div>`;
             }
@@ -1171,10 +1197,10 @@
             return html;
         }
 
-        function renderOrderLineSection(title, items, emptyText) {
+        function renderOrderLineSection(title, items, emptyText, orderId) {
             let html = `<div class="detail-section"><h4>${escapeHtml(title)}</h4>`;
             if (items && items.length) {
-                items.forEach(li => { html += renderOrderLineItem(li); });
+                items.forEach(li => { html += renderOrderLineItem(li, orderId); });
             } else {
                 html += `<p class="detail-empty">${escapeHtml(emptyText)}</p>`;
             }
@@ -1433,7 +1459,6 @@
             }
             html += `</div><div class="order-info-actions">
                     <button type="submit" class="btn-save-order-info">Save order info</button>
-                    <button type="button" class="btn-print-production-note" data-order-id="${escapeHtml(o.id)}">Print production note</button>
                     <span class="order-info-msg" hidden></span>
                 </div></form></div>`;
             return html;
@@ -1490,7 +1515,7 @@
 
         function renderCustomerOrderDetails(o) {
             let html = '<div class="details-inner">';
-            html += renderOrderLineSection('Items', o.order_items || [], 'No items');
+            html += renderOrderLineSection('Items', o.order_items || [], 'No items', o.id);
             html += renderFeesSection(o.fees);
             html += renderOrderCostSections(o);
             html += renderOrderAddressesSection(o);
@@ -1740,8 +1765,13 @@
                 if (!btn) return;
                 e.preventDefault();
                 const orderId = btn.dataset.orderId;
-                if (!orderId) return;
-                window.open(`/orders/${encodeURIComponent(orderId)}/production-notes`, '_blank', 'noopener');
+                const lineNumber = btn.dataset.lineNumber;
+                if (!orderId || !lineNumber) return;
+                window.open(
+                    `/orders/${encodeURIComponent(orderId)}/production-notes?line=${encodeURIComponent(lineNumber)}`,
+                    '_blank',
+                    'noopener'
+                );
             });
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape' && document.getElementById('cu-orders-modal').classList.contains('open')) {

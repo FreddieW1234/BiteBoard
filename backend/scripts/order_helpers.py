@@ -63,6 +63,9 @@ LINE_ITEM_FIELDS = """
               variantTitle
               customAttributes { key value }
               variant {
+                product {
+                  caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
+                }
                 inventoryItem {
                   measurement {
                     weight {
@@ -353,6 +356,15 @@ def format_line_item(li: dict) -> dict:
     total = li_money.get("amount") or "0.00"
     quantity = li.get("quantity") or 0
     weight_kg = _line_item_weight_kg(li)
+    variant = li.get("variant") or {}
+    product = variant.get("product") or {}
+    case_qty_raw = ((product.get("caseQuantity") or {}).get("value") or "").strip()
+    case_quantity = None
+    if case_qty_raw:
+        try:
+            case_quantity = int(float(case_qty_raw))
+        except (TypeError, ValueError):
+            case_quantity = None
     item = {
         "title": title,
         "quantity": quantity,
@@ -368,6 +380,7 @@ def format_line_item(li: dict) -> dict:
         "currency": currency,
         "properties": storefront_props + remaining,
         "is_fee": is_fee,
+        "case_quantity": case_quantity,
     }
     if is_fee:
         item = _format_fee_item(item)
