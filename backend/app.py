@@ -1995,7 +1995,8 @@ def production_notes_page(order_id):
     from scripts.production_note import get_production_notes_for_order  # type: ignore
 
     line_number = request.args.get("line", type=int)
-    auto_print = request.args.get("print", "1") != "0"
+    embed = request.args.get("embed") == "1"
+    auto_print = request.args.get("print") == "1"
     result = get_production_notes_for_order(order_id, line_number=line_number)
     if not result.get("success"):
         return result.get("error") or "Order not found", 404
@@ -2006,6 +2007,7 @@ def production_notes_page(order_id):
         "UI/Production_Note.html",
         order_name=result.get("order_name") or "",
         notes=notes,
+        embed=embed,
         auto_print=auto_print,
     )
 

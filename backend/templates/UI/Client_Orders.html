@@ -268,10 +268,15 @@
             margin-bottom: 20px;
             border-top: 1px solid var(--bite-border);
         }
-        .orders-wrap .order-summary-total .line-fee-row .line-title {
-            font-weight: 700;
+        .orders-wrap .order-summary-total .detail-line-cost {
+            padding: 3px 0;
+            border-bottom: none;
         }
-        .orders-wrap .order-summary-total .line-price {
+        .orders-wrap .order-summary-total .order-grand-total {
+            margin-top: 4px;
+        }
+        .orders-wrap .order-summary-total .order-grand-total .line-title,
+        .orders-wrap .order-summary-total .order-grand-total .line-price {
             font-weight: 700;
             font-size: 0.92rem;
         }
@@ -603,16 +608,24 @@
 
                                     {% set has_shipping = order.shipping and (order.shipping | float) > 0 %}
                                     {% set has_tax = order.tax and (order.tax | float) > 0 %}
-                                    {% if has_shipping or has_tax %}
+                                    {% if has_shipping %}
                                     <div class="detail-section detail-section-extra-costs">
-                                        {% if has_shipping %}
                                         <div class="detail-line detail-line-cost">
                                             <div class="line-fee-row">
                                                 <span class="line-title">Shipping</span>
                                                 <span class="line-price">{{ order.shipping_display }}</span>
                                             </div>
                                         </div>
-                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+
+                                    <div class="order-summary-total">
+                                        <div class="detail-line detail-line-cost">
+                                            <div class="line-fee-row">
+                                                <span class="line-title">Total Net of VAT</span>
+                                                <span class="line-price">{{ order.total_net_display }}</span>
+                                            </div>
+                                        </div>
                                         {% if has_tax %}
                                         <div class="detail-line detail-line-cost">
                                             <div class="line-fee-row">
@@ -621,11 +634,7 @@
                                             </div>
                                         </div>
                                         {% endif %}
-                                    </div>
-                                    {% endif %}
-
-                                    <div class="order-summary-total">
-                                        <div class="line-fee-row">
+                                        <div class="line-fee-row order-grand-total">
                                             <span class="line-title">Total</span>
                                             <span class="line-price">{{ order.total_display }}</span>
                                         </div>

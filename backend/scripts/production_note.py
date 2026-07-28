@@ -282,7 +282,6 @@ def build_production_note(order: dict, line: dict) -> dict:
         "no_of_pallets": "",
         "order_number_shopify": (order.get("name") or "").strip(),
         "order_number_sage": "",
-        "actual_dispatch": "",
         "notes": _additional_notes(order_info, product_section),
     }
 

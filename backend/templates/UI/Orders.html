@@ -139,10 +139,15 @@
             margin-bottom: 20px;
             border-top: 1px solid #e5e7eb;
         }
-        .order-summary-total .line-fee-row .line-title {
-            font-weight: 700;
+        .order-summary-total .detail-line-cost {
+            padding: 3px 0;
+            border-bottom: none;
         }
-        .order-summary-total .line-price {
+        .order-summary-total .order-grand-total {
+            margin-top: 4px;
+        }
+        .order-summary-total .order-grand-total .line-title,
+        .order-summary-total .order-grand-total .line-price {
             font-weight: 700;
             font-size: 0.92rem;
         }
@@ -522,25 +527,29 @@
 
         function renderOrderGrandTotal(o) {
             const total = o.total_display || formatGbp(o.total);
-            return `<div class="order-summary-total"><div class="line-fee-row">
+            return `<div class="line-fee-row order-grand-total">
                 <span class="line-title">Total</span>
                 <span class="line-price">${escapeHtml(total)}</span>
-            </div></div>`;
+            </div>`;
         }
 
         function renderOrderCostSections(o) {
             let html = '';
             const ship = o.shipping_display || formatGbp(o.shipping);
             const tax = o.tax_display || formatGbp(o.tax);
+            const net = o.total_net_display || formatGbp(
+                (parseFloat(String(o.total ?? '').replace(/,/g, '')) || 0)
+                - (parseFloat(String(o.tax ?? '').replace(/,/g, '')) || 0)
+            );
             const shipVal = parseFloat(String(o.shipping ?? '').replace(/,/g, '')) || 0;
             const taxVal = parseFloat(String(o.tax ?? '').replace(/,/g, '')) || 0;
-            const lines = [];
-            if (shipVal > 0) lines.push(renderCostLine('Shipping', ship));
-            if (taxVal > 0) lines.push(renderCostLine('VAT', tax));
-            if (lines.length) {
-                html += `<div class="detail-section detail-section-extra-costs">${lines.join('')}</div>`;
+            if (shipVal > 0) {
+                html += `<div class="detail-section detail-section-extra-costs">${renderCostLine('Shipping', ship)}</div>`;
             }
+            html += `<div class="order-summary-total">${renderCostLine('Total Net of VAT', net)}`;
+            if (taxVal > 0) html += renderCostLine('VAT', tax);
             html += renderOrderGrandTotal(o);
+            html += '</div>';
             return html;
         }
 
@@ -1056,14 +1065,7 @@
             const btn = e.target.closest('.btn-print-production-note');
             if (!btn) return;
             e.preventDefault();
-            const orderId = btn.dataset.orderId;
-            const lineNumber = btn.dataset.lineNumber;
-            if (!orderId || !lineNumber) return;
-            window.open(
-                `/orders/${encodeURIComponent(orderId)}/production-notes?line=${encodeURIComponent(lineNumber)}`,
-                '_blank',
-                'noopener'
-            );
+            printProductionNote(btn.dataset.orderId, btn.dataset.lineNumber);
         });
         document.getElementById('search-input').addEventListener('input', function() {
             const filtered = filterOrders(this.value);
@@ -1088,6 +1090,7 @@
         loadOrders();
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
+    <script src="/static/production_note_print.js?v=1"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>
 </html>

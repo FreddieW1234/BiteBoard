@@ -923,6 +923,10 @@ def format_order_totals(node: dict) -> dict:
     shipping, _ = _shop_money(node, "totalShippingPriceSet")
     tax, _ = _shop_money(node, "totalTaxSet")
     total, currency = _shop_money(node, "totalPriceSet")
+    try:
+        total_net = float(str(total or "0").replace(",", "")) - float(str(tax or "0").replace(",", ""))
+    except (TypeError, ValueError):
+        total_net = 0.0
     return {
         "subtotal": subtotal,
         "subtotal_display": format_gbp(subtotal),
@@ -932,6 +936,8 @@ def format_order_totals(node: dict) -> dict:
         "tax_display": format_gbp(tax),
         "total": total,
         "total_display": format_gbp(total),
+        "total_net": f"{total_net:.2f}",
+        "total_net_display": format_gbp(total_net),
         "currency": currency,
     }
 
