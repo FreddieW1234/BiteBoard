@@ -98,6 +98,11 @@ def _load_saved_entries() -> dict[tuple[str, str], dict]:
     return out
 
 
+def load_saved_entries() -> dict[tuple[str, str], dict]:
+    """Public accessor for saved diary entries keyed by (order_name, item_id)."""
+    return _load_saved_entries()
+
+
 def get_diary_overview(max_orders: int = 250) -> dict:
     orders_result = get_orders_overview(max_orders=max_orders)
     if not orders_result.get("success"):

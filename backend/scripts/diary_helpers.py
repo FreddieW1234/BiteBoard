@@ -161,6 +161,48 @@ def lookup_saved_entry(
     return {}, ""
 
 
+def resolve_dispatch_date(
+    order_name: str,
+    line: dict,
+    saved: dict[tuple[str, str], dict],
+    *,
+    requested_date: date | None = None,
+) -> tuple[date | None, bool]:
+    """Return (dispatch_date, dispatch_manual) using the same rules as the Diary page."""
+    line_number = line.get("line_number")
+    if line_number is None:
+        return None, False
+    item_id = line.get("office_item_id") or item_key(
+        int(line_number), line.get("title") or ""
+    )
+    entry, _ = lookup_saved_entry(saved, order_name, item_id)
+    dispatch_manual = bool(entry.get("dispatch_manual"))
+    if dispatch_manual:
+        dispatch_iso = entry.get("dispatch_date") or ""
+    elif requested_date:
+        dispatch_iso = format_iso_date(default_dispatch_date(requested_date))
+    else:
+        dispatch_iso = entry.get("dispatch_date") or ""
+    dispatch_date = parse_delivery_date(dispatch_iso) if dispatch_iso else None
+    if dispatch_iso and not dispatch_date:
+        dispatch_date = parse_delivery_date(dispatch_iso)
+    return dispatch_date, dispatch_manual
+
+
+def dispatch_display_for_line(
+    order_name: str,
+    line: dict,
+    saved: dict[tuple[str, str], dict],
+    *,
+    requested_date: date | None = None,
+) -> str:
+    """Return dispatch date display (DD.MM.YYYY) matching the Diary dispatch column."""
+    dispatch_date, _ = resolve_dispatch_date(
+        order_name, line, saved, requested_date=requested_date
+    )
+    return format_display_date(dispatch_date)
+
+
 def product_label(line: dict, matched_field: dict | None) -> str:
     if matched_field:
         label = _field_label(matched_field)
@@ -210,16 +252,12 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                     entry.get("carrier") if entry else None,
                 )
 
-            dispatch_manual = bool(entry.get("dispatch_manual"))
-            if dispatch_manual:
-                dispatch_iso = entry.get("dispatch_date") or ""
-            elif requested_date:
-                dispatch_iso = format_iso_date(default_dispatch_date(requested_date))
-            else:
-                dispatch_iso = entry.get("dispatch_date") or ""
-            dispatch_date = parse_delivery_date(dispatch_iso) if dispatch_iso else None
-            if dispatch_iso and not dispatch_date:
-                dispatch_date = parse_delivery_date(dispatch_iso)
+            dispatch_date, dispatch_manual = resolve_dispatch_date(
+                order_name,
+                line,
+                saved,
+                requested_date=requested_date,
+            )
 
             carrier = entry.get("carrier") or ""
             tracking_number = entry.get("tracking_number") or ""

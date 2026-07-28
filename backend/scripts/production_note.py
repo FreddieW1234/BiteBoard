@@ -7,11 +7,12 @@ from datetime import datetime
 
 from scripts.diary_helpers import (  # type: ignore
     collect_delivery_date_fields,
-    default_dispatch_date,
+    dispatch_display_for_line,
     format_display_date,
     parse_delivery_date,
     _match_field_for_line,
 )
+from scripts.Diary import load_saved_entries  # type: ignore
 from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
 
 DEFAULT_SALES_PERSON = "DAVE"
@@ -231,7 +232,11 @@ def _case_price(line: dict) -> str:
     return format_gbp(unit * case_qty)
 
 
-def build_production_note(order: dict, line: dict) -> dict:
+def build_production_note(
+    order: dict,
+    line: dict,
+    saved: dict[tuple[str, str], dict] | None = None,
+) -> dict:
     """Return prefilled field values for one product line item."""
     order_info = order.get("order_info") or {}
     product_section = _match_product_section(order_info, line)
@@ -239,7 +244,13 @@ def build_production_note(order: dict, line: dict) -> dict:
     matched_date = _match_field_for_line(line, date_fields)
     delivery_raw = (matched_date.get("value") if matched_date else "") or ""
     delivery_date = parse_delivery_date(str(delivery_raw).strip())
-    dispatch_date = default_dispatch_date(delivery_date) if delivery_date else None
+    saved_entries = saved or {}
+    expected_dispatch = dispatch_display_for_line(
+        order.get("name") or "",
+        line,
+        saved_entries,
+        requested_date=delivery_date,
+    )
 
     quantity = line.get("quantity")
     qty_text = str(quantity) if quantity is not None else ""
@@ -255,7 +266,7 @@ def build_production_note(order: dict, line: dict) -> dict:
         "total_units_ordered": qty_text,
         "case_quantity": _case_quantity_display(line),
         "origination_fee": _origination_fee(line, order),
-        "expected_dispatch": format_display_date(dispatch_date),
+        "expected_dispatch": expected_dispatch,
         "delivery_address_confirmed": _delivery_address(order, product_section),
         "approved_to_print": "",
         "sales_person": DEFAULT_SALES_PERSON,
@@ -282,11 +293,16 @@ def build_production_note(order: dict, line: dict) -> dict:
         "no_of_pallets": "",
         "order_number_shopify": (order.get("name") or "").strip(),
         "order_number_sage": "",
-        "notes": _additional_notes(order_info, product_section),
+        "notes": "",
     }
 
 
-def build_production_notes(order: dict, *, line_number: int | None = None) -> list[dict]:
+def build_production_notes(
+    order: dict,
+    *,
+    line_number: int | None = None,
+    saved: dict[tuple[str, str], dict] | None = None,
+) -> list[dict]:
     notes: list[dict] = []
     for line in order.get("order_items") or []:
         if line.get("is_fee"):
@@ -294,7 +310,7 @@ def build_production_notes(order: dict, *, line_number: int | None = None) -> li
         ln = line.get("line_number")
         if line_number is not None and ln != line_number:
             continue
-        notes.append(build_production_note(order, line))
+        notes.append(build_production_note(order, line, saved=saved))
     return notes
 
 
@@ -302,7 +318,8 @@ def get_production_notes_for_order(order_id: str | int, *, line_number: int | No
     order = fetch_order_by_id(order_id)
     if not order:
         return {"success": False, "error": "Order not found"}
-    notes = build_production_notes(order, line_number=line_number)
+    saved = load_saved_entries()
+    notes = build_production_notes(order, line_number=line_number, saved=saved)
     if line_number is not None and not notes:
         return {"success": False, "error": "Line item not found"}
     return {

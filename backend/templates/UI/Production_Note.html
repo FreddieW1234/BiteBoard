@@ -119,34 +119,31 @@
             vertical-align: top;
         }
 
-        .split-right {
+        .dispatch-box {
             vertical-align: middle;
             text-align: center;
-            padding: 8px;
-            width: 50%;
-        }
-
-        .dispatch-pane {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100%;
-            height: 100%;
+            padding: 6px 8px;
+            height: 26mm;
+            max-height: 26mm;
         }
 
         .dispatch-label {
             font-weight: 700;
             text-transform: uppercase;
             font-size: 10pt;
-            margin-bottom: 12px;
+            margin-bottom: 6px;
         }
 
         .dispatch-date {
             font-weight: 700;
             line-height: 1;
             letter-spacing: -0.02em;
-            font-size: clamp(32pt, 8vw, 48pt);
+            font-size: 26pt;
+        }
+
+        .split-right-spacer {
+            background: #fff;
+            vertical-align: top;
         }
 
         .code {
@@ -182,7 +179,7 @@
             html, body { width: 100%; margin: 0; padding: 0; }
             .toolbar { display: none !important; }
             .sheet { width: 100%; max-width: 100%; margin: 0; page-break-inside: avoid; }
-            .dispatch-date { font-size: 44pt; }
+            .dispatch-date { font-size: 26pt; }
         }
 
         @media screen {
@@ -263,15 +260,13 @@
             <tr>
                 <td class="lbl addr-lbl">Delivery Address<br>Confirmed</td>
                 <td class="val addr-val">{{ note.delivery_address_confirmed }}</td>
-                <td colspan="2" rowspan="20" class="split-right">
-                    <div class="dispatch-pane">
-                        <div class="dispatch-label">Expected Dispatch</div>
-                        <div class="dispatch-date">{{ note.expected_dispatch }}</div>
-                    </div>
+                <td colspan="2" class="dispatch-box">
+                    <div class="dispatch-label">Expected Dispatch</div>
+                    <div class="dispatch-date">{{ note.expected_dispatch }}</div>
                 </td>
             </tr>
 
-            <tr class="left-stack"><th class="subhdr" colspan="2">Pallet Delivery Charge</th></tr>
+            <tr class="left-stack"><th class="subhdr" colspan="2">Pallet Delivery Charge</th><td colspan="2" rowspan="19" class="split-right-spacer"></td></tr>
             <tr class="left-stack"><td class="lbl">Next Day</td><td class="tick"></td></tr>
             <tr class="left-stack"><td class="lbl">AM Delivery</td><td class="tick"></td></tr>
             <tr class="left-stack"><td class="lbl">Timed Delivery</td><td class="tick"></td></tr>
@@ -321,7 +316,7 @@
                 <th class="hdr" colspan="2">Order Number Sage</th>
             </tr>
             <tr>
-                <td class="notes-body" colspan="2">{{ note.notes }}</td>
+                <td class="notes-body" colspan="2"></td>
                 <td class="sage-body" colspan="2">
                     <div class="val">{{ note.order_number_sage }}</div>
                 </td>
