@@ -12,6 +12,7 @@
     let noteModalCompanyId = null;
     let addMemberModalCompanyId = null;
     let addMemberPickerSearch = '';
+    let addMemberPendingIds = new Set();
     let companiesListLoaded = false;
     let companiesLoadPromise = null;
     let customerLookup = null;
@@ -238,11 +239,14 @@
         }
 
         resultsEl.innerHTML = matches.map(c => {
+            const id = String(c.id);
+            const isPending = addMemberPendingIds.has(id);
             const companyLine = (c.company_name || '').trim();
             const meta = [c.email || '', companyLine ? `Company: ${companyLine}` : ''].filter(Boolean).join(' · ');
-            return `<button type="button" class="co-customer-picker-item" data-customer-id="${escapeHtml(c.id)}">
+            return `<button type="button" class="co-customer-picker-item${isPending ? ' is-pending' : ''}" data-customer-id="${escapeHtml(c.id)}"${isPending ? ' disabled' : ''}>
                 <strong>${escapeHtml(c.name || c.email || 'Unknown')}</strong>
                 <span>${escapeHtml(meta)}</span>
+                ${isPending ? '<span class="co-customer-picker-pending"><i class="fas fa-spinner fa-spin"></i> Adding…</span>' : ''}
             </button>`;
         }).join('');
     }
@@ -279,13 +283,18 @@
             const pick = e.target.closest('.co-customer-picker-item');
             if (pick && addMemberModalCompanyId) {
                 const customerId = pick.dataset.customerId;
-                if (!customerId) return;
-                pick.disabled = true;
+                if (!customerId || pick.disabled || addMemberPendingIds.has(String(customerId))) return;
+                addMemberPendingIds.add(String(customerId));
+                renderCustomerPickerResults();
                 addMember(addMemberModalCompanyId, customerId)
-                    .then(function () { closeAddMemberModal(); })
+                    .then(function () {
+                        addMemberPendingIds.delete(String(customerId));
+                        renderCustomerPickerResults();
+                    })
                     .catch(function (err) {
+                        addMemberPendingIds.delete(String(customerId));
                         alert(err.message);
-                        pick.disabled = false;
+                        renderCustomerPickerResults();
                     });
             }
         });
@@ -330,6 +339,7 @@
         modal.hidden = true;
         addMemberModalCompanyId = null;
         addMemberPickerSearch = '';
+        addMemberPendingIds.clear();
     }
 
     function escapeHtml(text) {
@@ -436,10 +446,29 @@
         return companies.filter(c => (c.name || '').toLowerCase().includes(term));
     }
 
-    function availableCustomers(company) {
-        const assigned = new Set((company.members || []).map(m => String(m.customer_id)));
+    function allLinkedCustomerIds() {
+        const linked = new Set();
+        companies.forEach(function (co) {
+            companyMemberIds(co).forEach(function (id) { linked.add(id); });
+        });
+        Object.keys(companyDetailsCache).forEach(function (key) {
+            companyMemberIds(companyDetailsCache[key]).forEach(function (id) { linked.add(id); });
+        });
         const all = (global.CU_DATA && global.CU_DATA.customers) || [];
-        return all.filter(c => !assigned.has(String(c.id)));
+        all.forEach(function (c) {
+            if ((c.linked_company_id || '').trim() || c.company_locked) {
+                linked.add(String(c.id));
+            }
+        });
+        return linked;
+    }
+
+    function availableCustomers(company) {
+        const linked = allLinkedCustomerIds();
+        const all = (global.CU_DATA && global.CU_DATA.customers) || [];
+        return all.filter(function (c) {
+            return !linked.has(String(c.id));
+        });
     }
 
     function renderNoteRow(companyId, note) {
