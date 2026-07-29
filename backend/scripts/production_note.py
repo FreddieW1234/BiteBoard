@@ -133,6 +133,26 @@ def _additional_notes(order_info: dict, product_section: dict | None) -> str:
     return _global_note_value(order_info, "additional notes", "notes", "comments")
 
 
+def _po_number(order_info: dict) -> str:
+    """PO number from Shopify native order note (parsed note_sections)."""
+    for sec in order_info.get("note_sections") or []:
+        for field in sec.get("fields") or []:
+            key = (field.get("key") or "").upper()
+            if key.startswith("PO NUMBER"):
+                val = str(field.get("value") or "").strip()
+                if val:
+                    return val
+    val = _global_note_value(order_info, "po number")
+    if val:
+        return val
+    note = (order_info.get("note") or "").replace("\r\n", "\n").strip()
+    if note:
+        m = re.search(r"PO NUMBER:\s*(.+?)(?:\n|$)", note, re.I)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
 def _origination_fee(line: dict, order: dict) -> str:
     raw = line.get("origination")
     if raw is not None:
@@ -293,6 +313,7 @@ def build_production_note(
         "no_of_shippers": "",
         "no_of_pallets": "",
         "order_number_shopify": (order.get("name") or "").strip(),
+        "po_number": _po_number(order_info),
         "order_number_sage": "",
         "notes": "",
     }
