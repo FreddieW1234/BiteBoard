@@ -73,7 +73,8 @@ def list_companies() -> list[dict]:
         rows = conn.execute(
             """
             SELECT c.id, c.name, c.created_at, c.updated_at,
-                   COUNT(m.customer_id) AS member_count
+                   COUNT(m.customer_id) AS member_count,
+                   GROUP_CONCAT(m.customer_id) AS member_ids_csv
             FROM companies c
             LEFT JOIN company_members m ON m.company_id = c.id
             GROUP BY c.id
@@ -87,6 +88,7 @@ def list_companies() -> list[dict]:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "member_count": int(row["member_count"] or 0),
+            "member_ids": [x for x in (row["member_ids_csv"] or "").split(",") if x],
         }
         for row in rows
     ]

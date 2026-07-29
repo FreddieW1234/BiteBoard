@@ -64,7 +64,8 @@
         .co-member-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #eef0f3; }
         .co-member-row:last-of-type { border-bottom: none; }
         .co-member-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .co-member-email, .co-member-id { font-size: 0.78rem; color: #6b7280; }
+        .co-member-email { font-size: 0.78rem; color: #6b7280; }
+        .co-companies-table .co-col-total { text-align: right; white-space: nowrap; }
         .co-empty-hint { font-size: 0.85rem; color: #9ca3af; font-style: italic; margin-bottom: 12px; }
         .co-note-item { padding: 12px 0; border-bottom: 1px solid #eef0f3; }
         .co-note-item:last-of-type { border-bottom: none; }
@@ -1812,6 +1813,7 @@
         }
 
         window.loadCustomers = loadCustomers;
+        window.renderCustomers = render;
 
         function setCustomersView(view) {
             view = view === 'companies' ? 'companies' : 'individuals';
@@ -1909,7 +1911,7 @@
             });
         });
     </script>
-    <script src="/static/companies_panel.js?v=1"></script>
+    <script src="/static/companies_panel.js?v=2"></script>
     <script src="/static/production_note_print.js?v=2"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>

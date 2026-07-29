@@ -30,6 +30,43 @@
         return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
 
+    function formatGBP(amount) {
+        const n = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
+        return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function companyMemberIds(company) {
+        if (Array.isArray(company.member_ids) && company.member_ids.length) {
+            return company.member_ids.map(String);
+        }
+        return (company.members || []).map(m => String(m.customer_id)).filter(Boolean);
+    }
+
+    function companyTotalSpent(company) {
+        const ids = new Set(companyMemberIds(company));
+        if (!ids.size) return 0;
+        const all = (global.CU_DATA && global.CU_DATA.customers) || [];
+        let sum = 0;
+        for (const c of all) {
+            if (ids.has(String(c.id))) {
+                sum += parseFloat(c.total_spent || 0) || 0;
+            }
+        }
+        return sum;
+    }
+
+    function patchLinkedCustomersCompanyName(company) {
+        if (!company || !global.CU_DATA || !Array.isArray(global.CU_DATA.customers)) return;
+        const memberIds = new Set(companyMemberIds(company));
+        const companyName = (company.name || '').trim();
+        global.CU_DATA.customers.forEach(function (c) {
+            if (memberIds.has(String(c.id))) {
+                c.company_name = companyName;
+                c.company_locked = true;
+            }
+        });
+    }
+
     function filteredCompanies() {
         const term = (searchTerm || '').trim().toLowerCase();
         if (!term) return companies;
@@ -57,7 +94,6 @@
             <div class="co-member-info">
                 <strong>${escapeHtml(member.name || 'Unknown')}</strong>
                 <span class="co-member-email">${escapeHtml(member.email || '')}</span>
-                <span class="co-member-id">ID ${escapeHtml(member.customer_id)}</span>
             </div>
             <button type="button" class="btn-ghost co-remove-member" data-company-id="${escapeHtml(companyId)}" data-customer-id="${escapeHtml(member.customer_id)}">
                 <i class="fas fa-user-minus"></i> Remove
@@ -92,7 +128,6 @@
                 </section>
                 <section class="co-company-section">
                     <h4>Individuals</h4>
-                    <p class="co-section-lead">Linked by Shopify customer ID. Their profile company field is set automatically.</p>
                     ${membersHtml}
                     <form class="co-add-member-form" data-company-id="${escapeHtml(company.id)}">
                         <div class="co-inline-field">
@@ -153,7 +188,7 @@
             rows += `<tr class="co-company-row${expanded ? ' expanded' : ''}" data-company-id="${escapeHtml(company.id)}">
                 <td><strong>${escapeHtml(company.name)}</strong><i class="fas fa-chevron-down co-company-chevron"></i></td>
                 <td>${escapeHtml(String(company.member_count || 0))}</td>
-                <td>${escapeHtml(formatDate(company.updated_at))}</td>
+                <td class="co-col-total">£${escapeHtml(formatGBP(companyTotalSpent(company)))}</td>
             </tr>`;
             if (expanded) {
                 rows += `<tr class="co-company-details-row open"><td colspan="3">${detail ? renderCompanyDetail(detail) : '<div class="state-msg"><div class="spinner"></div>Loading…</div>'}</td></tr>`;
@@ -166,7 +201,7 @@
                     <tr>
                         <th>Company</th>
                         <th>Individuals</th>
-                        <th>Updated</th>
+                        <th class="co-col-total">Total</th>
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -185,6 +220,12 @@
             throw new Error((data && data.error) || 'Failed to load companies');
         }
         companies = data.companies || [];
+        companies.forEach(function (company) {
+            const cached = companyDetailsCache[company.id];
+            if (cached && Array.isArray(cached.members)) {
+                company.members = cached.members;
+            }
+        });
         renderCompaniesTable();
     }
 
@@ -224,8 +265,17 @@
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Save failed');
         companyDetailsCache[companyId] = data.company;
+        patchLinkedCustomersCompanyName(data.company);
+        const idx = companies.findIndex(c => String(c.id) === String(companyId));
+        if (idx >= 0 && data.company) {
+            companies[idx] = { ...companies[idx], name: data.company.name };
+        }
         await loadCompanies();
+        if (expandedCompanyId === companyId) {
+            await loadCompanyDetail(companyId);
+        }
         if (global.loadCustomers) await global.loadCustomers(true);
+        if (typeof global.renderCustomers === 'function') global.renderCustomers();
     }
 
     async function addMember(companyId, customerId) {
@@ -238,8 +288,10 @@
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Could not add member');
         companyDetailsCache[companyId] = data.company;
+        patchLinkedCustomersCompanyName(data.company);
         await loadCompanies();
         if (global.loadCustomers) await global.loadCustomers(true);
+        if (typeof global.renderCustomers === 'function') global.renderCustomers();
     }
 
     async function removeMember(companyId, customerId) {

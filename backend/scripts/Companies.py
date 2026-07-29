@@ -57,12 +57,14 @@ def create_company(name: str) -> dict:
 
 def rename_company(company_id: str, name: str) -> dict:
     try:
+        name = (name or "").strip()
         company = update_company_name(company_id, name)
         for member in company.get("members") or []:
             customer_id = str(member.get("customer_id") or "")
             if customer_id:
                 set_customer_company_link(customer_id, company_id, name)
-        return {"success": True, "company": _enrich_members(company)}
+        updated = get_company(company_id) or company
+        return {"success": True, "company": _enrich_members(updated)}
     except ValueError as exc:
         return {"success": False, "error": str(exc)}
 

@@ -522,7 +522,7 @@
                         <label for="co-company_name">Company (if required)</label>
                         {% if profile.company_locked %}
                         <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name" readonly aria-readonly="true">
-                        <p class="co-company-locked-hint">Your company is managed by us and cannot be changed here.</p>
+                        <p class="co-company-locked-hint">Please contact us if this looks incorrect.</p>
                         {% else %}
                         <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
                         {% endif %}
