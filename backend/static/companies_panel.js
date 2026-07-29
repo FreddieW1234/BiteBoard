@@ -10,6 +10,8 @@
     let companyDetailsCache = Object.create(null);
     let searchTerm = '';
     let noteModalCompanyId = null;
+    let addMemberModalCompanyId = null;
+    let addMemberPickerSearch = '';
 
     function ensureNoteModal() {
         let modal = document.getElementById('co-note-modal');
@@ -195,6 +197,138 @@
         modal.hidden = true;
     }
 
+    function customerPickerHaystack(c) {
+        return [
+            c.name, c.first_name, c.last_name, c.email, c.company_name,
+            c.phone, c.landline_phone, c.mobile_number,
+        ].join(' ').toLowerCase();
+    }
+
+    function filteredPickerCustomers(company) {
+        const term = (addMemberPickerSearch || '').trim().toLowerCase();
+        let list = availableCustomers(company);
+        if (term) {
+            list = list.filter(c => customerPickerHaystack(c).includes(term));
+        }
+        return list.slice(0, 50);
+    }
+
+    function renderCustomerPickerResults() {
+        const resultsEl = document.getElementById('co-add-member-results');
+        if (!resultsEl || !addMemberModalCompanyId) return;
+
+        const company = companyDetailsCache[addMemberModalCompanyId]
+            || companies.find(c => String(c.id) === String(addMemberModalCompanyId));
+        if (!company) {
+            resultsEl.innerHTML = '<div class="co-customer-picker-empty">Company not found.</div>';
+            return;
+        }
+
+        const matches = filteredPickerCustomers(company);
+        if (!availableCustomers(company).length) {
+            resultsEl.innerHTML = '<div class="co-customer-picker-empty">All customers are already linked to a company.</div>';
+            return;
+        }
+        if (!matches.length) {
+            resultsEl.innerHTML = '<div class="co-customer-picker-empty">No customers match your search.</div>';
+            return;
+        }
+
+        resultsEl.innerHTML = matches.map(c => {
+            const companyLine = (c.company_name || '').trim();
+            const meta = [c.email || '', companyLine ? `Company: ${companyLine}` : ''].filter(Boolean).join(' · ');
+            return `<button type="button" class="co-customer-picker-item" data-customer-id="${escapeHtml(c.id)}">
+                <strong>${escapeHtml(c.name || c.email || 'Unknown')}</strong>
+                <span>${escapeHtml(meta)}</span>
+            </button>`;
+        }).join('');
+    }
+
+    function ensureAddMemberModal() {
+        let modal = document.getElementById('co-add-member-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'co-add-member-modal';
+        modal.className = 'co-note-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="co-note-modal-backdrop" data-close-co-add-member></div>
+            <div class="co-note-modal-panel" role="dialog" aria-modal="true" aria-labelledby="co-add-member-modal-title">
+                <div class="co-note-modal-header">
+                    <h2 id="co-add-member-modal-title">Add individual</h2>
+                    <button type="button" class="co-note-modal-close" data-close-co-add-member aria-label="Close">&times;</button>
+                </div>
+                <div class="co-note-modal-body">
+                    <div class="co-customer-picker-search-wrap">
+                        <i class="fas fa-search"></i>
+                        <input type="search" id="co-add-member-search" placeholder="Search by name, email, or company…" autocomplete="off">
+                    </div>
+                    <div id="co-add-member-results" class="co-customer-picker-results"></div>
+                </div>
+                <div class="co-note-modal-footer">
+                    <button type="button" class="btn-ghost" data-close-co-add-member>Cancel</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-co-add-member]')) closeAddMemberModal();
+            const pick = e.target.closest('.co-customer-picker-item');
+            if (pick && addMemberModalCompanyId) {
+                const customerId = pick.dataset.customerId;
+                if (!customerId) return;
+                pick.disabled = true;
+                addMember(addMemberModalCompanyId, customerId)
+                    .then(function () { closeAddMemberModal(); })
+                    .catch(function (err) {
+                        alert(err.message);
+                        pick.disabled = false;
+                    });
+            }
+        });
+
+        const searchInput = document.getElementById('co-add-member-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                addMemberPickerSearch = searchInput.value || '';
+                renderCustomerPickerResults();
+            });
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('open')) closeAddMemberModal();
+        });
+
+        return modal;
+    }
+
+    function openAddMemberModal(companyId, companyName) {
+        const modal = ensureAddMemberModal();
+        addMemberModalCompanyId = companyId;
+        addMemberPickerSearch = '';
+        const title = document.getElementById('co-add-member-modal-title');
+        if (title) {
+            title.textContent = companyName
+                ? `Add individual — ${companyName}`
+                : 'Add individual';
+        }
+        const searchInput = document.getElementById('co-add-member-search');
+        if (searchInput) searchInput.value = '';
+        renderCustomerPickerResults();
+        modal.hidden = false;
+        modal.classList.add('open');
+        if (searchInput) searchInput.focus();
+    }
+
+    function closeAddMemberModal() {
+        const modal = document.getElementById('co-add-member-modal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.hidden = true;
+        addMemberModalCompanyId = null;
+        addMemberPickerSearch = '';
+    }
+
     function escapeHtml(text) {
         const d = document.createElement('div');
         d.textContent = text == null ? '' : String(text);
@@ -287,10 +421,7 @@
     }
 
     function renderCompanyDetail(company) {
-        const customers = availableCustomers(company);
-        const options = customers.map(c =>
-            `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.email)} (${escapeHtml(c.email || '')})</option>`
-        ).join('');
+        const availableCount = availableCustomers(company).length;
 
         const notesHtml = (company.notes || []).length
             ? company.notes.map(renderNoteRow).join('')
@@ -312,17 +443,13 @@
                     </form>
                 </section>
                 <section class="co-company-section">
-                    <h4>Individuals</h4>
+                    <div class="co-individuals-header">
+                        <h4>Individuals</h4>
+                        <button type="button" class="btn-primary co-add-member-btn" data-company-id="${escapeHtml(company.id)}"${availableCount ? '' : ' disabled title="No unlinked customers"'}>
+                            <i class="fas fa-user-plus"></i> Add individual
+                        </button>
+                    </div>
                     ${membersHtml}
-                    <form class="co-add-member-form" data-company-id="${escapeHtml(company.id)}">
-                        <div class="co-inline-field">
-                            <select name="customer_id" required ${customers.length ? '' : 'disabled'}>
-                                <option value="">Add individual…</option>
-                                ${options}
-                            </select>
-                            <button type="submit" class="btn-primary" ${customers.length ? '' : 'disabled'}><i class="fas fa-user-plus"></i> Add</button>
-                        </div>
-                    </form>
                 </section>
                 <section class="co-company-section co-notes-section">
                     <div class="co-notes-header">
@@ -523,6 +650,16 @@
                 const companyId = addNoteBtn.dataset.companyId;
                 const company = companyDetailsCache[companyId] || companies.find(c => String(c.id) === String(companyId));
                 openNoteModal(companyId, company && company.name);
+                return;
+            }
+            const addMemberBtn = e.target.closest('.co-add-member-btn');
+            if (addMemberBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (addMemberBtn.disabled) return;
+                const companyId = addMemberBtn.dataset.companyId;
+                const company = companyDetailsCache[companyId] || companies.find(c => String(c.id) === String(companyId));
+                openAddMemberModal(companyId, company && company.name);
             }
         });
 
@@ -533,15 +670,6 @@
                 const companyId = renameForm.dataset.companyId;
                 const name = (new FormData(renameForm).get('name') || '').trim();
                 renameCompany(companyId, name).catch(err => alert(err.message));
-                return;
-            }
-            const memberForm = e.target.closest('.co-add-member-form');
-            if (memberForm) {
-                e.preventDefault();
-                const companyId = memberForm.dataset.companyId;
-                const customerId = (new FormData(memberForm).get('customer_id') || '').trim();
-                if (!customerId) return;
-                addMember(companyId, customerId).catch(err => alert(err.message));
                 return;
             }
         });
