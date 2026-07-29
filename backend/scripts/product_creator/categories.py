@@ -263,7 +263,7 @@ CATEGORIES = [
     "Seasonal",
     "Industries",
     "Events",
-    "Food & Pastry",
+    "Food & Pantry",
     "Branded Merchandise & Packaging",
 ]
 
@@ -342,7 +342,7 @@ SUBCATEGORIES = [
     "Community Charities & Causes",
     "Wellbeing & Inclusion Events",
     "Sports Events",
-    # Food & Pastry
+    # Food & Pantry
     "Cereal & Porridge",
     "Soup",
     "Pasta & Noodles",
@@ -447,7 +447,7 @@ CATEGORY_MAPPING = {
         "Wellbeing & Inclusion Events",
         "Sports Events",
     ],
-    "Food & Pastry": [
+    "Food & Pantry": [
         "Cereal & Porridge",
         "Soup",
         "Pasta & Noodles",
