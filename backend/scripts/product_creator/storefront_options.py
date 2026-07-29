@@ -19,7 +19,7 @@ COLOUR_METAFIELD_KEYS = (
 STOREFRONT_OPTION_KEYS = ("print", "foil", "mailer", "mailerpacking")
 
 STOREFRONT_OPTION_CHOICES: Dict[str, List[str]] = {
-    "print": ["Outside", "Outside + Inside"],
+    "print": ["Outside Only", "Outside + Inside"],
     "foil": ["Yes", "No"],
     "mailer": ["Yes", "No"],
     "mailerpacking": ["Yes", "No"],

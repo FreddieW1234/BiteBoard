@@ -4890,6 +4890,15 @@ Dietary</textarea>
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for filters`);
+                } else if (metafield.key === 'origination') {
+                    const origOptions = ['0', '50', '75'];
+                    let origSelected = String(currentValue || '').trim();
+                    if (!origOptions.includes(origSelected)) origSelected = '50';
+                    inputElement = `
+                        <select class="metafield-value list-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="origination" data-type="${metafield.type || 'number_integer'}">
+                            ${origOptions.map(o => `<option value="${o}"${origSelected === o ? ' selected' : ''}>${o}</option>`).join('')}
+                        </select>
+                    `;
                 } else if (hasOptions) {
                     console.log(`🔧 Creating dropdown for ${metafield.key} (hasOptions)`);
                         // Use Shopify's predefined options

@@ -153,18 +153,30 @@ def _po_number(order_info: dict) -> str:
     return ""
 
 
-def _origination_select_value(line: dict) -> str:
-    """Origination dropdown value: 0, 50, or 75 (default 50)."""
-    options = {"0", "50", "75"}
+def _origination_fee(line: dict, order: dict) -> str:
     raw = line.get("origination")
     if raw is not None:
         try:
-            val = str(int(float(str(raw).replace(",", "").strip())))
-            if val in options:
-                return val
+            return format_gbp(float(raw))
         except (TypeError, ValueError):
             pass
-    return "50"
+    title = (line.get("title") or "").strip()
+    sku = (line.get("sku") or "").strip()
+    for group in order.get("fees_by_product") or []:
+        product = (group.get("product") or "").strip()
+        if not product:
+            continue
+        if product == title or (sku and sku in product) or title in product:
+            for fee in group.get("fees") or []:
+                if fee.get("is_origination"):
+                    return fee.get("total_display") or fee.get("total") or ""
+    for fee in order.get("fees") or []:
+        if not fee.get("is_origination"):
+            continue
+        for_product = (fee.get("for_product") or "").strip()
+        if not for_product or for_product == title or (sku and sku in for_product):
+            return fee.get("total_display") or fee.get("total") or ""
+    return ""
 
 
 def _delivery_address(order: dict, product_section: dict | None) -> str:
@@ -273,7 +285,7 @@ def build_production_note(
         "product_code": (line.get("sku") or "").strip(),
         "total_units_ordered": qty_text,
         "case_quantity": _case_quantity_display(line),
-        "origination": _origination_select_value(line),
+        "origination_fee": _origination_fee(line, order),
         "expected_dispatch": expected_dispatch,
         "delivery_address_confirmed": _delivery_address(order, product_section),
         "approved_to_print": "",
