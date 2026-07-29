@@ -279,6 +279,116 @@ def set_diary_entry(
     return result
 
 
+def _companies_url(company_id: str = "", *suffix: str) -> str:
+    base = f"{OFFICE_API_URL.rstrip('/')}/companies"
+    if not company_id:
+        return base
+    path = "/".join(quote(part, safe="") for part in (company_id,) + suffix if part)
+    return f"{base}/{path}"
+
+
+def list_companies(*, full: bool = False) -> dict:
+    """``GET /companies`` — durable company overview from the office server."""
+    url = _companies_url()
+    params = {"full": "true"} if full else None
+    resp = _request("GET", url, params=params)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from companies list")
+    return result
+
+
+def get_company(company_id: str) -> dict:
+    """``GET /companies/{id}`` — one company with members and notes."""
+    cid = (company_id or "").strip()
+    if not cid:
+        raise OfficeApiError("Company id is required")
+    resp = _request("GET", _companies_url(cid))
+    result = _handle_response(resp, allow_404=True)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Company not found")
+    return result
+
+
+def create_company(name: str, *, company_id: str | None = None) -> dict:
+    """``POST /companies`` — create on the office server."""
+    payload: dict = {"name": (name or "").strip()}
+    if company_id:
+        payload["id"] = str(company_id).strip()
+    resp = _request("POST", _companies_url(), json=payload)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company create")
+    return result
+
+
+def rename_company(company_id: str, name: str) -> dict:
+    """``PUT /companies/{id}`` — rename on the office server."""
+    cid = (company_id or "").strip()
+    resp = _request("PUT", _companies_url(cid), json={"name": (name or "").strip()})
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company rename")
+    return result
+
+
+def add_company_member(company_id: str, customer_id: str, *, move: bool = False) -> dict:
+    """``POST /companies/{id}/members`` — link customer by Shopify id."""
+    cid = (company_id or "").strip()
+    resp = _request(
+        "POST",
+        _companies_url(cid, "members"),
+        json={"customer_id": str(customer_id or "").strip(), "move": bool(move)},
+    )
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company member add")
+    return result
+
+
+def remove_company_member(company_id: str, customer_id: str) -> dict:
+    """``DELETE /companies/{id}/members/{customer_id}``."""
+    cid = (company_id or "").strip()
+    cust = str(customer_id or "").strip()
+    resp = _request("DELETE", _companies_url(cid, "members", cust))
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company member remove")
+    return result
+
+
+def add_company_note(
+    company_id: str,
+    *,
+    author: str,
+    body: str,
+    note_date: str = "",
+) -> dict:
+    """``POST /companies/{id}/notes``."""
+    cid = (company_id or "").strip()
+    payload = {
+        "author": (author or "").strip() or None,
+        "body": (body or "").strip(),
+        "note_date": (note_date or "").strip() or None,
+    }
+    resp = _request("POST", _companies_url(cid, "notes"), json=payload)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company note add")
+    return result
+
+
+def get_customer_company(customer_id: str) -> dict:
+    """``GET /customers/{id}/company`` — reverse lookup."""
+    cid = str(customer_id or "").strip()
+    url = f"{OFFICE_API_URL.rstrip('/')}/customers/{quote(cid, safe='')}/company"
+    resp = _request("GET", url)
+    result = _handle_response(resp, allow_404=True)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from customer company lookup")
+    return result
+
+
 _PRINT_TIMEOUT = 45
 
 
