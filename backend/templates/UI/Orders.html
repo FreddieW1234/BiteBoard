@@ -1015,24 +1015,41 @@
             }
         }
 
-        let indicatorPrefetchToken = 0;
+        let trackingPrefetchToken = 0;
 
-        async function prefetchIndicatorsForOrders(orders) {
-            if (!window.OfficeTracking || typeof OfficeTracking.fetchOrderIndicators !== 'function') {
+        async function prefetchTrackingForOrders(orders) {
+            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') {
                 return;
             }
-            const token = ++indicatorPrefetchToken;
+            const token = ++trackingPrefetchToken;
             const ids = (orders || []).map(o => o.id).filter(Boolean);
             if (!ids.length) return;
-            const indicators = await OfficeTracking.fetchOrderIndicators(ids, '/api/orders', 3);
-            if (token !== indicatorPrefetchToken) return;
-            Object.assign(orderIndicators, indicators);
-            if (suppressOrdersRefresh) return;
-            renderOrdersView(filterOrders(document.getElementById('search-input').value));
+
+            suppressOrdersRefresh = true;
+            try {
+                await OfficeTracking.prefetchAllOrderTracking(
+                    ids,
+                    '/api/orders',
+                    'staff',
+                    (orderId, entry) => {
+                        if (token !== trackingPrefetchToken) return;
+                        onTrackingSettled(orderId, entry, false);
+                        const content = document.getElementById('content');
+                        if (content && typeof OfficeTracking.applyCachedTrackingIn === 'function') {
+                            OfficeTracking.applyCachedTrackingIn(content, '/api/orders', 'staff');
+                        }
+                    },
+                    3
+                );
+            } finally {
+                if (token !== trackingPrefetchToken) return;
+                suppressOrdersRefresh = false;
+                renderOrdersView(filterOrders(document.getElementById('search-input').value));
+            }
         }
 
-        function startBackgroundIndicatorPrefetch(orders) {
-            void prefetchIndicatorsForOrders(orders);
+        function startBackgroundTrackingPrefetch(orders) {
+            void prefetchTrackingForOrders(orders);
         }
 
         function filterOrders(q) {
@@ -1063,7 +1080,7 @@
                 }
                 const filtered = filterOrders(document.getElementById('search-input').value);
                 renderOrdersView(filtered);
-                void prefetchIndicatorsForOrders(filtered);
+                void prefetchTrackingForOrders(filtered);
             } catch (err) {
                 content.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;
                 document.getElementById('count-pill').textContent = '0 orders';
@@ -1094,7 +1111,7 @@
         document.getElementById('search-input').addEventListener('input', function() {
             const filtered = filterOrders(this.value);
             renderOrdersView(filtered);
-            startBackgroundIndicatorPrefetch(filtered);
+            startBackgroundTrackingPrefetch(filtered);
         });
         document.getElementById('sort-select').value = sortMode;
         document.getElementById('sort-select').addEventListener('change', function() {
@@ -1115,6 +1132,6 @@
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
     <script src="/static/production_note_print.js?v=2"></script>
-    <script src="/static/office_tracking.js?v=40"></script>
+    <script src="/static/office_tracking.js?v=41"></script>
 </body>
 </html>

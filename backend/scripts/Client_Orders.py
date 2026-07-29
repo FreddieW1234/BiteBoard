@@ -118,6 +118,7 @@ def get_customer_profile(customer_id: str | int) -> dict:
                 "last_name": profile.get("last_name") or "",
                 "email": profile.get("email") or "",
                 "company_name": profile.get("company_name") or "",
+                "company_locked": bool(profile.get("company_locked")),
                 "invoice_address": profile.get("invoice_address") or "",
                 "landline_phone": profile.get("landline_phone") or "",
                 "mobile_number": profile.get("mobile_number") or "",
@@ -149,7 +150,7 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     scripts_dir = os.path.dirname(__file__)
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
-    from Customers import update_customer_details  # type: ignore
+    from Customers import update_customer_details, _fetch_single_customer  # type: ignore
 
     first_name = str(payload.get("first_name") or "").strip()
     email = str(payload.get("email") or "").strip()
@@ -163,6 +164,12 @@ def update_client_profile(customer_id: str | int, payload: dict) -> dict:
     safe = {k: payload[k] for k in CLIENT_PROFILE_KEYS if k in payload}
     safe["first_name"] = first_name
     safe["email"] = email
+    try:
+        existing = _fetch_single_customer(customer_id)
+        if existing.get("company_locked") and "company_name" in safe:
+            safe.pop("company_name", None)
+    except Exception:
+        pass
     update_customer_details(customer_id, safe)
     with _customer_cache_lock:
         _customer_cache.pop(f"profile:{str(customer_id).strip()}", None)

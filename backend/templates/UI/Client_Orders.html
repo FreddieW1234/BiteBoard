@@ -126,6 +126,16 @@
             border-color: #fca5a5;
             box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
         }
+        .co-portal-profile .co-field input[readonly] {
+            background: #f3f4f6;
+            color: #6b7280;
+            cursor: not-allowed;
+        }
+        .co-company-locked-hint {
+            font-size: 0.78rem;
+            color: #6b7280;
+            margin-top: 4px;
+        }
         .co-portal-profile .co-field input,
         .co-portal-profile .co-field textarea {
             width: 100%;
@@ -510,7 +520,12 @@
                     </div>
                     <div class="co-field">
                         <label for="co-company_name">Company (if required)</label>
+                        {% if profile.company_locked %}
+                        <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name" readonly aria-readonly="true">
+                        <p class="co-company-locked-hint">Your company is managed by us and cannot be changed here.</p>
+                        {% else %}
                         <input type="text" id="co-company_name" name="company_name" value="{{ profile.company_name or '' }}" autocomplete="organization" placeholder="Company name">
+                        {% endif %}
                     </div>
                     <div class="co-field">
                         <label for="co-email">Email <span class="req">*</span></label>
@@ -878,6 +893,9 @@
 
                 const fd = new FormData(profileForm);
                 const body = Object.fromEntries(fd.entries());
+                if (document.getElementById('co-company_name')?.readOnly) {
+                    delete body.company_name;
+                }
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Saving…';
                 try {
@@ -904,12 +922,39 @@
             });
         }
     </script>
-    <script src="/static/office_tracking.js?v=39"></script>
+    <script src="/static/office_tracking.js?v=41"></script>
     <script>
         (function () {
-            /** Tracking loads when a customer expands an order (see toggleDetails). Deep links still prefetch one order. */
+            function prefetchAllClientOrderTracking() {
+                if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') {
+                    return Promise.resolve();
+                }
+                const wrap = document.querySelector('.orders-wrap');
+                if (!wrap) return Promise.resolve();
+                const ids = [];
+                wrap.querySelectorAll('.data-row[data-order-id]').forEach(function (row) {
+                    const id = (row.dataset.orderId || '').trim();
+                    if (id) ids.push(id);
+                });
+                if (!ids.length) return Promise.resolve();
+                return OfficeTracking.prefetchAllOrderTracking(
+                    ids,
+                    '/api/client/orders',
+                    'client',
+                    function () {
+                        if (typeof OfficeTracking.applyCachedTrackingIn === 'function') {
+                            OfficeTracking.applyCachedTrackingIn(wrap, '/api/client/orders', 'client');
+                        }
+                        if (typeof notifyEmbedHeight === 'function') notifyEmbedHeight();
+                    },
+                    3
+                );
+            }
+
             function initClientPortalTracking() {
-                if (!window.OfficeTracking || !OfficeTracking.applyPortalDeepLink) return;
+                if (!window.OfficeTracking) return;
+                void prefetchAllClientOrderTracking();
+                if (!OfficeTracking.applyPortalDeepLink) return;
                 const dl = window.__PORTAL_DEEP_LINK__ || {};
                 const orderId = (dl.order || '').trim();
                 if (!orderId) return;

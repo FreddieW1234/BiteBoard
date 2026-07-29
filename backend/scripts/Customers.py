@@ -28,6 +28,7 @@ CUSTOMER_METAFIELD_KEYS = (
     "invoice_address_new",
     "landline_phone_number",
     "mobile_number",
+    "linked_company_id",
 )
 
 CUSTOMERS_GRAPHQL_QUERY = """
@@ -49,6 +50,7 @@ query GetCustomersOverview($cursor: String) {
         invoiceAddressNew: metafield(namespace: "custom_fields", key: "invoice_address_new") { value }
         landlinePhoneNumber: metafield(namespace: "custom_fields", key: "landline_phone_number") { value }
         mobileNumber: metafield(namespace: "custom_fields", key: "mobile_number") { value }
+        linkedCompanyId: metafield(namespace: "custom_fields", key: "linked_company_id") { value }
       }
     }
     pageInfo { hasNextPage endCursor }
@@ -215,6 +217,7 @@ METAFIELD_PAYLOAD_KEYS = {
     "invoice_address": ("invoice_address_new", "multi_line_text_field"),
     "landline_phone": ("landline_phone_number", "single_line_text_field"),
     "mobile_number": ("mobile_number", "single_line_text_field"),
+    "linked_company_id": ("linked_company_id", "single_line_text_field"),
 }
 
 
@@ -348,7 +351,32 @@ def create_customer(payload: dict) -> dict:
     return customer
 
 
-def update_customer_details(customer_id, payload):
+def _customer_company_locked(mf: dict) -> bool:
+    return bool((mf.get("linked_company_id") or "").strip())
+
+
+def set_customer_company_link(customer_id: str | int, company_id: str, company_name: str) -> dict:
+    """Assign customer to a company — overwrite company name and store company id on Shopify."""
+    payload = {
+        "company_name": (company_name or "").strip(),
+        "linked_company_id": str(company_id or "").strip(),
+    }
+    return update_customer_details(customer_id, payload, allow_company_override=True)
+
+
+def clear_customer_company_link(customer_id: str | int) -> dict:
+    """Remove company assignment from a customer."""
+    customer_id = int(customer_id)
+    owner_gid = f"gid://shopify/Customer/{customer_id}"
+    _graphql_metafields_delete([{
+        "ownerId": owner_gid,
+        "namespace": CUSTOMER_METAFIELD_NAMESPACE,
+        "key": "linked_company_id",
+    }])
+    return _fetch_single_customer(customer_id)
+
+
+def update_customer_details(customer_id, payload, *, allow_company_override: bool = False):
     """Update customer tags, email, and custom_fields metafields."""
     customer_id = int(customer_id)
     get_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/customers/{customer_id}.json"
@@ -381,6 +409,11 @@ def update_customer_details(customer_id, payload):
     owner_gid = f"gid://shopify/Customer/{customer_id}"
     existing_mf = _fetch_customer_metafields_rest(customer_id)
     existing_by_key = {mf.get("key"): mf for mf in existing_mf if mf.get("key")}
+    mf_map = _metafields_map_from_rest(existing_mf)
+
+    if not allow_company_override and _customer_company_locked(mf_map) and "company_name" in payload:
+        payload = dict(payload)
+        payload.pop("company_name", None)
 
     metafields_to_set = []
     metafields_to_delete = []
@@ -429,6 +462,8 @@ def _format_customer_graphql(node):
         "invoice_address": _metafield_graphql_value(node, "invoiceAddressNew"),
         "landline_phone": _metafield_graphql_value(node, "landlinePhoneNumber"),
         "mobile_number": _metafield_graphql_value(node, "mobileNumber"),
+        "linked_company_id": _metafield_graphql_value(node, "linkedCompanyId"),
+        "company_locked": bool(_metafield_graphql_value(node, "linkedCompanyId")),
         "phone": node.get("phone") or "",
         "tags": tags,
         "matched_tags": matched,
@@ -457,6 +492,8 @@ def _format_customer_rest(raw, metafields_by_key=None):
         "invoice_address": mf.get("invoice_address_new", ""),
         "landline_phone": mf.get("landline_phone_number", ""),
         "mobile_number": mf.get("mobile_number", ""),
+        "linked_company_id": mf.get("linked_company_id", ""),
+        "company_locked": _customer_company_locked(mf),
         "phone": raw.get("phone") or (raw.get("default_address") or {}).get("phone") or "",
         "tags": tags,
         "matched_tags": matched,

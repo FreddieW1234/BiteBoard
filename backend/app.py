@@ -2791,6 +2791,84 @@ def api_customers():
         }), 500
 
 
+@app.route('/api/companies', methods=['GET', 'POST'])
+def api_companies():
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.Companies import create_company, get_companies_overview  # type: ignore
+        if request.method == 'GET':
+            return jsonify(get_companies_overview())
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        result = create_company(name)
+        status = 400 if not result.get('success') else 200
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/companies/<company_id>', methods=['GET', 'PUT'])
+def api_company_detail(company_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.Companies import get_company_detail, rename_company  # type: ignore
+        if request.method == 'GET':
+            result = get_company_detail(company_id)
+            return jsonify(result), (404 if not result.get('success') else 200)
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        result = rename_company(company_id, name)
+        return jsonify(result), (400 if not result.get('success') else 200)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/companies/<company_id>/members', methods=['POST'])
+def api_company_add_member(company_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    customer_id = (data.get('customer_id') or '').strip()
+    try:
+        from scripts.Companies import add_company_member  # type: ignore
+        result = add_company_member(company_id, customer_id)
+        return jsonify(result), (400 if not result.get('success') else 200)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/companies/<company_id>/members/<customer_id>', methods=['DELETE'])
+def api_company_remove_member(company_id, customer_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.Companies import remove_company_member  # type: ignore
+        result = remove_company_member(company_id, customer_id)
+        return jsonify(result), (400 if not result.get('success') else 200)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/companies/<company_id>/notes', methods=['POST'])
+def api_company_add_note(company_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        from scripts.Companies import add_company_note  # type: ignore
+        result = add_company_note(
+            company_id,
+            author=(data.get('author') or '').strip(),
+            body=(data.get('body') or '').strip(),
+            note_date=(data.get('note_date') or '').strip(),
+        )
+        return jsonify(result), (400 if not result.get('success') else 200)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/customers/<customer_id>/orders', methods=['GET'])
 def api_customer_orders(customer_id):
     """Return all orders for one customer (staff Customers page)."""

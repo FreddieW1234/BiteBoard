@@ -38,6 +38,46 @@
         .dashboard-tab:hover { background: #4338ca; }
 
         .main-wrap { flex: 1; min-width: 0; padding: 24px; }
+        .page-title-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 0 20px 0; }
+        .page-title-row .page-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+        .customers-view-toggle { display: inline-flex; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px; gap: 2px; flex-shrink: 0; }
+        .customers-view-toggle button { border: none; background: transparent; color: #4338ca; font-size: 0.82rem; font-weight: 600; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-family: inherit; }
+        .customers-view-toggle button:hover { background: rgba(255,255,255,0.55); }
+        .customers-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
+        #customers-view-individuals[hidden], #customers-view-companies[hidden] { display: none !important; }
+
+        .co-create-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+        .co-create-card h3 { font-size: 0.95rem; margin-bottom: 10px; color: #111827; }
+        .co-inline-field { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .co-inline-field input[type="text"], .co-inline-field select { flex: 1 1 220px; min-width: 180px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.86rem; }
+        .co-company-row { cursor: pointer; }
+        .co-company-row.expanded { background: #eef2ff; }
+        .co-company-chevron { margin-left: 8px; font-size: 0.75rem; color: #9ca3af; transition: transform 0.15s; }
+        .co-company-row.expanded .co-company-chevron { transform: rotate(180deg); }
+        .co-company-details-row { display: none; }
+        .co-company-details-row.open { display: table-row; }
+        .co-company-details-row td { background: #f8fafc; padding: 0 !important; border-bottom: 1px solid #e5e7eb; }
+        .co-company-detail { padding: 18px 20px 22px; }
+        .co-company-detail-grid { display: grid; gap: 20px; }
+        .co-company-section h4 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; margin-bottom: 10px; }
+        .co-section-lead { font-size: 0.82rem; color: #6b7280; margin-bottom: 12px; line-height: 1.45; }
+        .co-member-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+        .co-member-row:last-of-type { border-bottom: none; }
+        .co-member-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .co-member-email, .co-member-id { font-size: 0.78rem; color: #6b7280; }
+        .co-empty-hint { font-size: 0.85rem; color: #9ca3af; font-style: italic; margin-bottom: 12px; }
+        .co-note-item { padding: 12px 0; border-bottom: 1px solid #eef0f3; }
+        .co-note-item:last-of-type { border-bottom: none; }
+        .co-note-meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; font-size: 0.82rem; color: #6b7280; }
+        .co-note-meta strong { color: #111827; }
+        .co-note-body { font-size: 0.88rem; color: #374151; white-space: pre-wrap; line-height: 1.5; }
+        .co-note-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .co-note-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: #6b7280; }
+        .co-note-form-grid input, .co-note-form-grid textarea { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.86rem; }
+        .co-note-body-field { grid-column: 1 / -1; }
+        .cu-company-locked-hint { font-size: 0.78rem; color: #6b7280; margin-top: 4px; }
+        input.cu-edit-input[readonly] { background: #f3f4f6; color: #6b7280; cursor: not-allowed; }
+
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
 
@@ -655,8 +695,15 @@
         <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
 
         <div class="main-wrap">
-            <h1 class="page-title"><i class="fas fa-users"></i> Customers</h1>
+            <div class="page-title-row">
+                <h1 class="page-title"><i class="fas fa-users"></i> Customers</h1>
+                <div class="customers-view-toggle" role="group" aria-label="Customers view">
+                    <button type="button" data-view="individuals" class="active" aria-pressed="true">Individuals</button>
+                    <button type="button" data-view="companies" aria-pressed="false">Companies</button>
+                </div>
+            </div>
 
+            <div id="customers-view-individuals">
             <div class="toolbar">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
@@ -706,6 +753,32 @@
                     Loading customers…
                 </div>
             </div>
+            </div>
+
+            <div id="customers-view-companies" hidden>
+                <div class="co-create-card">
+                    <h3>Create company</h3>
+                    <form id="co-create-company-form">
+                        <div class="co-inline-field">
+                            <input type="text" name="name" placeholder="Company name" required autocomplete="organization">
+                            <button type="submit" class="btn-primary"><i class="fas fa-plus"></i> Create</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="co-companies-search" placeholder="Search companies…" autocomplete="off">
+                    </div>
+                    <span class="count-pill" id="co-companies-count">–</span>
+                    <div class="toolbar-actions">
+                        <button type="button" class="btn-ghost" id="co-companies-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+                    </div>
+                </div>
+                <div id="co-companies-content">
+                    <div class="state-msg"><div class="spinner"></div>Loading companies…</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -726,6 +799,7 @@
 
     <script>
         let CU_DATA = { customers: [], total: 0, conflict_count: 0 };
+        window.CU_DATA = CU_DATA;
         let CU_SEARCH = '';
         let CU_SORT = 'alpha';
         let CU_FILTERS = { pending: false, trade: false, 'end-customer': false, unassigned: false };
@@ -1066,7 +1140,8 @@
                                 </div>
                                 <div class="cu-edit-field">
                                     <label for="cu-company-${escapeHtml(c.id)}">Company</label>
-                                    <input class="cu-edit-input" id="cu-company-${escapeHtml(c.id)}" name="company_name" type="text" value="${escapeHtml(c.company_name || '')}">
+                                    <input class="cu-edit-input" id="cu-company-${escapeHtml(c.id)}" name="company_name" type="text" value="${escapeHtml(c.company_name || '')}"${c.company_locked ? ' readonly aria-readonly="true"' : ''}>
+                                    ${c.company_locked ? '<p class="cu-company-locked-hint">Managed via Companies — linked to a company record.</p>' : ''}
                                 </div>
                                 <div class="cu-edit-field">
                                     <label for="cu-landline-${escapeHtml(c.id)}">Landline</label>
@@ -1729,13 +1804,37 @@
                     total: data.total || 0,
                     conflict_count: data.conflict_count || 0,
                 };
+                window.CU_DATA = CU_DATA;
                 render();
             } catch (err) {
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers()"><i class="fas fa-rotate"></i> Try again</button></div>`;
             }
         }
 
+        window.loadCustomers = loadCustomers;
+
+        function setCustomersView(view) {
+            view = view === 'companies' ? 'companies' : 'individuals';
+            const individuals = document.getElementById('customers-view-individuals');
+            const companies = document.getElementById('customers-view-companies');
+            if (individuals) individuals.hidden = view !== 'individuals';
+            if (companies) companies.hidden = view !== 'companies';
+            document.querySelectorAll('.customers-view-toggle [data-view]').forEach(function(btn) {
+                const active = btn.getAttribute('data-view') === view;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+            if (view === 'companies' && window.CompaniesPanel) {
+                window.CompaniesPanel.show();
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.customers-view-toggle [data-view]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    setCustomersView(btn.getAttribute('data-view'));
+                });
+            });
             loadCustomers();
             document.getElementById('cu-search').addEventListener('input', applyControls);
             document.getElementById('cu-sort').addEventListener('change', applyControls);
@@ -1810,6 +1909,7 @@
             });
         });
     </script>
+    <script src="/static/companies_panel.js?v=1"></script>
     <script src="/static/production_note_print.js?v=2"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>
