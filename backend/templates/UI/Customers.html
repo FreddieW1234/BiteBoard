@@ -67,8 +67,9 @@
         .co-empty-hint { font-size: 0.85rem; color: #9ca3af; font-style: italic; margin-bottom: 12px; }
         .co-note-item { padding: 12px 0; border-bottom: 1px solid #eef0f3; }
         .co-note-item:last-of-type { border-bottom: none; }
-        .co-note-meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; font-size: 0.82rem; color: #6b7280; }
+        .co-note-meta { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; font-size: 0.82rem; color: #6b7280; flex-wrap: wrap; }
         .co-note-meta strong { color: #111827; }
+        .co-note-meta .co-delete-note { margin-left: auto; font-size: 0.78rem; padding: 4px 8px; }
         .co-note-body { font-size: 0.88rem; color: #374151; white-space: pre-wrap; line-height: 1.5; }
         .co-note-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
         .co-note-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: #6b7280; }
@@ -1907,7 +1908,8 @@
             document.getElementById('cu-flagged').innerHTML = '';
             content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
             try {
-                const resp = await fetch('/api/customers', { credentials: 'same-origin' });
+                const url = forceRefresh ? '/api/customers?refresh=1' : '/api/customers';
+                const resp = await fetch(url, { credentials: 'same-origin' });
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
@@ -1919,6 +1921,9 @@
                 };
                 window.CU_DATA = CU_DATA;
                 render();
+                if (window.CompaniesPanel && window.CompaniesPanel.onCustomersLoaded) {
+                    window.CompaniesPanel.onCustomersLoaded();
+                }
             } catch (err) {
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers()"><i class="fas fa-rotate"></i> Try again</button></div>`;
             }
@@ -1950,6 +1955,9 @@
                 });
             });
             loadCustomers();
+            if (window.CompaniesPanel && window.CompaniesPanel.preload) {
+                window.CompaniesPanel.preload();
+            }
             document.getElementById('cu-search').addEventListener('input', applyControls);
             document.getElementById('cu-sort').addEventListener('change', applyControls);
             document.getElementById('cu-filter-pending').addEventListener('change', applyControls);
@@ -2023,7 +2031,7 @@
             });
         });
     </script>
-    <script src="/static/companies_panel.js?v=5"></script>
+    <script src="/static/companies_panel.js?v=7"></script>
     <script src="/static/production_note_print.js?v=2"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>

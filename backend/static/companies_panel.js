@@ -12,6 +12,9 @@
     let noteModalCompanyId = null;
     let addMemberModalCompanyId = null;
     let addMemberPickerSearch = '';
+    let companiesListLoaded = false;
+    let companiesLoadPromise = null;
+    let customerLookup = null;
 
     function ensureNoteModal() {
         let modal = document.getElementById('co-note-modal');
@@ -361,15 +364,56 @@
         return (company.members || []).map(m => String(m.customer_id)).filter(Boolean);
     }
 
-    function companyTotalSpent(company) {
-        const ids = new Set(companyMemberIds(company));
-        if (!ids.size) return 0;
+    function rebuildCustomerLookup() {
+        customerLookup = Object.create(null);
         const all = (global.CU_DATA && global.CU_DATA.customers) || [];
-        let sum = 0;
         for (const c of all) {
-            if (ids.has(String(c.id))) {
-                sum += parseFloat(c.total_spent || 0) || 0;
-            }
+            customerLookup[String(c.id)] = c;
+        }
+    }
+
+    function customerLookupById() {
+        if (!customerLookup) rebuildCustomerLookup();
+        return customerLookup;
+    }
+
+    function enrichCompanyFromCuData(company) {
+        if (!company) return company;
+        const lookup = customerLookupById();
+        let members = company.members;
+        if (!members || !members.length) {
+            members = companyMemberIds(company).map(function (id) {
+                const c = lookup[id];
+                return {
+                    customer_id: id,
+                    name: c ? (c.name || '') : '',
+                    email: c ? (c.email || '') : '',
+                };
+            });
+        } else {
+            members = members.map(function (m) {
+                const id = String(m.customer_id || '');
+                const c = lookup[id];
+                if (!c) return m;
+                return {
+                    customer_id: id,
+                    added_at: m.added_at || '',
+                    name: m.name || c.name || '',
+                    email: m.email || c.email || '',
+                };
+            });
+        }
+        return Object.assign({}, company, { members: members });
+    }
+
+    function companyTotalSpent(company) {
+        const lookup = customerLookupById();
+        const ids = companyMemberIds(company);
+        if (!ids.length) return 0;
+        let sum = 0;
+        for (let i = 0; i < ids.length; i++) {
+            const c = lookup[ids[i]];
+            if (c) sum += parseFloat(c.total_spent || 0) || 0;
         }
         return sum;
     }
@@ -398,11 +442,14 @@
         return all.filter(c => !assigned.has(String(c.id)));
     }
 
-    function renderNoteRow(note) {
+    function renderNoteRow(companyId, note) {
         return `<div class="co-note-item">
             <div class="co-note-meta">
                 <strong>${escapeHtml(note.author || '')}</strong>
                 <span>${escapeHtml(formatDate(note.note_date))}</span>
+                <button type="button" class="btn-ghost co-delete-note" data-company-id="${escapeHtml(companyId)}" data-note-id="${escapeHtml(note.id)}" title="Delete note">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
             </div>
             <div class="co-note-body">${escapeHtml(note.body || '')}</div>
         </div>`;
@@ -421,10 +468,11 @@
     }
 
     function renderCompanyDetail(company) {
+        company = enrichCompanyFromCuData(company);
         const availableCount = availableCustomers(company).length;
 
         const notesHtml = (company.notes || []).length
-            ? company.notes.map(renderNoteRow).join('')
+            ? company.notes.map(function (n) { return renderNoteRow(company.id, n); }).join('')
             : '<p class="co-empty-hint">No notes yet.</p>';
 
         const membersHtml = (company.members || []).length
@@ -509,33 +557,60 @@
         </div></div>`;
     }
 
-    async function loadCompanies() {
+    async function loadCompanies(options) {
+        options = options || {};
+        const force = !!options.force;
+        const silent = !!options.silent;
+
+        if (!force && companiesListLoaded) {
+            renderCompaniesTable();
+            return;
+        }
+        if (companiesLoadPromise && !force) {
+            return companiesLoadPromise;
+        }
+
         const root = document.getElementById('co-companies-content');
-        if (root) {
+        const view = document.getElementById('customers-view-companies');
+        if (root && !silent && view && !view.hidden) {
             root.innerHTML = '<div class="list-card"><div class="state-msg"><div class="spinner"></div>Loading companies…</div></div>';
         }
-        const resp = await fetch('/api/companies', { credentials: 'same-origin' });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || !data.success) {
-            throw new Error((data && data.error) || 'Failed to load companies');
-        }
-        companies = data.companies || [];
-        companies.forEach(function (company) {
-            const cached = companyDetailsCache[company.id];
-            if (cached && Array.isArray(cached.members)) {
-                company.members = cached.members;
+
+        companiesLoadPromise = (async function () {
+            const url = force ? '/api/companies?refresh=1' : '/api/companies';
+            const resp = await fetch(url, { credentials: 'same-origin' });
+            const data = await resp.json().catch(function () { return {}; });
+            if (!resp.ok || !data.success) {
+                throw new Error((data && data.error) || 'Failed to load companies');
             }
-        });
-        renderCompaniesTable();
+            companies = data.companies || [];
+            companies.forEach(function (company) {
+                const cached = companyDetailsCache[company.id];
+                if (cached && Array.isArray(cached.members)) {
+                    company.members = cached.members;
+                }
+            });
+            companiesListLoaded = true;
+            renderCompaniesTable();
+        })();
+
+        try {
+            await companiesLoadPromise;
+        } catch (err) {
+            if (!silent) throw err;
+            companiesListLoaded = false;
+        } finally {
+            if (force) companiesLoadPromise = null;
+        }
     }
 
     async function loadCompanyDetail(companyId) {
         const resp = await fetch(`/api/companies/${encodeURIComponent(companyId)}`, { credentials: 'same-origin' });
-        const data = await resp.json().catch(() => ({}));
+        const data = await resp.json().catch(function () { return {}; });
         if (!resp.ok || !data.success) {
             throw new Error((data && data.error) || 'Failed to load company');
         }
-        companyDetailsCache[companyId] = data.company;
+        companyDetailsCache[companyId] = enrichCompanyFromCuData(data.company);
         renderCompaniesTable();
     }
 
@@ -550,7 +625,7 @@
         if (!resp.ok || !data.success) {
             throw new Error((data && data.error) || 'Could not create company');
         }
-        await loadCompanies();
+        await loadCompanies({ force: true });
         expandedCompanyId = data.company && data.company.id;
         if (expandedCompanyId) await loadCompanyDetail(expandedCompanyId);
     }
@@ -570,7 +645,7 @@
         if (idx >= 0 && data.company) {
             companies[idx] = { ...companies[idx], name: data.company.name };
         }
-        await loadCompanies();
+        await loadCompanies({ force: true });
         if (expandedCompanyId === companyId) {
             await loadCompanyDetail(companyId);
         }
@@ -589,7 +664,7 @@
         if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Could not add member');
         companyDetailsCache[companyId] = data.company;
         patchLinkedCustomersCompanyName(data.company);
-        await loadCompanies();
+        await loadCompanies({ force: true });
         if (global.loadCustomers) await global.loadCustomers(true);
         if (typeof global.renderCustomers === 'function') global.renderCustomers();
     }
@@ -602,7 +677,7 @@
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Could not remove member');
         companyDetailsCache[companyId] = data.company;
-        await loadCompanies();
+        await loadCompanies({ force: true });
         if (global.loadCustomers) await global.loadCustomers(true);
     }
 
@@ -613,9 +688,26 @@
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
-        const data = await resp.json().catch(() => ({}));
+        const data = await resp.json().catch(function () { return {}; });
         if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Could not save note');
         await loadCompanyDetail(companyId);
+    }
+
+    async function deleteNote(companyId, noteId) {
+        const resp = await fetch(
+            `/api/companies/${encodeURIComponent(companyId)}/notes/${encodeURIComponent(noteId)}`,
+            { method: 'DELETE', credentials: 'same-origin' }
+        );
+        const data = await resp.json().catch(function () { return {}; });
+        if (!resp.ok || !data.success) {
+            throw new Error((data && data.error) || 'Could not delete note');
+        }
+        if (data.company) {
+            companyDetailsCache[companyId] = enrichCompanyFromCuData(data.company);
+        } else {
+            await loadCompanyDetail(companyId);
+        }
+        renderCompaniesTable();
     }
 
     function bindEvents() {
@@ -628,9 +720,21 @@
             if (row && !e.target.closest('button, input, select, textarea, form, a')) {
                 const id = row.dataset.companyId;
                 expandedCompanyId = expandedCompanyId === id ? null : id;
+                if (expandedCompanyId) {
+                    const summary = companies.find(function (c) {
+                        return String(c.id) === String(expandedCompanyId);
+                    });
+                    const cached = companyDetailsCache[expandedCompanyId];
+                    if (!cached && summary) {
+                        companyDetailsCache[expandedCompanyId] = enrichCompanyFromCuData(summary);
+                    }
+                }
                 renderCompaniesTable();
-                if (expandedCompanyId && !companyDetailsCache[expandedCompanyId]) {
-                    loadCompanyDetail(expandedCompanyId).catch(err => alert(err.message));
+                if (expandedCompanyId) {
+                    const cached = companyDetailsCache[expandedCompanyId];
+                    if (!cached || !Array.isArray(cached.notes)) {
+                        loadCompanyDetail(expandedCompanyId).catch(function (err) { alert(err.message); });
+                    }
                 }
                 return;
             }
@@ -650,6 +754,16 @@
                 const companyId = addNoteBtn.dataset.companyId;
                 const company = companyDetailsCache[companyId] || companies.find(c => String(c.id) === String(companyId));
                 openNoteModal(companyId, company && company.name);
+                return;
+            }
+            const deleteNoteBtn = e.target.closest('.co-delete-note');
+            if (deleteNoteBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const companyId = deleteNoteBtn.dataset.companyId;
+                const noteId = deleteNoteBtn.dataset.noteId;
+                if (!confirm('Delete this note? This cannot be undone.')) return;
+                deleteNote(companyId, noteId).catch(function (err) { alert(err.message); });
                 return;
             }
             const addMemberBtn = e.target.closest('.co-add-member-btn');
@@ -686,7 +800,8 @@
         if (refreshBtn) {
             refreshBtn.addEventListener('click', function () {
                 companyDetailsCache = Object.create(null);
-                loadCompanies().catch(err => alert(err.message));
+                companiesListLoaded = false;
+                loadCompanies({ force: true }).catch(function (err) { alert(err.message); });
             });
         }
 
@@ -698,9 +813,25 @@
         }
     }
 
+    function onCustomersLoaded() {
+        rebuildCustomerLookup();
+        if (companiesListLoaded) {
+            renderCompaniesTable();
+        }
+    }
+
+    function preloadCompanies() {
+        return loadCompanies({ silent: true });
+    }
+
     function showCompaniesView() {
         bindEvents();
-        loadCompanies().catch(err => {
+        rebuildCustomerLookup();
+        if (companiesListLoaded) {
+            renderCompaniesTable();
+            return;
+        }
+        loadCompanies().catch(function (err) {
             const root = document.getElementById('co-companies-content');
             if (root) root.innerHTML = `<div class="list-card"><div class="state-msg error">${escapeHtml(err.message)}</div></div>`;
         });
@@ -708,6 +839,8 @@
 
     global.CompaniesPanel = {
         show: showCompaniesView,
-        refreshList: loadCompanies,
+        preload: preloadCompanies,
+        refreshList: function () { return loadCompanies({ force: true }); },
+        onCustomersLoaded: onCustomersLoaded,
     };
 })(window);

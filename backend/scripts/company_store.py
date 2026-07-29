@@ -294,3 +294,28 @@ def add_note(
         "body": row["body"],
         "created_at": row["created_at"],
     }
+
+
+def delete_note(company_id: str, note_id: str) -> None:
+    init_db()
+    cid = (company_id or "").strip()
+    if not cid:
+        raise ValueError("Company id is required")
+    try:
+        nid = int(note_id)
+    except (TypeError, ValueError):
+        raise ValueError("Note id is required")
+    with _connect() as conn:
+        company = conn.execute(
+            "SELECT id FROM companies WHERE id = ?",
+            (cid,),
+        ).fetchone()
+        if not company:
+            raise ValueError("Company not found")
+        cur = conn.execute(
+            "DELETE FROM company_notes WHERE id = ? AND company_id = ?",
+            (nid, cid),
+        )
+        if cur.rowcount == 0:
+            raise ValueError("Note not found")
+        conn.commit()

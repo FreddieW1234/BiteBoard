@@ -537,13 +537,46 @@ def _fetch_all_customers():
         return customers
 
 
-def get_customers_overview():
+_CUSTOMERS_CACHE: dict | None = None
+_CUSTOMERS_CACHE_AT = 0.0
+_CUSTOMERS_CACHE_TTL = 90  # seconds — avoids repeated full Shopify pulls on tab switches
+
+
+def invalidate_customers_cache() -> None:
+    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT
+    _CUSTOMERS_CACHE = None
+    _CUSTOMERS_CACHE_AT = 0.0
+
+
+def get_customers_overview(*, refresh: bool = False):
     """Return all Shopify customers as a flat list."""
+    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT
+    now = time.time()
+    if (
+        not refresh
+        and _CUSTOMERS_CACHE is not None
+        and (now - _CUSTOMERS_CACHE_AT) < _CUSTOMERS_CACHE_TTL
+    ):
+        return _CUSTOMERS_CACHE
+
     customers = _fetch_all_customers()
     conflict_count = sum(1 for c in customers if c["tag_conflict"])
-    return {
+    result = {
         "success": True,
         "customers": customers,
         "total": len(customers),
         "conflict_count": conflict_count,
+    }
+    _CUSTOMERS_CACHE = result
+    _CUSTOMERS_CACHE_AT = now
+    return result
+
+
+def get_customers_id_map(*, refresh: bool = False) -> dict[str, dict]:
+    """Customer id (str) -> customer dict, from the in-memory overview cache."""
+    overview = get_customers_overview(refresh=refresh)
+    return {
+        str(c.get("id")): c
+        for c in (overview.get("customers") or [])
+        if c.get("id") is not None
     }

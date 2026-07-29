@@ -14,6 +14,7 @@ from config import OFFICE_API_URL, OFFICE_API_KEY  # type: ignore
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 30
+_COMPANIES_TIMEOUT = 8  # fail fast when office server is slow/unreachable
 _thread_local = threading.local()
 
 
@@ -291,7 +292,7 @@ def list_companies(*, full: bool = False) -> dict:
     """``GET /companies`` — durable company overview from the office server."""
     url = _companies_url()
     params = {"full": "true"} if full else None
-    resp = _request("GET", url, params=params)
+    resp = _request("GET", url, params=params, timeout=_COMPANIES_TIMEOUT)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from companies list")
@@ -303,7 +304,7 @@ def get_company(company_id: str) -> dict:
     cid = (company_id or "").strip()
     if not cid:
         raise OfficeApiError("Company id is required")
-    resp = _request("GET", _companies_url(cid))
+    resp = _request("GET", _companies_url(cid), timeout=_COMPANIES_TIMEOUT)
     result = _handle_response(resp, allow_404=True)
     if not isinstance(result, dict):
         raise OfficeApiError("Company not found")
@@ -375,6 +376,19 @@ def add_company_note(
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from company note add")
+    return result
+
+
+def delete_company_note(company_id: str, note_id: str) -> dict:
+    """``DELETE /companies/{id}/notes/{note_id}``."""
+    cid = (company_id or "").strip()
+    nid = str(note_id or "").strip()
+    if not nid:
+        raise OfficeApiError("Note id is required")
+    resp = _request("DELETE", _companies_url(cid, "notes", nid), timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company note delete")
     return result
 
 

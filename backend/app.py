@@ -2780,7 +2780,8 @@ def api_customers():
     """Return all Shopify customers grouped by Pending / trade / end-customer tags."""
     try:
         from scripts.Customers import get_customers_overview
-        return jsonify(get_customers_overview())
+        refresh = request.args.get('refresh', '').lower() in ('1', 'true', 'yes')
+        return jsonify(get_customers_overview(refresh=refresh))
     except Exception as e:
         return jsonify({
             'success': False,
@@ -2798,7 +2799,8 @@ def api_companies():
     try:
         from scripts.Companies import create_company, get_companies_overview  # type: ignore
         if request.method == 'GET':
-            return jsonify(get_companies_overview())
+            refresh = request.args.get('refresh', '').lower() in ('1', 'true', 'yes')
+            return jsonify(get_companies_overview(refresh=refresh))
         data = request.get_json(silent=True) or {}
         name = (data.get('name') or '').strip()
         result = create_company(name)
@@ -2865,6 +2867,19 @@ def api_company_add_note(company_id):
             note_date=(data.get('note_date') or '').strip(),
         )
         return jsonify(result), (400 if not result.get('success') else 200)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/companies/<company_id>/notes/<note_id>', methods=['DELETE'])
+def api_company_delete_note(company_id, note_id):
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.Companies import delete_company_note  # type: ignore
+        result = delete_company_note(company_id, note_id)
+        status = 404 if result.get('error') == 'Note not found' else (400 if not result.get('success') else 200)
+        return jsonify(result), status
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -2957,7 +2972,7 @@ def api_customer_type_assigned_notify(customer_id):
 def api_customer_update(customer_id):
     """Save customer email, type tag, and custom_fields metafields."""
     try:
-        from scripts.Customers import update_customer_details, CUSTOMER_TYPE_TAGS
+        from scripts.Customers import update_customer_details, CUSTOMER_TYPE_TAGS, invalidate_customers_cache
         data = request.get_json(silent=True) or {}
         type_tag = data.get('type_tag')
         if type_tag is not None and type_tag != '':
@@ -2968,6 +2983,7 @@ def api_customer_update(customer_id):
         elif type_tag == '':
             data['type_tag'] = None
         customer = update_customer_details(customer_id, data)
+        invalidate_customers_cache()
         return jsonify({'success': True, 'customer': customer})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
