@@ -894,7 +894,11 @@ def api_metafield_create():
         
         if not all([product_id, namespace, key]):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
+        if key == "unit_weight":
+            from scripts.product_creator.Product_Creator import normalize_unit_weight_value  # type: ignore
+            value = normalize_unit_weight_value(value)
+
         metafield_id = create_metafield(product_id, namespace, key, value, metafield_type)
         
         if metafield_id:

@@ -292,6 +292,14 @@
         const TEXT_EDIT_KEYS = new Set(['product_size', 'moq', 'shelf_life', 'leadtime1', 'leadtime2', 'commodity_code']);
         const EMOJI_EDIT_KEYS = new Set(['vegan', 'vegetarian', 'halal', 'coeliac', 'peanuts', 'tree_nuts', 'sesame', 'milk', 'egg', 'cereals', 'soya']);
 
+        function floorUnitWeightValue(raw) {
+            const s = String(raw == null ? '' : raw).trim();
+            if (!s) return s;
+            const n = parseFloat(s.replace(/,/g, ''));
+            if (Number.isNaN(n)) return s;
+            return String(Math.floor(n));
+        }
+
         function editWidgetFor(key) {
             if (key === 'title') return 'title';
             if (key === 'category') return 'select-cat';
@@ -1105,7 +1113,9 @@
                 return JSON.stringify(normFilters(picked));
             }
             const inp = cell.querySelector('input');
-            return inp ? inp.value.trim() : '';
+            let val = inp ? inp.value.trim() : '';
+            if (key === 'unit_weight' && val) val = floorUnitWeightValue(val);
+            return val;
         }
 
         function buildUpdate(key, pid, newVal) {
@@ -1232,6 +1242,13 @@
             document.getElementById('ap-refresh').addEventListener('click', function() { loadProducts(true); });
             document.getElementById('ap-edit-cancel').addEventListener('click', cancelColumnEdit);
             document.getElementById('ap-edit-save').addEventListener('click', saveColumnEdit);
+            document.getElementById('ap-content').addEventListener('blur', function(e) {
+                if (editingColumn !== 'unit_weight') return;
+                const inp = e.target.closest('.ap-edit-input');
+                if (!inp) return;
+                const floored = floorUnitWeightValue(inp.value);
+                if (floored !== inp.value.trim()) inp.value = floored;
+            }, true);
             document.getElementById('ap-expand').addEventListener('click', function() {
                 document.querySelectorAll('#ap-content .category-card').forEach(c => c.classList.remove('collapsed'));
                 requestAnimationFrame(updateHorizontalScrollBar);

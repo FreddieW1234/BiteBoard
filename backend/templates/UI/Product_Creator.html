@@ -3553,6 +3553,9 @@ Dietary</textarea>
                             }
                         } else {
                             value = inputElement.value.trim();
+                            if (key === 'unit_weight' && value) {
+                                value = floorUnitWeightValue(value);
+                            }
                         }
                         
                         // Only include metafields that have values
@@ -5090,6 +5093,24 @@ Dietary</textarea>
         }
 
         // Auto-calculation function for case weight
+        function floorUnitWeightValue(raw) {
+            const s = String(raw == null ? '' : raw).trim();
+            if (!s) return s;
+            const n = parseFloat(s.replace(/,/g, ''));
+            if (Number.isNaN(n)) return s;
+            return String(Math.floor(n));
+        }
+
+        function applyUnitWeightFloor(el) {
+            if (!el) return;
+            const trimmed = String(el.value).trim();
+            const floored = floorUnitWeightValue(trimmed);
+            if (floored !== trimmed) {
+                el.value = floored;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+
         function setupCaseWeightCalculation() {
             const caseWeightField = document.querySelector('textarea[data-key="case_weight"]');
             const caseQuantityField = document.querySelector('textarea[data-key="case_quantity"]');
@@ -5101,7 +5122,7 @@ Dietary</textarea>
                 // Function to calculate case weight
                 function calculateCaseWeight() {
                     const caseQuantity = parseFloat(caseQuantityField.value) || 0;
-                    const unitWeight = parseFloat(unitWeightField.value) || 0;
+                    const unitWeight = parseFloat(floorUnitWeightValue(unitWeightField.value)) || 0;
                     
                     if (caseQuantity > 0 && unitWeight > 0) {
 
@@ -5135,6 +5156,7 @@ Dietary</textarea>
                 // Add event listeners to trigger calculation when values change
                 caseQuantityField.addEventListener('input', calculateCaseWeight);
                 unitWeightField.addEventListener('input', calculateCaseWeight);
+                unitWeightField.addEventListener('blur', function () { applyUnitWeightFloor(unitWeightField); });
                 
                 // Initial calculation if values are already present
                 if (caseQuantityField.value && unitWeightField.value) {

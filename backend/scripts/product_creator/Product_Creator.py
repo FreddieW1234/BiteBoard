@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import re
+import math
 import requests
 import json
 import base64
@@ -2297,6 +2298,19 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
     return saved_list
 
 
+def normalize_unit_weight_value(raw_value):
+    """Floor decimal unit weight (grams) to the nearest integer."""
+    if raw_value is None:
+        return raw_value
+    s = str(raw_value).strip()
+    if not s:
+        return raw_value
+    try:
+        return str(math.floor(float(s.replace(",", ""))))
+    except (TypeError, ValueError):
+        return raw_value
+
+
 def create_metafields(product_id, metafields_data, shopify_domain=None):
     """
     Create or update metafields for a product (upsert - update if exists, create if not)
@@ -2375,6 +2389,8 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 namespace = metafield_data.get("namespace", "custom")
                 key = metafield_data.get("key", "")
                 raw_value = metafield_data.get("value", "")
+                if namespace == "custom" and key == "unit_weight":
+                    raw_value = normalize_unit_weight_value(raw_value)
                 mf_type = metafield_data.get("type", "single_line_text_field") or "single_line_text_field"
 
                 # When clearable metafields (guidelines/templates/filter-groups/category/subcategory) are

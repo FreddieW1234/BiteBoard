@@ -128,6 +128,33 @@
 
         .tick { min-height: 16px; }
 
+        .origination-select {
+            width: 100%;
+            max-width: 100%;
+            border: none;
+            background: transparent;
+            font: inherit;
+            font-size: 9.5pt;
+            font-weight: 400;
+            padding: 0;
+            margin: 0;
+            color: #000;
+            cursor: pointer;
+        }
+
+        .origination-select:focus {
+            outline: 2px solid #4f46e5;
+            outline-offset: 1px;
+        }
+
+        @media print {
+            .origination-select {
+                -webkit-appearance: none;
+                appearance: none;
+                pointer-events: none;
+            }
+        }
+
         .addr-lbl {
             line-height: 1.15;
             vertical-align: top;
@@ -293,7 +320,13 @@
             </tr>
             <tr>
                 <td class="lbl" colspan="2">Origination Fee</td>
-                <td class="val">{{ note.origination_fee }}</td>
+                <td class="val">
+                    <select class="origination-select" aria-label="Origination fee">
+                        <option value="0"{% if note.origination == '0' %} selected{% endif %}>0</option>
+                        <option value="50"{% if note.origination == '50' %} selected{% endif %}>50</option>
+                        <option value="75"{% if note.origination == '75' %} selected{% endif %}>75</option>
+                    </select>
+                </td>
                 <td class="lbl" colspan="2">Email Address</td>
                 <td class="val">{{ note.email_address }}</td>
             </tr>
