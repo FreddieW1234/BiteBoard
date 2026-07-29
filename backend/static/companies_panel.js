@@ -9,6 +9,191 @@
     let expandedCompanyId = null;
     let companyDetailsCache = Object.create(null);
     let searchTerm = '';
+    let noteModalCompanyId = null;
+
+    function ensureNoteModal() {
+        let modal = document.getElementById('co-note-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'co-note-modal';
+        modal.className = 'co-note-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="co-note-modal-backdrop" data-close-co-note-modal></div>
+            <div class="co-note-modal-panel" role="dialog" aria-modal="true" aria-labelledby="co-note-modal-title">
+                <div class="co-note-modal-header">
+                    <h2 id="co-note-modal-title">Add note</h2>
+                    <button type="button" class="co-note-modal-close" data-close-co-note-modal aria-label="Close">&times;</button>
+                </div>
+                <form id="co-note-modal-form" class="co-note-modal-body">
+                    <div class="co-note-form-grid">
+                        <label>
+                            <span>Date</span>
+                            <input type="date" name="note_date" required>
+                        </label>
+                        <label>
+                            <span>Author</span>
+                            <input type="text" name="author" placeholder="Your name" required autocomplete="name">
+                        </label>
+                        <label class="co-note-body-field">
+                            <span>Note</span>
+                            <textarea name="body" rows="8" placeholder="Interaction notes…" required></textarea>
+                        </label>
+                    </div>
+                </form>
+                <div class="co-note-modal-footer">
+                    <button type="button" class="btn-ghost" data-close-co-note-modal>Cancel</button>
+                    <button type="submit" form="co-note-modal-form" class="btn-primary" id="co-note-modal-save">
+                        <i class="fas fa-check"></i> Save note
+                    </button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-co-note-modal]')) closeNoteModal();
+        });
+
+        document.getElementById('co-note-modal-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!noteModalCompanyId) return;
+            const form = e.target;
+            const saveBtn = document.getElementById('co-note-modal-save');
+            const fd = new FormData(form);
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+            }
+            addNote(noteModalCompanyId, {
+                note_date: fd.get('note_date'),
+                author: fd.get('author'),
+                body: fd.get('body'),
+            }).then(function () {
+                closeNoteModal();
+            }).catch(function (err) {
+                alert(err.message);
+            }).finally(function () {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-check"></i> Save note';
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('open')) closeNoteModal();
+        });
+
+        return modal;
+    }
+
+    function openNoteModal(companyId, companyName) {
+        const modal = ensureNoteModal();
+        noteModalCompanyId = companyId;
+        const form = document.getElementById('co-note-modal-form');
+        const title = document.getElementById('co-note-modal-title');
+        if (title) {
+            title.textContent = companyName
+                ? `Add note — ${companyName}`
+                : 'Add note';
+        }
+        if (form) {
+            form.reset();
+            const dateInput = form.querySelector('[name="note_date"]');
+            if (dateInput) dateInput.value = todayIso();
+        }
+        modal.hidden = false;
+        modal.classList.add('open');
+        const authorInput = form && form.querySelector('[name="author"]');
+        if (authorInput) authorInput.focus();
+    }
+
+    function closeNoteModal() {
+        const modal = document.getElementById('co-note-modal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.hidden = true;
+        noteModalCompanyId = null;
+    }
+
+    function ensureCreateCompanyModal() {
+        let modal = document.getElementById('co-create-company-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'co-create-company-modal';
+        modal.className = 'co-note-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="co-note-modal-backdrop" data-close-co-create-company></div>
+            <div class="co-note-modal-panel" role="dialog" aria-modal="true" aria-labelledby="co-create-company-modal-title">
+                <div class="co-note-modal-header">
+                    <h2 id="co-create-company-modal-title">Create company</h2>
+                    <button type="button" class="co-note-modal-close" data-close-co-create-company aria-label="Close">&times;</button>
+                </div>
+                <form id="co-create-company-modal-form" class="co-note-modal-body">
+                    <label class="co-create-company-field">
+                        <span>Company name</span>
+                        <input type="text" name="name" placeholder="Company name" required autocomplete="organization">
+                    </label>
+                </form>
+                <div class="co-note-modal-footer">
+                    <button type="button" class="btn-ghost" data-close-co-create-company>Cancel</button>
+                    <button type="submit" form="co-create-company-modal-form" class="btn-primary" id="co-create-company-modal-save">
+                        <i class="fas fa-plus"></i> Create
+                    </button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-co-create-company]')) closeCreateCompanyModal();
+        });
+
+        document.getElementById('co-create-company-modal-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = e.target;
+            const saveBtn = document.getElementById('co-create-company-modal-save');
+            const name = (new FormData(form).get('name') || '').trim();
+            if (!name) return;
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating…';
+            }
+            createCompany(name).then(function () {
+                closeCreateCompanyModal();
+            }).catch(function (err) {
+                alert(err.message);
+            }).finally(function () {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-plus"></i> Create';
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('open')) closeCreateCompanyModal();
+        });
+
+        return modal;
+    }
+
+    function openCreateCompanyModal() {
+        const modal = ensureCreateCompanyModal();
+        const form = document.getElementById('co-create-company-modal-form');
+        if (form) form.reset();
+        modal.hidden = false;
+        modal.classList.add('open');
+        const nameInput = form && form.querySelector('[name="name"]');
+        if (nameInput) nameInput.focus();
+    }
+
+    function closeCreateCompanyModal() {
+        const modal = document.getElementById('co-create-company-modal');
+        if (!modal) return;
+        modal.classList.remove('open');
+        modal.hidden = true;
+    }
 
     function escapeHtml(text) {
         const d = document.createElement('div');
@@ -140,25 +325,13 @@
                     </form>
                 </section>
                 <section class="co-company-section co-notes-section">
-                    <h4>Notes</h4>
+                    <div class="co-notes-header">
+                        <h4>Notes</h4>
+                        <button type="button" class="btn-primary co-add-note-btn" data-company-id="${escapeHtml(company.id)}">
+                            <i class="fas fa-plus"></i> Add note
+                        </button>
+                    </div>
                     ${notesHtml}
-                    <form class="co-add-note-form" data-company-id="${escapeHtml(company.id)}">
-                        <div class="co-note-form-grid">
-                            <label>
-                                <span>Date</span>
-                                <input type="date" name="note_date" value="${todayIso()}" required>
-                            </label>
-                            <label>
-                                <span>Author</span>
-                                <input type="text" name="author" placeholder="Your name" required>
-                            </label>
-                            <label class="co-note-body-field">
-                                <span>Note</span>
-                                <textarea name="body" rows="3" placeholder="Interaction notes…" required></textarea>
-                            </label>
-                        </div>
-                        <button type="submit" class="btn-primary"><i class="fas fa-plus"></i> Add note</button>
-                    </form>
                 </section>
             </div>
         </div>`;
@@ -341,19 +514,19 @@
                 const customerId = removeBtn.dataset.customerId;
                 if (!confirm('Remove this individual from the company?')) return;
                 removeMember(companyId, customerId).catch(err => alert(err.message));
+                return;
+            }
+            const addNoteBtn = e.target.closest('.co-add-note-btn');
+            if (addNoteBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const companyId = addNoteBtn.dataset.companyId;
+                const company = companyDetailsCache[companyId] || companies.find(c => String(c.id) === String(companyId));
+                openNoteModal(companyId, company && company.name);
             }
         });
 
         root.addEventListener('submit', function (e) {
-            const createForm = e.target.closest('#co-create-company-form');
-            if (createForm) {
-                e.preventDefault();
-                const name = (new FormData(createForm).get('name') || '').trim();
-                if (!name) return;
-                createCompany(name).catch(err => alert(err.message));
-                createForm.reset();
-                return;
-            }
             const renameForm = e.target.closest('.co-rename-form');
             if (renameForm) {
                 e.preventDefault();
@@ -371,17 +544,6 @@
                 addMember(companyId, customerId).catch(err => alert(err.message));
                 return;
             }
-            const noteForm = e.target.closest('.co-add-note-form');
-            if (noteForm) {
-                e.preventDefault();
-                const companyId = noteForm.dataset.companyId;
-                const fd = new FormData(noteForm);
-                addNote(companyId, {
-                    note_date: fd.get('note_date'),
-                    author: fd.get('author'),
-                    body: fd.get('body'),
-                }).then(() => noteForm.querySelector('[name="body"]').value = '').catch(err => alert(err.message));
-            }
         });
 
         const search = document.getElementById('co-companies-search');
@@ -397,6 +559,13 @@
             refreshBtn.addEventListener('click', function () {
                 companyDetailsCache = Object.create(null);
                 loadCompanies().catch(err => alert(err.message));
+            });
+        }
+
+        const createBtn = document.getElementById('co-companies-create');
+        if (createBtn) {
+            createBtn.addEventListener('click', function () {
+                openCreateCompanyModal();
             });
         }
     }

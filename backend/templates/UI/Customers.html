@@ -46,8 +46,6 @@
         .customers-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
         #customers-view-individuals[hidden], #customers-view-companies[hidden] { display: none !important; }
 
-        .co-create-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
-        .co-create-card h3 { font-size: 0.95rem; margin-bottom: 10px; color: #111827; }
         .co-inline-field { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .co-inline-field input[type="text"], .co-inline-field select { flex: 1 1 220px; min-width: 180px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.86rem; }
         .co-company-row { cursor: pointer; }
@@ -76,6 +74,60 @@
         .co-note-form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; color: #6b7280; }
         .co-note-form-grid input, .co-note-form-grid textarea { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.86rem; }
         .co-note-body-field { grid-column: 1 / -1; }
+        .co-notes-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .co-notes-header h4 { margin-bottom: 0; }
+        .co-note-modal { position: fixed; inset: 0; z-index: 1100; display: none; align-items: center; justify-content: center; padding: 24px; }
+        .co-note-modal.open { display: flex; }
+        .co-note-modal-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, 0.45); }
+        .co-note-modal-panel {
+            position: relative;
+            width: min(560px, 100%);
+            max-height: min(90vh, 720px);
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .co-note-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fafc;
+        }
+        .co-note-modal-header h2 { font-size: 1.05rem; font-weight: 600; color: #111827; margin: 0; }
+        .co-note-modal-close {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .co-note-modal-close:hover { background: #f3f4f6; color: #111827; }
+        .co-note-modal-body { padding: 20px 22px 24px; overflow: auto; }
+        .co-note-modal-body .co-note-form-grid { margin-bottom: 0; }
+        .co-note-modal-body textarea[name="body"] { min-height: 160px; resize: vertical; }
+        .co-note-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 22px 20px;
+            border-top: 1px solid #eef0f3;
+            background: #fafbfc;
+        }
+        .co-create-company-field { display: flex; flex-direction: column; gap: 6px; }
+        .co-create-company-field span { font-size: 0.78rem; font-weight: 600; color: #6b7280; }
+        .co-create-company-field input { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: inherit; font-size: 0.86rem; }
         .cu-company-locked-hint { font-size: 0.78rem; color: #6b7280; margin-top: 4px; }
         input.cu-edit-input[readonly] { background: #f3f4f6; color: #6b7280; cursor: not-allowed; }
 
@@ -757,15 +809,6 @@
             </div>
 
             <div id="customers-view-companies" hidden>
-                <div class="co-create-card">
-                    <h3>Create company</h3>
-                    <form id="co-create-company-form">
-                        <div class="co-inline-field">
-                            <input type="text" name="name" placeholder="Company name" required autocomplete="organization">
-                            <button type="submit" class="btn-primary"><i class="fas fa-plus"></i> Create</button>
-                        </div>
-                    </form>
-                </div>
                 <div class="toolbar">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
@@ -773,6 +816,7 @@
                     </div>
                     <span class="count-pill" id="co-companies-count">–</span>
                     <div class="toolbar-actions">
+                        <button type="button" class="btn-primary" id="co-companies-create"><i class="fas fa-plus"></i> Create company</button>
                         <button type="button" class="btn-ghost" id="co-companies-refresh"><i class="fas fa-rotate"></i> Refresh</button>
                     </div>
                 </div>
@@ -1911,7 +1955,7 @@
             });
         });
     </script>
-    <script src="/static/companies_panel.js?v=2"></script>
+    <script src="/static/companies_panel.js?v=4"></script>
     <script src="/static/production_note_print.js?v=2"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>
