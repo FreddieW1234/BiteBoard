@@ -217,6 +217,50 @@ def product_label(line: dict, matched_field: dict | None) -> str:
     return title or sku or "Product"
 
 
+def order_dispatch_display(order: dict, saved: dict[tuple[str, str], dict]) -> str:
+    """Diary dispatch date(s) for an order row (DD.MM.YYYY); multiple lines joined with /."""
+    order_name = (order.get("name") or "").strip()
+    if not order_name:
+        return ""
+    order_info = order.get("order_info") or {}
+    date_fields = collect_delivery_date_fields(order_info)
+    dated: list[tuple[date, str]] = []
+    seen: set[str] = set()
+
+    for line in order.get("order_items") or []:
+        if line.get("is_fee"):
+            continue
+        line_number = line.get("line_number")
+        if line_number is None:
+            continue
+        matched = _match_field_for_line(line, date_fields)
+        requested_raw = (matched.get("value") if matched else "") or ""
+        requested_date = parse_delivery_date(str(requested_raw).strip())
+        display = dispatch_display_for_line(
+            order_name,
+            line,
+            saved,
+            requested_date=requested_date,
+        )
+        if not display or display in seen:
+            continue
+        parsed = parse_delivery_date(display)
+        if parsed:
+            dated.append((parsed, display))
+            seen.add(display)
+
+    if not dated:
+        return ""
+    dated.sort(key=lambda pair: pair[0])
+    unique: list[str] = []
+    seen.clear()
+    for _, display in dated:
+        if display not in seen:
+            seen.add(display)
+            unique.append(display)
+    return " / ".join(unique)
+
+
 def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> list[dict]:
     rows: list[dict] = []
     for order in orders or []:

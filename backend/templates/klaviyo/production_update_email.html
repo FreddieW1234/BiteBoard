@@ -1,5 +1,5 @@
 <!-- Bite Promotions - Production Update (Klaviyo HTML block)
-     Paste into your Flow email. Button uses {{ event.portal_url }} from the portal API. -->
+     Paste into your Flow email. Event properties from send_production_update(). -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
   <tr>
     <td align="center" style="padding:32px 24px;font-family:Helvetica,Arial,sans-serif;">
@@ -43,30 +43,84 @@
               <tr>
                 <td style="padding:20px 22px;">
 
+                  <!-- Order + PO -->
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">Order</td>
+                      <td width="50%" valign="top" style="padding-right:12px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">Order</td>
+                          </tr>
+                          <tr>
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;padding-bottom:16px;">{{ event.order_name }}</td>
+                          </tr>
+                        </table>
+                      </td>
+                      {% if event.po_number %}
+                      <td width="50%" valign="top" align="right" style="padding-left:12px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">PO Number</td>
+                          </tr>
+                          <tr>
+                            <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;padding-bottom:16px;">{{ event.po_number }}</td>
+                          </tr>
+                        </table>
+                      </td>
+                      {% elif event.order_note and 'PO NUMBER:' in event.order_note %}
+                      <td width="50%" valign="top" align="right" style="padding-left:12px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">PO Number</td>
+                          </tr>
+                          <tr>
+                            <td align="right" style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;padding-bottom:16px;">{{ event.order_note|split:'PO NUMBER:'|last|split:'NAME AND ADDRESS ON PRODUCT'|first|strip }}</td>
+                          </tr>
+                        </table>
+                      </td>
+                      {% endif %}
                     </tr>
-                    <tr>
-                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;padding-bottom:16px;">{{ event.order_name }}</td>
-                    </tr>
+                  </table>
 
+                  <!-- Product -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:4px;">Product</td>
                     </tr>
                     <tr>
                       <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;color:#1a1a1a;padding-bottom:16px;">{{ event.item_title }}</td>
                     </tr>
+                  </table>
 
+                  <!-- Status + Scheduled dispatch -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">Status</td>
-                    </tr>
-                    <tr>
-                      <td>
-                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <td width="50%" valign="top" style="padding-right:12px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                           <tr>
-                            <td style="background:#5977ED;border-radius:20px;padding:7px 16px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;">
-                              {{ event.stage_label }}
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">Status</td>
+                          </tr>
+                          <tr>
+                            <td>
+                              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                  <td style="background:#5977ED;border-radius:20px;padding:7px 16px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:bold;color:#ffffff;">
+                                    {{ event.stage_label }}
+                                  </td>
+                                </tr>
+                              </table>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                      <td width="50%" valign="top" style="padding-left:12px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">Scheduled to dispatch on</td>
+                          </tr>
+                          <tr>
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;">
+                              {% if event.dispatch_date %}{{ event.dispatch_date }}{% else %}—{% endif %}
                             </td>
                           </tr>
                         </table>
@@ -99,8 +153,8 @@
         <!-- Sign-off -->
         <tr>
           <td style="font-family:Helvetica,Arial,sans-serif;font-size:14px;line-height:1.6;color:#666666;border-top:1px solid #eeeeee;padding-top:20px;">
-            Any questions, just reply to this email or call us on <a href="tel:+441792293689" style="color:#666666;text-decoration:none;">01792 293689</a> and we'll help.<br><br>
-            The Bite Promotions team
+            Any questions, just reply to this email or call us on <a href="tel:+441792293689" style="color:#666666;text-decoration:none;">01792 293689</a> and we'll be happy to help.<br><br>
+            The Bite Promotions Team
           </td>
         </tr>
 

@@ -113,6 +113,83 @@ def latest_proof_filename(order_name: str, item_id: str) -> str:
     return (best.get("name") or "").strip()
 
 
+def _find_line_for_item(order: dict | None, item_id: str) -> dict | None:
+    item_id = (item_id or "").strip()
+    if not order or not item_id:
+        return None
+    for line in order.get("order_items") or []:
+        if (line.get("office_item_id") or "") == item_id:
+            return line
+    return None
+
+
+def _extract_po_number(order_info: dict | None) -> str:
+    if not order_info:
+        return ""
+    for sec in order_info.get("note_sections") or []:
+        for field in sec.get("fields") or []:
+            key = (field.get("key") or "").upper()
+            if key.startswith("PO NUMBER"):
+                return str(field.get("value") or "").strip()
+    return ""
+
+
+def production_update_extra_properties(
+    order_name: str,
+    order_id: str,
+    item_id: str,
+    *,
+    order: dict | None = None,
+) -> dict[str, str]:
+    """Diary dispatch date, PO number, and raw order note for Klaviyo templates."""
+    props = {"dispatch_date": "", "po_number": "", "order_note": ""}
+    order_name = (order_name or "").strip()
+    item_id = (item_id or "").strip()
+
+    if order is None and (order_id or "").strip():
+        try:
+            from scripts.order_helpers import fetch_order_by_id  # type: ignore
+
+            order = fetch_order_by_id(order_id)
+        except Exception:
+            order = None
+
+    if not order:
+        return props
+
+    order_info = order.get("order_info") or {}
+    props["order_note"] = (order_info.get("note") or order.get("note") or "").strip()
+    props["po_number"] = _extract_po_number(order_info)
+
+    line = _find_line_for_item(order, item_id)
+    if not line or not order_name:
+        return props
+
+    try:
+        from scripts.diary_helpers import (  # type: ignore
+            collect_delivery_date_fields,
+            dispatch_display_for_line,
+            parse_delivery_date,
+            _match_field_for_line,
+        )
+        from scripts.Diary import load_saved_entries  # type: ignore
+
+        date_fields = collect_delivery_date_fields(order_info)
+        matched_date = _match_field_for_line(line, date_fields)
+        delivery_raw = (matched_date.get("value") if matched_date else "") or ""
+        requested_date = parse_delivery_date(str(delivery_raw).strip())
+        props["dispatch_date"] = dispatch_display_for_line(
+            order_name,
+            line,
+            load_saved_entries(),
+            requested_date=requested_date,
+        )
+    except Exception as exc:
+        log.warning("Could not resolve dispatch date for Klaviyo event: %s", exc)
+
+    return props
+
+
 def send_production_update(
     email: str,
     order_name: str,
@@ -122,6 +199,7 @@ def send_production_update(
     item_title: str = "",
     item_id: str = "",
     proof_filename: str = "",
+    order: dict | None = None,
 ) -> None:
     """Fire a Klaviyo metric event that triggers a transactional Flow."""
     if not klaviyo_configured():
@@ -142,6 +220,9 @@ def send_production_update(
         proof = latest_proof_filename(order_name, item_id)
 
     portal_url = build_portal_url(order_id, item_id=item_id, proof_filename=proof)
+    extra = production_update_extra_properties(
+        order_name, order_id, item_id, order=order
+    )
 
     payload: dict[str, Any] = {
         "data": {
@@ -156,6 +237,9 @@ def send_production_update(
                     "item_id": item_id or "",
                     "proof_filename": proof,
                     "portal_url": portal_url,
+                    "dispatch_date": extra["dispatch_date"],
+                    "po_number": extra["po_number"],
+                    "order_note": extra["order_note"],
                 },
                 "metric": {
                     "data": {

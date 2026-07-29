@@ -6,7 +6,7 @@ import time
 import requests
 
 from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
-from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, enrich_order  # type: ignore
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, attach_dispatch_displays, enrich_order  # type: ignore
 
 HEADERS = {
     "Content-Type": "application/json",
@@ -109,6 +109,7 @@ def get_orders_overview(max_orders: int = 250) -> dict:
             cursor = page_info.get("endCursor")
             if not cursor:
                 break
+        attach_dispatch_displays(orders)
         return {"success": True, "total": len(orders), "orders": orders}
     except Exception as e:
         return {"success": False, "error": str(e), "total": 0, "orders": []}

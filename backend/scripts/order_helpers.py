@@ -1186,3 +1186,15 @@ def update_order_info(
         "success": True,
         "order_info": format_order_info(order),
     }
+
+
+def attach_dispatch_displays(orders: list[dict]) -> None:
+    """Add dispatch_display to each order using diary dispatch dates."""
+    if not orders:
+        return
+    from scripts.Diary import load_saved_entries  # type: ignore
+    from scripts.diary_helpers import order_dispatch_display  # type: ignore
+
+    saved = load_saved_entries()
+    for order in orders:
+        order["dispatch_display"] = order_dispatch_display(order, saved)

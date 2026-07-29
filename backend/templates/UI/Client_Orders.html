@@ -196,6 +196,13 @@
             background: #f8fafc;
             white-space: nowrap;
         }
+        .orders-wrap th.order-col-total,
+        .orders-wrap td.order-col-total {
+            text-align: right;
+            width: 1%;
+            white-space: nowrap;
+            padding-right: 24px;
+        }
         .orders-wrap td {
             padding: 11px 16px;
             border-bottom: 1px solid #f3f4f6;
@@ -542,7 +549,8 @@
                             <th>Order</th>
                             <th>Date</th>
                             <th>Order Status</th>
-                            <th>Total</th>
+                            <th>Dispatch</th>
+                            <th class="order-col-total">Total</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -551,10 +559,11 @@
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td class="order-status-label-cell"><span class="order-status-label-slot" data-order-id="{{ order.id }}">—</span></td>
-                            <td>{{ order.total_display }}</td>
+                            <td>{{ order.dispatch_display or '—' }}</td>
+                            <td class="order-col-total">{{ order.total_display }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ order.id }}" data-order-id="{{ order.id }}">
-                            <td colspan="4">
+                            <td colspan="5">
                                 <div class="details-inner">
                                     <div class="detail-section">
                                         <h4>Items</h4>

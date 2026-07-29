@@ -85,6 +85,7 @@
         .list-card-scroll { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; min-width: 980px; }
         th { text-align: left; font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; padding: 12px 16px; border-bottom: 1px solid #eef0f3; background: #f8fafc; white-space: nowrap; }
+        th.order-col-total, td.order-col-total { text-align: right; width: 1%; white-space: nowrap; padding-right: 24px; }
         td { font-size: 0.86rem; padding: 11px 16px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
         tbody tr.data-row { cursor: pointer; }
         tbody tr.data-row:hover { background: #f9fafb; }
@@ -881,7 +882,7 @@
             if (!orders.length) {
                 return '<div class="state-msg">No orders found.</div>';
             }
-            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Total</th></tr></thead><tbody>';
+            let html = '<div class="list-card-scroll"><table><thead><tr><th>Order</th><th class="order-status-indicator-cell" aria-hidden="true"></th><th>Date</th><th>Company</th><th>Customer</th><th>Email</th><th>Landline</th><th>Mobile</th><th>Dispatch</th><th class="order-col-total">Total</th></tr></thead><tbody>';
             orders.forEach(o => {
                 const orderId = String(o.id);
                 const indicator = getOrderIndicator(orderId);
@@ -897,9 +898,10 @@
                     <td>${escapeHtml(o.customer_email || '—')}</td>
                     <td>${escapeHtml(o.landline_phone || '—')}</td>
                     <td>${escapeHtml(o.mobile_number || '—')}</td>
-                    <td>${escapeHtml(o.total_display || formatGbp(o.total))}</td>
+                    <td>${escapeHtml(o.dispatch_display || '—')}</td>
+                    <td class="order-col-total">${escapeHtml(o.total_display || formatGbp(o.total))}</td>
                 </tr>
-                <tr class="details-row" id="details-${escapeHtml(orderId)}"><td colspan="9">${renderOrderDetails(o)}</td></tr>`;
+                <tr class="details-row" id="details-${escapeHtml(orderId)}"><td colspan="10">${renderOrderDetails(o)}</td></tr>`;
             });
             html += '</tbody></table></div>';
             return html;

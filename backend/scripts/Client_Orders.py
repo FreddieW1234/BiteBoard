@@ -13,7 +13,7 @@ HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
 }
 
-from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, enrich_order  # type: ignore
+from scripts.order_helpers import LINE_ITEM_FIELDS, ORDER_EXTRA_FIELDS, ORDER_ADDRESS_PAYMENT_FIELDS, attach_dispatch_displays, enrich_order  # type: ignore
 
 _CUSTOMER_CACHE_TTL_SEC = 90
 _customer_cache: dict[str, tuple[float, dict]] = {}
@@ -312,6 +312,7 @@ def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
             if not cursor:
                 break
 
+        attach_dispatch_displays(orders)
         result = {
             "success": True,
             "customer": customer_info or {},

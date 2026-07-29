@@ -2401,6 +2401,7 @@ def api_order_production_notify(order_id):
             item_title=item_title,
             item_id=item_id,
             proof_filename=proof,
+            order=entry.get("order"),
         )
     except KlaviyoError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
