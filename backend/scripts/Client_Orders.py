@@ -222,14 +222,18 @@ def register_client_customer(payload: dict) -> dict:
 
     first_name = str(payload.get("first_name") or "").strip()
     email = str(payload.get("email") or "").strip()
+    company_name = str(payload.get("company_name") or "").strip()
     if not first_name:
         return {"success": False, "error": "First name is required."}
     if not email:
         return {"success": False, "error": "Email is required."}
+    if not company_name:
+        return {"success": False, "error": "Company is required."}
 
     safe = {k: payload[k] for k in CLIENT_PROFILE_KEYS if k in payload}
     safe["first_name"] = first_name
     safe["email"] = email
+    safe["company_name"] = company_name
 
     try:
         customer = create_customer(safe)

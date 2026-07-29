@@ -258,8 +258,8 @@
                     <input type="text" id="co-last_name" name="last_name" autocomplete="family-name" placeholder="Last name">
                 </div>
                 <div class="co-field">
-                    <label for="co-company_name">Company (if required)</label>
-                    <input type="text" id="co-company_name" name="company_name" autocomplete="organization" placeholder="Company name">
+                    <label for="co-company_name">Company <span class="req">*</span></label>
+                    <input type="text" id="co-company_name" name="company_name" autocomplete="organization" placeholder="Company name" required>
                 </div>
                 <div class="co-field">
                     <label for="co-landline_phone">Landline</label>
@@ -323,6 +323,7 @@
             const registerMsg = document.getElementById('co-register-msg');
             const emailInput = document.getElementById('co-email');
             const firstNameInput = document.getElementById('co-first_name');
+            const companyInput = document.getElementById('co-company_name');
             const changeEmailBtn = document.getElementById('co-change-email-btn');
             const successPanel = document.getElementById('co-register-success');
             const successLink = document.getElementById('co-success-link');
@@ -423,12 +424,23 @@
 
                 const firstName = (firstNameInput?.value || '').trim();
                 const email = (emailInput?.value || '').trim();
+                const companyName = (companyInput?.value || '').trim();
                 firstNameInput?.classList.remove('co-field-invalid');
+                companyInput?.classList.remove('co-field-invalid');
                 if (!firstName) {
                     firstNameInput?.classList.add('co-field-invalid');
                     registerMsg.textContent = 'First name is required.';
                     registerMsg.className = 'co-save-msg err';
                     registerMsg.hidden = false;
+                    notifyEmbedHeight();
+                    return;
+                }
+                if (!companyName) {
+                    companyInput?.classList.add('co-field-invalid');
+                    registerMsg.textContent = 'Company is required.';
+                    registerMsg.className = 'co-save-msg err';
+                    registerMsg.hidden = false;
+                    companyInput?.focus();
                     notifyEmbedHeight();
                     return;
                 }
