@@ -110,6 +110,8 @@
     };
 
     const DISPLAY_NAME_OVERRIDES = {
+        productinfo: 'Product Info',
+        description: 'SEO / Meta Description',
         vegan: 'Suitable for: Vegans',
         vegetarian: 'Suitable for: Vegetarians',
         halal: 'Suitable for: Halal (Not certified)',
@@ -132,6 +134,7 @@
     };
 
     const DIETARY_SECTION_HEADING = 'Dietary/Allergens';
+    const PRODUCT_INFO_METAFIELD_KEY = 'productinfo';
     const DEFAULT_PRODUCT_DESCRIPTION = 'Product Info\n\n\nIngredients\n\n\n' + DIETARY_SECTION_HEADING;
 
     const ALLERGEN_LEVELS = [
@@ -139,6 +142,72 @@
         { value: 'may_contain', label: 'May Contain' },
         { value: 'free_from', label: 'Free From' },
     ];
+
+    function decodeHtmlEntities(text) {
+        const el = document.createElement('textarea');
+        el.innerHTML = text;
+        return el.value;
+    }
+
+    function parseShopifyBodyHtmlSections(bodyHtml) {
+        const result = { productinfo: '', ingredients: '', dietary_lines: [] };
+        if (!bodyHtml || typeof bodyHtml !== 'string') return result;
+        const lines = [];
+        const re = /<h3><span>([\s\S]*?)<\/span>/gi;
+        let match;
+        while ((match = re.exec(bodyHtml)) !== null) {
+            const raw = match[1].replace(/<[^>]+>/g, '');
+            lines.push(decodeHtmlEntities(raw).trim());
+        }
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            if (line === 'Product Info') {
+                i += 1;
+                const parts = [];
+                while (i < lines.length && lines[i] !== 'Ingredients' && lines[i] !== DIETARY_SECTION_HEADING && lines[i] !== 'Dietary') {
+                    parts.push(lines[i]);
+                    i += 1;
+                }
+                result.productinfo = parts.join('\n').trim();
+                continue;
+            }
+            if (line === 'Ingredients') {
+                i += 1;
+                const parts = [];
+                while (i < lines.length && lines[i] !== 'Product Info' && lines[i] !== DIETARY_SECTION_HEADING && lines[i] !== 'Dietary') {
+                    parts.push(lines[i]);
+                    i += 1;
+                }
+                result.ingredients = parts.join('\n').trim();
+                continue;
+            }
+            if (line === DIETARY_SECTION_HEADING || line === 'Dietary') {
+                i += 1;
+                while (i < lines.length && lines[i] !== 'Product Info' && lines[i] !== 'Ingredients') {
+                    result.dietary_lines.push(lines[i]);
+                    i += 1;
+                }
+                continue;
+            }
+            i += 1;
+        }
+        return result;
+    }
+
+    function applyParsedBodySectionsToDom(sections) {
+        if (!sections) return;
+        const piEl = document.querySelector('textarea.metafield-value[data-key="productinfo"]');
+        if (piEl && !(piEl.value || '').trim() && sections.productinfo) {
+            piEl.value = sections.productinfo;
+            piEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const ingEl = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
+        if (ingEl && !(ingEl.value || '').trim() && sections.ingredients) {
+            ingEl.value = sections.ingredients;
+            ingEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
 
     function allergenSentence(key, level) {
         const mapping = ALLERGEN_SENTENCES[key] || {};
@@ -254,22 +323,22 @@
         const lines = [];
         SUITABLE_FOR_KEYS.forEach(function (key) {
             const val = String((mfMap && mfMap[key]) || '').trim();
-            if (val) lines.push(BODY_SUITABLE_LABELS[key] + '\t' + val);
+            if (val) lines.push(BODY_SUITABLE_LABELS[key] + ' ' + val);
         });
         ALLERGEN_KEYS.forEach(function (key) {
             const val = String((mfMap && mfMap[key]) || '').trim();
             if (!val && mfMap && key === 'nuts' && mfMap.tree_nuts) {
                 const legacy = String(mfMap.tree_nuts).trim();
-                if (legacy) lines.push(BODY_ALLERGEN_LABELS.nuts + '\t' + legacy);
+                if (legacy) lines.push(BODY_ALLERGEN_LABELS.nuts + ' ' + legacy);
                 return;
             }
-            if (val) lines.push(BODY_ALLERGEN_LABELS[key] + '\t' + val);
+            if (val) lines.push(BODY_ALLERGEN_LABELS[key] + ' ' + val);
         });
         return lines;
     }
 
     function buildShopifyBodyPlainText(mfMap) {
-        const productInfo = String((mfMap && mfMap.description) || '').trim();
+        const productInfo = String((mfMap && mfMap[PRODUCT_INFO_METAFIELD_KEY]) || '').trim();
         const ingredients = String((mfMap && mfMap.ingredients) || '').trim();
         const dietaryLines = buildDietaryAllergensSectionLines(mfMap || {});
         const chunks = ['Product Info', '', productInfo, '', 'Ingredients', '', ingredients, '', DIETARY_SECTION_HEADING, ''].concat(dietaryLines);
@@ -304,11 +373,25 @@
             const val = getAllergenValueFromSelect(el);
             if (val) map[key] = val;
         });
-        const descEl = scope.querySelector('textarea.metafield-value[data-key="description"]');
+        const productInfoEl = scope.querySelector('textarea.metafield-value[data-key="productinfo"]');
         const ingEl = scope.querySelector('textarea.metafield-value[data-key="ingredients"]');
-        if (descEl) map.description = descEl.value || '';
+        if (productInfoEl) map[PRODUCT_INFO_METAFIELD_KEY] = productInfoEl.value || '';
         if (ingEl) map.ingredients = ingEl.value || '';
         return map;
+    }
+
+    function ensureEditorMetafields(metafields) {
+        let list = ensureDietaryMetafields(metafields);
+        if (!list.some(function (m) { return m && m.key === PRODUCT_INFO_METAFIELD_KEY; })) {
+            list = list.concat([{
+                namespace: 'custom',
+                key: PRODUCT_INFO_METAFIELD_KEY,
+                type: 'single_line_text_field',
+                value: '',
+                id: null,
+            }]);
+        }
+        return list;
     }
 
     function defaultMetafieldOrderDietaryTail() {
@@ -321,6 +404,7 @@
         ALLERGEN_SENTENCES,
         DISPLAY_NAME_OVERRIDES,
         DIETARY_SECTION_HEADING,
+        PRODUCT_INFO_METAFIELD_KEY,
         DEFAULT_PRODUCT_DESCRIPTION,
         allergenSentence,
         inferAllergenLevel,
@@ -332,6 +416,9 @@
         getAllergenValueFromSelect,
         buildShopifyBodyPlainText,
         metafieldsArrayToMap,
+        ensureEditorMetafields,
+        parseShopifyBodyHtmlSections,
+        applyParsedBodySectionsToDom,
         collectDietaryMapFromDom,
         defaultMetafieldOrderDietaryTail,
     };

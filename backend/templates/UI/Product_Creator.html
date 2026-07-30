@@ -2615,7 +2615,7 @@ Dietary/Allergens</textarea>
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=1"></script>
+    <script src="/static/allergen_mapping.js?v=2"></script>
     <script>
         let isHtmlMode = false;
 
@@ -4624,7 +4624,8 @@ Dietary/Allergens</textarea>
                 'whats_inside': 'What\'s Inside',
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
-                'description': 'Description',
+                'description': 'SEO / Meta Description',
+                'productinfo': 'Product Info',
                 'leadtime1': 'Lead Time <5000 units (Working Days)',
                 'leadtime2': 'Lead Time 5000-10000 units (Working Days)',
                 'packingfee': 'Packing Fee',
@@ -4667,7 +4668,9 @@ Dietary/Allergens</textarea>
             }
 
             metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
-            if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
+            if (window.AllergenMapping && typeof AllergenMapping.ensureEditorMetafields === 'function') {
+                metafields = AllergenMapping.ensureEditorMetafields(metafields);
+            } else if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
                 metafields = AllergenMapping.ensureDietaryMetafields(metafields);
             }
 
@@ -4680,6 +4683,7 @@ Dietary/Allergens</textarea>
             const DEFAULT_METAFIELD_ORDER = [
                 "categorysub",
                 "description",
+                "productinfo",
                 "ingredients",
                 "nutritional_info",
                 "print_info",
@@ -4952,7 +4956,7 @@ Dietary/Allergens</textarea>
                 let headerExtra = '';
                 if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
                 else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
-                const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
+                const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'productinfo', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
                 if (fullWidthKeys.includes(metafield.key)) metafieldDiv.classList.add('metafield-item-full-width');
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
@@ -5393,9 +5397,13 @@ Dietary/Allergens</textarea>
 
             let description = formData.get('description') || '';
             if (window.AllergenMapping && typeof AllergenMapping.buildShopifyBodyPlainText === 'function') {
-                const mfMap = AllergenMapping.metafieldsArrayToMap(productData.metafields);
-                const descTa = document.querySelector('textarea.metafield-value[data-key="description"]');
-                if (descTa) mfMap.description = descTa.value || mfMap.description || '';
+                const mfContainer = document.getElementById('metafields-container');
+                const mfMap = Object.assign(
+                    {},
+                    AllergenMapping.metafieldsArrayToMap(productData.metafields),
+                    mfContainer ? AllergenMapping.collectDietaryMapFromDom(mfContainer) : {}
+                );
+                delete mfMap.description;
                 const plainBody = AllergenMapping.buildShopifyBodyPlainText(mfMap);
                 description = plainBody;
                 isHtmlMode = false;
@@ -6602,6 +6610,13 @@ Dietary/Allergens</textarea>
                 try {
                     populateMetafieldValues(mfs, { skipCategorySub: isCreateFromParent });
                 } catch (e) { console.log('Populate metafield values failed', e); }
+
+                if (window.AllergenMapping && typeof data.body_html === 'string' && data.body_html.includes('<h3>')) {
+                    try {
+                        const parsed = AllergenMapping.parseShopifyBodyHtmlSections(data.body_html);
+                        AllergenMapping.applyParsedBodySectionsToDom(parsed);
+                    } catch (e) { console.log('Body section parse failed', e); }
+                }
                 
                 // Handle color loading separately since we skipped displayMetafields
                 try {

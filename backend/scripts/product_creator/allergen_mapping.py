@@ -126,6 +126,9 @@ BODY_ALLERGEN_LABELS = {
 
 DIETARY_SECTION_HEADING = "Dietary/Allergens"
 
+# Shopify native description (body_html) — Product Info section only (not custom.description SEO field).
+PRODUCT_INFO_METAFIELD_KEY = "productinfo"
+
 
 def allergen_sentence(key: str, level: str) -> str:
     k = (key or "").strip().lower()
@@ -173,12 +176,12 @@ def build_dietary_allergens_section_lines(mf_map: dict) -> list[str]:
         val = (mf.get(key) or "").strip()
         if val:
             label = BODY_SUITABLE_LABELS.get(key, key)
-            lines.append(f"{label}\t{val}")
+            lines.append(f"{label} {val}")
     for key in ALLERGEN_KEYS:
         val = (mf.get(key) or "").strip()
         if val:
             label = BODY_ALLERGEN_LABELS.get(key, key)
-            lines.append(f"{label}\t{val}")
+            lines.append(f"{label} {val}")
     return lines
 
 
@@ -201,7 +204,7 @@ def plain_text_to_shopify_h3_html(text: str) -> str:
 
 def build_shopify_body_plain_text(mf_map: dict) -> str:
     mf = _normalize_mf_map(mf_map)
-    product_info = (mf.get("description") or "").strip()
+    product_info = (mf.get(PRODUCT_INFO_METAFIELD_KEY) or "").strip()
     ingredients = (mf.get("ingredients") or "").strip()
     dietary_lines = build_dietary_allergens_section_lines(mf)
 

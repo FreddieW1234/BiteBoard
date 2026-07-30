@@ -665,7 +665,7 @@
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=1"></script>
+    <script src="/static/allergen_mapping.js?v=2"></script>
     <script>
         const productInput = document.getElementById('product-input');
         const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
@@ -1029,6 +1029,7 @@
             "custom_category", 
             "subcategory",
             "description",
+            "productinfo",
             "moq",
             "origination",
             "shelf_life",
@@ -1140,9 +1141,13 @@
             
             // Display metafields
             displayMetafields(product.metafields || []);
-            
+            if (window.AllergenMapping && product.body_html && String(product.body_html).includes('<h3>')) {
+                try {
+                    const parsed = AllergenMapping.parseShopifyBodyHtmlSections(product.body_html);
+                    AllergenMapping.applyParsedBodySectionsToDom(parsed);
+                } catch (e) { console.log('Body section parse failed', e); }
+            }
 
-            
             productInfo.style.display = 'block';
         }
 
@@ -1161,7 +1166,8 @@
                 'whats_inside': 'What\'s Inside',
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
-                'description': 'Description',
+                'description': 'SEO / Meta Description',
+                'productinfo': 'Product Info',
                 'leadtime1': 'Lead Time <5000 (Units)',
                 'leadtime2': 'Lead Time 5000-10000 (Units)',
                 'packingfee': 'Packing Fee',
@@ -1194,7 +1200,9 @@
             console.log('🔍 Total metafields to display:', metafields.length);
             
             metafieldsContainer.innerHTML = '';
-            if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
+            if (window.AllergenMapping && typeof AllergenMapping.ensureEditorMetafields === 'function') {
+                metafields = AllergenMapping.ensureEditorMetafields(metafields || []);
+            } else if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
                 metafields = AllergenMapping.ensureDietaryMetafields(metafields || []);
             }
             

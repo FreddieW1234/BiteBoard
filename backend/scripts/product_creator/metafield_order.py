@@ -8,6 +8,7 @@ DEFAULT_METAFIELD_ORDER = [
     "custom_category", 
     "subcategory",
     "description",
+    "productinfo",
     "moq",
     "origination",
     "shelf_life",

@@ -1198,6 +1198,7 @@ def _parse_metafield_list(value):
 # Maps the value-key used in the response "fields" dict -> the custom metafield key.
 ALL_PRODUCTS_FIELD_KEYS = {
     "ingredients": "ingredients",
+    "productinfo": "productinfo",
     "nutritional_info": "nutritional_info",
     "whats_inside": "whats_inside",
     "print_info": "print_info",
@@ -1946,7 +1947,7 @@ MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRON
 
 # Metafield keys that are "inherited" from parent to children (same as hidden on child form).
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
-    "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside",
+    "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside", "productinfo",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
     "case_weight", "leadtime1", "leadtime2", "commodity_code",
     "vegan", "vegetarian", "halal", "coeliac", "kosher",
