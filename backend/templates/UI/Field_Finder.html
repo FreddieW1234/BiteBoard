@@ -542,6 +542,20 @@
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
+            background: #fff;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        select.allergen-dropdown.allergen-level-contains {
+            background-color: #fef2f2;
+            border-color: #fecaca;
+        }
+        select.allergen-dropdown.allergen-level-may_contain {
+            background-color: #fefce8;
+            border-color: #fde047;
+        }
+        select.allergen-dropdown.allergen-level-free_from {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
         }
 
         .metafield-item.new-metafield {
@@ -665,7 +679,7 @@
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=3"></script>
+    <script src="/static/allergen_mapping.js?v=4"></script>
     <script>
         const productInput = document.getElementById('product-input');
         const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
@@ -1376,6 +1390,10 @@
                 }
             }
             
+            if (window.AllergenMapping && AllergenMapping.bindAllergenDropdownStyles) {
+                AllergenMapping.bindAllergenDropdownStyles(metafieldsContainer);
+            }
+
             // After all metafields are displayed, set up auto-calculation for case weight
             setupCaseWeightCalculation();
         }

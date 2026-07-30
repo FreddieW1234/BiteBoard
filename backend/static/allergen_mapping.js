@@ -327,6 +327,29 @@
         return allergenSentence(selectEl.dataset.key, level);
     }
 
+    const ALLERGEN_LEVEL_CLASSNAMES = ['allergen-level-contains', 'allergen-level-may_contain', 'allergen-level-free_from'];
+
+    function applyAllergenDropdownStyle(selectEl) {
+        if (!selectEl || selectEl.tagName !== 'SELECT') return;
+        selectEl.classList.remove.apply(selectEl.classList, ALLERGEN_LEVEL_CLASSNAMES);
+        const level = (selectEl.value || '').trim();
+        if (level === 'contains') selectEl.classList.add('allergen-level-contains');
+        else if (level === 'may_contain') selectEl.classList.add('allergen-level-may_contain');
+        else if (level === 'free_from') selectEl.classList.add('allergen-level-free_from');
+    }
+
+    function bindAllergenDropdownStyles(root) {
+        const scope = root || document;
+        scope.querySelectorAll('select.allergen-dropdown').forEach(function (el) {
+            applyAllergenDropdownStyle(el);
+            if (el.dataset.allergenColorBound === '1') return;
+            el.dataset.allergenColorBound = '1';
+            el.addEventListener('change', function () {
+                applyAllergenDropdownStyle(el);
+            });
+        });
+    }
+
     function buildDietaryAllergensSectionLines(mfMap) {
         const lines = [];
         SUITABLE_FOR_KEYS.forEach(function (key) {
@@ -424,6 +447,8 @@
         buildAllergenDropdownHtml,
         buildSuitableEmojiFieldHtml,
         getAllergenValueFromSelect,
+        applyAllergenDropdownStyle,
+        bindAllergenDropdownStyles,
         buildShopifyBodyPlainText,
         metafieldsArrayToMap,
         ensureEditorMetafields,
