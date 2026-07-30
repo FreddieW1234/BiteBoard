@@ -2636,7 +2636,7 @@ Dietary/Allergens</textarea>
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=4"></script>
+    <script src="/static/allergen_mapping.js?v=5"></script>
     <script>
         let isHtmlMode = false;
 
@@ -4648,8 +4648,7 @@ Dietary/Allergens</textarea>
                 'whats_inside': 'What\'s Inside',
                 'artworktemplates': 'Artwork Templates',
                 'artworkguidelines': 'Artwork Guidelines',
-                'description': 'SEO / Meta Description',
-                'productinfo': 'Product Info',
+                'description': 'Description',
                 'leadtime1': 'Lead Time <5000 units (Working Days)',
                 'leadtime2': 'Lead Time 5000-10000 units (Working Days)',
                 'packingfee': 'Packing Fee',
@@ -4692,9 +4691,7 @@ Dietary/Allergens</textarea>
             }
 
             metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
-            if (window.AllergenMapping && typeof AllergenMapping.ensureEditorMetafields === 'function') {
-                metafields = AllergenMapping.ensureEditorMetafields(metafields);
-            } else if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
+            if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
                 metafields = AllergenMapping.ensureDietaryMetafields(metafields);
             }
 
@@ -4707,7 +4704,6 @@ Dietary/Allergens</textarea>
             const DEFAULT_METAFIELD_ORDER = [
                 "categorysub",
                 "description",
-                "productinfo",
                 "ingredients",
                 "nutritional_info",
                 "print_info",
@@ -4786,6 +4782,7 @@ Dietary/Allergens</textarea>
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
                     if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar'].includes(key)) return false;
                     if (namespace === 'custom' && key === 'tree_nuts') return false;
+                    if (namespace === 'custom' && key === 'productinfo') return false;
                     return true;
                 });
             } catch (e) { /* ignore filter errors */ }
@@ -4980,7 +4977,7 @@ Dietary/Allergens</textarea>
                 let headerExtra = '';
                 if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
                 else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
-                const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'productinfo', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
+                const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size'];
                 if (fullWidthKeys.includes(metafield.key)) metafieldDiv.classList.add('metafield-item-full-width');
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">

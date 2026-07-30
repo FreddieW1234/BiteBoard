@@ -110,8 +110,7 @@
     };
 
     const DISPLAY_NAME_OVERRIDES = {
-        productinfo: 'Product Info',
-        description: 'SEO / Meta Description',
+        description: 'Description',
         vegan: 'Suitable for: Vegans',
         vegetarian: 'Suitable for: Vegetarians',
         halal: 'Suitable for: Halal (Not certified)',
