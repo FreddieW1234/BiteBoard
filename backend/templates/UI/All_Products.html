@@ -83,7 +83,9 @@
         .subcategory-title .subcat-label { position: sticky; left: 0; display: inline-block; margin-left: -18px; padding-left: 26px; background: #fff; }
 
         .ap-col-header { display: grid; grid-template-columns: var(--ap-grid); gap: 12px; align-items: center; padding: 8px 8px; margin-bottom: 2px; border-bottom: 1px solid #eef0f3; width: 100%; min-width: min-content; }
-        .ap-col-header .col-label { position: relative; font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ap-col-header .col-label { position: relative; display: flex; align-items: center; font-size: 0.7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; min-width: 0; overflow: visible; }
+        .ap-col-header .col-label-heading { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; max-width: calc(100% - 10px); min-width: 0; }
+        .ap-col-header .col-label-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ap-col-header .col-label.col-action { position: sticky; right: 0; align-self: stretch; display: flex; align-items: center; justify-content: flex-end; text-align: right; background: #fff; padding: 0 18px 0 12px; margin-right: -18px; border-left: 1px solid #eef0f3; z-index: 3; }
         .ap-col-header .col-label.col-sku { position: sticky; left: 0; align-self: stretch; display: flex; align-items: center; background: #fff; padding-left: 26px; margin: -8px 0 -8px -26px; z-index: 5; }
         .ap-col-header .col-label.col-title { position: sticky; left: var(--ap-title-left, 146px); align-self: stretch; display: flex; align-items: center; background: #fff; padding: 0 12px; margin: -8px 0 -8px -12px; border-right: 1px solid #eef0f3; box-shadow: 8px 0 12px -8px rgba(0,0,0,0.08); z-index: 4; }
@@ -124,7 +126,7 @@
         .col-menu input[type="checkbox"] { width: 15px; height: 15px; accent-color: #4f46e5; cursor: pointer; }
 
         /* --- Bulk column editing --- */
-        .col-edit-btn { margin-left: 6px; border: 1px solid #d1d5db; background: #fff; color: #4f46e5; border-radius: 5px; padding: 1px 5px; font-size: 0.62rem; line-height: 1.4; cursor: pointer; vertical-align: middle; }
+        .col-edit-btn { flex-shrink: 0; border: 1px solid #d1d5db; background: #fff; color: #4f46e5; border-radius: 5px; padding: 1px 5px; font-size: 0.62rem; line-height: 1.4; cursor: pointer; vertical-align: middle; }
         .col-edit-btn:hover { background: #eef2ff; border-color: #c7d2fe; }
         .ap-col-header .col-label.editing { color: #4f46e5; }
         .ap-col-header .col-label.editing .col-edit-btn { background: #4f46e5; color: #fff; border-color: #4f46e5; }
@@ -668,7 +670,10 @@
                         editBtn = `<button type="button" class="col-edit-btn" data-edit-col="${escapeHtml(c.key)}" title="Edit this column"><i class="fas fa-pen"></i></button>`;
                     }
                 }
-                return `<span class="col-label col-${escapeHtml(c.key)}${editing ? ' editing' : ''}" title="${escapeHtml(c.label)}">${escapeHtml(c.label)}${editBtn}<span class="col-resizer" data-key="${escapeHtml(c.key)}"></span></span>`;
+                const headingInner = editBtn
+                    ? `<span class="col-label-heading"><span class="col-label-text">${escapeHtml(c.label)}</span>${editBtn}</span>`
+                    : `<span class="col-label-heading"><span class="col-label-text">${escapeHtml(c.label)}</span></span>`;
+                return `<span class="col-label col-${escapeHtml(c.key)}${editing ? ' editing' : ''}" title="${escapeHtml(c.label)}">${headingInner}<span class="col-resizer" data-key="${escapeHtml(c.key)}"></span></span>`;
             }).join('');
             return `<div class="ap-col-header">${labels}<span class="col-label col-action"></span></div>`;
         }
