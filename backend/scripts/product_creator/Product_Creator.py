@@ -1216,13 +1216,22 @@ ALL_PRODUCTS_FIELD_KEYS = {
     "vegetarian": "vegetarian",
     "halal": "halal",
     "coeliac": "coeliac",
+    "kosher": "kosher",
     "peanuts": "peanuts",
-    "tree_nuts": "tree_nuts",
+    "nuts": "nuts",
+    "tree_nuts": "nuts",
     "sesame": "sesame",
     "milk": "milk",
     "egg": "egg",
     "cereals": "cereals",
     "soya": "soya",
+    "celery": "celery",
+    "crustaceans": "crustaceans",
+    "fish": "fish",
+    "lupin": "lupin",
+    "molluscs": "molluscs",
+    "mustard": "mustard",
+    "sulphurdioxide": "sulphurdioxide",
 }
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -1940,8 +1949,9 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
     "case_weight", "leadtime1", "leadtime2", "commodity_code",
-    "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame",
-    "egg", "cereals", "soya", "milk",
+    "vegan", "vegetarian", "halal", "coeliac", "kosher",
+    "peanuts", "nuts", "sesame", "egg", "cereals", "soya", "milk",
+    "celery", "crustaceans", "fish", "lupin", "molluscs", "mustard", "sulphurdioxide",
     "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates",
     "product_colours", "packaging_colours", "foil_colours", "bag_colours",
     "print", "foil", "mailer", "mailerpacking", "calendar",
@@ -2626,6 +2636,50 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "errors": [error_msg]
         }
 
+
+def sync_product_tab_body_from_metafields(product_id, shopify_domain=None):
+    """Rebuild Shopify body_html (Product Info / Ingredients / Dietary/Allergens) from custom metafields."""
+    try:
+        from .allergen_mapping import build_shopify_body_html_from_metafield_map, metafields_list_to_map
+
+        pid = int(product_id)
+        domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/")
+        if not domain:
+            return {"success": False, "error": "Shopify store domain is not configured"}
+        headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+        base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{pid}"
+        mf_list = []
+        url = f"{base_url}/metafields.json?limit=250"
+        while url:
+            mf_r = requests.get(url, headers=headers, timeout=30)
+            if mf_r.status_code != 200:
+                return {"success": False, "error": f"Could not load metafields (HTTP {mf_r.status_code})"}
+            data = mf_r.json() or {}
+            mf_list.extend(data.get("metafields") or [])
+            link = mf_r.headers.get("Link") or ""
+            url = None
+            if 'rel="next"' in link:
+                import re
+                m = re.search(r'<([^>]+)>;\s*rel="next"', link)
+                if m:
+                    url = m.group(1)
+        mf_map = metafields_list_to_map(mf_list)
+        body_html = build_shopify_body_html_from_metafield_map(mf_map)
+        if not body_html:
+            return {"success": True, "skipped": True}
+        put_r = requests.put(
+            f"{base_url}.json",
+            headers=headers,
+            json={"product": {"id": pid, "body_html": body_html}},
+            timeout=30,
+        )
+        if put_r.status_code not in (200, 201):
+            return {"success": False, "error": put_r.text[:400]}
+        return {"success": True, "body_html": body_html}
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+
 def create_product(product_data):
     """
     Create a new product in Shopify using the Admin API, or update existing product if product_id is provided
@@ -2702,6 +2756,16 @@ def create_product(product_data):
                 "success": False,
                 "error": error_msg
             }
+
+        try:
+            from .allergen_mapping import build_shopify_body_html_from_metafield_map, metafields_list_to_map
+
+            mf_map = metafields_list_to_map(product_data.get("metafields") or [])
+            rebuilt = build_shopify_body_html_from_metafield_map(mf_map)
+            if rebuilt:
+                product_data["description"] = rebuilt
+        except Exception as body_exc:
+            print(f"⚠️ Could not rebuild tab body_html from metafields (non-fatal): {body_exc}", flush=True)
         
         # Prepare the product payload (without taxable field initially)
         # Ensure variant has valid data - Shopify may reject empty/invalid variants

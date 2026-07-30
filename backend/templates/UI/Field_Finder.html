@@ -525,6 +525,25 @@
             color: #dc3545;
         }
 
+        .emoji-field-container {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .emoji-btn.selected {
+            background: #A1A4AD;
+            border-color: #495057;
+            box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+        }
+
+        select.allergen-dropdown {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
         .metafield-item.new-metafield {
             background: #e9ecef; /* Light gray background for new/blank fields */
             border: 1px dashed #ced4da; /* Dashed border for new fields */
@@ -646,6 +665,7 @@
         </div>
     </div>
 
+    <script src="/static/allergen_mapping.js?v=1"></script>
     <script>
         const productInput = document.getElementById('product-input');
         const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
@@ -1023,20 +1043,12 @@
             "leadtime2",
             "packingfee",
             "whats_inside",
-            "vegan",
-            "vegetarian",
-            "halal",
-            "coeliac",
-            "peanuts",
-            "tree_nuts",
-            "sesame",
-            "milk",
-            "egg",
-            "cereals",
-            "soya",
-            "product_size",
-            "commodity_code"
-        ];
+        ].concat(
+            (window.AllergenMapping && AllergenMapping.defaultMetafieldOrderDietaryTail())
+                ? AllergenMapping.defaultMetafieldOrderDietaryTail()
+                : ["vegan", "vegetarian", "halal", "coeliac", "kosher", "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard", "nuts", "peanuts", "sesame", "soya", "sulphurdioxide"],
+            ["product_size", "commodity_code"]
+        );
 
         // Apply saved metafield order to metafields array
         function applySavedOrder(metafields) {
@@ -1137,19 +1149,6 @@
         // Convert technical metafield keys to human-readable names
         function getHumanReadableName(key) {
             const nameMap = {
-                // Dietary restrictions
-                'vegan': 'Suitable for: Vegans',
-                'vegetarian': 'Suitable for: Vegetarians', 
-                'halal': 'Suitable for: Halal',
-                'coeliac': 'Suitable for: Coeliacs',
-                'peanuts': 'Contains: Peanuts',
-                'tree_nuts': 'Contains: Tree Nuts',
-                'sesame': 'Contains: Sesame',
-                'egg': 'Contains: Eggs',
-                'cereals': 'Contains: Cereals',
-                'soya': 'Contains: Soya',
-                'milk': 'Contains: Milk',
-                'egg': 'Contains: Egg',
                 'moq': 'MOQ (Units)',
                 'origination': 'Origination (£)',
                 'shelf_life': 'Shelf Life (Months)',
@@ -1178,6 +1177,9 @@
             };
             
             // Check if we have a specific mapping
+            if (window.AllergenMapping && AllergenMapping.DISPLAY_NAME_OVERRIDES && AllergenMapping.DISPLAY_NAME_OVERRIDES[key]) {
+                return AllergenMapping.DISPLAY_NAME_OVERRIDES[key];
+            }
             if (nameMap[key]) {
                 return nameMap[key];
             }
@@ -1192,6 +1194,9 @@
             console.log('🔍 Total metafields to display:', metafields.length);
             
             metafieldsContainer.innerHTML = '';
+            if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
+                metafields = AllergenMapping.ensureDietaryMetafields(metafields || []);
+            }
             
             if (metafields.length === 0) {
                 metafieldsContainer.innerHTML = '<p style="color: #666; font-style: italic; grid-column: 1 / -1;">No metafields found</p>';
@@ -1207,6 +1212,7 @@
                 if (key.startsWith('pricejson') && !key.includes('.')) return false;
                 if (namespace === 'shopify' && key.includes('chocolate')) return false;
                 if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','packing_info'].includes(key)) return false;
+                if (namespace === 'custom' && key === 'tree_nuts') return false;
                 return true;
             });
             
@@ -1226,12 +1232,13 @@
                 // Create a more readable display name by converting technical keys to human-readable names
                 let displayName = getHumanReadableName(metafield.key);
                 
-                // Check if this metafield should have emoji buttons
-                const emojiFields = ['vegan', 'vegetarian', 'halal', 'coeliac', 'peanuts', 'tree_nuts', 'sesame', 'egg', 'cereals', 'soya', 'milk'];
-                const hasEmojiButtons = emojiFields.includes(metafield.key);
+                const AM = window.AllergenMapping || {};
+                const hasSuitableEmoji = typeof AM.isSuitableForKey === 'function' && AM.isSuitableForKey(metafield.key);
+                const hasAllergenDropdown = typeof AM.isAllergenKey === 'function' && AM.isAllergenKey(metafield.key);
+                const hasEmojiButtons = hasSuitableEmoji;
                 
                 // Check if this metafield has predefined options (list types OR single_line_text_field with choices)
-                // BUT emoji fields should always use textareas, not dropdowns
+                // BUT dietary fields use dedicated widgets, not generic dropdowns
                 // AND only show dropdowns if there are actually multiple real options (not just the current value)
                 // Note: Category fields are now displayed but may have special handling
                 const isCategoryField = metafield.key === 'custom_category' || metafield.key === 'subcategory';
@@ -1258,9 +1265,13 @@
                     });
                 }
                 
-                // For fields with multiple real options (but NOT emoji fields), create a dropdown; otherwise use textarea
+                // For fields with multiple real options (but NOT dietary widgets), create a dropdown; otherwise use textarea
                 let inputElement;
-                if (hasOptions) {
+                if (hasAllergenDropdown && AM.buildAllergenDropdownHtml) {
+                    inputElement = AM.buildAllergenDropdownHtml(metafield);
+                } else if (hasSuitableEmoji && AM.buildSuitableEmojiFieldHtml) {
+                    inputElement = AM.buildSuitableEmojiFieldHtml(metafield);
+                } else if (hasOptions) {
                     // Create dropdown for fields with predefined options
                     let availableOptions = [];
                     // Always use backend-provided options for category fields; otherwise default behavior
@@ -1308,7 +1319,7 @@
                     `;
                 } else {
                     // Regular textarea for non-list types
-                    inputElement = `<textarea class="metafield-value ${hasEmojiButtons ? 'compact' : ''}" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}">${currentValue}</textarea>`;
+                    inputElement = `<textarea class="metafield-value" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}">${currentValue}</textarea>`;
                 }
                 
                 const isIngredients = metafield.key === 'ingredients';
@@ -1319,16 +1330,6 @@
                     </div>
                     <div class="metafield-input-row">
                         ${inputElement}
-                        ${hasEmojiButtons ? `
-                            <div class="emoji-buttons">
-                                <button class="emoji-btn tick" onclick="insertEmoji(this, '✔️')">
-                                    <span>✔️</span>
-                                </button>
-                                <button class="emoji-btn cross" onclick="insertEmoji(this, '❌')">
-                                    <span>❌</span>
-                                </button>
-                                </div>
-                        ` : ''}
                     </div>
                     <div class="metafield-footer">
                         <span class="metafield-type">${metafield.type}</span>
@@ -1336,6 +1337,12 @@
                     </div>
                 `;
                 metafieldsContainer.appendChild(metafieldDiv);
+
+                if (hasSuitableEmoji) {
+                    metafieldDiv.querySelectorAll('.emoji-btn').forEach(function (button) {
+                        button.addEventListener('click', function () { selectEmoji(button); });
+                    });
+                }
 
                 // Chocolate quick-fill: fill Ingredients + Nutritional Info (same as Product Manager)
                 if (isIngredients) {
@@ -1451,6 +1458,62 @@
 
 
         // Save all metafields at once - ULTRA SIMPLIFIED VERSION
+        // Handle suitable-for emoji selection (Product Manager parity)
+        function selectEmoji(button) {
+            const emojiFieldContainer = button.closest('.emoji-field-container');
+            if (!emojiFieldContainer) return;
+            const allButtons = emojiFieldContainer.querySelectorAll('.emoji-btn');
+            const selectedEmoji = button.dataset.emoji;
+            if (button.classList.contains('selected')) {
+                button.classList.remove('selected');
+                emojiFieldContainer.dataset.selectedValue = '';
+            } else {
+                allButtons.forEach(function (btn) { btn.classList.remove('selected'); });
+                button.classList.add('selected');
+                emojiFieldContainer.dataset.selectedValue = selectedEmoji;
+            }
+            emojiFieldContainer.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function getMetafieldSaveContext(item) {
+            const emojiContainer = item.querySelector('.emoji-field-container');
+            if (emojiContainer) {
+                return {
+                    el: emojiContainer,
+                    id: emojiContainer.dataset.id,
+                    namespace: emojiContainer.dataset.namespace,
+                    key: emojiContainer.dataset.key,
+                    type: emojiContainer.dataset.type,
+                    value: (emojiContainer.dataset.selectedValue || '').trim(),
+                };
+            }
+            const allergenSelect = item.querySelector('select.allergen-dropdown');
+            if (allergenSelect) {
+                const sentence = (window.AllergenMapping && AllergenMapping.getAllergenValueFromSelect)
+                    ? AllergenMapping.getAllergenValueFromSelect(allergenSelect)
+                    : '';
+                return {
+                    el: allergenSelect,
+                    id: allergenSelect.dataset.id,
+                    namespace: allergenSelect.dataset.namespace,
+                    key: allergenSelect.dataset.key,
+                    type: allergenSelect.dataset.type,
+                    value: sentence,
+                };
+            }
+            const inputElement = item.querySelector('.metafield-value');
+            if (!inputElement) return null;
+            let value = inputElement.tagName === 'SELECT' ? inputElement.value : inputElement.value;
+            return {
+                el: inputElement,
+                id: inputElement.dataset.id,
+                namespace: inputElement.dataset.namespace,
+                key: inputElement.dataset.key,
+                type: inputElement.dataset.type,
+                value: value,
+            };
+        }
+
         async function saveAllMetafields() {
             if (!currentProduct) {
                 alert('No product selected');
@@ -1471,23 +1534,20 @@
             let errorCount = 0;
 
             for (const item of metafieldItems) {
-                const inputElement = item.querySelector('.metafield-value');
-                const metafieldId = inputElement.dataset.id;
-                const namespace = inputElement.dataset.namespace;
-                const key = inputElement.dataset.key;
-                const metafieldType = inputElement.dataset.type;
-                
-                // Get value based on element type (textarea or select)
-                let value;
-                if (inputElement.tagName === 'SELECT') {
-                    value = inputElement.value;
-                } else {
-                    value = inputElement.value;
-                }
+                const ctx = getMetafieldSaveContext(item);
+                if (!ctx) continue;
+                const inputElement = ctx.el;
+                const metafieldId = ctx.id;
+                const namespace = ctx.namespace;
+                const key = ctx.key;
+                const metafieldType = ctx.type;
+                let value = ctx.value;
 
                 if (key === 'unit_weight' && value) {
                     value = floorUnitWeightValue(String(value).trim());
-                    inputElement.value = value;
+                    if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+                        inputElement.value = value;
+                    }
                 }
 
                 console.log(`🔍 Processing metafield:`, {
@@ -1509,7 +1569,7 @@
                 }
                 
                 // Skip empty values for existing metafields
-                if (metafieldId && metafieldId !== 'null' && !value.trim()) {
+                if (metafieldId && metafieldId !== 'null' && !String(value || '').trim()) {
                     console.log(`⏭️ Skipping ${key} - empty value for existing metafield`);
                     continue;
                 }
@@ -1586,7 +1646,18 @@
                     }
                 } catch (error) {
                     errorCount++;
-                    textarea.style.borderColor = '#dc3545';
+                    if (inputElement && inputElement.style) inputElement.style.borderColor = '#dc3545';
+                }
+            }
+
+            if (errorCount === 0 && currentProduct && currentProduct.id) {
+                try {
+                    await fetch('/api/products/' + encodeURIComponent(currentProduct.id) + '/sync-tab-description', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                    });
+                } catch (syncErr) {
+                    console.log('Tab description sync failed:', syncErr);
                 }
             }
 

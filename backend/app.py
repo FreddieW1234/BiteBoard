@@ -1833,6 +1833,17 @@ def api_create_product():
             'error': f"Failed to create product: {str(e)}"
         }), 500
 
+@app.route('/api/products/<int:product_id>/sync-tab-description', methods=['POST'])
+def api_sync_product_tab_description(product_id):
+    """Rebuild Shopify native description tabs from dietary / allergen metafields."""
+    try:
+        from scripts.product_creator.Product_Creator import sync_product_tab_body_from_metafields  # type: ignore
+        result = sync_product_tab_body_from_metafields(product_id)
+        status = 200 if result.get("success") else 500
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/shopify-media', methods=['GET'])
 def api_get_shopify_media():
     """Get existing media files from Shopify using GraphQL"""
@@ -2814,15 +2825,18 @@ def api_companies():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/companies/<company_id>', methods=['GET', 'PUT'])
+@app.route('/api/companies/<company_id>', methods=['GET', 'PUT', 'DELETE'])
 def api_company_detail(company_id):
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
     try:
-        from scripts.Companies import get_company_detail, rename_company  # type: ignore
+        from scripts.Companies import delete_company, get_company_detail, rename_company  # type: ignore
         if request.method == 'GET':
             result = get_company_detail(company_id)
             return jsonify(result), (404 if not result.get('success') else 200)
+        if request.method == 'DELETE':
+            result = delete_company(company_id)
+            return jsonify(result), (404 if result.get('error') == 'Company not found' else (400 if not result.get('success') else 200))
         data = request.get_json(silent=True) or {}
         name = (data.get('name') or '').strip()
         result = rename_company(company_id, name)

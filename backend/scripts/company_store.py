@@ -319,3 +319,15 @@ def delete_note(company_id: str, note_id: str) -> None:
         if cur.rowcount == 0:
             raise ValueError("Note not found")
         conn.commit()
+
+
+def delete_company(company_id: str) -> None:
+    init_db()
+    cid = (company_id or "").strip()
+    if not cid:
+        raise ValueError("Company id is required")
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM companies WHERE id = ?", (cid,))
+        if cur.rowcount == 0:
+            raise ValueError("Company not found")
+        conn.commit()

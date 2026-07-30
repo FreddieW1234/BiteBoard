@@ -25,13 +25,21 @@ DEFAULT_METAFIELD_ORDER = [
     "vegetarian",
     "halal",
     "coeliac",
-    "peanuts",
-    "tree_nuts",
-    "sesame",
-    "milk",
-    "egg",
+    "kosher",
+    "celery",
     "cereals",
+    "crustaceans",
+    "egg",
+    "fish",
+    "lupin",
+    "milk",
+    "molluscs",
+    "mustard",
+    "nuts",
+    "peanuts",
+    "sesame",
     "soya",
+    "sulphurdioxide",
     "product_size",
     "commodity_code"
 ]
@@ -49,7 +57,9 @@ ALTERNATIVE_ORDERS = {
         # Content
         "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info",
         # Dietary Info
-        "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame", "milk", "egg", "cereals", "soya",
+        "vegan", "vegetarian", "halal", "coeliac", "kosher",
+        "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard",
+        "nuts", "peanuts", "sesame", "soya", "sulphurdioxide",
         # Additional Fields
         "product_size", "commodity_code"
     ],
@@ -59,7 +69,9 @@ ALTERNATIVE_ORDERS = {
         # Medium Priority  
         "unit_weight", "case_weight", "case_quantity", "origination", "shelf_life",
         # Lower Priority
-        "vegan", "vegetarian", "halal", "coeliac", "peanuts", "tree_nuts", "sesame", "milk", "egg", "cereals", "soya",
+        "vegan", "vegetarian", "halal", "coeliac", "kosher",
+        "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard",
+        "nuts", "peanuts", "sesame", "soya", "sulphurdioxide",
         "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info", "leadtime1", "leadtime2", "packingfee",
         "product_size", "commodity_code"
     ]

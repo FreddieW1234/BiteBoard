@@ -511,7 +511,12 @@
         return `<div class="co-company-detail">
             <div class="co-company-detail-grid">
                 <section class="co-company-section">
-                    <h4>Company name</h4>
+                    <div class="co-company-name-header">
+                        <h4>Company name</h4>
+                        <button type="button" class="btn-ghost co-delete-company-btn" data-company-id="${escapeHtml(company.id)}" data-company-name="${escapeHtml(company.name || '')}" title="Delete company">
+                            <i class="fas fa-trash"></i> Delete company
+                        </button>
+                    </div>
                     <form class="co-rename-form" data-company-id="${escapeHtml(company.id)}">
                         <div class="co-inline-field">
                             <input type="text" name="name" value="${escapeHtml(company.name || '')}" required>
@@ -739,6 +744,22 @@
         renderCompaniesTable();
     }
 
+    async function deleteCompany(companyId) {
+        const resp = await fetch(`/api/companies/${encodeURIComponent(companyId)}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+        });
+        const data = await resp.json().catch(function () { return {}; });
+        if (!resp.ok || !data.success) {
+            throw new Error((data && data.error) || 'Could not delete company');
+        }
+        delete companyDetailsCache[companyId];
+        if (String(expandedCompanyId) === String(companyId)) {
+            expandedCompanyId = null;
+        }
+        await loadCompanies({ force: true });
+    }
+
     function bindEvents() {
         const root = document.getElementById('customers-view-companies');
         if (!root || root.dataset.bound === '1') return;
@@ -793,6 +814,17 @@
                 const noteId = deleteNoteBtn.dataset.noteId;
                 if (!confirm('Delete this note? This cannot be undone.')) return;
                 deleteNote(companyId, noteId).catch(function (err) { alert(err.message); });
+                return;
+            }
+            const deleteCompanyBtn = e.target.closest('.co-delete-company-btn');
+            if (deleteCompanyBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const companyId = deleteCompanyBtn.dataset.companyId;
+                const companyName = (deleteCompanyBtn.dataset.companyName || '').trim();
+                const label = companyName ? `"${companyName}"` : 'this company';
+                if (!confirm(`Delete ${label}? Linked customers will not be changed — only the company record and its notes will be removed.`)) return;
+                deleteCompany(companyId).catch(function (err) { alert(err.message); });
                 return;
             }
             const addMemberBtn = e.target.closest('.co-add-member-btn');

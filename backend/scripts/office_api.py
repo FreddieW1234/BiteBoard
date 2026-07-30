@@ -333,6 +333,16 @@ def rename_company(company_id: str, name: str) -> dict:
     return result
 
 
+def delete_company(company_id: str) -> dict:
+    """``DELETE /companies/{id}`` — remove company record only (no Shopify customer changes)."""
+    cid = (company_id or "").strip()
+    resp = _request("DELETE", _companies_url(cid), timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from company delete")
+    return result
+
+
 def add_company_member(company_id: str, customer_id: str, *, move: bool = False) -> dict:
     """``POST /companies/{id}/members`` — link customer by Shopify id."""
     cid = (company_id or "").strip()

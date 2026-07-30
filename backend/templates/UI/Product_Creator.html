@@ -1325,17 +1325,7 @@
         .pc-create-from-parent .metafield-item[data-metafield-key="leadtime2"],
         .pc-create-from-parent .metafield-item[data-metafield-key="packingfee"],
         .pc-create-from-parent .metafield-item[data-metafield-key="commodity_code"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="vegan"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="vegetarian"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="halal"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="coeliac"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="peanuts"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="tree_nuts"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="sesame"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="egg"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="cereals"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="soya"],
-        .pc-create-from-parent .metafield-item[data-metafield-key="milk"] { display: none !important; }
+        .pc-create-from-parent .metafield-item.dietary-metafield-item { display: none !important; }
         /* Create-from-parent: fewer fields — let cat/subcat dropdown extend over the action buttons */
         #productForm.pc-create-from-parent .field-finder-container,
         #productForm.pc-create-from-parent .metafields-section,
@@ -2218,7 +2208,7 @@
 
 Ingredients
 
-Dietary</textarea>
+Dietary/Allergens</textarea>
                         </div>
                         <div class="form-group full-width form-row-status-vat-colour">
                             <div class="form-group form-group-status">
@@ -2625,6 +2615,7 @@ Dietary</textarea>
         </div>
     </div>
 
+    <script src="/static/allergen_mapping.js?v=1"></script>
     <script>
         let isHtmlMode = false;
 
@@ -2642,7 +2633,8 @@ Dietary</textarea>
         }
 
         // Default Shopify product description (body_html) for new products.
-        const DEFAULT_PRODUCT_DESCRIPTION = 'Product Info\n\n\nIngredients\n\n\nDietary';
+        const DEFAULT_PRODUCT_DESCRIPTION = (window.AllergenMapping && AllergenMapping.DEFAULT_PRODUCT_DESCRIPTION)
+            || 'Product Info\n\n\nIngredients\n\n\nDietary/Allergens';
 
         function applyDefaultProductDescription() {
             const descEl = document.getElementById('description');
@@ -3441,17 +3433,32 @@ Dietary</textarea>
                         const key = emojiContainer.dataset.key;
                         const metafieldType = emojiContainer.dataset.type;
                         const value = emojiContainer.dataset.selectedValue || '';
-                        
-                        // Only include metafields that have values
                         if (value) {
                             metafieldsData.push({
                                 namespace: namespace,
                                 key: key,
                                 type: metafieldType,
                                 value: value
-                        });
-                    }
-                } else {
+                            });
+                        }
+                    } else {
+                    const allergenSelect = item.querySelector('select.allergen-dropdown');
+                    if (allergenSelect) {
+                        const namespace = allergenSelect.dataset.namespace;
+                        const key = allergenSelect.dataset.key;
+                        const metafieldType = allergenSelect.dataset.type;
+                        const value = (window.AllergenMapping && AllergenMapping.getAllergenValueFromSelect)
+                            ? AllergenMapping.getAllergenValueFromSelect(allergenSelect)
+                            : '';
+                        if (value) {
+                            metafieldsData.push({
+                                namespace: namespace,
+                                key: key,
+                                type: metafieldType,
+                                value: value
+                            });
+                        }
+                    } else {
                     // Check for custom dropdown first (category/subcategory), then other input types
                     let inputElement = item.querySelector('.custom-dropdown');
                     if (!inputElement) {
@@ -3579,6 +3586,7 @@ Dietary</textarea>
                             console.log(`✅ Added ${key} to metafieldsData:`, { namespace, key, type: forcedType, value: finalValue });
                         }
                         }
+                    }
                     }
                 }
             });
@@ -4603,19 +4611,7 @@ Dietary</textarea>
         // Convert technical metafield keys to human-readable names
         function getHumanReadableName(key) {
             const nameMap = {
-                // Dietary restrictions
-                'vegan': 'Suitable for: Vegans',
-                'vegetarian': 'Suitable for: Vegetarians', 
-                'halal': 'Suitable for: Halal',
-                'coeliac': 'Suitable for: Coeliacs',
-                'peanuts': 'Contains: Peanuts',
-                'tree_nuts': 'Contains: Tree Nuts',
-                'sesame': 'Contains: Sesame',
-                'egg': 'Contains: Eggs',
-                'cereals': 'Contains: Cereals',
-                'soya': 'Contains: Soya',
-                'milk': 'Contains: Milk',
-                'egg': 'Contains: Egg',
+                // Dietary / suitable-for (allergen labels come from AllergenMapping)
                 'moq': 'MOQ (Units)',
                 'origination': 'Origination (£)',
                 'shelf_life': 'Shelf Life (Months)',
@@ -4646,6 +4642,9 @@ Dietary</textarea>
             };
             
             // Check if we have a specific mapping
+            if (window.AllergenMapping && AllergenMapping.DISPLAY_NAME_OVERRIDES && AllergenMapping.DISPLAY_NAME_OVERRIDES[key]) {
+                return AllergenMapping.DISPLAY_NAME_OVERRIDES[key];
+            }
             if (nameMap[key]) {
                 return nameMap[key];
             }
@@ -4668,6 +4667,9 @@ Dietary</textarea>
             }
 
             metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
+            if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
+                metafields = AllergenMapping.ensureDietaryMetafields(metafields);
+            }
 
             if (metafields.length === 0) {
                 container.innerHTML = '<p style="color: #666; font-style: italic; grid-column: 1 / -1;">No metafields found</p>';
@@ -4694,18 +4696,9 @@ Dietary</textarea>
                 "leadtime1",
                 "leadtime2",
                 "commodity_code",
-                "vegan",
-                "vegetarian",
-                "halal",
-                "coeliac",
-                "peanuts",
-                "tree_nuts",
-                "sesame",
-                "milk",
-                "egg",
-                "cereals",
-                "soya"
-            ];
+            ].concat((window.AllergenMapping && AllergenMapping.defaultMetafieldOrderDietaryTail())
+                ? AllergenMapping.defaultMetafieldOrderDietaryTail()
+                : ["vegan", "vegetarian", "halal", "coeliac", "kosher", "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard", "nuts", "peanuts", "sesame", "soya", "sulphurdioxide"]);
 
             // Mirror Field Finder: apply saved box order from localStorage (metafieldOrder)
             try {
@@ -4764,6 +4757,7 @@ Dietary</textarea>
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
                     if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar'].includes(key)) return false;
+                    if (namespace === 'custom' && key === 'tree_nuts') return false;
                     return true;
                 });
             } catch (e) { /* ignore filter errors */ }
@@ -4779,9 +4773,14 @@ Dietary</textarea>
                 // Create a more readable display name by converting technical keys to human-readable names
                 let displayName = getHumanReadableName(metafield.key);
                 
-                // Check if this metafield should have emoji buttons
-                const emojiFields = ['vegan', 'vegetarian', 'halal', 'coeliac', 'peanuts', 'tree_nuts', 'sesame', 'egg', 'cereals', 'soya', 'milk'];
-                const hasEmojiButtons = emojiFields.includes(metafield.key);
+                // Suitable-for: tick/cross. Allergens: Contains / May Contain / Free From (saves sentence).
+                const AM = window.AllergenMapping || {};
+                const hasSuitableEmoji = typeof AM.isSuitableForKey === 'function' && AM.isSuitableForKey(metafield.key);
+                const hasAllergenDropdown = typeof AM.isAllergenKey === 'function' && AM.isAllergenKey(metafield.key);
+                const hasEmojiButtons = hasSuitableEmoji;
+                if (hasSuitableEmoji || hasAllergenDropdown) {
+                    metafieldDiv.classList.add('dietary-metafield-item');
+                }
                 
                 // Special handling for product_size field - create 3 separate input fields
                 const isProductSize = metafield.key === 'product_size';
@@ -4935,21 +4934,11 @@ Dietary</textarea>
                                 ${availableOptions.map(option => `<option value="${option}" ${currentValue === option ? 'selected' : ''}>${option}</option>`).join('')}
                             </select>
                         `;
-                } else if (hasEmojiButtons) {
-                    console.log(`🔧 Creating emoji buttons for ${metafield.key}`);
-                    // Create button-only interface for emoji fields (no textarea)
-                    inputElement = `
-                        <div class="emoji-field-container" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}">
-                            <div class="emoji-buttons">
-                                <button type="button" class="emoji-btn tick ${currentValue === '✔️' ? 'selected' : ''}" data-emoji="✔️">
-                                    <span>✔️</span>
-                                </button>
-                                <button type="button" class="emoji-btn cross ${currentValue === '❌' ? 'selected' : ''}" data-emoji="❌">
-                                    <span>❌</span>
-                                </button>
-                            </div>
-                        </div>
-                    `;
+                } else if (hasAllergenDropdown && AM.buildAllergenDropdownHtml) {
+                    inputElement = AM.buildAllergenDropdownHtml(metafield);
+                } else if (hasEmojiButtons && AM.buildSuitableEmojiFieldHtml) {
+                    console.log(`🔧 Creating suitable-for emoji buttons for ${metafield.key}`);
+                    inputElement = AM.buildSuitableEmojiFieldHtml(metafield);
                 } else {
                     console.log(`🔧 Creating textarea for ${metafield.key}`);
                     // Regular textarea for non-list types
@@ -5384,20 +5373,45 @@ Dietary</textarea>
             // Basic fields
             productData.title = formData.get('title') || '';
             
-            // Convert description to HTML if it's in text mode
+            // Collect metafields first so tab body can be rebuilt from Product Info / Ingredients / Dietary/Allergens
+            productData.metafields = collectMetafieldsData();
+            
+            // Ensure ingredients and nutritional_info are always taken from the DOM (fixes Chocolate autofill not saving nutritional_info)
+            const ingredientsInputEarly = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
+            const nutritionalInputEarly = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
+            const customNamespaceEarly = 'custom';
+            if (ingredientsInputEarly && ingredientsInputEarly.value.trim()) {
+                const type = ingredientsInputEarly.dataset.type || 'single_line_text_field';
+                productData.metafields = productData.metafields.filter(m => m.key !== 'ingredients');
+                productData.metafields.push({ namespace: customNamespaceEarly, key: 'ingredients', type: type, value: ingredientsInputEarly.value.trim() });
+            }
+            if (nutritionalInputEarly && nutritionalInputEarly.value.trim()) {
+                const type = nutritionalInputEarly.dataset.type || 'single_line_text_field';
+                productData.metafields = productData.metafields.filter(m => m.key !== 'nutritional_info');
+                productData.metafields.push({ namespace: customNamespaceEarly, key: 'nutritional_info', type: type, value: nutritionalInputEarly.value.trim() });
+            }
+
             let description = formData.get('description') || '';
+            if (window.AllergenMapping && typeof AllergenMapping.buildShopifyBodyPlainText === 'function') {
+                const mfMap = AllergenMapping.metafieldsArrayToMap(productData.metafields);
+                const descTa = document.querySelector('textarea.metafield-value[data-key="description"]');
+                if (descTa) mfMap.description = descTa.value || mfMap.description || '';
+                const plainBody = AllergenMapping.buildShopifyBodyPlainText(mfMap);
+                description = plainBody;
+                isHtmlMode = false;
+            }
             console.log('🔍 Raw description from form:', JSON.stringify(description));
             console.log('🔍 isHtmlMode:', isHtmlMode);
-            console.log('🔍 Description length:', description.length);
-            console.log('🔍 Description contains newlines:', description.includes('\n'));
             if (!isHtmlMode) {
                 description = textToHtml(description);
                 console.log('🔍 Converted to HTML:', JSON.stringify(description));
             } else {
                 console.log('🔍 Keeping as HTML (not converting)');
             }
-            // If it's already HTML mode, keep it as is
             productData.description = description;
+            const descElSync = document.getElementById('description');
+            if (descElSync) descElSync.value = description;
+            isHtmlMode = true;
             console.log('🔍 Final description being sent:', JSON.stringify(description));
             
             productData.status = formData.get('status') || 'active';
@@ -5464,23 +5478,7 @@ Dietary</textarea>
             productData.inventory_quantity = 0;
             productData.weight = '0';
             
-            // Collect metafields data
-            productData.metafields = collectMetafieldsData();
-            
-            // Ensure ingredients and nutritional_info are always taken from the DOM (fixes Chocolate autofill not saving nutritional_info)
-            const ingredientsInput = document.querySelector('textarea.metafield-value[data-key="ingredients"]');
-            const nutritionalInput = document.querySelector('textarea.metafield-value[data-key="nutritional_info"]');
-            const customNamespace = 'custom';
-            if (ingredientsInput && ingredientsInput.value.trim()) {
-                const type = ingredientsInput.dataset.type || 'single_line_text_field';
-                productData.metafields = productData.metafields.filter(m => m.key !== 'ingredients');
-                productData.metafields.push({ namespace: customNamespace, key: 'ingredients', type: type, value: ingredientsInput.value.trim() });
-            }
-            if (nutritionalInput && nutritionalInput.value.trim()) {
-                const type = nutritionalInput.dataset.type || 'single_line_text_field';
-                productData.metafields = productData.metafields.filter(m => m.key !== 'nutritional_info');
-                productData.metafields.push({ namespace: customNamespace, key: 'nutritional_info', type: type, value: nutritionalInput.value.trim() });
-            }
+            // Metafields already collected above for tab body rebuild
             
             // Explicitly set category and subcategory as top-level for backend (required for metafield creation + overflow routing)
             const mfData = productData.metafields || [];
@@ -7102,7 +7100,13 @@ Dietary</textarea>
                         console.log(`✅ Set ${key} height field to: ${height}`);
                     }
                 } else if (input) {
-                    if (input.classList.contains('emoji-field-container')) {
+                    if (input.classList.contains('allergen-dropdown') || (input.tagName === 'SELECT' && window.AllergenMapping && AllergenMapping.isAllergenKey(key))) {
+                        const level = AllergenMapping.inferAllergenLevel(key, value);
+                        if (level) {
+                            input.value = level;
+                            console.log(`✅ Set ${key} allergen dropdown to: ${level}`);
+                        }
+                    } else if (input.classList.contains('emoji-field-container')) {
                         // For emoji field containers, set the selected button
                         const allButtons = input.querySelectorAll('.emoji-btn');
                         allButtons.forEach(btn => btn.classList.remove('selected'));

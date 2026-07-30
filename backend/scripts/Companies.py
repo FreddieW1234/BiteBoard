@@ -10,6 +10,7 @@ from scripts.company_store import (  # type: ignore
     add_note as store_add_note,
     create_company as store_create_company,
     delete_note as store_delete_note,
+    delete_company as store_delete_company,
     get_company as store_get_company,
     list_companies as store_list_companies,
     remove_member as store_remove_member,
@@ -287,4 +288,24 @@ def delete_company_note(company_id: str, note_id: str) -> dict:
     except OfficeApiError as exc:
         return {"success": False, "error": str(exc)}
     except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+
+
+def delete_company(company_id: str) -> dict:
+    """Delete a company record only — does not modify Shopify customer metafields."""
+    cid = (company_id or "").strip()
+    if not cid:
+        return {"success": False, "error": "Company id is required"}
+    try:
+        if _office_companies_available():
+            office_api.delete_company(cid)
+        else:
+            store_delete_company(cid)
+        invalidate_companies_cache()
+        return {"success": True, "company_id": cid}
+    except OfficeApiError as exc:
+        return {"success": False, "error": str(exc)}
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+    except Exception as exc:
         return {"success": False, "error": str(exc)}
