@@ -1849,7 +1849,7 @@ def api_create_product():
 
 @app.route('/api/products/<int:product_id>/sync-tab-description', methods=['POST'])
 def api_sync_product_tab_description(product_id):
-    """Rebuild Shopify native description tabs from dietary / allergen metafields."""
+    """Clear Shopify native body_html for a product (legacy sync endpoint)."""
     try:
         from scripts.product_creator.Product_Creator import sync_product_tab_body_from_metafields  # type: ignore
         result = sync_product_tab_body_from_metafields(product_id)

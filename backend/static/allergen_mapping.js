@@ -138,10 +138,10 @@
         '<h3><span>Product Info</span><span></span></h3>\n' +
         '<h3><span>Ingredients</span><span></span></h3>\n' +
         '<h3><span>Dietary/Allergens</span><span></span><span></span></h3>';
-    const DEFAULT_PRODUCT_DESCRIPTION = SHOPIFY_NATIVE_DESCRIPTION_HTML;
+    const DEFAULT_PRODUCT_DESCRIPTION = '';
 
     function shopifyNativeDescriptionHtml() {
-        return SHOPIFY_NATIVE_DESCRIPTION_HTML;
+        return '';
     }
 
     const ALLERGEN_LEVELS = [

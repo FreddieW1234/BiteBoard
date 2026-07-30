@@ -211,11 +211,11 @@ SHOPIFY_NATIVE_DESCRIPTION_HTML = (
 
 
 def shopify_native_description_html() -> str:
-    return SHOPIFY_NATIVE_DESCRIPTION_HTML
+    """Shopify native body_html is intentionally left blank (theme reads metafields)."""
+    return ""
 
 
 def build_shopify_body_html_from_metafield_map(_mf_map=None) -> str:
-    """Native product description is fixed tab headings only (not metafield content)."""
     return shopify_native_description_html()
 
 

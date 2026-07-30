@@ -2302,18 +2302,13 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
         "X-Shopify-Access-Token": ACCESS_TOKEN,
         "Content-Type": "application/json",
     }
-    try:
-        from .allergen_mapping import shopify_native_description_html
-        child_body_html = shopify_native_description_html()
-    except Exception:
-        child_body_html = None
 
     saved_list = []
     for cid in child_ids:
         try:
             if mfs_to_propagate:
                 create_metafields(cid, mfs_to_propagate, shopify_domain=shopify_domain)
-            # Update child product tags, native tab body_html, and taxable to match parent
+            # Update child product tags, clear native body_html, and taxable to match parent
             prod_url = f"{base_url}/products/{cid}.json"
             get_resp = requests.get(prod_url, headers=headers, timeout=15)
             if get_resp.status_code == 200:
@@ -2323,11 +2318,10 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                     "product": {
                         "id": cid,
                         "tags": tags,
+                        "body_html": "",
                         "variants": [{"id": v.get("id"), "taxable": taxable} for v in prod.get("variants", [])],
                     }
                 }
-                if child_body_html:
-                    payload["product"]["body_html"] = child_body_html
                 put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
                 if put_resp.status_code == 200:
                     print(f"✅ Updated tags and taxable for child product {cid}", flush=True)
@@ -2345,10 +2339,9 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                     print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
             else:
                 print(f"⚠️ Could not fetch child product {cid} for tags update", flush=True)
-                if child_body_html:
-                    tab_sync = sync_product_tab_body_from_metafields(cid, shopify_domain=domain)
-                    if tab_sync.get("success"):
-                        saved_list.append({"id": cid, "title": f"Product {cid}", "is_parent": False})
+                tab_sync = sync_product_tab_body_from_metafields(cid, shopify_domain=domain)
+                if tab_sync.get("success"):
+                    saved_list.append({"id": cid, "title": f"Product {cid}", "is_parent": False})
         except Exception as e:
             print(f"⚠️ Error propagating to child {cid}: {e}", flush=True)
     return saved_list
@@ -2684,17 +2677,15 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
 
 
 def sync_product_tab_body_from_metafields(product_id, shopify_domain=None):
-    """Set Shopify body_html to the fixed Product Info / Ingredients / Dietary/Allergens tab headings."""
+    """Clear Shopify native body_html (tab content lives in metafields / theme)."""
     try:
-        from .allergen_mapping import shopify_native_description_html
-
         pid = int(product_id)
         domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/")
         if not domain:
             return {"success": False, "error": "Shopify store domain is not configured"}
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
         base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{pid}"
-        body_html = shopify_native_description_html()
+        body_html = ""
         put_r = requests.put(
             f"{base_url}.json",
             headers=headers,
@@ -2785,12 +2776,7 @@ def create_product(product_data):
                 "error": error_msg
             }
 
-        try:
-            from .allergen_mapping import shopify_native_description_html
-
-            product_data["description"] = shopify_native_description_html()
-        except Exception as body_exc:
-            print(f"⚠️ Could not set tab body_html (non-fatal): {body_exc}", flush=True)
+        product_data["description"] = ""
         
         # Prepare the product payload (without taxable field initially)
         # Ensure variant has valid data - Shopify may reject empty/invalid variants

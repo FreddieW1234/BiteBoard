@@ -2225,11 +2225,7 @@
                                         <span id="convertText">Convert to HTML</span>
                                     </button>
                         </div>
-                                <textarea id="description" name="description" class="form-textarea" placeholder="Enter product description" readonly>Product Info
-
-Ingredients
-
-Dietary/Allergens</textarea>
+                                <textarea id="description" name="description" class="form-textarea" placeholder="Enter product description" readonly></textarea>
                         </div>
                         <div class="form-group full-width form-row-status-vat-colour">
                             <div class="form-group form-group-status">
@@ -2636,7 +2632,7 @@ Dietary/Allergens</textarea>
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=5"></script>
+    <script src="/static/allergen_mapping.js?v=6"></script>
     <script>
         let isHtmlMode = false;
 
@@ -2654,8 +2650,7 @@ Dietary/Allergens</textarea>
         }
 
         // Default Shopify product description (body_html) for new products.
-        const DEFAULT_PRODUCT_DESCRIPTION = (window.AllergenMapping && AllergenMapping.DEFAULT_PRODUCT_DESCRIPTION)
-            || 'Product Info\n\n\nIngredients\n\n\nDietary/Allergens';
+        const DEFAULT_PRODUCT_DESCRIPTION = (window.AllergenMapping && AllergenMapping.DEFAULT_PRODUCT_DESCRIPTION) || '';
 
         function applyDefaultProductDescription() {
             const descEl = document.getElementById('description');
@@ -5420,14 +5415,10 @@ Dietary/Allergens</textarea>
                 productData.metafields.push({ namespace: customNamespaceEarly, key: 'nutritional_info', type: type, value: nutritionalInputEarly.value.trim() });
             }
 
-            let description = (window.AllergenMapping && AllergenMapping.shopifyNativeDescriptionHtml)
-                ? AllergenMapping.shopifyNativeDescriptionHtml()
-                : formData.get('description') || '';
-            isHtmlMode = true;
-            productData.description = description;
+            productData.description = '';
             const descElSync = document.getElementById('description');
-            if (descElSync) descElSync.value = description;
-            console.log('🔍 Final native description (tab headings only):', JSON.stringify(description));
+            if (descElSync) descElSync.value = '';
+            console.log('🔍 Native Shopify description (body_html) saved blank');
             
             productData.status = formData.get('status') || 'active';
             productData.tags = getVatTag();
