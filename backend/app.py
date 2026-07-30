@@ -1066,6 +1066,20 @@ def api_bulk_update_field():
         if not isinstance(updates, list) or not updates:
             return jsonify({"error": "No updates provided"}), 400
 
+        LONG_TEXT_BULK_COLUMNS = frozenset({
+            "description", "productinfo", "ingredients", "nutritional_info",
+            "whats_inside", "print_info", "recycle_info",
+        })
+        BULK_LONG_TEXT_MAX = 20
+
+        if column in LONG_TEXT_BULK_COLUMNS and len(updates) > BULK_LONG_TEXT_MAX:
+            return jsonify({
+                "error": (
+                    f"Long-text columns can only update up to {BULK_LONG_TEXT_MAX} products "
+                    f"per save (you have {len(updates)}). Edit fewer rows or save in batches."
+                ),
+            }), 400
+
         from scripts.product_creator.Product_Creator import create_metafields
 
         domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")

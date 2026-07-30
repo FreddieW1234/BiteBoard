@@ -1336,6 +1336,37 @@ def _merge_price_metafields_from_graphql_node(node, mf_map):
     return mf_map
 
 
+# All Products bulk column edit: full metafield text (not truncated) for textarea editing.
+ALL_PRODUCTS_LONG_TEXT_KEYS = frozenset({
+    "description", "productinfo", "ingredients", "nutritional_info",
+    "whats_inside", "print_info", "recycle_info",
+})
+
+
+def _metafield_full_text(value):
+    """Full metafield body for bulk-edit textareas (no list truncation)."""
+    if value is None:
+        return ""
+    s = str(value)
+    if not s.strip():
+        return ""
+    if _HTML_TAG_RE.search(s):
+        text = _HTML_TAG_RE.sub(" ", s)
+        text = (text.replace("&nbsp;", " ").replace("&amp;", "&")
+                .replace("&lt;", "<").replace("&gt;", ">").replace("&#39;", "'").replace("&quot;", '"'))
+        return " ".join(text.split())
+    return s
+
+
+def _build_field_values_full(mf_map):
+    """Untruncated values for long-text bulk edit on the All Products grid."""
+    out = {"description": _metafield_full_text(mf_map.get("description"))}
+    for out_key, mf_key in ALL_PRODUCTS_FIELD_KEYS.items():
+        if out_key in ALL_PRODUCTS_LONG_TEXT_KEYS:
+            out[out_key] = _metafield_full_text(mf_map.get(mf_key))
+    return out
+
+
 def _build_field_values(mf_map):
     """Build the display-value dict for the All Products optional columns."""
     try:
@@ -1573,6 +1604,7 @@ def get_all_products_overview(shopify_domain=None):
                     "subcategories": subs,
                     "has_prices": has_prices,
                     "fields": fields,
+                    "fields_full": _build_field_values_full(mf_map),
                     "filter_values": _build_filter_values(mf_map),
                     "is_child": _is_child_product(mf_map),
                     "has_parent_child": _has_parent_child_allocation(mf_map),
@@ -1644,6 +1676,7 @@ def get_all_products_overview(shopify_domain=None):
                         "subcategories": subs,
                         "has_prices": has_prices,
                         "fields": fields,
+                        "fields_full": _build_field_values_full(mf_map),
                         "filter_values": _build_filter_values(mf_map),
                         "is_child": _is_child_product(mf_map),
                         "has_parent_child": _has_parent_child_allocation(mf_map),

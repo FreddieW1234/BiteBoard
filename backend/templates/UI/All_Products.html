@@ -145,7 +145,8 @@
         .ap-edit-cell { min-width: 0; width: 100%; display: block; }
         .cell-title .ap-edit-cell { flex: 1 1 auto; }
         .ap-edit-input, .ap-edit-select { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 0.82rem; padding: 5px 7px; border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #1f2937; }
-        .ap-edit-input:focus, .ap-edit-select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+        .ap-edit-textarea { width: 100%; min-width: 180px; box-sizing: border-box; font-family: inherit; font-size: 0.78rem; line-height: 1.35; padding: 6px 7px; border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #1f2937; resize: vertical; min-height: 72px; max-height: 220px; }
+        .ap-edit-input:focus, .ap-edit-select:focus, .ap-edit-textarea:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
         .ap-emoji-wrap { display: inline-flex; gap: 6px; }
         .ap-emoji-btn { border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 3px 9px; font-size: 0.95rem; cursor: pointer; line-height: 1; opacity: 0.4; filter: grayscale(0.5); transition: opacity 0.12s; }
         .ap-emoji-btn:hover { opacity: 0.8; }
@@ -228,6 +229,7 @@
             <div class="ap-editbar" id="ap-editbar">
                 <span class="eb-label">Editing: <b id="ap-editbar-col">—</b></span>
                 <span class="eb-hint"><i class="fas fa-lock"></i> Child products are locked (inherited from parent).</span>
+                <span class="eb-hint" id="ap-editbar-long-cap" hidden><i class="fas fa-info-circle"></i> Long text: max <b id="ap-editbar-long-max">20</b> changed products per save.</span>
                 <span class="eb-spacer"></span>
                 <button type="button" class="btn-ghost" id="ap-edit-cancel"><i class="fas fa-xmark"></i> Cancel</button>
                 <button type="button" class="btn-primary" id="ap-edit-save"><i class="fas fa-check"></i> Save changes</button>
@@ -289,8 +291,11 @@
         let apHScrollSyncing = false;
 
         // --- Bulk column editing -------------------------------------------------
-        // Editable columns and how each maps to a Shopify metafield / widget.
-        // SKU, Prices and the long rich-text columns are intentionally not editable here.
+        // Long rich-text columns are editable with a per-save product cap (Shopify rate limits).
+        const BULK_LONG_TEXT_MAX = 20;
+        const LONG_TEXT_EDIT_KEYS = new Set([
+            'description', 'ingredients', 'nutritional_info', 'whats_inside', 'print_info', 'recycle_info'
+        ]);
         const NUMBER_EDIT_KEYS = new Set(['origination', 'unit_weight', 'case_quantity', 'case_weight']);
         const TEXT_EDIT_KEYS = new Set(['product_size', 'moq', 'shelf_life', 'leadtime1', 'leadtime2', 'commodity_code']);
         const EMOJI_EDIT_KEYS = new Set(['vegan', 'vegetarian', 'halal', 'coeliac', 'peanuts', 'tree_nuts', 'sesame', 'milk', 'egg', 'cereals', 'soya']);
@@ -309,6 +314,7 @@
             if (key === 'subcategory') return 'select-sub';
             if (key === 'filters') return 'filters';
             if (EMOJI_EDIT_KEYS.has(key)) return 'emoji';
+            if (LONG_TEXT_EDIT_KEYS.has(key)) return 'textarea';
             if (NUMBER_EDIT_KEYS.has(key)) return 'number';
             if (TEXT_EDIT_KEYS.has(key)) return 'text';
             return null;
@@ -550,6 +556,16 @@
             return (p.fields || {})[key] || '';
         }
 
+        function editFieldValue(p, key) {
+            if (LONG_TEXT_EDIT_KEYS.has(key) && p.fields_full && p.fields_full[key] != null) {
+                return p.fields_full[key];
+            }
+            if (key === 'filters') return JSON.stringify(normFilters(p.filter_values));
+            if (key === 'category') return (p.categories && p.categories[0]) || '';
+            if (key === 'subcategory') return (p.subcategories && p.subcategories[0]) || '';
+            return displayValue(p, key);
+        }
+
         function editWidgetHtml(p, key) {
             const widget = editWidgetFor(key);
             if (widget === 'title') {
@@ -558,6 +574,10 @@
             if (widget === 'text' || widget === 'number') {
                 const cur = (p.fields || {})[key] || '';
                 return `<input type="${widget === 'number' ? 'number' : 'text'}" class="ap-edit-input" value="${escapeHtml(cur)}">`;
+            }
+            if (widget === 'textarea') {
+                const cur = editFieldValue(p, key) || '';
+                return `<textarea class="ap-edit-textarea" rows="4">${escapeHtml(cur)}</textarea>`;
             }
             if (widget === 'emoji') {
                 const cur = (p.fields || {})[key] || '';
@@ -592,11 +612,7 @@
         }
 
         function editCellHtml(p, key) {
-            let original;
-            if (key === 'filters') original = JSON.stringify(normFilters(p.filter_values));
-            else if (key === 'category') original = (p.categories && p.categories[0]) || '';
-            else if (key === 'subcategory') original = (p.subcategories && p.subcategories[0]) || '';
-            else original = displayValue(p, key);
+            const original = editFieldValue(p, key);
             const attrs = `data-pid="${escapeHtml(p.id)}" data-key="${escapeHtml(key)}" data-original="${escapeHtml(original)}"`;
             // Lock children entirely — their fields are inherited from the parent.
             let inner, attrs2;
@@ -1071,12 +1087,15 @@
         function updateEditBar() {
             const bar = document.getElementById('ap-editbar');
             const label = document.getElementById('ap-editbar-col');
+            const longCap = document.getElementById('ap-editbar-long-cap');
             if (!bar) return;
             if (editingColumn) {
                 const def = COLUMN_DEFS.find(c => c.key === editingColumn);
                 if (label) label.textContent = def ? def.label : editingColumn;
+                if (longCap) longCap.hidden = !LONG_TEXT_EDIT_KEYS.has(editingColumn);
                 bar.classList.add('visible');
             } else {
+                if (longCap) longCap.hidden = true;
                 bar.classList.remove('visible');
             }
         }
@@ -1118,6 +1137,10 @@
                 });
                 return JSON.stringify(normFilters(picked));
             }
+            if (widget === 'textarea') {
+                const ta = cell.querySelector('textarea');
+                return ta ? ta.value : '';
+            }
             const inp = cell.querySelector('input');
             let val = inp ? inp.value.trim() : '';
             if (key === 'unit_weight' && val) val = floorUnitWeightValue(val);
@@ -1144,6 +1167,11 @@
                              value: arr.length ? JSON.stringify(arr) : '' };
                 });
                 return { id: pid, metafields: mfs };
+            }
+            if (LONG_TEXT_EDIT_KEYS.has(key)) {
+                return { id: pid, metafields: [{
+                    namespace: ns, key: key, type: 'multi_line_text_field', value: newVal
+                }] };
             }
             // emoji / text / number → single custom metafield
             const type = NUMBER_EDIT_KEYS.has(key) ? 'number_integer' : 'single_line_text_field';
@@ -1172,6 +1200,14 @@
 
             if (!updates.length) {
                 cancelColumnEdit();
+                return;
+            }
+
+            if (LONG_TEXT_EDIT_KEYS.has(key) && updates.length > BULK_LONG_TEXT_MAX) {
+                alert(
+                    'Long-text bulk edit is limited to ' + BULK_LONG_TEXT_MAX + ' products per save.\n' +
+                    'You changed ' + updates.length + ' — save in smaller batches or use Product Manager for large updates.'
+                );
                 return;
             }
 
