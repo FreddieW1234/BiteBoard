@@ -2668,6 +2668,7 @@
             isEditingProduct = false;
             selectedProduct = null;
             pcCreateFromParentMode = false;
+            resetCategorySubEditorState();
 
             const formEl = document.getElementById('productForm');
             if (formEl) formEl.classList.remove('pc-create-from-parent');
@@ -2807,7 +2808,16 @@
 
         function backToProductCreatorHome() {
             if (window.__PRODUCTS_EMBED__ && window.parent && window.parent.ProductsShell) {
-                window.parent.ProductsShell.backFromEditor();
+                var refreshId = null;
+                try {
+                    if (typeof selectedProduct !== 'undefined' && selectedProduct && selectedProduct.id) {
+                        refreshId = selectedProduct.id;
+                    } else if (typeof isEditingProduct !== 'undefined' && isEditingProduct) {
+                        var pidEl = document.querySelector('input[name="product_id"], #product-id');
+                        if (pidEl && pidEl.value) refreshId = pidEl.value;
+                    }
+                } catch (_) { /* ignore */ }
+                window.parent.ProductsShell.backFromEditor({ refreshProductId: refreshId });
                 return;
             }
             resetProductCreatorHomeUI();
@@ -3500,9 +3510,18 @@
                                 if (sub) subs.push(sub);
                                 if (cat) cats.push(cat);
                             });
-                            const uSubs = [...new Set(subs)];
-                            const uCats = [...new Set(cats)];
-                            // Always emit both metafields (empty string when none) so clearing all selections clears them
+                            let uSubs = [...new Set(subs)];
+                            let uCats = [...new Set(cats)];
+                            if (uSubs.length === 0 && uCats.length === 0) {
+                                if (!categorySubUserEdited && loadedCategorySubSnapshot) {
+                                    uCats = (loadedCategorySubSnapshot.categories || []).slice();
+                                    uSubs = (loadedCategorySubSnapshot.subcategories || []).slice();
+                                } else if (!categorySubUserEdited) {
+                                    // Options may not be ticked in the DOM yet — don't clear existing Shopify values
+                                    return;
+                                }
+                            }
+                            // Always emit both metafields (empty string when user cleared all selections)
                             metafieldsData.push({
                                 namespace: 'custom',
                                 key: 'custom_category',
@@ -4676,6 +4695,7 @@
         function displayMetafields(metafields) {
             console.log('🔍 displayMetafields called with:', metafields);
             console.log('🔍 Total metafields to display:', metafields.length);
+            resetCategorySubEditorState();
             
             const container = document.getElementById('metafields-container');
             container.innerHTML = '';
@@ -5509,7 +5529,32 @@
                     allSubcategories.push(...trimmed);
                 }
             });
-            // Fallback: read subcategories directly from the single subcategory dropdown (ensures overflow routing gets data)
+            // Fallback: read from combined Category & Subcategory dropdown (primary UI)
+            const catSubDropdown = document.querySelector('.custom-dropdown[data-key="categorysub"]');
+            if (catSubDropdown) {
+                const checked = catSubDropdown.querySelectorAll('input[type="checkbox"][data-category]:checked');
+                const fromDomSubs = [];
+                const fromDomCats = [];
+                checked.forEach(cb => {
+                    const sub = (cb.value || '').trim();
+                    const cat = (cb.getAttribute('data-category') || '').trim();
+                    if (sub) fromDomSubs.push(sub);
+                    if (cat) fromDomCats.push(cat);
+                });
+                if (fromDomSubs.length > 0) {
+                    allSubcategories = [...new Set([...allSubcategories, ...fromDomSubs])];
+                }
+                if (fromDomCats.length > 0) {
+                    allCategories.push(...fromDomCats);
+                }
+            }
+            if (!allCategories.length && !categorySubUserEdited && loadedCategorySubSnapshot) {
+                allCategories.push(...(loadedCategorySubSnapshot.categories || []));
+            }
+            if (!allSubcategories.length && !categorySubUserEdited && loadedCategorySubSnapshot) {
+                allSubcategories.push(...(loadedCategorySubSnapshot.subcategories || []));
+            }
+            // Legacy fallback: separate subcategory dropdown (if present)
             const subcatDropdown = document.querySelector('.custom-dropdown[data-key="subcategory"]');
             if (subcatDropdown) {
                 const checked = subcatDropdown.querySelectorAll('input[type="checkbox"]:checked');
@@ -5686,6 +5731,12 @@
                     if (!result.product || !result.product.id) {
                         throw new Error('Product creation reported success but no product data was returned');
                     }
+                    if (typeof selectedProduct === 'object' && selectedProduct) {
+                        selectedProduct.id = result.product.id;
+                    } else {
+                        selectedProduct = { id: result.product.id, title: result.product.title };
+                    }
+                    isEditingProduct = true;
                     resultDiv.className = 'result-message result-success';
                     // Detach from the ?edit=<id> deep-link after a successful save so that
                     // a refresh (or Reset) starts a blank form instead of reloading this product.
@@ -5979,6 +6030,67 @@
         // How many categories each subcategory appears under (built when category groups load).
         // Used to disambiguate shared subcategories (e.g. "Lollipops") when restoring selections.
         let CATEGORYSUB_SUB_COUNT = {};
+        let categorySubOptionsPromise = null;
+        let categorySubUserEdited = false;
+        let loadedCategorySubSnapshot = null;
+
+        function resetCategorySubEditorState() {
+            categorySubOptionsPromise = null;
+            categorySubUserEdited = false;
+            loadedCategorySubSnapshot = null;
+        }
+
+        function parseCategorySubFromMetafields(metafields) {
+            const toArray = (m) => {
+                if (!m) return [];
+                let v = m.value;
+                if (v == null || v === '') return [];
+                if (Array.isArray(v)) return v;
+                if (typeof v === 'string') {
+                    const s = v.trim();
+                    try { return s.startsWith('[') ? JSON.parse(s) : [s]; } catch (e) { return [s]; }
+                }
+                return [String(v)];
+            };
+            let cats = [];
+            let subs = [];
+            (metafields || []).forEach(m => {
+                if (!m || m.namespace !== 'custom') return;
+                if (m.key === 'custom_category') cats = cats.concat(toArray(m));
+                else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) subs = subs.concat(toArray(m));
+            });
+            return {
+                categories: [...new Set(cats.map(s => String(s).trim()).filter(Boolean))],
+                subcategories: [...new Set(subs.map(s => String(s).trim()).filter(Boolean))],
+            };
+        }
+
+        function captureCategorySubSnapshot(metafields) {
+            loadedCategorySubSnapshot = parseCategorySubFromMetafields(metafields);
+            categorySubUserEdited = false;
+        }
+
+        function ensureCategorySubDropdownReady() {
+            const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
+            if (!dd) return Promise.resolve(null);
+            if (dd.dataset.optionsLoaded === '1') return Promise.resolve(dd);
+            if (!categorySubOptionsPromise) {
+                categorySubOptionsPromise = loadCategorySubDropdownOptions(dd).then(() => {
+                    dd.dataset.optionsLoaded = '1';
+                    return dd;
+                }).catch(err => {
+                    categorySubOptionsPromise = null;
+                    throw err;
+                });
+            }
+            return categorySubOptionsPromise;
+        }
+
+        async function setCategorySubFromMetafieldsAsync(metafields) {
+            await ensureCategorySubDropdownReady();
+            setCategorySubFromMetafields(metafields);
+            captureCategorySubSnapshot(metafields);
+        }
 
         async function loadCategorySubDropdownOptions(dropdown) {
             try {
@@ -6031,6 +6143,7 @@
                             optionDiv.appendChild(label);
                             optionsList.appendChild(optionDiv);
                             checkbox.addEventListener('change', function() {
+                                categorySubUserEdited = true;
                                 updateDropdownText(dropdown);
                             });
                             totalOptions++;
@@ -6061,26 +6174,7 @@
         function setCategorySubFromMetafields(metafields) {
             const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
             if (!dd) return;
-            const toArray = (m) => {
-                if (!m) return [];
-                let v = m.value;
-                if (v == null || v === '') return [];
-                if (Array.isArray(v)) return v;
-                if (typeof v === 'string') {
-                    const s = v.trim();
-                    try { return s.startsWith('[') ? JSON.parse(s) : [s]; } catch (e) { return [s]; }
-                }
-                return [String(v)];
-            };
-            let cats = [];
-            let subs = [];
-            (metafields || []).forEach(m => {
-                if (!m || m.namespace !== 'custom') return;
-                if (m.key === 'custom_category') cats = cats.concat(toArray(m));
-                else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) subs = subs.concat(toArray(m));
-            });
-            cats = [...new Set(cats.map(s => String(s).trim()).filter(Boolean))];
-            subs = [...new Set(subs.map(s => String(s).trim()).filter(Boolean))];
+            const { categories: cats, subcategories: subs } = parseCategorySubFromMetafields(metafields);
             const boxes = dd.querySelectorAll('input[type="checkbox"][data-category]');
             boxes.forEach(cb => {
                 const sub = (cb.value || '').trim();
@@ -6606,7 +6700,7 @@
                 
                 // Instead, populate individual metafield values without recreating the UI
                 try {
-                    populateMetafieldValues(mfs, { skipCategorySub: isCreateFromParent });
+                    await populateMetafieldValues(mfs, { skipCategorySub: isCreateFromParent });
                 } catch (e) { console.log('Populate metafield values failed', e); }
 
                 if (window.AllergenMapping && typeof data.body_html === 'string' && data.body_html.includes('<h3>')) {
@@ -7023,14 +7117,16 @@
         function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
         
         // Populate metafield values without recreating the UI
-        function populateMetafieldValues(metafields, opts) {
+        async function populateMetafieldValues(metafields, opts) {
             console.log('🔍 populateMetafieldValues called with:', metafields.length, 'metafields');
 
-            // Restore the combined Category & Subcategory dropdown once (needs both metafields together)
+            // Restore the combined Category & Subcategory dropdown once options are loaded
             if (opts && opts.skipCategorySub) {
                 clearCategorySubDropdown();
+                loadedCategorySubSnapshot = null;
+                categorySubUserEdited = false;
             } else {
-                setCategorySubFromMetafields(metafields);
+                await setCategorySubFromMetafieldsAsync(metafields);
             }
 
             metafields.forEach(metafield => {

@@ -171,11 +171,18 @@
         setView('manager', { editId: productId, returnView: 'all' });
     }
 
-    function backFromEditor() {
+    function backFromEditor(options) {
+        options = options || {};
         var ret = getReturnView();
         if (ret === 'all') {
+            var refreshId = options.refreshProductId != null ? String(options.refreshProductId).trim() : '';
             setView('all');
             resetManagerFrame();
+            if (refreshId && typeof window.refreshAllProductsRow === 'function') {
+                try {
+                    window.refreshAllProductsRow(refreshId);
+                } catch (_) { /* ignore */ }
+            }
             return;
         }
         setView('manager', { skipUrl: true });

@@ -1496,6 +1496,205 @@ def _sku_from_metafield(mf_map):
     return str(mf_map.get("sku") or "").strip()
 
 
+def _build_overview_product(pid, title, mf_map, graphql_node=None):
+    """One All Products grid row from custom metafields (and optional GraphQL price fields)."""
+    if graphql_node:
+        mf_map = _merge_price_metafields_from_graphql_node(graphql_node, dict(mf_map or {}))
+    sku = _sku_from_metafield(mf_map)
+    cats = _parse_metafield_list(mf_map.get("custom_category"))
+    subs = _parse_metafield_list(mf_map.get("subcategory"))
+    has_prices = _product_has_prices(mf_map)
+    fields = _build_field_values(mf_map)
+    return {
+        "id": int(pid),
+        "title": (title or "").strip() or f"Product {pid}",
+        "sku": sku,
+        "categories": cats,
+        "subcategories": subs,
+        "has_prices": has_prices,
+        "fields": fields,
+        "fields_full": _build_field_values_full(mf_map),
+        "filter_values": _build_filter_values(mf_map),
+        "is_child": _is_child_product(mf_map),
+        "has_parent_child": _has_parent_child_allocation(mf_map),
+        "parent_child_value": _parent_child_value_from_mf_map(mf_map),
+    }
+
+
+def organize_products_for_overview(products):
+    """
+    Organise flat product overview records into groups / unassigned / misaligned
+    (same structure as get_all_products_overview).
+    """
+    try:
+        from .categories import CATEGORY_MAPPING
+    except Exception:
+        CATEGORY_MAPPING = {}
+
+    products = list(products or [])
+    placement = {}
+    placed_ids = set()
+
+    def _add(category, subcategory, product):
+        placement.setdefault(category, {}).setdefault(subcategory, []).append(product)
+        placed_ids.add(product["id"])
+
+    misaligned = []
+
+    def _is_misaligned(cats, subs):
+        if not cats or not subs:
+            return False
+        for sub in subs:
+            if not any(sub in CATEGORY_MAPPING.get(c, []) for c in cats):
+                return True
+        return False
+
+    for product in products:
+        cats = product["categories"]
+        subs = product["subcategories"]
+        if _is_misaligned(cats, subs):
+            misaligned.append(product)
+            placed_ids.add(product["id"])
+            continue
+        if subs:
+            for sub in subs:
+                matched_cats = [c for c in cats if sub in CATEGORY_MAPPING.get(c, [])]
+                if matched_cats:
+                    for c in matched_cats:
+                        _add(c, sub, product)
+                elif cats:
+                    for c in cats:
+                        _add(c, sub, product)
+                else:
+                    derived = next((c for c, sublist in CATEGORY_MAPPING.items() if sub in sublist), "Other")
+                    _add(derived, sub, product)
+        elif cats:
+            for c in cats:
+                _add(c, None, product)
+
+    NO_SUB_LABEL = "(No subcategory)"
+
+    def _build_subgroups(category):
+        subs_map = placement.get(category, {})
+        ordered_subs = list(CATEGORY_MAPPING.get(category, []))
+        extras = sorted(
+            s for s in subs_map.keys()
+            if s is not None and s not in ordered_subs
+        )
+        result = []
+        for sub in ordered_subs + extras:
+            prods = subs_map.get(sub)
+            if not prods:
+                continue
+            result.append({
+                "subcategory": sub,
+                "products": sorted(prods, key=lambda p: (p["title"] or "").lower()),
+            })
+        if None in subs_map and subs_map[None]:
+            result.append({
+                "subcategory": NO_SUB_LABEL,
+                "products": sorted(subs_map[None], key=lambda p: (p["title"] or "").lower()),
+            })
+        return result
+
+    groups = []
+    ordered_categories = list(CATEGORY_MAPPING.keys())
+    extra_categories = sorted(c for c in placement.keys() if c not in ordered_categories)
+    for category in ordered_categories + extra_categories:
+        if category not in placement:
+            continue
+        subgroups = _build_subgroups(category)
+        if subgroups:
+            groups.append({"category": category, "subgroups": subgroups})
+
+    unassigned = sorted(
+        (p for p in products if p["id"] not in placed_ids),
+        key=lambda p: (p["title"] or "").lower(),
+    )
+    misaligned = sorted(misaligned, key=lambda p: (p["title"] or "").lower())
+
+    return {"groups": groups, "unassigned": unassigned, "misaligned": misaligned}
+
+
+def fetch_product_overview_by_id(product_id, shopify_domain=None):
+    """Fetch one product in All Products overview record shape."""
+    try:
+        pid = int(product_id)
+    except (TypeError, ValueError):
+        return None
+
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return None
+
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
+    gid = f"gid://shopify/Product/{pid}"
+    query = """
+    query GetProductOverview($id: ID!) {
+      product(id: $id) {
+        legacyResourceId
+        title
+        pricejsonTr: metafield(namespace: "custom", key: "pricejsontr") { value }
+        pricejsonEr: metafield(namespace: "custom", key: "pricejsoner") { value }
+        metafields(first: 50, namespace: "custom") { edges { node { key value } } }
+      }
+    }
+    """
+    try:
+        resp = requests.post(
+            graphql_url,
+            json={"query": query, "variables": {"id": gid}},
+            headers=headers,
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if not data.get("errors"):
+                node = (data.get("data") or {}).get("product")
+                if node and node.get("legacyResourceId"):
+                    mf_map = {}
+                    for mf_edge in ((node.get("metafields") or {}).get("edges") or []):
+                        mf_node = mf_edge.get("node") or {}
+                        k = mf_node.get("key")
+                        if k:
+                            mf_map[k] = mf_node.get("value")
+                    title = (node.get("title") or "").strip()
+                    return _build_overview_product(pid, title, mf_map, graphql_node=node)
+    except Exception:
+        pass
+
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    try:
+        r = requests.get(f"{base_url}/products/{pid}.json", headers=headers, timeout=20)
+        if r.status_code != 200:
+            return None
+        prod = r.json().get("product") or {}
+        title = (prod.get("title") or "").strip()
+        mf_map = {}
+        mf_r = requests.get(
+            f"{base_url}/products/{pid}/metafields.json?namespace=custom&limit=250",
+            headers=headers,
+            timeout=15,
+        )
+        if mf_r.status_code == 200:
+            for mf in (mf_r.json().get("metafields") or []):
+                k = mf.get("key")
+                if k:
+                    mf_map[k] = mf.get("value")
+        return _build_overview_product(pid, title, mf_map)
+    except Exception:
+        return None
+
+
+def get_product_overview_slice(product_id, shopify_domain=None):
+    """Placement slice (groups/unassigned/misaligned) containing only the given product."""
+    product = fetch_product_overview_by_id(product_id, shopify_domain)
+    if not product:
+        return None
+    return organize_products_for_overview([product])
+
+
 def get_all_products_overview(shopify_domain=None):
     """
     Fetch every product with its first SKU, category/subcategory, price presence and
@@ -1591,25 +1790,7 @@ def get_all_products_overview(shopify_domain=None):
                     if k:
                         mf_map[k] = mf_node.get("value")
                 mf_map = _merge_price_metafields_from_graphql_node(node, mf_map)
-                sku = _sku_from_metafield(mf_map)
-                cats = _parse_metafield_list(mf_map.get("custom_category"))
-                subs = _parse_metafield_list(mf_map.get("subcategory"))
-                has_prices = _product_has_prices(mf_map)
-                fields = _build_field_values(mf_map)
-                products.append({
-                    "id": pid,
-                    "title": title,
-                    "sku": sku,
-                    "categories": cats,
-                    "subcategories": subs,
-                    "has_prices": has_prices,
-                    "fields": fields,
-                    "fields_full": _build_field_values_full(mf_map),
-                    "filter_values": _build_filter_values(mf_map),
-                    "is_child": _is_child_product(mf_map),
-                    "has_parent_child": _has_parent_child_allocation(mf_map),
-                    "parent_child_value": _parent_child_value_from_mf_map(mf_map),
-                })
+                products.append(_build_overview_product(pid, title, mf_map))
             if not page_info.get("hasNextPage"):
                 break
             cursor = page_info.get("endCursor")
@@ -1663,25 +1844,7 @@ def get_all_products_overview(shopify_domain=None):
                                     mf_map[k] = mf.get("value")
                     except Exception:
                         pass
-                    sku = _sku_from_metafield(mf_map)
-                    cats = _parse_metafield_list(mf_map.get("custom_category"))
-                    subs = _parse_metafield_list(mf_map.get("subcategory"))
-                    has_prices = _product_has_prices(mf_map)
-                    fields = _build_field_values(mf_map)
-                    products.append({
-                        "id": int(pid),
-                        "title": title,
-                        "sku": sku,
-                        "categories": cats,
-                        "subcategories": subs,
-                        "has_prices": has_prices,
-                        "fields": fields,
-                        "fields_full": _build_field_values_full(mf_map),
-                        "filter_values": _build_filter_values(mf_map),
-                        "is_child": _is_child_product(mf_map),
-                        "has_parent_child": _has_parent_child_allocation(mf_map),
-                        "parent_child_value": _parent_child_value_from_mf_map(mf_map),
-                    })
+                    products.append(_build_overview_product(int(pid), title, mf_map))
                 link = r.headers.get("Link") or ""
                 url = None
                 for part in link.split(","):
@@ -1691,101 +1854,7 @@ def get_all_products_overview(shopify_domain=None):
             except Exception:
                 break
 
-    # Organise into ordered (category -> subcategory -> products) structure.
-    # placement: category -> subcategory -> list of products
-    placement = {}
-    placed_ids = set()
-
-    def _add(category, subcategory, product):
-        placement.setdefault(category, {}).setdefault(subcategory, []).append(product)
-        placed_ids.add(product["id"])
-
-    misaligned = []
-
-    def _is_misaligned(cats, subs):
-        # A product is misaligned when it has both a category and a subcategory but at
-        # least one of its subcategories does not belong to any of its categories
-        # (per CATEGORY_MAPPING). Without this guard such products get force-attached to
-        # the wrong category (e.g. "Summer" showing under "Snacks" as well as "Seasonal").
-        if not cats or not subs:
-            return False
-        for sub in subs:
-            if not any(sub in CATEGORY_MAPPING.get(c, []) for c in cats):
-                return True
-        return False
-
-    for product in products:
-        cats = product["categories"]
-        subs = product["subcategories"]
-        if _is_misaligned(cats, subs):
-            misaligned.append(product)
-            placed_ids.add(product["id"])
-            continue
-        if subs:
-            for sub in subs:
-                matched_cats = [c for c in cats if sub in CATEGORY_MAPPING.get(c, [])]
-                if matched_cats:
-                    for c in matched_cats:
-                        _add(c, sub, product)
-                elif cats:
-                    # subcategory doesn't map to product's category list; attach to its categories
-                    for c in cats:
-                        _add(c, sub, product)
-                else:
-                    # no category on the product: derive from mapping (first matching category)
-                    derived = next((c for c, sublist in CATEGORY_MAPPING.items() if sub in sublist), "Other")
-                    _add(derived, sub, product)
-        elif cats:
-            # category but no subcategory
-            for c in cats:
-                _add(c, None, product)
-        # else: handled as unassigned below
-
-    NO_SUB_LABEL = "(No subcategory)"
-
-    def _build_subgroups(category):
-        subs_map = placement.get(category, {})
-        ordered_subs = list(CATEGORY_MAPPING.get(category, []))
-        # extra subcategories present on products but not in the mapping
-        extras = sorted(
-            s for s in subs_map.keys()
-            if s is not None and s not in ordered_subs
-        )
-        result = []
-        for sub in ordered_subs + extras:
-            prods = subs_map.get(sub)
-            if not prods:
-                continue
-            result.append({
-                "subcategory": sub,
-                "products": sorted(prods, key=lambda p: (p["title"] or "").lower()),
-            })
-        # products with this category but no subcategory go last
-        if None in subs_map and subs_map[None]:
-            result.append({
-                "subcategory": NO_SUB_LABEL,
-                "products": sorted(subs_map[None], key=lambda p: (p["title"] or "").lower()),
-            })
-        return result
-
-    groups = []
-    ordered_categories = list(CATEGORY_MAPPING.keys())
-    extra_categories = sorted(c for c in placement.keys() if c not in ordered_categories)
-    for category in ordered_categories + extra_categories:
-        if category not in placement:
-            continue
-        subgroups = _build_subgroups(category)
-        if subgroups:
-            groups.append({"category": category, "subgroups": subgroups})
-
-    unassigned = sorted(
-        (p for p in products if p["id"] not in placed_ids),
-        key=lambda p: (p["title"] or "").lower(),
-    )
-
-    misaligned = sorted(misaligned, key=lambda p: (p["title"] or "").lower())
-
-    return {"groups": groups, "unassigned": unassigned, "misaligned": misaligned}
+    return organize_products_for_overview(products)
 
 
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):

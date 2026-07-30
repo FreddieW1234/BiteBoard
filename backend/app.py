@@ -2000,6 +2000,19 @@ def api_all_products():
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
 
 
+@app.route('/api/all-products/<int:product_id>', methods=['GET'])
+def api_all_products_one(product_id):
+    """Fresh All Products row(s) for a single product after Product Manager save."""
+    try:
+        from scripts.product_creator.Product_Creator import get_product_overview_slice
+        slice_data = get_product_overview_slice(product_id)
+        if not slice_data:
+            return jsonify({'success': False, 'error': 'Product not found'}), 404
+        return jsonify({'success': True, 'product_id': product_id, 'slice': slice_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/orders/<order_id>/order-info', methods=['PUT'])
 def api_order_info_update(order_id):
     """Update order note / custom attributes (staff Orders page)."""

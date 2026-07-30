@@ -155,6 +155,9 @@
         .ap-filters-edit .fg-head { font-size: 0.64rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; margin-top: 4px; }
         .ap-filters-edit label { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #374151; white-space: nowrap; cursor: pointer; }
         .ap-filters-edit input[type="checkbox"] { width: 14px; height: 14px; accent-color: #4f46e5; cursor: pointer; }
+        .ap-list-edit { display: flex; flex-direction: column; gap: 3px; max-height: 170px; overflow-y: auto; padding: 4px 2px; }
+        .ap-list-edit label { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #374151; white-space: nowrap; cursor: pointer; }
+        .ap-list-edit input[type="checkbox"] { width: 14px; height: 14px; accent-color: #4f46e5; cursor: pointer; flex-shrink: 0; }
         .cell-locked { font-size: 0.86rem; color: #b0b4bb; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cell-locked i { font-size: 0.7rem; }
 
@@ -310,8 +313,8 @@
 
         function editWidgetFor(key) {
             if (key === 'title') return 'title';
-            if (key === 'category') return 'select-cat';
-            if (key === 'subcategory') return 'select-sub';
+            if (key === 'category') return 'multi-cat';
+            if (key === 'subcategory') return 'multi-sub';
             if (key === 'filters') return 'filters';
             if (EMOJI_EDIT_KEYS.has(key)) return 'emoji';
             if (LONG_TEXT_EDIT_KEYS.has(key)) return 'textarea';
@@ -547,6 +550,24 @@
             return out;
         }
 
+        function normCatSubList(values) {
+            const arr = (values || []).map(v => String(v).trim()).filter(Boolean).sort();
+            return JSON.stringify(arr);
+        }
+
+        function buildApListEditHtml(options, selectedValues) {
+            const opts = (options || []).slice();
+            const selected = (selectedValues || []).map(v => String(v).trim()).filter(Boolean);
+            selected.forEach(v => { if (opts.indexOf(v) === -1) opts.unshift(v); });
+            const chosen = new Set(selected);
+            let html = '<span class="ap-list-edit">';
+            opts.forEach(o => {
+                html += `<label><input type="checkbox" value="${escapeHtml(o)}"${chosen.has(o) ? ' checked' : ''}>${escapeHtml(o)}</label>`;
+            });
+            html += '</span>';
+            return html;
+        }
+
         // The current (read-only) display string for a column, used for locked child cells.
         function displayValue(p, key) {
             if (key === 'title') return p.title || '';
@@ -561,8 +582,8 @@
                 return p.fields_full[key];
             }
             if (key === 'filters') return JSON.stringify(normFilters(p.filter_values));
-            if (key === 'category') return (p.categories && p.categories[0]) || '';
-            if (key === 'subcategory') return (p.subcategories && p.subcategories[0]) || '';
+            if (key === 'category') return normCatSubList(p.categories);
+            if (key === 'subcategory') return normCatSubList(p.subcategories);
             return displayValue(p, key);
         }
 
@@ -586,13 +607,11 @@
                     <button type="button" class="ap-emoji-btn cross${cur === '❌' ? ' selected' : ''}" data-val="❌">❌</button>
                 </span>`;
             }
-            if (widget === 'select-cat') {
-                const cur = (p.categories && p.categories[0]) || '';
-                return `<select class="ap-edit-select">${buildSelectOptions(apEditOpts.category, cur)}</select>`;
+            if (widget === 'multi-cat') {
+                return buildApListEditHtml(apEditOpts.category, p.categories);
             }
-            if (widget === 'select-sub') {
-                const cur = (p.subcategories && p.subcategories[0]) || '';
-                return `<select class="ap-edit-select">${buildSelectOptions(apEditOpts.subcategory, cur)}</select>`;
+            if (widget === 'multi-sub') {
+                return buildApListEditHtml(apEditOpts.subcategory, p.subcategories);
             }
             if (widget === 'filters') {
                 const groups = apEditOpts.filters || [];
@@ -1122,9 +1141,13 @@
                 const sel = cell.querySelector('.ap-emoji-btn.selected');
                 return sel ? sel.getAttribute('data-val') : '';
             }
-            if (widget === 'select-cat' || widget === 'select-sub') {
-                const s = cell.querySelector('select');
-                return s ? s.value : '';
+            if (widget === 'multi-cat' || widget === 'multi-sub') {
+                const picked = [];
+                cell.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                    const v = (cb.value || '').trim();
+                    if (v) picked.push(v);
+                });
+                return normCatSubList(picked);
             }
             if (widget === 'filters') {
                 const groups = apEditOpts.filters || [];
@@ -1154,9 +1177,17 @@
             }
             if (key === 'category' || key === 'subcategory') {
                 const mfKey = key === 'category' ? 'custom_category' : 'subcategory';
+                let arr = [];
+                try {
+                    const parsed = JSON.parse(newVal || '[]');
+                    arr = Array.isArray(parsed) ? parsed : (newVal ? [newVal] : []);
+                } catch (e) {
+                    arr = newVal ? [String(newVal).trim()] : [];
+                }
+                arr = arr.map(v => String(v).trim()).filter(Boolean);
                 return { id: pid, metafields: [{
                     namespace: ns, key: mfKey, type: 'list.single_line_text_field',
-                    value: newVal ? JSON.stringify([newVal]) : ''
+                    value: arr.length ? JSON.stringify(arr) : ''
                 }] };
             }
             if (key === 'filters') {
