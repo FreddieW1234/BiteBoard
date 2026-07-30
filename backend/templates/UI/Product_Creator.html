@@ -2615,7 +2615,7 @@ Dietary/Allergens</textarea>
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=2"></script>
+    <script src="/static/allergen_mapping.js?v=3"></script>
     <script>
         let isHtmlMode = false;
 
@@ -2638,9 +2638,12 @@ Dietary/Allergens</textarea>
 
         function applyDefaultProductDescription() {
             const descEl = document.getElementById('description');
-            if (descEl) {
-                descEl.value = DEFAULT_PRODUCT_DESCRIPTION;
-                isHtmlMode = false;
+            const html = (window.AllergenMapping && AllergenMapping.shopifyNativeDescriptionHtml)
+                ? AllergenMapping.shopifyNativeDescriptionHtml()
+                : '';
+            if (descEl && html) {
+                descEl.value = html;
+                isHtmlMode = true;
                 if (typeof updateConverterButton === 'function') updateConverterButton();
             }
         }
@@ -5395,32 +5398,14 @@ Dietary/Allergens</textarea>
                 productData.metafields.push({ namespace: customNamespaceEarly, key: 'nutritional_info', type: type, value: nutritionalInputEarly.value.trim() });
             }
 
-            let description = formData.get('description') || '';
-            if (window.AllergenMapping && typeof AllergenMapping.buildShopifyBodyPlainText === 'function') {
-                const mfContainer = document.getElementById('metafields-container');
-                const mfMap = Object.assign(
-                    {},
-                    AllergenMapping.metafieldsArrayToMap(productData.metafields),
-                    mfContainer ? AllergenMapping.collectDietaryMapFromDom(mfContainer) : {}
-                );
-                delete mfMap.description;
-                const plainBody = AllergenMapping.buildShopifyBodyPlainText(mfMap);
-                description = plainBody;
-                isHtmlMode = false;
-            }
-            console.log('🔍 Raw description from form:', JSON.stringify(description));
-            console.log('🔍 isHtmlMode:', isHtmlMode);
-            if (!isHtmlMode) {
-                description = textToHtml(description);
-                console.log('🔍 Converted to HTML:', JSON.stringify(description));
-            } else {
-                console.log('🔍 Keeping as HTML (not converting)');
-            }
+            let description = (window.AllergenMapping && AllergenMapping.shopifyNativeDescriptionHtml)
+                ? AllergenMapping.shopifyNativeDescriptionHtml()
+                : formData.get('description') || '';
+            isHtmlMode = true;
             productData.description = description;
             const descElSync = document.getElementById('description');
             if (descElSync) descElSync.value = description;
-            isHtmlMode = true;
-            console.log('🔍 Final description being sent:', JSON.stringify(description));
+            console.log('🔍 Final native description (tab headings only):', JSON.stringify(description));
             
             productData.status = formData.get('status') || 'active';
             productData.tags = getVatTag();

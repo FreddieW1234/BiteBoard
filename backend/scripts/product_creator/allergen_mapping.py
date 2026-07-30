@@ -202,22 +202,21 @@ def plain_text_to_shopify_h3_html(text: str) -> str:
     return "\n".join(parts)
 
 
-def build_shopify_body_plain_text(mf_map: dict) -> str:
-    mf = _normalize_mf_map(mf_map)
-    product_info = (mf.get(PRODUCT_INFO_METAFIELD_KEY) or "").strip()
-    ingredients = (mf.get("ingredients") or "").strip()
-    dietary_lines = build_dietary_allergens_section_lines(mf)
-
-    chunks = ["Product Info", "", product_info, "", "Ingredients", "", ingredients, "", DIETARY_SECTION_HEADING, ""]
-    chunks.extend(dietary_lines)
-    # Trim trailing blank lines while keeping internal structure
-    while chunks and chunks[-1] == "":
-        chunks.pop()
-    return "\n".join(chunks)
+# Shopify native description (body_html) — tab headings only; tab content comes from metafields on the theme.
+SHOPIFY_NATIVE_DESCRIPTION_HTML = (
+    "<h3><span>Product Info</span><span></span></h3>\n"
+    "<h3><span>Ingredients</span><span></span></h3>\n"
+    "<h3><span>Dietary/Allergens</span><span></span><span></span></h3>"
+)
 
 
-def build_shopify_body_html_from_metafield_map(mf_map: dict) -> str:
-    return plain_text_to_shopify_h3_html(build_shopify_body_plain_text(mf_map))
+def shopify_native_description_html() -> str:
+    return SHOPIFY_NATIVE_DESCRIPTION_HTML
+
+
+def build_shopify_body_html_from_metafield_map(_mf_map=None) -> str:
+    """Native product description is fixed tab headings only (not metafield content)."""
+    return shopify_native_description_html()
 
 
 def metafields_list_to_map(metafields) -> dict:

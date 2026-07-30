@@ -2639,9 +2639,9 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
 
 
 def sync_product_tab_body_from_metafields(product_id, shopify_domain=None):
-    """Rebuild Shopify body_html (Product Info / Ingredients / Dietary/Allergens) from custom metafields."""
+    """Set Shopify body_html to the fixed Product Info / Ingredients / Dietary/Allergens tab headings."""
     try:
-        from .allergen_mapping import build_shopify_body_html_from_metafield_map, metafields_list_to_map
+        from .allergen_mapping import shopify_native_description_html
 
         pid = int(product_id)
         domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/")
@@ -2649,25 +2649,7 @@ def sync_product_tab_body_from_metafields(product_id, shopify_domain=None):
             return {"success": False, "error": "Shopify store domain is not configured"}
         headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
         base_url = f"https://{domain}/admin/api/{API_VERSION}/products/{pid}"
-        mf_list = []
-        url = f"{base_url}/metafields.json?limit=250"
-        while url:
-            mf_r = requests.get(url, headers=headers, timeout=30)
-            if mf_r.status_code != 200:
-                return {"success": False, "error": f"Could not load metafields (HTTP {mf_r.status_code})"}
-            data = mf_r.json() or {}
-            mf_list.extend(data.get("metafields") or [])
-            link = mf_r.headers.get("Link") or ""
-            url = None
-            if 'rel="next"' in link:
-                import re
-                m = re.search(r'<([^>]+)>;\s*rel="next"', link)
-                if m:
-                    url = m.group(1)
-        mf_map = metafields_list_to_map(mf_list)
-        body_html = build_shopify_body_html_from_metafield_map(mf_map)
-        if not body_html:
-            return {"success": True, "skipped": True}
+        body_html = shopify_native_description_html()
         put_r = requests.put(
             f"{base_url}.json",
             headers=headers,
@@ -2759,14 +2741,11 @@ def create_product(product_data):
             }
 
         try:
-            from .allergen_mapping import build_shopify_body_html_from_metafield_map, metafields_list_to_map
+            from .allergen_mapping import shopify_native_description_html
 
-            mf_map = metafields_list_to_map(product_data.get("metafields") or [])
-            rebuilt = build_shopify_body_html_from_metafield_map(mf_map)
-            if rebuilt:
-                product_data["description"] = rebuilt
+            product_data["description"] = shopify_native_description_html()
         except Exception as body_exc:
-            print(f"⚠️ Could not rebuild tab body_html from metafields (non-fatal): {body_exc}", flush=True)
+            print(f"⚠️ Could not set tab body_html (non-fatal): {body_exc}", flush=True)
         
         # Prepare the product payload (without taxable field initially)
         # Ensure variant has valid data - Shopify may reject empty/invalid variants

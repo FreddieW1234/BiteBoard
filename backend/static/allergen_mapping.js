@@ -135,7 +135,15 @@
 
     const DIETARY_SECTION_HEADING = 'Dietary/Allergens';
     const PRODUCT_INFO_METAFIELD_KEY = 'productinfo';
-    const DEFAULT_PRODUCT_DESCRIPTION = 'Product Info\n\n\nIngredients\n\n\n' + DIETARY_SECTION_HEADING;
+    const SHOPIFY_NATIVE_DESCRIPTION_HTML =
+        '<h3><span>Product Info</span><span></span></h3>\n' +
+        '<h3><span>Ingredients</span><span></span></h3>\n' +
+        '<h3><span>Dietary/Allergens</span><span></span><span></span></h3>';
+    const DEFAULT_PRODUCT_DESCRIPTION = SHOPIFY_NATIVE_DESCRIPTION_HTML;
+
+    function shopifyNativeDescriptionHtml() {
+        return SHOPIFY_NATIVE_DESCRIPTION_HTML;
+    }
 
     const ALLERGEN_LEVELS = [
         { value: 'contains', label: 'Contains' },
@@ -405,6 +413,8 @@
         DISPLAY_NAME_OVERRIDES,
         DIETARY_SECTION_HEADING,
         PRODUCT_INFO_METAFIELD_KEY,
+        SHOPIFY_NATIVE_DESCRIPTION_HTML,
+        shopifyNativeDescriptionHtml,
         DEFAULT_PRODUCT_DESCRIPTION,
         allergenSentence,
         inferAllergenLevel,
