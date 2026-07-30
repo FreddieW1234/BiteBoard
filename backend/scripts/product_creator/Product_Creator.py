@@ -2302,12 +2302,18 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
         "X-Shopify-Access-Token": ACCESS_TOKEN,
         "Content-Type": "application/json",
     }
+    try:
+        from .allergen_mapping import shopify_native_description_html
+        child_body_html = shopify_native_description_html()
+    except Exception:
+        child_body_html = None
+
     saved_list = []
     for cid in child_ids:
         try:
             if mfs_to_propagate:
                 create_metafields(cid, mfs_to_propagate, shopify_domain=shopify_domain)
-            # Update child product tags and taxable to match parent
+            # Update child product tags, native tab body_html, and taxable to match parent
             prod_url = f"{base_url}/products/{cid}.json"
             get_resp = requests.get(prod_url, headers=headers, timeout=15)
             if get_resp.status_code == 200:
@@ -2320,6 +2326,8 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                         "variants": [{"id": v.get("id"), "taxable": taxable} for v in prod.get("variants", [])],
                     }
                 }
+                if child_body_html:
+                    payload["product"]["body_html"] = child_body_html
                 put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
                 if put_resp.status_code == 200:
                     print(f"✅ Updated tags and taxable for child product {cid}", flush=True)
@@ -2337,6 +2345,10 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                     print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
             else:
                 print(f"⚠️ Could not fetch child product {cid} for tags update", flush=True)
+                if child_body_html:
+                    tab_sync = sync_product_tab_body_from_metafields(cid, shopify_domain=domain)
+                    if tab_sync.get("success"):
+                        saved_list.append({"id": cid, "title": f"Product {cid}", "is_parent": False})
         except Exception as e:
             print(f"⚠️ Error propagating to child {cid}: {e}", flush=True)
     return saved_list
