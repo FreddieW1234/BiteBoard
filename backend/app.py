@@ -21,6 +21,7 @@ from portal_auth import (  # type: ignore
     is_staff_public_path,
     can_access_order,
 )
+from maintenance import init_maintenance  # type: ignore
 
 print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
       f"ACCESS_TOKEN={'✅ set' if ACCESS_TOKEN else '❌ EMPTY'}, API_VERSION={API_VERSION}", flush=True)
@@ -46,6 +47,11 @@ app.config['SESSION_COOKIE_SECURE'] = FLASK_SESSION_SECURE
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
 
 print("🔐 Staff login enabled", flush=True)
+
+# Registered before portal_auth_gate below: Flask runs before_request handlers
+# in registration order, so the maintenance page must win over the staff auth
+# redirect. Also registers /healthz and /maint-exit.
+init_maintenance(app)
 
 
 @app.errorhandler(413)

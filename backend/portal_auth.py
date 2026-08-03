@@ -70,7 +70,9 @@ def is_client_path(path: str) -> bool:
 
 
 def is_staff_public_path(path: str) -> bool:
-    public = {"/staff/login", "/api/health", "/test"}
+    # /healthz must stay reachable for Render's health check, and /maint-exit
+    # must stay reachable to clear the maintenance bypass cookie.
+    public = {"/staff/login", "/api/health", "/test", "/healthz", "/maint-exit"}
     return path in public
 
 
