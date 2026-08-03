@@ -180,11 +180,14 @@ def _origination_fee(line: dict, order: dict) -> str:
 
 
 def _delivery_address(order: dict, product_section: dict | None) -> str:
-    addr = _field_value(product_section, "address") if product_section else ""
-    if addr:
-        return addr
+    """Shopify order shipping address — not the native order note text."""
     shipping = order.get("shipping_address") or {}
-    return (shipping.get("text") or "").strip()
+    text = (shipping.get("text") or "").strip()
+    if text:
+        return text
+    if product_section:
+        return _field_value(product_section, "address")
+    return ""
 
 
 def _client_name(order: dict, product_section: dict | None) -> str:
