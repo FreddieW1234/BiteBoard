@@ -2003,7 +2003,7 @@ def api_product_queue_list():
                 'error': j.get('error'),
                 'verify_ok': (all(r.get('ok') for r in verify) if verify else None),
             })
-        return jsonify({'jobs': summary, 'locked': queue.locked_product_ids()})
+        return jsonify({'jobs': summary, 'locked': queue.locked_product_ids(jobs=jobs)})
     except Exception as e:
         return jsonify({'jobs': [], 'locked': [], 'error': str(e)})
 
@@ -2016,6 +2016,7 @@ def api_product_queue_detail(job_id):
         job = queue.get_job(job_id)
         if not job:
             return jsonify({'error': 'Job not found'}), 404
+        job['logs'] = queue.get_logs(job_id)   # logs are stored separately now
         return jsonify(job)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

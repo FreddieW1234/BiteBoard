@@ -49,7 +49,7 @@ def main(argv) -> int:
         _emit({"ok": False, "success": False, "verify": [], "error": f"job {job_id} not found"})
         return 1
 
-    data = job.get("data") or {}
+    data = queue.get_job_data(job_id) or {}
     print(f"▶️ Running save job {job_id} — {job.get('title')!r} (attempt {job.get('attempts')})", flush=True)
 
     try:

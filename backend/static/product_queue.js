@@ -13,6 +13,8 @@
   if (window.ProductQueue) return;
 
   var POLL_MS = 3000;
+  var ACTIVE_POLL_MS = 4000;   // Queue modal open — keep it responsive
+  var IDLE_POLL_MS = 15000;    // modal closed — just enough to refresh locks
   var lockedIds = new Set();      // strings
   var jobs = [];
   var selectedLogJobId = null;
@@ -339,21 +341,41 @@
     isOpen = true;
     document.getElementById('pq-overlay').classList.add('open');
     switchTab('queue');
-    refresh();
+    tick();  // refresh now and adopt the faster cadence while open
   }
 
   function close() {
     isOpen = false;
     var ov = document.getElementById('pq-overlay');
     if (ov) ov.classList.remove('open');
+    scheduleNext();  // drop back to the slow idle cadence
+  }
+
+  function currentInterval() {
+    if (typeof document !== 'undefined' && document.hidden) return IDLE_POLL_MS * 2;
+    return isOpen ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+  }
+
+  function scheduleNext() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(tick, currentInterval());
+  }
+
+  function tick() {
+    var p = refresh();
+    if (p && p.finally) { p.finally(scheduleNext); } else { scheduleNext(); }
   }
 
   function start() {
     injectStyles();
     buildModal();
-    refresh();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(refresh, POLL_MS);
+    if (typeof document !== 'undefined' && !start._visWired) {
+      start._visWired = true;
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) tick();  // refresh promptly when the tab returns
+      });
+    }
+    tick();
   }
 
   window.ProductQueue = {

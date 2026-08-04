@@ -82,7 +82,7 @@ SAVE_WORKER_ENABLED = os.environ.get("SAVE_WORKER_ENABLED", "true").lower() in (
 SAVE_QUEUE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_POLL_SEC", "2"))
 SAVE_MAX_ATTEMPTS = int(os.environ.get("SAVE_MAX_ATTEMPTS", "3"))
 SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "1800"))
-SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "24"))
+SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "6"))
 # SAVE_MIN_FREE_MB: the worker defers claiming a job (leaving it queued) when the
 # instance has less available memory than this, so the save subprocess can't push
 # a small (e.g. 512MB) instance into an OOM kill that takes the whole site down.

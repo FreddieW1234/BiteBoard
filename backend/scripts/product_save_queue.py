@@ -54,6 +54,11 @@ except Exception:
     SAVE_JOB_RETENTION_H = 24
 
 KIND = "save_job"
+# Big/append-heavy fields live in their own items so the polled job list stays
+# tiny. The job item holds only summary fields; data (create_product input) and
+# logs (streamed output) are fetched on demand.
+DATA_KIND = "save_job_data"
+LOG_KIND = "save_job_log"
 TERMINAL = ("done", "failed", "cancelled")
 ACTIVE = ("queued", "running")
 
@@ -83,6 +88,49 @@ def _age_seconds(iso, now=None):
 
 def _save(job: dict) -> None:
     office_api.put_snapshot_item(KIND, job["job_id"], job, updated_by="render")
+
+
+def _save_data(job_id: str, data: dict) -> None:
+    """Store the create_product input separately from the summary job item."""
+    office_api.put_snapshot_item(DATA_KIND, str(job_id), {"data": data}, updated_by="render")
+
+
+def get_job_data(job_id: str):
+    """The create_product input for a job (used by the runner). None if absent."""
+    if not _available() or not job_id:
+        return None
+    try:
+        item = office_api.get_snapshot_item(DATA_KIND, str(job_id))
+    except Exception:
+        item = None
+    if isinstance(item, dict) and isinstance(item.get("payload"), dict):
+        return item["payload"].get("data")
+    # Back-compat: older jobs stored data inline on the job item.
+    job = get_job(job_id)
+    return (job or {}).get("data")
+
+
+def _save_logs(job_id: str, logs) -> None:
+    """Best-effort store of a job's captured output, separate from the job item."""
+    try:
+        office_api.put_snapshot_item(LOG_KIND, str(job_id), {"logs": logs or ""}, updated_by="render")
+    except Exception:
+        pass
+
+
+def get_logs(job_id: str) -> str:
+    """A job's captured output (Logs tab). Empty string if none."""
+    if not _available() or not job_id:
+        return ""
+    try:
+        item = office_api.get_snapshot_item(LOG_KIND, str(job_id))
+    except Exception:
+        item = None
+    if isinstance(item, dict) and isinstance(item.get("payload"), dict):
+        return item["payload"].get("logs") or ""
+    # Back-compat: older jobs stored logs inline on the job item.
+    job = get_job(job_id)
+    return (job or {}).get("logs") or ""
 
 
 # --------------------------------------------------------------------------- #
@@ -125,11 +173,11 @@ def enqueue(data: dict, product_id=None, title: str = "", locked_ids=None) -> di
         "started_at": None,
         "finished_at": None,
         "worker_id": None,
-        "data": data,
         "verify": [],
-        "logs": "",
         "error": None,
     }
+    # Heavy fields go in their own items so the polled job list stays tiny.
+    _save_data(job["job_id"], data)
     _save(job)
     return job
 
@@ -200,10 +248,12 @@ def complete(job_id: str, status: str, verify=None, logs=None, error=None):
     job["finished_at"] = _now_iso()
     if verify is not None:
         job["verify"] = verify
-    if logs is not None:
-        job["logs"] = logs
     job["error"] = error
+    job.pop("logs", None)   # logs live in their own item now
+    job.pop("data", None)
     _save(job)
+    if logs is not None:
+        _save_logs(job_id, logs)
     return job
 
 
@@ -217,33 +267,29 @@ def requeue(job_id: str, error=None, logs=None, verify=None):
     job["started_at"] = None
     if error:
         job["error"] = error
-    if logs is not None:
-        job["logs"] = logs
     if verify is not None:
         job["verify"] = verify
+    job.pop("logs", None)
     _save(job)
+    if logs is not None:
+        _save_logs(job_id, logs)
     return job
 
 
 def set_progress(job_id: str, logs) -> bool:
-    """Write partial logs for a still-running job so the UI can stream them live.
+    """Stream partial logs for a still-running job so the UI can show them live.
 
-    Read-modify-write so an external cancel isn't clobbered: if the job is no
-    longer running (cancelled/gone), nothing is written and False is returned so
-    the worker can react. Returns True while the job is still running.
+    Only the separate log item is written (the summary job item is left alone) so
+    the frequently-polled job list never carries the growing log text. Returns
+    False when the job is no longer running (e.g. cancelled) so the worker can
+    stop the subprocess.
     """
     job = get_job(job_id)
     if not job:
         return False
     if job.get("status") != "running":
         return False
-    if logs is not None:
-        job["logs"] = logs
-    job["progress_at"] = _now_iso()
-    try:
-        _save(job)
-    except Exception:
-        pass
+    _save_logs(job_id, logs)
     return True
 
 
@@ -307,13 +353,14 @@ def reap_stale(timeout=None):
     return reaped
 
 
-def locked_product_ids() -> list:
+def locked_product_ids(jobs=None) -> list:
     """Product ids with an active (queued/running) save — these are locked.
 
     Includes any child products the job will propagate to (job['locked_ids']).
+    Pass an already-fetched job list to avoid a second office round-trip.
     """
     ids = set()
-    for job in list_jobs():
+    for job in (jobs if jobs is not None else list_jobs()):
         if job.get("status") not in ACTIVE:
             continue
         locked = job.get("locked_ids")
@@ -340,11 +387,18 @@ def prune(retention_h=None):
             continue
         age = _age_seconds(job.get("finished_at") or job.get("created_at"), now)
         if age is not None and age > cutoff:
+            jid = job["job_id"]
             try:
-                if office_api.delete_snapshot_item(KIND, job["job_id"]):
-                    removed += 1
+                deleted = office_api.delete_snapshot_item(KIND, jid)
             except Exception:
-                pass
+                deleted = False
+            for extra in (DATA_KIND, LOG_KIND):
+                try:
+                    office_api.delete_snapshot_item(extra, jid)
+                except Exception:
+                    pass
+            if deleted:
+                removed += 1
     return removed
 
 
