@@ -2027,6 +2027,18 @@ def sync_product_snapshot(product_id, shopify_domain=None):
         # Couldn't fetch the fresh row; drop the mem tier so the next read is accurate.
         invalidate_products_overview_cache()
 
+    # Keep the editor detail snapshot fresh too (best-effort) so reopening is fast.
+    try:
+        detail = _build_product_detail_from_shopify(product_id, shopify_domain)
+        if detail and detail.get("id"):
+            _write_product_detail_snapshot(product_id, detail)
+            _PRODUCT_DETAIL_CACHE[str(product_id)] = {"at": time.time(), "data": detail}
+        else:
+            invalidate_product_detail_cache(product_id)
+    except Exception as exc:
+        logger.warning("Products: detail sync failed for %s (%s)", product_id, exc)
+        invalidate_product_detail_cache(product_id)
+
 
 def get_all_products_overview(shopify_domain=None, refresh=False):
     """
@@ -2071,6 +2083,173 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
     flat = _build_products_overview_from_shopify(shopify_domain)
     return _store_overview_cache(flat, now)
+
+
+# --------------------------------------------------------------------------- #
+# Single-product editor detail — server-side SWR cache of the full payload the
+# Product Manager editor loads (matches /api/product/<id>/prices). Shared across
+# instances via the office snapshot (kind "product_detail") with a per-instance
+# memory tier and per-product singleflight background refresh.
+# --------------------------------------------------------------------------- #
+_SNAPSHOT_DETAIL_KIND = "product_detail"
+_PRODUCT_DETAIL_CACHE = {}            # str(pid) -> {"at": ts, "data": dict}
+_PRODUCT_DETAIL_LOCK = threading.Lock()
+_PRODUCT_DETAIL_REFRESHING = set()    # str(pid) currently refreshing in background
+
+
+def _iso_age(updated_at, now):
+    """Seconds since an ISO-8601 timestamp, or None if it can't be parsed."""
+    if not updated_at:
+        return None
+    try:
+        s = str(updated_at).replace("Z", "+00:00")
+        return now - datetime.fromisoformat(s).timestamp()
+    except Exception:
+        return None
+
+
+def _build_product_detail_from_shopify(product_id, shopify_domain=None):
+    """Full editor payload for one product (same shape as /api/product/<id>/prices), or None."""
+    try:
+        pid = int(product_id)
+    except (TypeError, ValueError):
+        pid = product_id
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return None
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
+    base = f"https://{domain}/admin/api/{API_VERSION}"
+
+    def _get(url, timeout):
+        for attempt in range(3):
+            try:
+                r = requests.get(url, headers=headers, timeout=timeout)
+            except requests.RequestException:
+                if attempt < 2:
+                    time.sleep(1)
+                    continue
+                return None
+            if r.status_code == 429 and attempt < 2:
+                time.sleep(2)
+                continue
+            return r
+        return None
+
+    pr = _get(f"{base}/products/{pid}.json", 20)
+    if not pr or pr.status_code != 200:
+        return None
+    product_data = pr.json().get("product", {}) or {}
+    mr = _get(f"{base}/products/{pid}/metafields.json?limit=250", 15)
+    all_metafields = mr.json().get("metafields", []) if (mr and mr.status_code == 200) else []
+    return {
+        "id": product_data.get("id"),
+        "title": product_data.get("title", "Unknown Product"),
+        "handle": product_data.get("handle", ""),
+        "vendor": product_data.get("vendor", ""),
+        "product_type": product_data.get("product_type", ""),
+        "status": product_data.get("status", "active"),
+        "body_html": product_data.get("body_html", ""),
+        "tags": product_data.get("tags", []),
+        "options": product_data.get("options", []),
+        "variants": product_data.get("variants", []),
+        "images": product_data.get("images", []),
+        "metafields": all_metafields,
+    }
+
+
+def _write_product_detail_snapshot(product_id, data, updated_by="render"):
+    if not _office_snapshots_available():
+        return
+    try:
+        office_api.put_snapshot_item(_SNAPSHOT_DETAIL_KIND, str(product_id), data, updated_by=updated_by)
+    except Exception as exc:
+        logger.warning("Product detail: snapshot write failed for %s (%s)", product_id, exc)
+
+
+def _refresh_product_detail_bg(product_id, shopify_domain=None):
+    pid = str(product_id)
+    try:
+        data = _build_product_detail_from_shopify(product_id, shopify_domain)
+        if data and data.get("id"):
+            _write_product_detail_snapshot(product_id, data)
+            _PRODUCT_DETAIL_CACHE[pid] = {"at": time.time(), "data": data}
+    except Exception as exc:
+        logger.warning("Product detail: background refresh failed for %s (%s)", pid, exc)
+    finally:
+        with _PRODUCT_DETAIL_LOCK:
+            _PRODUCT_DETAIL_REFRESHING.discard(pid)
+
+
+def _kick_product_detail_refresh(product_id, shopify_domain=None):
+    pid = str(product_id)
+    with _PRODUCT_DETAIL_LOCK:
+        if pid in _PRODUCT_DETAIL_REFRESHING:
+            return
+        _PRODUCT_DETAIL_REFRESHING.add(pid)
+    threading.Thread(
+        target=_refresh_product_detail_bg,
+        kwargs={"product_id": product_id, "shopify_domain": shopify_domain},
+        daemon=True,
+    ).start()
+
+
+def invalidate_product_detail_cache(product_id):
+    """Drop one product's detail from the memory tier and the office snapshot, so the
+    next editor open rebuilds it fresh. Called after any write to that product."""
+    pid = str(product_id)
+    _PRODUCT_DETAIL_CACHE.pop(pid, None)
+    if _office_snapshots_available():
+        try:
+            office_api.delete_snapshot_item(_SNAPSHOT_DETAIL_KIND, pid)
+        except Exception as exc:
+            logger.warning("Product detail: snapshot invalidate failed for %s (%s)", pid, exc)
+
+
+def get_product_detail(product_id, shopify_domain=None, refresh=False):
+    """Full editor payload with stale-while-revalidate caching:
+
+      per-instance memory tier -> office snapshot item -> Shopify (cold miss).
+
+    A served-but-stale item (older than PRODUCTS_SNAPSHOT_TTL) or refresh=True
+    triggers one background rebuild; the caller gets an immediate response.
+    Returns None if the product can't be fetched from Shopify on a cold miss.
+    """
+    pid = str(product_id)
+    now = time.time()
+
+    # 1. Memory tier.
+    if not refresh:
+        ent = _PRODUCT_DETAIL_CACHE.get(pid)
+        if ent and (now - ent["at"]) < PRODUCTS_MEM_TTL:
+            return ent["data"]
+
+    # 2. Shared office snapshot.
+    if _office_snapshots_available():
+        item = None
+        try:
+            item = office_api.get_snapshot_item(_SNAPSHOT_DETAIL_KIND, pid)
+        except Exception as exc:
+            logger.warning("Product detail: snapshot read failed for %s (%s)", pid, exc)
+        if isinstance(item, dict) and isinstance(item.get("payload"), dict):
+            data = item["payload"]
+            _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+            age = _iso_age(item.get("updated_at"), now)
+            if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
+                _kick_product_detail_refresh(product_id, shopify_domain)
+            return data
+
+        # 3. Cold miss: build once (blocking) and write back.
+        data = _build_product_detail_from_shopify(product_id, shopify_domain)
+        if data and data.get("id"):
+            _write_product_detail_snapshot(product_id, data)
+            _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+        return data
+
+    # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
+    data = _build_product_detail_from_shopify(product_id, shopify_domain)
+    if data and data.get("id"):
+        _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+    return data
 
 
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):

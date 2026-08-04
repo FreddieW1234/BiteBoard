@@ -791,49 +791,20 @@ def _shopify_get_with_retry(url, headers, max_retries=2):
 
 @app.route('/api/product/<product_id>/prices')
 def api_product_prices(product_id):
-    """Special endpoint for Price Manager that returns all metafields including pricejson ones"""
+    """Special endpoint for Price Manager that returns all metafields including pricejson ones.
+
+    Served from the shared office snapshot (stale-while-revalidate) so opening a
+    product is instant; pass ?refresh=1 to force a background rebuild from Shopify.
+    """
     try:
         pid = _parse_product_id(product_id)
         if pid is None:
             return jsonify({"error": "Invalid product ID"}), 400
-        product_id = pid
-        headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
-        # Get product details (with 429 retry)
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
-        response, err = _shopify_get_with_retry(url, headers)
-        if err:
-            return jsonify({"error": "Failed to fetch product", "detail": err.get("detail", "")}), 400
-        if response.status_code != 200:
-            err_body = response.text[:500] if response.text else ""
-            return jsonify({"error": "Failed to fetch product", "detail": err_body}), 400
-        product_data = response.json().get("product", {})
-        # Get ALL metafields without filtering (with 429 retry)
-        url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json?limit=250"
-        response, err = _shopify_get_with_retry(url, headers)
-        if err:
-            return jsonify({"error": "Failed to fetch metafields", "detail": err.get("detail", "")}), 400
-        if response.status_code != 200:
-            err_body = response.text[:500] if response.text else ""
-            return jsonify({"error": "Failed to fetch metafields", "detail": err_body}), 400
-        metafields_data = response.json()
-        all_metafields = metafields_data.get("metafields", [])
-        
-        # Format the response
-        formatted_product = {
-            'id': product_data['id'],
-            'title': product_data.get('title', 'Unknown Product'),
-            'handle': product_data.get('handle', ''),
-            'vendor': product_data.get('vendor', ''),
-            'product_type': product_data.get('product_type', ''),
-            'status': product_data.get('status', 'active'),
-            'body_html': product_data.get('body_html', ''),
-            'tags': product_data.get('tags', []),
-            'options': product_data.get('options', []),
-            'variants': product_data.get('variants', []),
-            'images': product_data.get('images', []),
-            'metafields': all_metafields  # Include ALL metafields
-        }
-        
+        from scripts.product_creator.Product_Creator import get_product_detail
+        refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
+        formatted_product = get_product_detail(pid, refresh=refresh)
+        if not formatted_product or not formatted_product.get('id'):
+            return jsonify({"error": "Failed to fetch product"}), 400
         return jsonify(formatted_product)
     except Exception as e:
         print(f"💥 Product prices error: {str(e)}")
@@ -912,6 +883,11 @@ def api_metafield_create():
         metafield_id = create_metafield(product_id, namespace, key, value, metafield_type)
         
         if metafield_id:
+            try:
+                from scripts.product_creator.Product_Creator import sync_product_snapshot
+                sync_product_snapshot(product_id)
+            except Exception:
+                pass
             return jsonify({"message": "Metafield created successfully", "id": metafield_id})
         else:
             return jsonify({"error": "Failed to create metafield"}), 400
@@ -976,6 +952,11 @@ def api_update_metafield():
             run_price_bandit_for_product(product_id)
         except Exception as e:
             print(f"⚠️ Price Bandit run failed: {str(e)}")
+        try:
+            from scripts.product_creator.Product_Creator import sync_product_snapshot
+            sync_product_snapshot(product_id)
+        except Exception:
+            pass
         return jsonify({"success": True, "message": "Metafield updated successfully and Price Bandit triggered"})
 
     except Exception as e:
@@ -1047,6 +1028,11 @@ def api_update_price_metafields():
             run_price_bandit_for_product(product_id)
         except Exception as e:
             print(f"⚠️ Price Bandit run failed: {str(e)}")
+        try:
+            from scripts.product_creator.Product_Creator import sync_product_snapshot
+            sync_product_snapshot(product_id)
+        except Exception:
+            pass
         return jsonify({"success": True, "message": "Price metafields saved and Price Bandit triggered"})
 
     except Exception as e:
@@ -1098,6 +1084,7 @@ def api_bulk_update_field():
         saved = 0
         failed = 0
         errors = []
+        touched_ids = set()
 
         def _normalize_id(pid):
             if isinstance(pid, str) and pid.startswith("gid://"):
@@ -1115,6 +1102,7 @@ def api_bulk_update_field():
                 failed += 1
                 errors.append(f"Invalid product id: {upd.get('id')}")
                 continue
+            touched_ids.add(pid)
 
             # Light pacing between products to stay within Shopify's REST bucket
             if i > 0:
@@ -1155,6 +1143,18 @@ def api_bulk_update_field():
                 errors.append(f"Product {pid}: {e}")
 
         print(f"[bulk-update-field] column={column} saved={saved} failed={failed}", flush=True)
+        if touched_ids:
+            try:
+                from scripts.product_creator.Product_Creator import (
+                    invalidate_product_detail_cache,
+                    _kick_products_refresh,
+                )
+                for tid in touched_ids:
+                    invalidate_product_detail_cache(tid)
+                # One background overview rebuild so the All Products list converges.
+                _kick_products_refresh()
+            except Exception:
+                pass
         return jsonify({
             "success": failed == 0,
             "saved": saved,
