@@ -31,11 +31,13 @@ try:
         SAVE_WORKER_ENABLED,
         SAVE_QUEUE_POLL_SEC,
         SAVE_JOB_TIMEOUT_SEC,
+        SAVE_MIN_FREE_MB,
     )
 except Exception:
     SAVE_WORKER_ENABLED = True
     SAVE_QUEUE_POLL_SEC = 2
-    SAVE_JOB_TIMEOUT_SEC = 600
+    SAVE_JOB_TIMEOUT_SEC = 1800
+    SAVE_MIN_FREE_MB = 150
 
 try:
     import product_save_queue as queue  # type: ignore
@@ -47,6 +49,8 @@ _WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 _started = False
 _started_lock = threading.Lock()
 _PRUNE_EVERY_SEC = 3600.0
+_LOG_FLUSH_SEC = 3.0        # how often to push partial logs to the job record
+_MAX_LOG_CHARS = 200_000    # cap stored log size (keep the most recent output)
 
 
 def _parse_result(stdout: str) -> dict:
@@ -67,27 +71,78 @@ def _run_job(job: dict) -> None:
     job_id = job["job_id"]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUNBUFFERED"] = "1"  # child flushes stdout promptly so logs stream live
     timeout = int(SAVE_JOB_TIMEOUT_SEC)
 
-    try:
-        proc = subprocess.run(
-            [sys.executable, _RUNNER, job_id],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=_BACKEND_DIR,
-            env=env,
-            timeout=timeout,
-        )
-        logs = (proc.stdout or "")
-        if proc.stderr:
-            logs += "\n--- stderr ---\n" + proc.stderr
-        result = _parse_result(proc.stdout)
-    except subprocess.TimeoutExpired as exc:
-        logs = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+    # Stream the runner's output so the Queue → Logs tab shows progress live
+    # instead of only at the end. A reader thread appends lines; this loop
+    # flushes the accumulated log to the job record every few seconds and
+    # enforces the timeout even if the child goes silent.
+    proc = subprocess.Popen(
+        [sys.executable, _RUNNER, job_id],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=_BACKEND_DIR,
+        env=env,
+        bufsize=1,
+    )
+
+    lines: list = []
+    lines_lock = threading.Lock()
+
+    def _reader():
+        try:
+            for line in proc.stdout:  # type: ignore[union-attr]
+                with lines_lock:
+                    lines.append(line)
+        except Exception:
+            pass
+
+    reader = threading.Thread(target=_reader, name=f"save-log-{job_id[:8]}", daemon=True)
+    reader.start()
+
+    def _current_logs() -> str:
+        with lines_lock:
+            text = "".join(lines)
+        return text[-_MAX_LOG_CHARS:]
+
+    start = time.time()
+    last_flush = 0.0
+    timed_out = False
+    while True:
+        finished = proc.poll() is not None and not reader.is_alive()
+        now = time.time()
+        if not finished and now - start > timeout:
+            timed_out = True
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            break
+        if now - last_flush >= _LOG_FLUSH_SEC:
+            last_flush = now
+            # If the job was cancelled externally, stop the subprocess.
+            if not queue.set_progress(job_id, _current_logs()):
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                print(f"[save-worker] job {job_id} no longer running — stopped subprocess", flush=True)
+                return
+        if finished:
+            break
+        time.sleep(0.5)
+
+    reader.join(timeout=2)
+    logs = _current_logs()
+    if timed_out:
         logs += f"\n💥 Runner timed out after {timeout}s"
         result = {"ok": False, "success": False, "verify": [], "error": "timeout"}
+    else:
+        result = _parse_result(logs)
 
     ok = bool(result.get("ok"))
     verify = result.get("verify") or []
@@ -128,9 +183,30 @@ def _refresh_caches(product_id) -> None:
         print(f"[save-worker] snapshot refresh skipped for {product_id}: {exc}", flush=True)
 
 
+def _available_mb():
+    """Available RAM in MB from /proc/meminfo (Linux), or None if unknown."""
+    try:
+        with open("/proc/meminfo", "r") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1024.0
+    except Exception:
+        return None
+    return None
+
+
+def _enough_memory() -> bool:
+    """True unless the instance is close to OOM (guards the save subprocess)."""
+    avail = _available_mb()
+    if avail is None:
+        return True  # can't measure (e.g. dev/Windows) — don't block saves
+    return avail >= float(SAVE_MIN_FREE_MB)
+
+
 def _loop() -> None:
     poll = max(1, int(SAVE_QUEUE_POLL_SEC))
     last_prune = 0.0
+    last_mem_warn = 0.0
     print(f"[save-worker] started ({_WORKER_ID}), polling every {poll}s", flush=True)
     while True:
         try:
@@ -139,6 +215,14 @@ def _loop() -> None:
             if now - last_prune > _PRUNE_EVERY_SEC:
                 queue.prune()
                 last_prune = now
+            # Defer starting a heavy save subprocess when memory is tight, so we
+            # never OOM-kill the web process. Jobs stay queued and run later.
+            if not _enough_memory():
+                if now - last_mem_warn > 30:
+                    print(f"[save-worker] low memory (<{SAVE_MIN_FREE_MB}MB free) — deferring saves", flush=True)
+                    last_mem_warn = now
+                time.sleep(poll)
+                continue
             job = queue.claim_next(_WORKER_ID)
             if job:
                 print(f"[save-worker] claimed job {job['job_id']} ({job.get('title')})", flush=True)

@@ -81,8 +81,12 @@ PRODUCTS_MEM_TTL = int(os.environ.get("PRODUCTS_MEM_TTL", "30"))
 SAVE_WORKER_ENABLED = os.environ.get("SAVE_WORKER_ENABLED", "true").lower() in ("1", "true", "yes")
 SAVE_QUEUE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_POLL_SEC", "2"))
 SAVE_MAX_ATTEMPTS = int(os.environ.get("SAVE_MAX_ATTEMPTS", "3"))
-SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "600"))
+SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "1800"))
 SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "24"))
+# SAVE_MIN_FREE_MB: the worker defers claiming a job (leaving it queued) when the
+# instance has less available memory than this, so the save subprocess can't push
+# a small (e.g. 512MB) instance into an OOM kill that takes the whole site down.
+SAVE_MIN_FREE_MB = int(os.environ.get("SAVE_MIN_FREE_MB", "150"))
 
 # Klaviyo — production update emails (transactional Flow triggered by Events API)
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""

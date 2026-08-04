@@ -1236,6 +1236,11 @@ def print_label(
 # See the /snapshots API in the office app.py. The payload field is opaque JSON.
 # --------------------------------------------------------------------------- #
 
+# Reads sit on the page-load hot path, so cap them well below the default so a
+# slow/unreachable office server fails fast (callers fall back to cache/Shopify)
+# instead of tying up a request thread for the full _TIMEOUT.
+_SNAPSHOT_READ_TIMEOUT = 8
+
 def _snapshots_base() -> str:
     return f"{OFFICE_API_URL.rstrip('/')}/snapshots"
 
@@ -1243,7 +1248,7 @@ def _snapshots_base() -> str:
 def get_snapshot(name: str) -> dict | None:
     """One named document: {name, payload, etag, updated_at, updated_by} or None if absent."""
     url = f"{_snapshots_base()}/{_path(name)}"
-    resp = _request("GET", url)
+    resp = _request("GET", url, timeout=_SNAPSHOT_READ_TIMEOUT)
     return _handle_response(resp, allow_404=True)
 
 
@@ -1278,7 +1283,7 @@ def get_snapshot_items(
         params["include_payload"] = "true"
     if since:
         params["since"] = since
-    resp = _request("GET", url, params=params or None)
+    resp = _request("GET", url, params=params or None, timeout=_SNAPSHOT_READ_TIMEOUT)
     result = _handle_response(resp, allow_404=True)
     if not isinstance(result, dict):
         return []
@@ -1288,7 +1293,7 @@ def get_snapshot_items(
 def get_snapshot_item(kind: str, item_id: str) -> dict | None:
     """One item: {kind, item_id, payload, etag, updated_at, updated_by} or None if absent."""
     url = f"{_snapshots_base()}/{_path(kind)}/items/{_path(str(item_id))}"
-    resp = _request("GET", url)
+    resp = _request("GET", url, timeout=_SNAPSHOT_READ_TIMEOUT)
     return _handle_response(resp, allow_404=True)
 
 

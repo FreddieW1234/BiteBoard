@@ -79,6 +79,9 @@
       + '.pq-verify th,.pq-verify td{border:1px solid #e2e8f0;padding:5px 8px;text-align:left;vertical-align:top;}'
       + '.pq-verify .ok{color:#15803d;}.pq-verify .bad{color:#b91c1c;}'
       + '.pq-log{background:#0b1020;color:#d1e0ff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;padding:12px;border-radius:8px;max-height:52vh;overflow:auto;}'
+      + '.pq-live{display:flex;align-items:center;gap:6px;color:#15803d;font-size:12px;font-weight:700;margin-bottom:6px;}'
+      + '.pq-live::before{content:"";width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pq-pulse 1.2s infinite;}'
+      + '@keyframes pq-pulse{0%,100%{opacity:1;}50%{opacity:.25;}}'
       + '.pq-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;background:#ef4444;color:#fff;border-radius:999px;font-size:11px;font-weight:700;text-align:center;}'
       + '.pq-count:empty{display:none;}'
       + '[data-product-id].pq-locked{opacity:.55;pointer-events:none;filter:grayscale(.4);}'
@@ -267,9 +270,24 @@
               }).join('')
             + '</tbody></table>';
         }
-        var logs = job.logs || '(no output captured)';
-        var html = vhtml + '<div class="pq-log">' + esc(logs) + '</div>';
-        var sig = logs.length + ':' + verify.length + ':' + (job.status || '');
+        var status = job.status || '';
+        var logs = job.logs || '';
+        var body;
+        if (!logs) {
+          if (status === 'queued') {
+            body = '<div class="pq-empty">&#9203; Waiting in the queue &mdash; this save hasn&rsquo;t started yet.</div>';
+          } else if (status === 'running') {
+            body = '<div class="pq-empty">&#9654; Starting&hellip; waiting for the first output.</div>';
+          } else {
+            body = '<div class="pq-log">(no output captured)</div>';
+          }
+        } else {
+          var live = (status === 'running')
+            ? '<div class="pq-live">&#9679; Live &mdash; updating as it saves&hellip;</div>' : '';
+          body = live + '<div class="pq-log">' + esc(logs) + '</div>';
+        }
+        var html = vhtml + body;
+        var sig = logs.length + ':' + verify.length + ':' + status;
         if (sig === lastLogSig) return;  // unchanged — don't repaint (no flash)
         lastLogSig = sig;
         var prev = c.querySelector('.pq-log');

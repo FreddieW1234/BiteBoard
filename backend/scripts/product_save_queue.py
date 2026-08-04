@@ -225,6 +225,28 @@ def requeue(job_id: str, error=None, logs=None, verify=None):
     return job
 
 
+def set_progress(job_id: str, logs) -> bool:
+    """Write partial logs for a still-running job so the UI can stream them live.
+
+    Read-modify-write so an external cancel isn't clobbered: if the job is no
+    longer running (cancelled/gone), nothing is written and False is returned so
+    the worker can react. Returns True while the job is still running.
+    """
+    job = get_job(job_id)
+    if not job:
+        return False
+    if job.get("status") != "running":
+        return False
+    if logs is not None:
+        job["logs"] = logs
+    job["progress_at"] = _now_iso()
+    try:
+        _save(job)
+    except Exception:
+        pass
+    return True
+
+
 def cancel(job_id: str):
     """Cancel a job (queued/running/failed). Done jobs are left untouched."""
     job = get_job(job_id)

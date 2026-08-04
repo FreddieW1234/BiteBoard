@@ -2082,7 +2082,15 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
                 _kick_products_refresh(shopify_domain)
             return organized
 
-        # 3. Cold miss: no snapshot yet. Build once (blocking) and write back.
+        # 3. Office reachable but no snapshot rows (or the read just failed/timed
+        # out). Never block the request thread on a full Shopify rebuild if we
+        # already have a prior in-process copy — serve it (stale is fine) and
+        # rebuild in the background. Only the very first cold start blocks.
+        if _PRODUCTS_OVERVIEW_CACHE is not None:
+            _kick_products_refresh(shopify_domain)
+            return _PRODUCTS_OVERVIEW_CACHE
+
+        # True cold start: build once (blocking) and write back.
         try:
             flat = _build_products_overview_from_shopify(shopify_domain)
         except Exception as exc:
