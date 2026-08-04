@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dev Files - BiteBoard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/theme.css?v=5" rel="stylesheet">
+    <script src="/static/theme.js?v=2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 2px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+        .main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 8px 0; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+        .page-desc { font-size: 0.875rem; color: #6b7280; margin: 0 0 20px 0; }
+
+        .dv-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+        .dv-crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.85rem; }
+        .dv-crumb { color: #4f46e5; cursor: pointer; background: none; border: none; font: inherit; padding: 2px 4px; border-radius: 4px; }
+        .dv-crumb:hover { background: #eef2ff; text-decoration: underline; }
+        .dv-crumb.current { color: #111827; font-weight: 600; cursor: default; }
+        .dv-crumb.current:hover { background: none; text-decoration: none; }
+        .dv-sep { color: #9ca3af; }
+        .dv-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.825rem; font-weight: 500; color: #374151; cursor: pointer; }
+        .dv-btn:hover { background: #f3f4f6; }
+        .dv-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .dv-spacer { flex: 1; }
+        .dv-filter { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.825rem; font-family: inherit; min-width: 200px; }
+
+        .dv-split { display: flex; gap: 16px; align-items: flex-start; }
+        .dv-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+        .dv-list { width: 340px; flex-shrink: 0; max-height: calc(100vh - 190px); overflow-y: auto; }
+        .dv-view { flex: 1; min-width: 0; max-height: calc(100vh - 190px); display: flex; flex-direction: column; }
+        .dv-row { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-bottom: 1px solid #f3f4f6; cursor: pointer; font-size: 0.85rem; }
+        .dv-row:last-child { border-bottom: none; }
+        .dv-row:hover { background: #f9fafb; }
+        .dv-row.selected { background: #eef2ff; }
+        .dv-row i { width: 16px; text-align: center; font-size: 0.9rem; }
+        .dv-row .fa-folder { color: #f59e0b; }
+        .dv-row .fa-file-code { color: #4f46e5; }
+        .dv-row .fa-file { color: #9ca3af; }
+        .dv-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dv-size { font-size: 0.75rem; color: #9ca3af; flex-shrink: 0; }
+        .dv-view-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; background: #f9fafb; flex-shrink: 0; }
+        .dv-view-name { font-size: 0.85rem; font-weight: 600; color: #111827; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dv-view-meta { font-size: 0.75rem; color: #6b7280; flex-shrink: 0; margin-left: auto; }
+        .dv-code { margin: 0; padding: 14px 16px; overflow: auto; flex: 1; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 0.78rem; line-height: 1.55; color: #1f2937; white-space: pre; tab-size: 4; }
+        .dv-state { padding: 40px 20px; text-align: center; color: #6b7280; font-size: 0.875rem; }
+        .dv-err { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/app/Products" class="app-tab"><i class="fas fa-box-open"></i><span>Products</span></a>
+                    <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
+                    <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+                    <a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
+                    <a href="/app/Dev" class="app-tab active"><i class="fas fa-code"></i><span>Dev</span></a>
+                </div>
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-code"></i> Dev Files</h1>
+            <p class="page-desc">Read-only view of the code deployed on this Render instance. This is not the Office server.</p>
+
+            <div class="dv-bar">
+                <button type="button" class="dv-btn" id="dv-up"><i class="fas fa-arrow-up"></i> Up</button>
+                <div class="dv-crumbs" id="dv-crumbs"></div>
+                <span class="dv-spacer"></span>
+                <input type="text" class="dv-filter" id="dv-filter" placeholder="Filter this folder…" autocomplete="off">
+                <button type="button" class="dv-btn" id="dv-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+            </div>
+
+            <div class="dv-split">
+                <div class="dv-panel dv-list" id="dv-list">
+                    <div class="dv-state"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
+                </div>
+                <div class="dv-panel dv-view" id="dv-view">
+                    <div class="dv-state">Select a file to view its contents.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+(function () {
+    'use strict';
+
+    var currentPath = '';
+    var parentPath = '';
+    var atRoot = true;
+    var entries = [];
+    var selected = null;
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function fmtSize(n) {
+        if (n == null) return '';
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function iconFor(entry) {
+        if (entry.type === 'dir') return 'fa-folder';
+        var ext = (entry.name.split('.').pop() || '').toLowerCase();
+        if (['py', 'js', 'html', 'css', 'json', 'yaml', 'yml', 'md', 'txt', 'cfg', 'ini', 'toml'].indexOf(ext) >= 0) return 'fa-file-code';
+        return 'fa-file';
+    }
+
+    function renderCrumbs(crumbs) {
+        var el = document.getElementById('dv-crumbs');
+        el.innerHTML = crumbs.map(function (c, i) {
+            var last = i === crumbs.length - 1;
+            var sep = i > 0 ? '<span class="dv-sep">/</span>' : '';
+            return sep + '<button type="button" class="dv-crumb' + (last ? ' current' : '') + '" data-path="' + esc(c.path) + '">' + esc(c.name) + '</button>';
+        }).join('');
+        el.querySelectorAll('.dv-crumb:not(.current)').forEach(function (b) {
+            b.addEventListener('click', function () { loadTree(b.getAttribute('data-path')); });
+        });
+    }
+
+    function renderList() {
+        var filter = (document.getElementById('dv-filter').value || '').trim().toLowerCase();
+        var shown = entries.filter(function (e) { return !filter || e.name.toLowerCase().indexOf(filter) >= 0; });
+        var el = document.getElementById('dv-list');
+        if (!shown.length) {
+            el.innerHTML = '<div class="dv-state">' + (entries.length ? 'Nothing matches that filter.' : 'This folder is empty.') + '</div>';
+            return;
+        }
+        el.innerHTML = shown.map(function (e) {
+            var sel = (selected === e.path) ? ' selected' : '';
+            return '<div class="dv-row' + sel + '" data-path="' + esc(e.path) + '" data-type="' + e.type + '">' +
+                   '<i class="fas ' + iconFor(e) + '"></i>' +
+                   '<span class="dv-name">' + esc(e.name) + '</span>' +
+                   '<span class="dv-size">' + (e.type === 'file' ? fmtSize(e.size) : '') + '</span>' +
+                   '</div>';
+        }).join('');
+        el.querySelectorAll('.dv-row').forEach(function (row) {
+            row.addEventListener('click', function () {
+                var p = row.getAttribute('data-path');
+                if (row.getAttribute('data-type') === 'dir') { loadTree(p); }
+                else { selected = p; renderList(); loadFile(p); }
+            });
+        });
+    }
+
+    function loadTree(path) {
+        var el = document.getElementById('dv-list');
+        el.innerHTML = '<div class="dv-state"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+        fetch('/api/dev/tree?path=' + encodeURIComponent(path || ''), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'Could not list folder');
+                currentPath = d.path; parentPath = d.parent; atRoot = d.at_root; entries = d.entries || [];
+                document.getElementById('dv-up').disabled = atRoot;
+                renderCrumbs(d.crumbs || []);
+                renderList();
+            })
+            .catch(function (err) {
+                el.innerHTML = '<div class="dv-state dv-err"><i class="fas fa-exclamation-circle"></i> ' + esc(err.message) + '</div>';
+            });
+    }
+
+    function loadFile(path) {
+        var el = document.getElementById('dv-view');
+        el.innerHTML = '<div class="dv-state"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+        fetch('/api/dev/file?path=' + encodeURIComponent(path), { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'Could not read file');
+                var meta = fmtSize(d.size) + (d.modified ? ' · ' + d.modified + ' UTC' : '');
+                el.innerHTML = '<div class="dv-view-head"><span class="dv-view-name">' + esc(d.path) + '</span>' +
+                               '<span class="dv-view-meta">' + esc(meta) + '</span></div>' +
+                               '<pre class="dv-code">' + esc(d.content) + '</pre>';
+            })
+            .catch(function (err) {
+                el.innerHTML = '<div class="dv-state dv-err"><i class="fas fa-exclamation-circle"></i> ' + esc(err.message) + '</div>';
+            });
+    }
+
+    document.getElementById('dv-up').addEventListener('click', function () { if (!atRoot) loadTree(parentPath); });
+    document.getElementById('dv-refresh').addEventListener('click', function () { loadTree(currentPath); });
+    document.getElementById('dv-filter').addEventListener('input', renderList);
+
+    loadTree('');
+})();
+</script>
+</body>
+</html>

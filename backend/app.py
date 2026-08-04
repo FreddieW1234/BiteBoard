@@ -22,6 +22,7 @@ from portal_auth import (  # type: ignore
     can_access_order,
 )
 from maintenance import init_maintenance  # type: ignore
+from dev_browser import init_dev_browser  # type: ignore
 
 print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
       f"ACCESS_TOKEN={'✅ set' if ACCESS_TOKEN else '❌ EMPTY'}, API_VERSION={API_VERSION}", flush=True)
@@ -52,6 +53,9 @@ print("🔐 Staff login enabled", flush=True)
 # in registration order, so the maintenance page must win over the staff auth
 # redirect. Also registers /healthz and /maint-exit.
 init_maintenance(app)
+
+# Read-only Dev file browser (/app/Dev). Staff-only via portal_auth_gate.
+init_dev_browser(app)
 
 
 @app.errorhandler(413)

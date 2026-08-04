@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scheduled maintenance</title>
+<title>Maintenance</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -54,13 +54,14 @@
 </head>
 <body>
     <div class="panel">
-        <h1>Scheduled maintenance</h1>
-        <p>The portal is temporarily unavailable while we carry out scheduled maintenance. Please try again shortly.</p>
+        <h1>Maintenance</h1>
+        <p>The portal is temporarily unavailable while we carry out maintenance. Please try again shortly.</p>
+        {% if show_contact %}
         <p class="contact">
             If you need assistance, contact
-            <!-- PLACEHOLDER: replace both the mailto address and the link text below -->
-            <a href="mailto:REPLACE-ME@example.com">REPLACE-ME@example.com</a>
+            <a href="mailto:sales@bitepromotions.co.uk">sales@bitepromotions.co.uk</a>
         </p>
+        {% endif %}
     </div>
 </body>
 </html>

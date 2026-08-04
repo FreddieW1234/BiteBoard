@@ -27,6 +27,7 @@ from urllib.parse import urlencode
 from flask import jsonify, make_response, redirect, render_template, request
 
 from config import FLASK_SESSION_SECURE  # type: ignore
+from portal_auth import is_client_path  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,9 @@ def _maintenance_response():
     if _wants_json():
         response = make_response(jsonify({"status": "maintenance"}), 503)
     else:
-        response = make_response(render_template("maintenance.html"), 503)
+        # Customers get a contact address; staff-side pages do not.
+        page = render_template("maintenance.html", show_contact=is_client_path(request.path or ""))
+        response = make_response(page, 503)
     response.headers["Retry-After"] = "3600"
     response.headers["Cache-Control"] = "no-store, private"
     return response
