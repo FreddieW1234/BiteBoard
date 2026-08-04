@@ -1958,6 +1958,11 @@ def _refresh_products_snapshot_bg(shopify_domain=None):
         flat = _build_products_overview_from_shopify(shopify_domain)
         _write_products_snapshot(flat)
         _store_overview_cache(flat)
+        # Warm the family snapshots on the same cadence so the editor never cold-scans.
+        try:
+            refresh_family_snapshots()
+        except Exception:
+            pass
     except Exception as exc:
         logger.warning("Products: background refresh failed (%s)", exc)
     finally:
@@ -2065,6 +2070,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
         and _PRODUCTS_OVERVIEW_CACHE is not None
         and (now - _PRODUCTS_OVERVIEW_CACHE_AT) < PRODUCTS_MEM_TTL
     ):
+        print(f"[cache] all-products source=mem {int((time.time()-now)*1000)}ms", flush=True)
         return _PRODUCTS_OVERVIEW_CACHE
 
     # 2. Shared durable snapshot on the office server.
@@ -2075,6 +2081,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
             age = _snapshot_age(now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_products_refresh(shopify_domain)
+            print(f"[cache] all-products source=office {int((time.time()-now)*1000)}ms", flush=True)
             return organized
 
         # 3. Cold miss: no snapshot yet. Build once (blocking) and write back.
@@ -2084,10 +2091,17 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
             logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
             flat = []
         _write_products_snapshot(flat)
+        # Warm the family snapshots in the background so the editor never cold-scans.
+        try:
+            refresh_family_snapshots()
+        except Exception:
+            pass
+        print(f"[cache] all-products source=cold-build {int((time.time()-now)*1000)}ms", flush=True)
         return _store_overview_cache(flat, now)
 
     # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
     flat = _build_products_overview_from_shopify(shopify_domain)
+    print(f"[cache] all-products source=no-office {int((time.time()-now)*1000)}ms", flush=True)
     return _store_overview_cache(flat, now)
 
 
@@ -2301,6 +2315,7 @@ def _named_snapshot_swr(name, builder, refresh=False):
     if not refresh:
         ent = _NAMED_CACHE.get(name)
         if ent and (now - ent["at"]) < PRODUCTS_MEM_TTL:
+            print(f"[cache] {name} source=mem {int((time.time()-now)*1000)}ms", flush=True)
             return ent["data"]
 
     if _office_snapshots_available():
@@ -2315,6 +2330,7 @@ def _named_snapshot_swr(name, builder, refresh=False):
             age = _iso_age(doc.get("updated_at"), now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_named_refresh(name, builder)
+            print(f"[cache] {name} source=office {int((time.time()-now)*1000)}ms", flush=True)
             return data
 
         # Cold miss: build once (blocking) and write back.
@@ -2326,12 +2342,14 @@ def _named_snapshot_swr(name, builder, refresh=False):
                 except Exception as exc:
                     logger.warning("Named snapshot write failed for %s (%s)", name, exc)
             _NAMED_CACHE[name] = {"at": now, "data": data}
+        print(f"[cache] {name} source=cold-build {int((time.time()-now)*1000)}ms", flush=True)
         return data
 
     # Office snapshot store unavailable: build directly, no snapshot.
     data = builder()
     if data is not None:
         _NAMED_CACHE[name] = {"at": now, "data": data}
+    print(f"[cache] {name} source=no-office {int((time.time()-now)*1000)}ms", flush=True)
     return data
 
 
