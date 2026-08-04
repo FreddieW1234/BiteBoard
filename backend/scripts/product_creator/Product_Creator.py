@@ -1952,9 +1952,24 @@ def _store_overview_cache(flat, now=None):
 
 
 def _refresh_products_snapshot_bg(shopify_domain=None):
-    """Background full rebuild: Shopify -> office snapshot -> in-process tier. Singleflight."""
+    """Background refresh (singleflight), cheapest source first.
+
+    Prefer the shared office snapshot (a fast read) to update the in-process
+    tier; only fall through to a full Shopify rebuild when the office snapshot is
+    missing or older than PRODUCTS_SNAPSHOT_TTL. This keeps steady-state refreshes
+    off Shopify while still serving fresh data, and never blocks a request.
+    """
     global _PRODUCTS_REFRESH_IN_PROGRESS
     try:
+        now = time.time()
+        if _office_snapshots_available():
+            flat = _load_products_flat_from_snapshot()
+            if flat is not None:
+                _store_overview_cache(flat, now)
+                age = _snapshot_age(now)
+                if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
+                    return  # office snapshot is fresh enough — done cheaply
+                # Office snapshot is stale: rebuild it from Shopify.
         flat = _build_products_overview_from_shopify(shopify_domain)
         _write_products_snapshot(flat)
         _store_overview_cache(flat)
@@ -2064,15 +2079,18 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     """
     now = time.time()
 
-    # 1. In-process memory tier.
-    if (
-        not refresh
-        and _PRODUCTS_OVERVIEW_CACHE is not None
-        and (now - _PRODUCTS_OVERVIEW_CACHE_AT) < PRODUCTS_MEM_TTL
-    ):
+    # 1. In-process memory tier. Serve it immediately whenever we have a copy so
+    # the office/Shopify round-trip is never on the request's critical path. When
+    # the copy is older than the mem TTL, kick a single background refresh and
+    # still return the (slightly stale) copy now — true stale-while-revalidate.
+    if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
+        if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
+            _kick_products_refresh(shopify_domain)
         return _PRODUCTS_OVERVIEW_CACHE
 
-    # 2. Shared durable snapshot on the office server.
+    # 2. No in-process copy yet (cold start) or an explicit refresh: read the
+    # shared durable snapshot on the office server. This blocks the request only
+    # on the very first load after a restart.
     if _office_snapshots_available():
         flat = _load_products_flat_from_snapshot()
         if flat is not None:
@@ -2241,10 +2259,13 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
     pid = str(product_id)
     now = time.time()
 
-    # 1. Memory tier.
+    # 1. Memory tier. Serve immediately whenever present so the office round-trip
+    # is never on the editor's critical path; refresh in the background if stale.
     if not refresh:
         ent = _PRODUCT_DETAIL_CACHE.get(pid)
-        if ent and (now - ent["at"]) < PRODUCTS_MEM_TTL:
+        if ent:
+            if (now - ent["at"]) >= PRODUCTS_MEM_TTL:
+                _kick_product_detail_refresh(product_id, shopify_domain)
             return ent["data"]
 
     # 2. Shared office snapshot.
@@ -2294,6 +2315,22 @@ def _kick_named_refresh(name, builder):
 
     def _run():
         try:
+            now = time.time()
+            # Cheap path: refresh the mem tier from the office snapshot and only
+            # rebuild from Shopify (builder) when the office copy is missing or
+            # older than PRODUCTS_SNAPSHOT_TTL. Prevents a full Shopify family
+            # scan on every mem-TTL expiry under steady traffic.
+            if _office_snapshots_available():
+                doc = None
+                try:
+                    doc = office_api.get_snapshot(name)
+                except Exception:
+                    doc = None
+                if isinstance(doc, dict) and doc.get("payload") is not None:
+                    _NAMED_CACHE[name] = {"at": now, "data": doc["payload"]}
+                    age = _iso_age(doc.get("updated_at"), now)
+                    if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
+                        return
             data = builder()
             if data is not None:
                 if _office_snapshots_available():
@@ -2316,9 +2353,13 @@ def _named_snapshot_swr(name, builder, refresh=False):
     fresh value on cold miss / background rebuild."""
     now = time.time()
 
+    # Serve the in-process copy immediately whenever present; refresh in the
+    # background when stale so the office round-trip never blocks the caller.
     if not refresh:
         ent = _NAMED_CACHE.get(name)
-        if ent and (now - ent["at"]) < PRODUCTS_MEM_TTL:
+        if ent:
+            if (now - ent["at"]) >= PRODUCTS_MEM_TTL:
+                _kick_named_refresh(name, builder)
             return ent["data"]
 
     if _office_snapshots_available():
