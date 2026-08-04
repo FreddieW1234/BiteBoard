@@ -1849,6 +1849,17 @@ def api_create_product():
         
         # Create the product
         result = create_product(data)
+
+        # Keep the All Products snapshot consistent with this save (best-effort).
+        try:
+            if isinstance(result, dict) and result.get('success'):
+                pid = (result.get('product') or {}).get('id') or result.get('product_id')
+                if pid:
+                    from scripts.product_creator.Product_Creator import sync_product_snapshot
+                    sync_product_snapshot(pid)
+        except Exception as _sync_err:
+            print(f"[API] product snapshot sync skipped: {_sync_err}", flush=True)
+
         return jsonify(result)
         
     except Exception as e:
@@ -2003,7 +2014,8 @@ def api_all_products():
     """Return every product organised by category -> subcategory (alphabetical) with SKU + title for the All Products page."""
     try:
         from scripts.product_creator.Product_Creator import get_all_products_overview
-        result = get_all_products_overview()
+        refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
+        result = get_all_products_overview(refresh=refresh)
         result['success'] = True
         return jsonify(result)
     except Exception as e:

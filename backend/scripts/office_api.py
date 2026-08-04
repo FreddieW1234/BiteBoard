@@ -1228,3 +1228,94 @@ def print_label(
     if not isinstance(body, dict):
         return {"ok": True}
     return body
+
+
+# --------------------------------------------------------------------------- #
+# Snapshots — durable JSON store on the office server (survives Render redeploy,
+# shared across instances). Two shapes: named documents and per-kind items.
+# See the /snapshots API in the office app.py. The payload field is opaque JSON.
+# --------------------------------------------------------------------------- #
+
+def _snapshots_base() -> str:
+    return f"{OFFICE_API_URL.rstrip('/')}/snapshots"
+
+
+def get_snapshot(name: str) -> dict | None:
+    """One named document: {name, payload, etag, updated_at, updated_by} or None if absent."""
+    url = f"{_snapshots_base()}/{_path(name)}"
+    resp = _request("GET", url)
+    return _handle_response(resp, allow_404=True)
+
+
+def put_snapshot(name: str, payload, updated_by: str | None = None) -> dict:
+    """Create or replace a named document. Last write wins."""
+    url = f"{_snapshots_base()}/{_path(name)}"
+    body: dict = {"payload": payload}
+    if updated_by:
+        body["updated_by"] = updated_by
+    resp = _request("PUT", url, json=body)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from snapshot store")
+    return result
+
+
+def get_snapshot_items(
+    kind: str, *, include_payload: bool = False, since: str | None = None
+) -> list[dict]:
+    """Items of one kind (oldest change first). Empty list if the kind has none."""
+    url = f"{_snapshots_base()}/{_path(kind)}/items"
+    params: dict = {}
+    if include_payload:
+        params["include_payload"] = "true"
+    if since:
+        params["since"] = since
+    resp = _request("GET", url, params=params or None)
+    result = _handle_response(resp, allow_404=True)
+    if not isinstance(result, dict):
+        return []
+    return list(result.get("items") or [])
+
+
+def get_snapshot_item(kind: str, item_id: str) -> dict | None:
+    """One item: {kind, item_id, payload, etag, updated_at, updated_by} or None if absent."""
+    url = f"{_snapshots_base()}/{_path(kind)}/items/{_path(str(item_id))}"
+    resp = _request("GET", url)
+    return _handle_response(resp, allow_404=True)
+
+
+def put_snapshot_item(kind: str, item_id: str, payload, updated_by: str | None = None) -> dict:
+    """Create or replace one item. Last write wins."""
+    url = f"{_snapshots_base()}/{_path(kind)}/items/{_path(str(item_id))}"
+    body: dict = {"payload": payload}
+    if updated_by:
+        body["updated_by"] = updated_by
+    resp = _request("PUT", url, json=body)
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from snapshot store")
+    return result
+
+
+def delete_snapshot_item(kind: str, item_id: str) -> bool:
+    """Remove one item. Returns False if it was not there."""
+    url = f"{_snapshots_base()}/{_path(kind)}/items/{_path(str(item_id))}"
+    resp = _request("DELETE", url)
+    result = _handle_response(resp, allow_404=True)
+    return bool(result)
+
+
+def bulk_put_snapshot_items(kind: str, items: dict, updated_by: str | None = None) -> int:
+    """Upsert many items ({item_id: payload}). No office bulk endpoint, so loop PUTs.
+
+    Returns the number successfully written; individual failures are logged, not raised,
+    so one bad item never aborts a full rebuild.
+    """
+    written = 0
+    for item_id, payload in items.items():
+        try:
+            put_snapshot_item(kind, item_id, payload, updated_by=updated_by)
+            written += 1
+        except OfficeApiError as exc:
+            logger.warning("Snapshot bulk PUT failed for %s/%s: %s", kind, item_id, exc)
+    return written

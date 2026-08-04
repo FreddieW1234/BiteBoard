@@ -11,6 +11,8 @@ import math
 import requests
 import json
 import base64
+import logging
+import threading
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -24,6 +26,34 @@ try:
 except ImportError:
     print("ERROR: Could not import config. Make sure config.py exists in the backend directory.")
     sys.exit(1)
+
+try:
+    from config import PRODUCTS_SNAPSHOT_TTL, PRODUCTS_MEM_TTL
+except Exception:
+    PRODUCTS_SNAPSHOT_TTL = 1800
+    PRODUCTS_MEM_TTL = 30
+
+logger = logging.getLogger(__name__)
+
+# Office snapshot store — durable, shared All Products cache. Imported lazily so
+# this module still works if the office client is unavailable.
+try:
+    from scripts import office_api  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        import office_api  # type: ignore
+    except Exception:
+        office_api = None
+
+# In-process (per-instance) tier in front of the shared office snapshot.
+_PRODUCTS_OVERVIEW_CACHE = None      # organized dict returned to callers
+_PRODUCTS_OVERVIEW_CACHE_AT = 0.0
+_PRODUCTS_FLAT_CACHE = None          # flat list of overview rows backing the cache
+_PRODUCTS_REFRESH_LOCK = threading.Lock()
+_PRODUCTS_REFRESH_IN_PROGRESS = False
+
+_SNAPSHOT_KIND = "product"           # per-item snapshot kind
+_SNAPSHOT_META_NAME = "products_overview"  # named doc holding the freshness marker
 
 def format_price(price):
     """Format price to 2 decimal places as string."""
@@ -1692,14 +1722,16 @@ def get_product_overview_slice(product_id, shopify_domain=None):
     product = fetch_product_overview_by_id(product_id, shopify_domain)
     if not product:
         return None
+    # Keep the shared snapshot + in-process tier consistent with this fresh row.
+    _sync_product_row_to_snapshot(product)
     return organize_products_for_overview([product])
 
 
-def get_all_products_overview(shopify_domain=None):
+def _build_products_overview_from_shopify(shopify_domain=None):
     """
     Fetch every product with its first SKU, category/subcategory, price presence and
-    all field-finder metafield values, then organise them into an ordered structure
-    for the All Products page:
+    all field-finder metafield values as a flat list of overview rows. Callers pass
+    the result to organize_products_for_overview() to build the All Products structure:
 
       {
         "groups": [
@@ -1854,7 +1886,191 @@ def get_all_products_overview(shopify_domain=None):
             except Exception:
                 break
 
-    return organize_products_for_overview(products)
+    return products
+
+
+def _office_snapshots_available() -> bool:
+    return office_api is not None and bool(getattr(office_api, "OFFICE_API_URL", None))
+
+
+def _load_products_flat_from_snapshot():
+    """Flat overview rows from the office snapshot, or None if unavailable/empty."""
+    try:
+        items = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=True)
+    except Exception as exc:
+        logger.warning("Products: snapshot read failed (%s)", exc)
+        return None
+    if not items:
+        return None
+    flat = [it.get("payload") for it in items if isinstance(it.get("payload"), dict)]
+    return flat or None
+
+
+def _snapshot_age(now):
+    """Seconds since the last full rebuild (from the freshness marker), or None if unknown."""
+    try:
+        meta = office_api.get_snapshot(_SNAPSHOT_META_NAME)
+    except Exception:
+        return None
+    if not isinstance(meta, dict):
+        return None
+    payload = meta.get("payload") or {}
+    try:
+        return now - float(payload.get("refreshed_at"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _write_products_snapshot(flat, updated_by="render"):
+    """Upsert every flat row as a per-item snapshot and stamp the freshness marker."""
+    if not _office_snapshots_available():
+        return
+    items = {}
+    for rec in flat or []:
+        pid = rec.get("id")
+        if pid is not None:
+            items[str(pid)] = rec
+    try:
+        office_api.bulk_put_snapshot_items(_SNAPSHOT_KIND, items, updated_by=updated_by)
+        office_api.put_snapshot(
+            _SNAPSHOT_META_NAME,
+            {"refreshed_at": time.time(), "count": len(items)},
+            updated_by=updated_by,
+        )
+    except Exception as exc:
+        logger.warning("Products: snapshot write failed (%s)", exc)
+
+
+def _store_overview_cache(flat, now=None):
+    """Replace the in-process tier with a freshly built overview from a flat list."""
+    global _PRODUCTS_OVERVIEW_CACHE, _PRODUCTS_OVERVIEW_CACHE_AT, _PRODUCTS_FLAT_CACHE
+    organized = organize_products_for_overview(flat)
+    _PRODUCTS_FLAT_CACHE = list(flat or [])
+    _PRODUCTS_OVERVIEW_CACHE = organized
+    _PRODUCTS_OVERVIEW_CACHE_AT = now if now is not None else time.time()
+    return organized
+
+
+def _refresh_products_snapshot_bg(shopify_domain=None):
+    """Background full rebuild: Shopify -> office snapshot -> in-process tier. Singleflight."""
+    global _PRODUCTS_REFRESH_IN_PROGRESS
+    try:
+        flat = _build_products_overview_from_shopify(shopify_domain)
+        _write_products_snapshot(flat)
+        _store_overview_cache(flat)
+    except Exception as exc:
+        logger.warning("Products: background refresh failed (%s)", exc)
+    finally:
+        with _PRODUCTS_REFRESH_LOCK:
+            _PRODUCTS_REFRESH_IN_PROGRESS = False
+
+
+def _kick_products_refresh(shopify_domain=None):
+    """Start one background refresh if none is already running (singleflight)."""
+    global _PRODUCTS_REFRESH_IN_PROGRESS
+    with _PRODUCTS_REFRESH_LOCK:
+        if _PRODUCTS_REFRESH_IN_PROGRESS:
+            return
+        _PRODUCTS_REFRESH_IN_PROGRESS = True
+    threading.Thread(
+        target=_refresh_products_snapshot_bg,
+        kwargs={"shopify_domain": shopify_domain},
+        daemon=True,
+    ).start()
+
+
+def invalidate_products_overview_cache():
+    """Drop the in-process overview cache so the next read re-loads/re-organizes."""
+    global _PRODUCTS_OVERVIEW_CACHE, _PRODUCTS_OVERVIEW_CACHE_AT, _PRODUCTS_FLAT_CACHE
+    _PRODUCTS_OVERVIEW_CACHE = None
+    _PRODUCTS_OVERVIEW_CACHE_AT = 0.0
+    _PRODUCTS_FLAT_CACHE = None
+
+
+def _upsert_flat_cache(row):
+    """Merge one overview row into the in-process tier (used after a save)."""
+    global _PRODUCTS_FLAT_CACHE
+    if not row:
+        return
+    if _PRODUCTS_FLAT_CACHE is None:
+        # Nothing cached to merge into; next read rebuilds from the snapshot.
+        invalidate_products_overview_cache()
+        return
+    pid = row.get("id")
+    flat = [r for r in _PRODUCTS_FLAT_CACHE if r.get("id") != pid]
+    flat.append(row)
+    _store_overview_cache(flat)
+
+
+def _sync_product_row_to_snapshot(row):
+    """Upsert one already-fetched overview row into the office snapshot + in-process tier."""
+    if not row:
+        return
+    if _office_snapshots_available():
+        try:
+            office_api.put_snapshot_item(_SNAPSHOT_KIND, str(row.get("id")), row)
+        except Exception as exc:
+            logger.warning("Products: snapshot item write failed (%s)", exc)
+    _upsert_flat_cache(row)
+
+
+def sync_product_snapshot(product_id, shopify_domain=None):
+    """After a save: fetch one product's overview row from Shopify and sync it everywhere."""
+    try:
+        row = fetch_product_overview_by_id(product_id, shopify_domain)
+    except Exception as exc:
+        logger.warning("Products: overview fetch failed for %s (%s)", product_id, exc)
+        row = None
+    if row:
+        _sync_product_row_to_snapshot(row)
+    else:
+        # Couldn't fetch the fresh row; drop the mem tier so the next read is accurate.
+        invalidate_products_overview_cache()
+
+
+def get_all_products_overview(shopify_domain=None, refresh=False):
+    """
+    All Products overview with stale-while-revalidate caching:
+
+      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
+
+    A served-but-stale snapshot (older than PRODUCTS_SNAPSHOT_TTL) or refresh=True
+    triggers exactly one background Shopify rebuild that writes back to the office;
+    the caller still gets an immediate response. Falls back to a direct Shopify
+    build if the office snapshot store is unavailable.
+    """
+    now = time.time()
+
+    # 1. In-process memory tier.
+    if (
+        not refresh
+        and _PRODUCTS_OVERVIEW_CACHE is not None
+        and (now - _PRODUCTS_OVERVIEW_CACHE_AT) < PRODUCTS_MEM_TTL
+    ):
+        return _PRODUCTS_OVERVIEW_CACHE
+
+    # 2. Shared durable snapshot on the office server.
+    if _office_snapshots_available():
+        flat = _load_products_flat_from_snapshot()
+        if flat is not None:
+            organized = _store_overview_cache(flat, now)
+            age = _snapshot_age(now)
+            if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
+                _kick_products_refresh(shopify_domain)
+            return organized
+
+        # 3. Cold miss: no snapshot yet. Build once (blocking) and write back.
+        try:
+            flat = _build_products_overview_from_shopify(shopify_domain)
+        except Exception as exc:
+            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
+            flat = []
+        _write_products_snapshot(flat)
+        return _store_overview_cache(flat, now)
+
+    # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
+    flat = _build_products_overview_from_shopify(shopify_domain)
+    return _store_overview_cache(flat, now)
 
 
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
