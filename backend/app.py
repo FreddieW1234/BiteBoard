@@ -1957,7 +1957,21 @@ def api_product_queue_enqueue():
             return jsonify(payload), (200 if success else 500)
 
         # Background path: metadata-only edit — return instantly.
-        job = queue.enqueue(data, product_id, title)
+        # If this is a parent product, lock its children too — the save
+        # propagates parent fields to every child in the family.
+        locked_ids = None
+        try:
+            pcv = (data.get('parent_child') or '').strip()
+            if pcv:
+                from scripts.product_creator.Product_Creator import (
+                    _is_parent_child_type, get_child_product_ids_by_parent_child_value,
+                )
+                if _is_parent_child_type(pcv, 'parent'):
+                    locked_ids = get_child_product_ids_by_parent_child_value(pcv) or []
+        except Exception as _le:
+            print(f"[API] child lock resolution skipped: {_le}", flush=True)
+
+        job = queue.enqueue(data, product_id, title, locked_ids=locked_ids)
         return jsonify({
             'success': True,
             'queued': True,

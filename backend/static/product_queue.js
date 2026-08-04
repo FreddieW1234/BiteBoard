@@ -18,6 +18,10 @@
   var selectedLogJobId = null;
   var pollTimer = null;
   var isOpen = false;
+  var lastQueueSig = '';          // last rendered queue signature (skip no-op rebuilds)
+  var lastPickerSig = '';         // last rendered logs shell signature
+  var lastLogSig = '';            // last rendered log-content signature
+  var logLoadedFor = null;        // job id whose final logs are already shown
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -78,7 +82,9 @@
       + '.pq-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;background:#ef4444;color:#fff;border-radius:999px;font-size:11px;font-weight:700;text-align:center;}'
       + '.pq-count:empty{display:none;}'
       + '[data-product-id].pq-locked{opacity:.55;pointer-events:none;filter:grayscale(.4);}'
-      + '[data-product-id].pq-locked .edit-btn{pointer-events:none;opacity:.5;}';
+      + '[data-product-id].pq-locked .edit-btn{pointer-events:none;opacity:.5;}'
+      + '.pq-locked-option{opacity:.5 !important;pointer-events:none !important;cursor:not-allowed !important;position:relative;}'
+      + '.pq-locked-option::after{content:"in queue";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:#b91c1c;text-transform:uppercase;letter-spacing:.03em;}';
     var st = document.createElement('style');
     st.id = 'pq-styles';
     st.textContent = css;
@@ -120,12 +126,33 @@
     });
     document.getElementById('pq-body-queue').style.display = name === 'queue' ? '' : 'none';
     document.getElementById('pq-body-logs').style.display = name === 'logs' ? '' : 'none';
-    if (name === 'logs') renderLogs();
+    if (name === 'logs') { renderLogsShell(); refreshLogContent(true); }
   }
 
-  function renderQueue() {
+  function jobById(id) {
+    for (var i = 0; i < jobs.length; i++) { if (jobs[i].job_id === id) return jobs[i]; }
+    return null;
+  }
+
+  function isTerminal(status) {
+    return status === 'done' || status === 'failed' || status === 'cancelled';
+  }
+
+  // Signature of everything that affects the rendered queue rows (excludes the
+  // relative time, which is ticked over in place so the list never rebuilds just
+  // because a second passed).
+  function queueSig() {
+    return jobs.map(function (j) {
+      return [j.job_id, j.status, j.attempts, j.verify_ok].join(':');
+    }).join('|');
+  }
+
+  function renderQueue(force) {
     var el = document.getElementById('pq-body-queue');
     if (!el) return;
+    var sig = queueSig();
+    if (!force && sig === lastQueueSig) { updateTimes(); return; }
+    lastQueueSig = sig;
     if (!jobs.length) {
       el.innerHTML = '<div class="pq-empty">No saves in the queue.</div>';
       return;
@@ -135,9 +162,6 @@
       var label = st.label;
       if (j.status === 'done' && j.verify_ok === false) label = 'Done (mismatch)';
       var acts = '';
-      if (j.status === 'queued' || j.status === 'running') {
-        acts += '<button type="button" class="pq-act pq-danger" data-cancel="' + esc(j.job_id) + '">Cancel</button>';
-      }
       if (j.status === 'failed' || j.status === 'cancelled') {
         acts += '<button type="button" class="pq-act" data-retry="' + esc(j.job_id) + '">Retry</button>';
       }
@@ -146,7 +170,8 @@
       return '<div class="pq-job">'
         + '<span class="pq-badge ' + st.cls + '">' + esc(label) + '</span>'
         + '<span class="pq-title" title="' + esc(j.title) + '">' + esc(j.title) + '</span>'
-        + '<span class="pq-time">' + esc(ago(j.created_at)) + attempts + '</span>'
+        + '<span class="pq-time" data-created="' + esc(j.created_at) + '" data-attempts="' + esc(attempts) + '">'
+        + esc(ago(j.created_at)) + esc(attempts) + '</span>'
         + acts
         + '</div>';
     }).join('');
@@ -159,7 +184,20 @@
       b.addEventListener('click', function () { act('retry', b.getAttribute('data-retry')); });
     });
     el.querySelectorAll('[data-logs]').forEach(function (b) {
-      b.addEventListener('click', function () { selectedLogJobId = b.getAttribute('data-logs'); switchTab('logs'); });
+      b.addEventListener('click', function () {
+        selectedLogJobId = b.getAttribute('data-logs');
+        logLoadedFor = null;
+        switchTab('logs');
+      });
+    });
+  }
+
+  // Tick the relative timestamps without touching the rest of the row.
+  function updateTimes() {
+    document.querySelectorAll('#pq-body-queue .pq-time').forEach(function (el) {
+      var created = el.getAttribute('data-created');
+      var att = el.getAttribute('data-attempts') || '';
+      el.textContent = ago(created) + att;
     });
   }
 
@@ -169,35 +207,58 @@
       .catch(function () {});
   }
 
-  function renderLogs() {
+  // Build the Logs shell (job picker + content container) only when the set of
+  // jobs or the selection changes — never on a plain poll, so the dropdown stays
+  // open and nothing flickers.
+  function renderLogsShell() {
     var el = document.getElementById('pq-body-logs');
     if (!el) return;
-    if (!selectedLogJobId) {
-      // Default to the most recent job.
-      if (jobs.length) selectedLogJobId = jobs[jobs.length - 1].job_id;
-    }
+    if (!selectedLogJobId && jobs.length) selectedLogJobId = jobs[jobs.length - 1].job_id;
     if (!selectedLogJobId) {
       el.innerHTML = '<div class="pq-empty">Pick a job&rsquo;s <b>Logs</b> from the Queue tab.</div>';
+      lastPickerSig = '';
       return;
     }
+    var sig = jobs.map(function (j) { return j.job_id + ':' + j.status; }).join('|') + '||' + selectedLogJobId;
+    if (sig === lastPickerSig && document.getElementById('pq-log-content')) return;
+    lastPickerSig = sig;
     var picker = '<div class="pq-logsel">Showing logs for: <select id="pq-log-picker">'
       + jobs.slice().reverse().map(function (j) {
-          var sel = j.job_id === selectedLogJobId ? ' selected' : '';
-          return '<option value="' + esc(j.job_id) + '"' + sel + '>' + esc(j.title) + ' — ' + esc((STATUS[j.status] || {}).label || j.status) + '</option>';
+          var seld = j.job_id === selectedLogJobId ? ' selected' : '';
+          return '<option value="' + esc(j.job_id) + '"' + seld + '>' + esc(j.title) + ' — ' + esc((STATUS[j.status] || {}).label || j.status) + '</option>';
         }).join('')
       + '</select></div>';
     el.innerHTML = picker + '<div id="pq-log-content"><div class="pq-empty">Loading…</div></div>';
+    lastLogSig = '';  // force a content repaint after the shell is rebuilt
     var picEl = document.getElementById('pq-log-picker');
-    if (picEl) picEl.addEventListener('change', function () { selectedLogJobId = picEl.value; renderLogs(); });
+    if (picEl) picEl.addEventListener('change', function () {
+      selectedLogJobId = picEl.value;
+      logLoadedFor = null;
+      renderLogsShell();
+      refreshLogContent(true);
+    });
+  }
 
+  // Fetch + paint the selected job's logs/verify, but only replace the DOM when
+  // the content actually changed, and keep the log pane's scroll position.
+  // Finished jobs are fetched once (their logs are final).
+  function refreshLogContent(force) {
+    if (!selectedLogJobId) return;
+    var summary = jobById(selectedLogJobId);
+    var terminal = summary && isTerminal(summary.status);
+    if (!force && terminal && logLoadedFor === selectedLogJobId) return;
     fetch('/api/product-queue/' + encodeURIComponent(selectedLogJobId))
       .then(function (r) { return r.json(); })
       .then(function (job) {
         var c = document.getElementById('pq-log-content');
         if (!c) return;
-        if (!job || job.error) { c.innerHTML = '<div class="pq-empty">' + esc((job && job.error) || 'Job not found') + '</div>'; return; }
-        var vhtml = '';
+        if (!job || job.error) {
+          var msg = '<div class="pq-empty">' + esc((job && job.error) || 'Job not found') + '</div>';
+          if (c.innerHTML !== msg) c.innerHTML = msg;
+          return;
+        }
         var verify = job.verify || [];
+        var vhtml = '';
         if (verify.length) {
           vhtml = '<table class="pq-verify"><thead><tr><th>Field</th><th>Intended</th><th>On Shopify</th><th>OK</th></tr></thead><tbody>'
             + verify.map(function (v) {
@@ -207,12 +268,19 @@
             + '</tbody></table>';
         }
         var logs = job.logs || '(no output captured)';
-        c.innerHTML = vhtml + '<div class="pq-log">' + esc(logs) + '</div>';
+        var html = vhtml + '<div class="pq-log">' + esc(logs) + '</div>';
+        var sig = logs.length + ':' + verify.length + ':' + (job.status || '');
+        if (sig === lastLogSig) return;  // unchanged — don't repaint (no flash)
+        lastLogSig = sig;
+        var prev = c.querySelector('.pq-log');
+        var atBottom = prev ? (prev.scrollTop + prev.clientHeight >= prev.scrollHeight - 8) : true;
+        var prevTop = prev ? prev.scrollTop : 0;
+        c.innerHTML = html;
+        var now = c.querySelector('.pq-log');
+        if (now) now.scrollTop = atBottom ? now.scrollHeight : prevTop;
+        if (terminal) logLoadedFor = selectedLogJobId;
       })
-      .catch(function () {
-        var c = document.getElementById('pq-log-content');
-        if (c) c.innerHTML = '<div class="pq-empty">Failed to load logs.</div>';
-      });
+      .catch(function () {});
   }
 
   function applyLocks() {
@@ -237,7 +305,10 @@
         renderQueue();
         if (isOpen) {
           var logsShown = document.getElementById('pq-body-logs');
-          if (logsShown && logsShown.style.display !== 'none') renderLogs();
+          if (logsShown && logsShown.style.display !== 'none') {
+            renderLogsShell();
+            refreshLogContent(false);
+          }
         }
         applyLocks();
       })
@@ -273,7 +344,19 @@
     refresh: refresh,
     start: start,
     lockedIds: lockedIds,
-    isLocked: function (id) { return lockedIds.has(String(id)); }
+    isLocked: function (id) { return lockedIds.has(String(id)); },
+    // Grey out and disable a picker/autocomplete row when its product is
+    // locked (queued/running save); otherwise wire the given select handler.
+    applyLockToOption: function (item, productId, selectFn) {
+      if (item && lockedIds.has(String(productId))) {
+        item.classList.add('pq-locked-option');
+        item.title = 'This product has a save in the queue and is locked';
+        item.onclick = function (e) { if (e) { e.preventDefault(); e.stopPropagation(); } };
+        return true;
+      }
+      if (item) item.onclick = selectFn;
+      return false;
+    }
   };
   // Keep the exposed set reference current across refreshes.
   Object.defineProperty(window.ProductQueue, 'lockedIds', { get: function () { return lockedIds; } });

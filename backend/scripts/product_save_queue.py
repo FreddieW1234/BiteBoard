@@ -88,8 +88,13 @@ def _save(job: dict) -> None:
 # --------------------------------------------------------------------------- #
 # Queue operations
 # --------------------------------------------------------------------------- #
-def enqueue(data: dict, product_id=None, title: str = "") -> dict:
-    """Create a queued save job and return it. Binary media is never stored."""
+def enqueue(data: dict, product_id=None, title: str = "", locked_ids=None) -> dict:
+    """Create a queued save job and return it. Binary media is never stored.
+
+    locked_ids: product ids that this job locks for editing. For a parent save
+    this includes the parent plus every child it will propagate to, so children
+    cannot be edited while the save is in flight.
+    """
     if not _available():
         raise RuntimeError("Office snapshot store is not configured")
     data = dict(data or {})
@@ -100,9 +105,18 @@ def enqueue(data: dict, product_id=None, title: str = "") -> dict:
             pid = int(product_id)
         except (TypeError, ValueError):
             pid = None
+    locked = set()
+    if pid is not None:
+        locked.add(pid)
+    for cid in (locked_ids or []):
+        try:
+            locked.add(int(cid))
+        except (TypeError, ValueError):
+            pass
     job = {
         "job_id": uuid.uuid4().hex,
         "product_id": pid,
+        "locked_ids": sorted(locked),
         "title": (title or data.get("title") or "").strip() or "Untitled product",
         "status": "queued",
         "attempts": 0,
@@ -272,12 +286,20 @@ def reap_stale(timeout=None):
 
 
 def locked_product_ids() -> list:
-    """Product ids with an active (queued/running) save — these are locked."""
+    """Product ids with an active (queued/running) save — these are locked.
+
+    Includes any child products the job will propagate to (job['locked_ids']).
+    """
     ids = set()
     for job in list_jobs():
-        if job.get("status") in ACTIVE and job.get("product_id") is not None:
+        if job.get("status") not in ACTIVE:
+            continue
+        locked = job.get("locked_ids")
+        if not locked and job.get("product_id") is not None:
+            locked = [job["product_id"]]
+        for pid in (locked or []):
             try:
-                ids.add(int(job["product_id"]))
+                ids.add(int(pid))
             except (TypeError, ValueError):
                 pass
     return sorted(ids)

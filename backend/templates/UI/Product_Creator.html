@@ -6384,7 +6384,7 @@
                 item.addEventListener('mouseenter', function () {
                     if (window.pcPrefetchProductDetail) window.pcPrefetchProductDetail(p.id);
                 });
-                item.onclick = () => pcPopulateFromProduct(p.id, p.title);
+                pcBindPickItem(item, p.id, () => pcPopulateFromProduct(p.id, p.title));
                 pcDrop.appendChild(item);
             });
             pcDrop.style.display = 'block';
@@ -6467,6 +6467,16 @@
                     updateTemplateStatus();
                 } catch (e) { console.log('Templates prefill failed', e); }
             })();
+        }
+
+        // Wire a picker/autocomplete row's click handler, greying it out and
+        // blocking selection when the product has an active save in the queue.
+        function pcBindPickItem(item, productId, selectFn) {
+            if (window.ProductQueue && window.ProductQueue.applyLockToOption) {
+                window.ProductQueue.applyLockToOption(item, productId, selectFn);
+            } else {
+                item.onclick = selectFn;
+            }
         }
 
         async function pcPopulateFromProduct(productId, title, opts) {
@@ -6948,7 +6958,7 @@
                             item.className = 'autocomplete-item';
                             const sku = (p.variants && p.variants[0] && p.variants[0].sku) || '';
                             item.innerHTML = `<div class="product-name">${p.title}</div><div class="product-id">${sku}</div>`;
-                            item.onclick = () => pcPopulateFromProduct(p.id, p.title, { duplicate: true });
+                            pcBindPickItem(item, p.id, () => pcPopulateFromProduct(p.id, p.title, { duplicate: true }));
                             dupDrop.appendChild(item);
                         });
                         dupDrop.style.display = 'block';
@@ -7025,7 +7035,7 @@
                 const sku = (p.sku || '').trim();
                 const sub = sku ? (sku + ' · ' + (p.parent_child_value || '')) : (p.parent_child_value || '');
                 item.innerHTML = `<div class="product-name">${p.title || 'Untitled'}</div><div class="product-id">${sub}</div>`;
-                item.onclick = () => selectCreateFromParentProduct(p);
+                pcBindPickItem(item, p.id, () => selectCreateFromParentProduct(p));
                 listEl.appendChild(item);
             });
         }
@@ -7113,10 +7123,10 @@
                             item.className = 'autocomplete-item';
                             const sku = (p.variants && p.variants[0] && p.variants[0].sku) || '';
                             item.innerHTML = `<div class="product-name">${p.title}</div><div class="product-id">${sku}</div>`;
-                            item.onclick = () => {
+                            pcBindPickItem(item, p.id, () => {
                                 pcPopulateFromProduct(p.id, p.title);
                                 closeEditModal();
-                            };
+                            });
                             editDrop.appendChild(item);
                         });
                         editDrop.style.display = 'block';
@@ -8482,6 +8492,6 @@
             resetColourOptions();
         });
     </script>
-    <script src="/static/product_queue.js?v=1"></script>
+    <script src="/static/product_queue.js?v=4"></script>
 </body>
 </html>
