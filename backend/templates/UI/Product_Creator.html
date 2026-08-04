@@ -2139,6 +2139,9 @@
                             <button type="button" class="btn btn-primary" onclick="openCreateFromParentModal(); return false;">
                                 <i class="fas fa-sitemap"></i> Create from Parent
                             </button>
+                            <button type="button" class="btn btn-secondary" onclick="ProductQueue.open(); return false;" title="Background save queue">
+                                <i class="fas fa-list-check"></i> Queue <span class="pq-count"></span>
+                            </button>
                         </div>
                         <button type="button" class="btn btn-secondary" id="product-back-button" onclick="backToProductCreatorHome()" style="display: none;" title="Back to start">
                             <i class="fas fa-arrow-left"></i> Back
@@ -5681,13 +5684,13 @@
                     console.log(`📦 selectedShopifyMedia IDs:`, selectedShopifyMedia.map(m => ({id: m.id, rest_api_id: m.rest_api_id || m.id})));
                     addMediaToFormData(formData);
                     
-                    response = await fetch('/api/create-product', {
+                    response = await fetch('/api/product-queue', {
                         method: 'POST',
                         body: formData
                     });
                 } else {
                     // Use JSON for regular requests
-                    response = await fetch('/api/create-product', {
+                    response = await fetch('/api/product-queue', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -5723,6 +5726,20 @@
                 // Show result
                 const resultDiv = document.getElementById('resultMessage');
                 resultDiv.style.display = 'block';
+                
+                // Background enqueue: worker applies + verifies the save. Return
+                // immediately; the Queue popup tracks progress.
+                if (result.queued) {
+                    resultDiv.className = 'result-message result-success';
+                    resultDiv.innerHTML = `
+                        <h4><i class="fas fa-clock"></i> Queued — saving in the background</h4>
+                        <p>Your changes are being applied to Shopify and verified. Track progress with the <strong>Queue</strong> button.</p>`;
+                    if (result.product_id != null && window.ProductQueue) {
+                        try { window.ProductQueue.lockedIds.add(String(result.product_id)); } catch (e) {}
+                        try { window.ProductQueue.refresh(); } catch (e) {}
+                    }
+                    return;
+                }
                 
                 if (result.success) {
                     const escapeHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -6456,6 +6473,12 @@
             const pcInput = document.getElementById('pc-product-input');
             const pcDrop = document.getElementById('pc-autocomplete-dropdown');
             const isDuplicate = opts && opts.duplicate === true;
+            // A queued/running save fully locks the product — refuse to open it
+            // for editing (also enforced server-side with HTTP 423).
+            if (!isDuplicate && window.ProductQueue && window.ProductQueue.isLocked(productId)) {
+                alert('This product is being saved in the background and is locked until the save finishes. Check the Queue for progress.');
+                return;
+            }
             // "Create from Parent" passes a versionName and intentionally creates a restricted
             // child product. A plain "Duplicate" (no versionName) should behave like creating a
             // brand-new product with the full set of editable fields.
@@ -8459,5 +8482,6 @@
             resetColourOptions();
         });
     </script>
+    <script src="/static/product_queue.js?v=1"></script>
 </body>
 </html>

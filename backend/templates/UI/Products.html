@@ -247,6 +247,7 @@
                     <button type="button" class="btn-ghost" id="ap-expand"><i class="fas fa-angles-down"></i> Expand all</button>
                     <button type="button" class="btn-ghost" id="ap-collapse"><i class="fas fa-angles-up"></i> Collapse all</button>
                     <button type="button" class="btn-ghost" id="ap-refresh"><i class="fas fa-rotate"></i> Refresh</button>
+                    <button type="button" class="btn-ghost" onclick="ProductQueue.open()" title="Background save queue"><i class="fas fa-list-check"></i> Queue <span class="pq-count"></span></button>
                 </div>
             </div>
 
@@ -716,7 +717,7 @@
             const cols = activeColumns().map(c => cellHtml(p, c.key)).join('');
             const fieldText = Object.values(p.fields || {}).join(' ');
             const searchStr = ((p.title || '') + ' ' + (p.sku || '') + ' ' + (p.categories || []).join(' ') + ' ' + (p.subcategories || []).join(' ') + ' ' + fieldText).toLowerCase();
-            return `<div class="product-row" data-search="${escapeHtml(searchStr)}">
+            return `<div class="product-row" data-product-id="${escapeHtml(p.id)}" data-search="${escapeHtml(searchStr)}">
                 ${cols}
                 <span class="cell-action"><a class="edit-btn" href="/app/Products?view=manager&edit=${encodeURIComponent(p.id)}&return=all"><i class="fas fa-pen"></i> Edit</a></span>
             </div>`;
@@ -986,7 +987,7 @@
             const badgeHtml = badge
                 ? `<span class="pc-gap-badge ${escapeHtml(badge.className)}">${escapeHtml(badge.label)}</span>`
                 : '';
-            return `<div class="pc-gap-item${extraClass ? ' ' + extraClass : ''}">
+            return `<div class="pc-gap-item${extraClass ? ' ' + extraClass : ''}" data-product-id="${escapeHtml(p.id)}">
                 ${badgeHtml}
                 ${skuHtml}
                 <span class="product-name" title="${name}">${name}</span>
@@ -1083,6 +1084,8 @@
             renderParentChildGaps(data);
             document.getElementById('ap-count').textContent = totalProductCount(data) + ' products';
             requestAnimationFrame(updateHorizontalScrollBar);
+            // Re-apply background-save locks to the freshly rendered rows.
+            if (window.ProductQueue) { try { window.ProductQueue.refresh(); } catch (e) {} }
         }
 
         function applySearch() {
@@ -1445,7 +1448,18 @@
                 var m = (link.getAttribute('href') || '').match(/[?&]edit=([^&]+)/);
                 if (m) window.ProductsShell.prefetchProductForEditor(decodeURIComponent(m[1]));
             }, true);
+            // Block opening a product that has a queued/running save (also enforced server-side).
+            document.getElementById('ap-content').addEventListener('click', function(e) {
+                var row = e.target.closest('[data-product-id]');
+                if (!row || !window.ProductQueue) return;
+                if (e.target.closest('a.edit-btn') && window.ProductQueue.isLocked(row.getAttribute('data-product-id'))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    alert('This product is being saved in the background and is locked until the save finishes. Check the Queue for progress.');
+                }
+            }, true);
         });
     </script>
+    <script src="/static/product_queue.js?v=1"></script>
 </body>
 </html>

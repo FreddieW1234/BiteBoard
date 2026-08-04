@@ -1,0 +1,286 @@
+/*
+ * Shared product save-queue UI — used by both the Product Manager and All
+ * Products pages. Self-injects a modal (Queue + Logs tabs) into the page, polls
+ * GET /api/product-queue, greys/locks queued products, and drives Cancel/Retry.
+ *
+ * Pages opt in by:
+ *   - including this script,
+ *   - adding a button that calls ProductQueue.open(),
+ *   - marking rows with data-product-id (so locks can grey them), and
+ *   - optionally defining window.onQueueLockUpdate(lockedSet) to react to locks.
+ */
+(function () {
+  if (window.ProductQueue) return;
+
+  var POLL_MS = 3000;
+  var lockedIds = new Set();      // strings
+  var jobs = [];
+  var selectedLogJobId = null;
+  var pollTimer = null;
+  var isOpen = false;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function ago(iso) {
+    if (!iso) return '';
+    var t = Date.parse(iso);
+    if (isNaN(t)) return '';
+    var s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.round(s / 60) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
+  }
+
+  var STATUS = {
+    queued:    { label: 'Queued',    cls: 'pq-b-queued' },
+    running:   { label: 'Saving',    cls: 'pq-b-running' },
+    done:      { label: 'Done',      cls: 'pq-b-done' },
+    failed:    { label: 'Failed',    cls: 'pq-b-failed' },
+    cancelled: { label: 'Cancelled', cls: 'pq-b-cancel' }
+  };
+
+  function injectStyles() {
+    if (document.getElementById('pq-styles')) return;
+    var css = ''
+      + '.pq-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;z-index:100000;align-items:center;justify-content:center;}'
+      + '.pq-overlay.open{display:flex;}'
+      + '.pq-panel{background:#fff;width:min(860px,94vw);max-height:88vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;font-family:inherit;}'
+      + '.pq-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #e2e8f0;}'
+      + '.pq-head h3{margin:0;font-size:17px;font-weight:700;color:#0f172a;}'
+      + '.pq-tabs{display:flex;gap:6px;margin-left:8px;}'
+      + '.pq-tab{border:0;background:#f1f5f9;color:#334155;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;}'
+      + '.pq-tab.active{background:#2563eb;color:#fff;}'
+      + '.pq-x{margin-left:auto;border:0;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#64748b;}'
+      + '.pq-body{padding:14px 18px;overflow:auto;}'
+      + '.pq-empty{color:#64748b;text-align:center;padding:28px 0;}'
+      + '.pq-job{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;}'
+      + '.pq-job .pq-title{font-weight:600;color:#0f172a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.pq-job .pq-time{color:#94a3b8;font-size:12px;white-space:nowrap;}'
+      + '.pq-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;}'
+      + '.pq-b-queued{background:#e2e8f0;color:#475569;}'
+      + '.pq-b-running{background:#dbeafe;color:#1d4ed8;}'
+      + '.pq-b-done{background:#dcfce7;color:#15803d;}'
+      + '.pq-b-failed{background:#fee2e2;color:#b91c1c;}'
+      + '.pq-b-cancel{background:#f1f5f9;color:#64748b;}'
+      + '.pq-act{border:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 10px;font-size:12px;cursor:pointer;color:#334155;}'
+      + '.pq-act:hover{background:#eef2f7;}'
+      + '.pq-act.pq-danger{color:#b91c1c;}'
+      + '.pq-logsel{margin-bottom:10px;font-size:13px;color:#475569;}'
+      + '.pq-verify{margin:0 0 12px;border-collapse:collapse;width:100%;font-size:12px;}'
+      + '.pq-verify th,.pq-verify td{border:1px solid #e2e8f0;padding:5px 8px;text-align:left;vertical-align:top;}'
+      + '.pq-verify .ok{color:#15803d;}.pq-verify .bad{color:#b91c1c;}'
+      + '.pq-log{background:#0b1020;color:#d1e0ff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;padding:12px;border-radius:8px;max-height:52vh;overflow:auto;}'
+      + '.pq-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;background:#ef4444;color:#fff;border-radius:999px;font-size:11px;font-weight:700;text-align:center;}'
+      + '.pq-count:empty{display:none;}'
+      + '[data-product-id].pq-locked{opacity:.55;pointer-events:none;filter:grayscale(.4);}'
+      + '[data-product-id].pq-locked .edit-btn{pointer-events:none;opacity:.5;}';
+    var st = document.createElement('style');
+    st.id = 'pq-styles';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  function buildModal() {
+    if (document.getElementById('pq-overlay')) return;
+    var ov = document.createElement('div');
+    ov.className = 'pq-overlay';
+    ov.id = 'pq-overlay';
+    ov.innerHTML = ''
+      + '<div class="pq-panel" role="dialog" aria-modal="true">'
+      + '  <div class="pq-head">'
+      + '    <h3>Save Queue</h3>'
+      + '    <div class="pq-tabs">'
+      + '      <button type="button" class="pq-tab active" data-tab="queue">Queue</button>'
+      + '      <button type="button" class="pq-tab" data-tab="logs">Logs</button>'
+      + '    </div>'
+      + '    <button type="button" class="pq-x" aria-label="Close">&times;</button>'
+      + '  </div>'
+      + '  <div class="pq-body" id="pq-body-queue"></div>'
+      + '  <div class="pq-body" id="pq-body-logs" style="display:none;"></div>'
+      + '</div>';
+    document.body.appendChild(ov);
+
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    ov.querySelector('.pq-x').addEventListener('click', close);
+    ov.querySelectorAll('.pq-tab').forEach(function (t) {
+      t.addEventListener('click', function () { switchTab(t.getAttribute('data-tab')); });
+    });
+  }
+
+  function switchTab(name) {
+    var ov = document.getElementById('pq-overlay');
+    if (!ov) return;
+    ov.querySelectorAll('.pq-tab').forEach(function (t) {
+      t.classList.toggle('active', t.getAttribute('data-tab') === name);
+    });
+    document.getElementById('pq-body-queue').style.display = name === 'queue' ? '' : 'none';
+    document.getElementById('pq-body-logs').style.display = name === 'logs' ? '' : 'none';
+    if (name === 'logs') renderLogs();
+  }
+
+  function renderQueue() {
+    var el = document.getElementById('pq-body-queue');
+    if (!el) return;
+    if (!jobs.length) {
+      el.innerHTML = '<div class="pq-empty">No saves in the queue.</div>';
+      return;
+    }
+    var rows = jobs.slice().reverse().map(function (j) {
+      var st = STATUS[j.status] || { label: j.status, cls: 'pq-b-cancel' };
+      var label = st.label;
+      if (j.status === 'done' && j.verify_ok === false) label = 'Done (mismatch)';
+      var acts = '';
+      if (j.status === 'queued' || j.status === 'running') {
+        acts += '<button type="button" class="pq-act pq-danger" data-cancel="' + esc(j.job_id) + '">Cancel</button>';
+      }
+      if (j.status === 'failed' || j.status === 'cancelled') {
+        acts += '<button type="button" class="pq-act" data-retry="' + esc(j.job_id) + '">Retry</button>';
+      }
+      acts += '<button type="button" class="pq-act" data-logs="' + esc(j.job_id) + '">Logs</button>';
+      var attempts = (j.attempts && j.max_attempts) ? (' · try ' + j.attempts + '/' + j.max_attempts) : '';
+      return '<div class="pq-job">'
+        + '<span class="pq-badge ' + st.cls + '">' + esc(label) + '</span>'
+        + '<span class="pq-title" title="' + esc(j.title) + '">' + esc(j.title) + '</span>'
+        + '<span class="pq-time">' + esc(ago(j.created_at)) + attempts + '</span>'
+        + acts
+        + '</div>';
+    }).join('');
+    el.innerHTML = rows;
+
+    el.querySelectorAll('[data-cancel]').forEach(function (b) {
+      b.addEventListener('click', function () { act('cancel', b.getAttribute('data-cancel')); });
+    });
+    el.querySelectorAll('[data-retry]').forEach(function (b) {
+      b.addEventListener('click', function () { act('retry', b.getAttribute('data-retry')); });
+    });
+    el.querySelectorAll('[data-logs]').forEach(function (b) {
+      b.addEventListener('click', function () { selectedLogJobId = b.getAttribute('data-logs'); switchTab('logs'); });
+    });
+  }
+
+  function act(kind, jobId) {
+    fetch('/api/product-queue/' + encodeURIComponent(jobId) + '/' + kind, { method: 'POST' })
+      .then(function () { refresh(); })
+      .catch(function () {});
+  }
+
+  function renderLogs() {
+    var el = document.getElementById('pq-body-logs');
+    if (!el) return;
+    if (!selectedLogJobId) {
+      // Default to the most recent job.
+      if (jobs.length) selectedLogJobId = jobs[jobs.length - 1].job_id;
+    }
+    if (!selectedLogJobId) {
+      el.innerHTML = '<div class="pq-empty">Pick a job&rsquo;s <b>Logs</b> from the Queue tab.</div>';
+      return;
+    }
+    var picker = '<div class="pq-logsel">Showing logs for: <select id="pq-log-picker">'
+      + jobs.slice().reverse().map(function (j) {
+          var sel = j.job_id === selectedLogJobId ? ' selected' : '';
+          return '<option value="' + esc(j.job_id) + '"' + sel + '>' + esc(j.title) + ' — ' + esc((STATUS[j.status] || {}).label || j.status) + '</option>';
+        }).join('')
+      + '</select></div>';
+    el.innerHTML = picker + '<div id="pq-log-content"><div class="pq-empty">Loading…</div></div>';
+    var picEl = document.getElementById('pq-log-picker');
+    if (picEl) picEl.addEventListener('change', function () { selectedLogJobId = picEl.value; renderLogs(); });
+
+    fetch('/api/product-queue/' + encodeURIComponent(selectedLogJobId))
+      .then(function (r) { return r.json(); })
+      .then(function (job) {
+        var c = document.getElementById('pq-log-content');
+        if (!c) return;
+        if (!job || job.error) { c.innerHTML = '<div class="pq-empty">' + esc((job && job.error) || 'Job not found') + '</div>'; return; }
+        var vhtml = '';
+        var verify = job.verify || [];
+        if (verify.length) {
+          vhtml = '<table class="pq-verify"><thead><tr><th>Field</th><th>Intended</th><th>On Shopify</th><th>OK</th></tr></thead><tbody>'
+            + verify.map(function (v) {
+                return '<tr><td>' + esc(v.field) + '</td><td>' + esc(v.intended) + '</td><td>' + esc(v.actual) + '</td>'
+                  + '<td class="' + (v.ok ? 'ok' : 'bad') + '">' + (v.ok ? '✓' : '✗') + '</td></tr>';
+              }).join('')
+            + '</tbody></table>';
+        }
+        var logs = job.logs || '(no output captured)';
+        c.innerHTML = vhtml + '<div class="pq-log">' + esc(logs) + '</div>';
+      })
+      .catch(function () {
+        var c = document.getElementById('pq-log-content');
+        if (c) c.innerHTML = '<div class="pq-empty">Failed to load logs.</div>';
+      });
+  }
+
+  function applyLocks() {
+    document.querySelectorAll('[data-product-id]').forEach(function (row) {
+      var id = String(row.getAttribute('data-product-id'));
+      row.classList.toggle('pq-locked', lockedIds.has(id));
+    });
+    // Update any Queue-button count badges with the active job total.
+    var active = jobs.filter(function (j) { return j.status === 'queued' || j.status === 'running'; }).length;
+    document.querySelectorAll('.pq-count').forEach(function (b) { b.textContent = active ? String(active) : ''; });
+    if (typeof window.onQueueLockUpdate === 'function') {
+      try { window.onQueueLockUpdate(lockedIds); } catch (e) {}
+    }
+  }
+
+  function refresh() {
+    return fetch('/api/product-queue')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        jobs = (d && d.jobs) || [];
+        lockedIds = new Set(((d && d.locked) || []).map(String));
+        renderQueue();
+        if (isOpen) {
+          var logsShown = document.getElementById('pq-body-logs');
+          if (logsShown && logsShown.style.display !== 'none') renderLogs();
+        }
+        applyLocks();
+      })
+      .catch(function () {});
+  }
+
+  function open() {
+    injectStyles();
+    buildModal();
+    isOpen = true;
+    document.getElementById('pq-overlay').classList.add('open');
+    switchTab('queue');
+    refresh();
+  }
+
+  function close() {
+    isOpen = false;
+    var ov = document.getElementById('pq-overlay');
+    if (ov) ov.classList.remove('open');
+  }
+
+  function start() {
+    injectStyles();
+    buildModal();
+    refresh();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(refresh, POLL_MS);
+  }
+
+  window.ProductQueue = {
+    open: open,
+    close: close,
+    refresh: refresh,
+    start: start,
+    lockedIds: lockedIds,
+    isLocked: function (id) { return lockedIds.has(String(id)); }
+  };
+  // Keep the exposed set reference current across refreshes.
+  Object.defineProperty(window.ProductQueue, 'lockedIds', { get: function () { return lockedIds; } });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+})();

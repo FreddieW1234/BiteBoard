@@ -57,6 +57,13 @@ init_maintenance(app)
 # Read-only Dev file browser (/app/Dev). Staff-only via portal_auth_gate.
 init_dev_browser(app)
 
+# Background product-save worker (write-behind saves). Guarded by SAVE_WORKER_ENABLED.
+try:
+    from scripts.product_save_worker import start_worker as _start_save_worker  # type: ignore
+    _start_save_worker(app)
+except Exception as _sw_err:
+    print(f"⚠️ Save worker not started: {_sw_err}", flush=True)
+
 
 @app.errorhandler(413)
 def request_entity_too_large(_e):
@@ -800,6 +807,16 @@ def api_product_prices(product_id):
         pid = _parse_product_id(product_id)
         if pid is None:
             return jsonify({"error": "Invalid product ID"}), 400
+        # A queued/running save fully locks the product so it can't be opened.
+        try:
+            from scripts import product_save_queue as queue
+            if pid in set(queue.locked_product_ids()):
+                return jsonify({
+                    "error": "This product is being saved and is temporarily locked.",
+                    "locked": True
+                }), 423
+        except Exception:
+            pass
         from scripts.product_creator.Product_Creator import get_product_detail
         refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
         formatted_product = get_product_detail(pid, refresh=refresh)
@@ -1699,155 +1716,121 @@ def update_products_artwork():
             'totalCount': 0
         }), 500
 
+def _parse_product_form(req):
+    """Parse a create/enqueue product request (multipart or JSON) into the
+    create_product() input dict.
+
+    Returns (data, error) where error is a (payload_dict, status_code) tuple on
+    an unsupported content type, else None. Shared by /api/create-product and the
+    background /api/product-queue enqueue endpoint.
+    """
+    # Multipart form data (with or without files).
+    if req.content_type and req.content_type.startswith('multipart/form-data'):
+        data = {}
+        for key, value in req.form.items():
+            if key.startswith('media_'):
+                continue  # Media files live in req.files
+            if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options', 'is_calendar']:
+                try:
+                    if key == 'metafields':
+                        data[key] = json.loads(value) if (value and value.strip()) else []
+                    elif key in ('charge_vat', 'is_calendar'):
+                        data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
+                    elif key == 'colour_images':
+                        data[key] = json.loads(value) if (value and value.strip()) else {}
+                    elif key in ('categories', 'subcategories'):
+                        if value and value.strip():
+                            parsed = json.loads(value)
+                            data[key] = parsed if isinstance(parsed, list) else [parsed]
+                        else:
+                            data[key] = []
+                    elif key == 'storefront_options':
+                        if value and value.strip():
+                            parsed = json.loads(value)
+                            data[key] = parsed if isinstance(parsed, dict) else {}
+                        else:
+                            data[key] = {}
+                    else:
+                        data[key] = value
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"⚠️ Failed to parse {key}: {e}", flush=True)
+                    data[key] = value
+            else:
+                data[key] = value
+
+        # Media files (new format, with fallback to media_${index}).
+        media_files = []
+        if 'media_files' in req.files:
+            for file in req.files.getlist('media_files'):
+                if file and file.filename:
+                    media_files.append({'filename': file.filename, 'content': file.read(), 'content_type': file.content_type})
+                    print(f"[API] Added media file: {file.filename} ({file.content_type})")
+        else:
+            media_count = int(req.form.get('media_count', 0))
+            for i in range(media_count):
+                file_key = f'media_{i}'
+                if file_key in req.files:
+                    file = req.files[file_key]
+                    if file and file.filename:
+                        media_files.append({'filename': file.filename, 'content': file.read(), 'content_type': file.content_type})
+        data['media_files'] = media_files
+
+        # Selected Shopify media IDs to keep.
+        shopify_media_ids = req.form.getlist('shopify_media_ids')
+        if shopify_media_ids:
+            data['shopify_media_ids'] = [int(i) if i.isdigit() else i for i in shopify_media_ids]
+        else:
+            data['shopify_media_ids'] = []
+
+        data['media_explicitly_cleared'] = req.form.get('media_explicitly_cleared', 'false').lower() in ('true', '1', 'yes')
+
+        media_order_str = req.form.get('media_order', '[]')
+        try:
+            data['media_order'] = json.loads(media_order_str) if media_order_str else []
+        except (json.JSONDecodeError, ValueError):
+            data['media_order'] = []
+
+        media_urls_str = req.form.get('media_urls', '')
+        if media_urls_str and media_urls_str.strip():
+            try:
+                parsed = json.loads(media_urls_str)
+                data['media_urls'] = parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                data['media_urls'] = []
+        else:
+            data['media_urls'] = []
+        return data, None
+
+    # JSON body (backward compatibility).
+    if req.is_json:
+        data = req.get_json()
+        if data is None:
+            data = {}
+        data.setdefault('media_files', [])
+        return data, None
+
+    return None, ({'success': False, 'error': f"Unsupported content type: {req.content_type}"}, 400)
+
+
 @app.route('/api/create-product', methods=['POST'])
 def api_create_product():
-    """Create a new product in Shopify with media uploads"""
+    """Create a new product in Shopify with media uploads (synchronous path)."""
     try:
         print(f"[API] Create product endpoint called")
-        
-        # Check if request is multipart form data (with or without files)
-        if request.content_type and request.content_type.startswith('multipart/form-data'):
-            
-            # Extract form data
-            data = {}
-            for key, value in request.form.items():
-                if key.startswith('media_'):
-                    continue  # Skip media files, they're in request.files
-                
-                # Parse JSON fields that come as strings from FormData
-                if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options', 'is_calendar']:
-                    try:
-                        if key == 'metafields':
-                            if value and value.strip():
-                                data[key] = json.loads(value)
-                            else:
-                                data[key] = []
-                        elif key == 'charge_vat':
-                            data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
-                        elif key == 'is_calendar':
-                            data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
-                        elif key == 'colour_images':
-                            if value and value.strip():
-                                data[key] = json.loads(value)
-                            else:
-                                data[key] = {}
-                        elif key in ('categories', 'subcategories'):
-                            if value and value.strip():
-                                parsed = json.loads(value)
-                                data[key] = parsed if isinstance(parsed, list) else [parsed]
-                            else:
-                                data[key] = []
-                        elif key == 'storefront_options':
-                            if value and value.strip():
-                                parsed = json.loads(value)
-                                data[key] = parsed if isinstance(parsed, dict) else {}
-                            else:
-                                data[key] = {}
-                        else:
-                            data[key] = value
-                    except (json.JSONDecodeError, ValueError) as e:
-                        print(f"⚠️ Failed to parse {key}: {e}", flush=True)
-                        data[key] = value
-                else:
-                    data[key] = value
-            
-            # Handle media files
-            media_files = []
-            
-            # Check for media_files format (new format)
-            if 'media_files' in request.files:
-                files = request.files.getlist('media_files')
-                for file in files:
-                    if file and file.filename:
-                        media_files.append({
-                            'filename': file.filename,
-                            'content': file.read(),
-                            'content_type': file.content_type
-                        })
-                        print(f"[API] Added media file: {file.filename} ({file.content_type})")
-            else:
-                # Fallback to media_${index} format (old format)
-                media_count = int(request.form.get('media_count', 0))
-                for i in range(media_count):
-                    file_key = f'media_{i}'
-                    if file_key in request.files:
-                        file = request.files[file_key]
-                        if file and file.filename:
-                            media_files.append({
-                                'filename': file.filename,
-                                'content': file.read(),
-                                'content_type': file.content_type
-                            })
-            
-            data['media_files'] = media_files
-            
-            # Handle selected Shopify media IDs
-            shopify_media_ids = request.form.getlist('shopify_media_ids')
-            if shopify_media_ids:
-                # Convert string IDs to integers (only if they're numeric)
-                processed_ids = []
-                for id in shopify_media_ids:
-                    if id.isdigit():
-                        processed_ids.append(int(id))
-                    else:
-                        processed_ids.append(id)  # Keep as string if it's a Global ID
-                data['shopify_media_ids'] = processed_ids
-                print(f"[API] Shopify media IDs to keep: {processed_ids}")
-            else:
-                data['shopify_media_ids'] = []
+        data, err = _parse_product_form(request)
+        if err is not None:
+            payload, status = err
+            return jsonify(payload), status
 
-            data['media_explicitly_cleared'] = request.form.get(
-                'media_explicitly_cleared', 'false'
-            ).lower() in ('true', '1', 'yes')
-            
-            # Handle media order for reordering
-            media_order_str = request.form.get('media_order', '[]')
-            try:
-                media_order = json.loads(media_order_str) if media_order_str else []
-                data['media_order'] = media_order
-                print(f"[API] Media order received: {media_order}")
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"⚠️ Failed to parse media_order: {e}")
-                data['media_order'] = []
-
-            # When duplicating, frontend sends image URLs to create media on new product (can't attach from other product)
-            media_urls_str = request.form.get('media_urls', '')
-            if media_urls_str and media_urls_str.strip():
-                try:
-                    data['media_urls'] = json.loads(media_urls_str)
-                    if isinstance(data['media_urls'], list):
-                        print(f"[API] Media URLs for copy (new product): {len(data['media_urls'])} URLs")
-                    else:
-                        data['media_urls'] = []
-                except (json.JSONDecodeError, ValueError):
-                    data['media_urls'] = []
-            else:
-                data['media_urls'] = []
-            
-        elif request.is_json:
-            # Handle JSON data (backward compatibility)
-            data = request.get_json()
-            if data is None:
-                data = {}
-        else:
-            # Handle other content types
-            return jsonify({
-                'success': False,
-                'error': f"Unsupported content type: {request.content_type}"
-            }), 400
-        
-        # Import the Product Manager script
         from scripts.product_creator.Product_Creator import create_product, validate_product_data
-        
-        # Validate the product data
+
         validation = validate_product_data(data)
         if not validation["valid"]:
             return jsonify({
                 'success': False,
                 'error': f"Validation failed: {', '.join(validation['errors'])}"
             }), 400
-        
-        # Create the product
+
         result = create_product(data)
 
         # Keep the All Products snapshot consistent with this save (best-effort).
@@ -1861,12 +1844,191 @@ def api_create_product():
             print(f"[API] product snapshot sync skipped: {_sync_err}", flush=True)
 
         return jsonify(result)
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
             'error': f"Failed to create product: {str(e)}"
         }), 500
+
+
+def _queue_extract_product_id(data):
+    pid = data.get('product_id')
+    if pid in (None, '', 'null'):
+        return None
+    try:
+        return int(pid)
+    except (TypeError, ValueError):
+        return None
+
+
+@app.route('/api/product-queue', methods=['POST'])
+def api_product_queue_enqueue():
+    """Enqueue a write-behind product save.
+
+    New images (binary media, or copy-from-URL duplicates) are applied
+    synchronously here so the upload happens while the user waits; the rest of
+    the save (metafields, Price Bandit, child propagation) is applied by the
+    background worker and verified against Shopify. Metadata-only edits are fully
+    backgrounded and return instantly.
+    """
+    try:
+        data, err = _parse_product_form(request)
+        if err is not None:
+            payload, status = err
+            return jsonify(payload), status
+
+        from scripts.product_creator.Product_Creator import create_product, validate_product_data, sync_product_snapshot
+        from scripts import product_save_queue as queue
+
+        validation = validate_product_data(data)
+        if not validation["valid"]:
+            return jsonify({
+                'success': False,
+                'error': f"Validation failed: {', '.join(validation['errors'])}"
+            }), 400
+
+        product_id = _queue_extract_product_id(data)
+        title = (data.get('title') or '').strip()
+
+        # Refuse to queue a product that already has an active save (concurrency lock).
+        try:
+            if product_id and product_id in set(queue.locked_product_ids()):
+                return jsonify({
+                    'success': False,
+                    'locked': True,
+                    'error': 'This product already has a save in the queue.'
+                }), 409
+        except Exception:
+            pass
+
+        try:
+            queue_ready = queue._available()
+        except Exception:
+            queue_ready = False
+        needs_sync = bool(data.get('media_files')) or bool(data.get('media_urls'))
+
+        # Synchronous path: new images present, or the office queue store is down.
+        if needs_sync or not queue_ready:
+            import io, contextlib
+            buf = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buf):
+                    result = create_product(data)
+            except Exception as exc:
+                result = {'success': False, 'error': str(exc)}
+            logs = buf.getvalue()
+            if logs:
+                print(logs, flush=True)  # keep Render console visibility
+
+            success = bool(isinstance(result, dict) and result.get('success'))
+            pid = None
+            if isinstance(result, dict):
+                pid = (result.get('product') or {}).get('id') or result.get('product_id')
+            pid = pid or product_id
+
+            verify = []
+            if success and pid:
+                try:
+                    verify = queue.verify_product(data, pid)
+                except Exception:
+                    verify = []
+                try:
+                    sync_product_snapshot(pid)
+                except Exception as _e:
+                    print(f"[API] snapshot sync skipped: {_e}", flush=True)
+
+            ok = success and all(r.get('ok') for r in verify)
+            job_id = None
+            if queue_ready:
+                try:
+                    job = queue.enqueue(data, pid, title)
+                    err_msg = None if ok else ((result or {}).get('error') if not success else 'verification mismatch')
+                    queue.complete(job['job_id'], 'done' if ok else 'failed',
+                                   verify=verify, logs=logs, error=err_msg)
+                    job_id = job['job_id']
+                except Exception as _qe:
+                    print(f"[API] queue record skipped: {_qe}", flush=True)
+
+            payload = dict(result) if isinstance(result, dict) else {'success': success}
+            payload['queued'] = False
+            payload['job_id'] = job_id
+            payload['verify'] = verify
+            return jsonify(payload), (200 if success else 500)
+
+        # Background path: metadata-only edit — return instantly.
+        job = queue.enqueue(data, product_id, title)
+        return jsonify({
+            'success': True,
+            'queued': True,
+            'job_id': job['job_id'],
+            'product_id': product_id
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f"Failed to enqueue save: {str(e)}"}), 500
+
+
+@app.route('/api/product-queue', methods=['GET'])
+def api_product_queue_list():
+    """Queue summary + locked product ids, for polling/greying on both pages."""
+    try:
+        from scripts import product_save_queue as queue
+        jobs = queue.list_jobs()
+        summary = []
+        for j in jobs:
+            verify = j.get('verify') or []
+            summary.append({
+                'job_id': j.get('job_id'),
+                'product_id': j.get('product_id'),
+                'title': j.get('title'),
+                'status': j.get('status'),
+                'attempts': j.get('attempts'),
+                'max_attempts': j.get('max_attempts'),
+                'created_at': j.get('created_at'),
+                'finished_at': j.get('finished_at'),
+                'error': j.get('error'),
+                'verify_ok': (all(r.get('ok') for r in verify) if verify else None),
+            })
+        return jsonify({'jobs': summary, 'locked': queue.locked_product_ids()})
+    except Exception as e:
+        return jsonify({'jobs': [], 'locked': [], 'error': str(e)})
+
+
+@app.route('/api/product-queue/<job_id>', methods=['GET'])
+def api_product_queue_detail(job_id):
+    """Full job incl. logs + verification diff (Logs tab)."""
+    try:
+        from scripts import product_save_queue as queue
+        job = queue.get_job(job_id)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/product-queue/<job_id>/cancel', methods=['POST'])
+def api_product_queue_cancel(job_id):
+    try:
+        from scripts import product_save_queue as queue
+        job = queue.cancel(job_id)
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+        return jsonify({'success': True, 'status': job.get('status')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/product-queue/<job_id>/retry', methods=['POST'])
+def api_product_queue_retry(job_id):
+    try:
+        from scripts import product_save_queue as queue
+        job = queue.retry(job_id)
+        if not job:
+            return jsonify({'success': False, 'error': 'Job not found'}), 404
+        return jsonify({'success': True, 'status': job.get('status')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/products/<int:product_id>/sync-tab-description', methods=['POST'])
 def api_sync_product_tab_description(product_id):

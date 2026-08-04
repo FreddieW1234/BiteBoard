@@ -73,6 +73,17 @@ ORDER_ACCESS_CACHE_TTL_SEC = int(os.environ.get("ORDER_ACCESS_CACHE_TTL_SEC", "3
 PRODUCTS_SNAPSHOT_TTL = int(os.environ.get("PRODUCTS_SNAPSHOT_TTL", "1800"))
 PRODUCTS_MEM_TTL = int(os.environ.get("PRODUCTS_MEM_TTL", "30"))
 
+# Background product-save queue (write-behind saves + post-save verification).
+# SAVE_WORKER_ENABLED: run the in-process worker thread on this instance.
+# SAVE_QUEUE_POLL_SEC: worker poll interval. SAVE_MAX_ATTEMPTS: retries before a
+# job is marked Failed. SAVE_JOB_TIMEOUT_SEC: a running job older than this is
+# reaped/requeued. SAVE_JOB_RETENTION_H: terminal jobs pruned after this many hours.
+SAVE_WORKER_ENABLED = os.environ.get("SAVE_WORKER_ENABLED", "true").lower() in ("1", "true", "yes")
+SAVE_QUEUE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_POLL_SEC", "2"))
+SAVE_MAX_ATTEMPTS = int(os.environ.get("SAVE_MAX_ATTEMPTS", "3"))
+SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "600"))
+SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "24"))
+
 # Klaviyo — production update emails (transactional Flow triggered by Events API)
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
 KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")

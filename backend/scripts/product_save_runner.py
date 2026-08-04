@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""Save runner — applies one queued product save in its own process.
+
+Run as: ``python product_save_runner.py <job_id>``
+
+Running the save in a subprocess gives clean per-job log capture (everything on
+stdout becomes the job's log) and crash isolation, mirroring the existing
+Price Bandit subprocess pattern. The final stdout line is always::
+
+    RESULT_JSON:{"ok": bool, "success": bool, "verify": [...], "error": str|None}
+
+so the worker can parse the outcome even if the save printed a lot before it.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import traceback
+
+# Make ``config`` and sibling scripts importable when run as a bare script.
+_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_DIR = os.path.dirname(_SCRIPTS_DIR)
+for _p in (_BACKEND_DIR, _SCRIPTS_DIR):
+    if _p not in sys.path:
+        sys.path.append(_p)
+
+
+def _emit(result: dict) -> None:
+    # Always the very last line so the worker can find it deterministically.
+    print("RESULT_JSON:" + json.dumps(result), flush=True)
+
+
+def main(argv) -> int:
+    if len(argv) < 2:
+        _emit({"ok": False, "success": False, "verify": [], "error": "missing job_id"})
+        return 2
+
+    job_id = argv[1]
+
+    try:
+        import product_save_queue as queue  # type: ignore
+    except Exception:
+        from scripts import product_save_queue as queue  # type: ignore
+
+    job = queue.get_job(job_id)
+    if not job:
+        _emit({"ok": False, "success": False, "verify": [], "error": f"job {job_id} not found"})
+        return 1
+
+    data = job.get("data") or {}
+    print(f"▶️ Running save job {job_id} — {job.get('title')!r} (attempt {job.get('attempts')})", flush=True)
+
+    try:
+        from product_creator.Product_Creator import create_product  # type: ignore
+    except Exception:
+        from scripts.product_creator.Product_Creator import create_product  # type: ignore
+
+    try:
+        result = create_product(data)
+    except Exception as exc:
+        print("💥 create_product raised:", exc, flush=True)
+        traceback.print_exc()
+        _emit({"ok": False, "success": False, "verify": [], "error": str(exc)})
+        return 1
+
+    success = bool(isinstance(result, dict) and result.get("success"))
+    product_id = None
+    if isinstance(result, dict):
+        product_id = (result.get("product") or {}).get("id") or result.get("product_id")
+    if not product_id:
+        product_id = data.get("product_id")
+
+    error = None
+    if not success:
+        error = (result or {}).get("error") if isinstance(result, dict) else "create_product failed"
+        print(f"❌ Save failed: {error}", flush=True)
+        _emit({"ok": False, "success": False, "verify": [], "error": error})
+        return 1
+
+    print(f"✅ Save applied to product {product_id}. Verifying against Shopify...", flush=True)
+
+    verify = []
+    try:
+        verify = queue.verify_product(data, product_id)
+    except Exception as exc:
+        print("⚠️ Verification raised:", exc, flush=True)
+        traceback.print_exc()
+        verify = [{"field": "verify", "intended": "runs", "actual": str(exc), "ok": False}]
+
+    ok = success and all(row.get("ok") for row in verify)
+    if ok:
+        print("✅ Verification passed — Shopify matches the intended save.", flush=True)
+    else:
+        bad = [r for r in verify if not r.get("ok")]
+        print(f"⚠️ Verification mismatch on {len(bad)} field(s):", flush=True)
+        for r in bad:
+            print(f"   - {r.get('field')}: intended={r.get('intended')!r} actual={r.get('actual')!r}", flush=True)
+
+    _emit({
+        "ok": ok,
+        "success": success,
+        "product_id": product_id,
+        "verify": verify,
+        "error": None if ok else "verification mismatch",
+    })
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
