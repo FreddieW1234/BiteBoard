@@ -329,11 +329,18 @@ def verify_product(intended_data: dict, product_id) -> list:
 
     Returns a list of ``{field, intended, actual, ok}`` rows. Price metafields
     are checked for presence only (Price Bandit rewrites their exact contents in
-    the background, so an exact match would give false failures).
+    the background, so an exact match would give false failures). Blank intended
+    values are skipped because create_product substitutes/deletes them.
     """
-    from product_creator.Product_Creator import get_product_detail  # type: ignore
+    # Read live from Shopify. NOT get_product_detail(refresh=True): that still
+    # returns the cached office snapshot and only refreshes in the background, so
+    # it would compare against pre-save data and always report a mismatch.
+    try:
+        from product_creator.Product_Creator import _build_product_detail_from_shopify as _live_detail  # type: ignore
+    except Exception:
+        from scripts.product_creator.Product_Creator import _build_product_detail_from_shopify as _live_detail  # type: ignore
 
-    detail = get_product_detail(product_id, refresh=True)
+    detail = _live_detail(product_id)
     if not detail or not detail.get("id"):
         return [{
             "field": "product",
@@ -373,6 +380,9 @@ def verify_product(intended_data: dict, product_id) -> list:
         want = mf.get("value")
         got = actual_mf.get((ns, key))
         if key in _PRICE_KEYS:
+            # Only verify prices that were meant to be set; cleared prices are skipped.
+            if want is None or str(want).strip() in ("", "[]", "{}"):
+                continue
             ok = got is not None and str(got).strip() not in ("", "[]", "{}")
             rows.append({
                 "field": f"{ns}.{key}",
@@ -381,6 +391,10 @@ def verify_product(intended_data: dict, product_id) -> list:
                 "ok": ok,
             })
         else:
+            # Skip blank intended values: create_product stores "-" or deletes them,
+            # so an exact comparison would give false mismatches.
+            if want is None or str(want).strip() == "":
+                continue
             ok = _norm(want) == _norm(got)
             rows.append({
                 "field": f"{ns}.{key}",

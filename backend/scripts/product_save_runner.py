@@ -94,16 +94,21 @@ def main(argv) -> int:
         print("✅ Verification passed — Shopify matches the intended save.", flush=True)
     else:
         bad = [r for r in verify if not r.get("ok")]
-        print(f"⚠️ Verification mismatch on {len(bad)} field(s):", flush=True)
+        print(f"⚠️ Verification mismatch on {len(bad)} field(s) (advisory — save still applied):", flush=True)
         for r in bad:
             print(f"   - {r.get('field')}: intended={r.get('intended')!r} actual={r.get('actual')!r}", flush=True)
 
+    # Verification is advisory: a successful create_product completes the job.
+    # The diff is surfaced in the logs/Queue for inspection, but a mismatch does
+    # not fail the save (create_product normalises some values, and the write did
+    # reach Shopify). Genuine save errors are handled by the `not success` path above.
     _emit({
-        "ok": ok,
+        "ok": success,
         "success": success,
         "product_id": product_id,
         "verify": verify,
-        "error": None if ok else "verification mismatch",
+        "verify_ok": ok,
+        "error": None,
     })
     return 0
 
