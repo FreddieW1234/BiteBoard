@@ -2039,6 +2039,12 @@ def sync_product_snapshot(product_id, shopify_domain=None):
         logger.warning("Products: detail sync failed for %s (%s)", product_id, exc)
         invalidate_product_detail_cache(product_id)
 
+    # A save can change parent/child relationships, so rebuild the family snapshots.
+    try:
+        refresh_family_snapshots()
+    except Exception as exc:
+        logger.warning("Products: family snapshot refresh failed (%s)", exc)
+
 
 def get_all_products_overview(shopify_domain=None, refresh=False):
     """
@@ -2252,6 +2258,107 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
     return data
 
 
+# --------------------------------------------------------------------------- #
+# Generic named-snapshot SWR — for catalog-wide, product-independent blobs that
+# are identical for every viewer (e.g. the product-families tree). Same tiers as
+# above: per-instance memory -> office named snapshot -> Shopify rebuild.
+# --------------------------------------------------------------------------- #
+_NAMED_CACHE = {}                 # name -> {"at": ts, "data": ...}
+_NAMED_LOCK = threading.Lock()
+_NAMED_REFRESHING = set()         # names currently refreshing in background
+
+
+def _kick_named_refresh(name, builder):
+    with _NAMED_LOCK:
+        if name in _NAMED_REFRESHING:
+            return
+        _NAMED_REFRESHING.add(name)
+
+    def _run():
+        try:
+            data = builder()
+            if data is not None:
+                if _office_snapshots_available():
+                    try:
+                        office_api.put_snapshot(name, data)
+                    except Exception as exc:
+                        logger.warning("Named snapshot write failed for %s (%s)", name, exc)
+                _NAMED_CACHE[name] = {"at": time.time(), "data": data}
+        except Exception as exc:
+            logger.warning("Named snapshot refresh failed for %s (%s)", name, exc)
+        finally:
+            with _NAMED_LOCK:
+                _NAMED_REFRESHING.discard(name)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _named_snapshot_swr(name, builder, refresh=False):
+    """Serve a named snapshot with stale-while-revalidate. builder() produces the
+    fresh value on cold miss / background rebuild."""
+    now = time.time()
+
+    if not refresh:
+        ent = _NAMED_CACHE.get(name)
+        if ent and (now - ent["at"]) < PRODUCTS_MEM_TTL:
+            return ent["data"]
+
+    if _office_snapshots_available():
+        doc = None
+        try:
+            doc = office_api.get_snapshot(name)
+        except Exception as exc:
+            logger.warning("Named snapshot read failed for %s (%s)", name, exc)
+        if isinstance(doc, dict) and doc.get("payload") is not None:
+            data = doc["payload"]
+            _NAMED_CACHE[name] = {"at": now, "data": data}
+            age = _iso_age(doc.get("updated_at"), now)
+            if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
+                _kick_named_refresh(name, builder)
+            return data
+
+        # Cold miss: build once (blocking) and write back.
+        data = builder()
+        if data is not None:
+            if _office_snapshots_available():
+                try:
+                    office_api.put_snapshot(name, data)
+                except Exception as exc:
+                    logger.warning("Named snapshot write failed for %s (%s)", name, exc)
+            _NAMED_CACHE[name] = {"at": now, "data": data}
+        return data
+
+    # Office snapshot store unavailable: build directly, no snapshot.
+    data = builder()
+    if data is not None:
+        _NAMED_CACHE[name] = {"at": now, "data": data}
+    return data
+
+
+def invalidate_named_snapshot(name):
+    """Drop a named snapshot from the memory tier and the office store."""
+    _NAMED_CACHE.pop(name, None)
+    if _office_snapshots_available():
+        try:
+            office_api.delete_snapshot(name)
+        except Exception as exc:
+            logger.warning("Named snapshot invalidate failed for %s (%s)", name, exc)
+
+
+_FAMILY_TREE_SNAPSHOT = "parent_child_tree"
+_FAMILY_TREE_PARENTS_SNAPSHOT = "parent_child_tree_parents"
+_FAMILY_PARENTS_SNAPSHOT = "products_parent_child"
+
+
+def refresh_family_snapshots():
+    """Kick background rebuilds of the catalog-wide family snapshots (used after a
+    save, which may change parent/child relationships)."""
+    _kick_named_refresh(_FAMILY_TREE_SNAPSHOT, lambda: _build_parent_child_tree(parents_only=False))
+    _kick_named_refresh(_FAMILY_PARENTS_SNAPSHOT, _build_products_parent_child)
+    # Parents-only variant is rarely used; just drop it so it rebuilds on demand.
+    invalidate_named_snapshot(_FAMILY_TREE_PARENTS_SNAPSHOT)
+
+
 def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value, max_products=1000):
     """
     Fallback: find child products via REST (list products + metafields per product).
@@ -2398,7 +2505,7 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
     return result
 
 
-def get_parent_child_tree(parents_only=False):
+def _build_parent_child_tree(parents_only=False):
     """
     Return a tree of all parent products with their child products.
     Only products that ACTUALLY exist in the store with a "Parent - X" metafield are
@@ -2424,6 +2531,14 @@ def get_parent_child_tree(parents_only=False):
     except Exception as e:
         print(f"Error get_parent_child_tree: {e}", flush=True)
         return {"tree": []}
+
+
+def get_parent_child_tree(parents_only=False, refresh=False):
+    """Product-families tree, served from the shared office snapshot (SWR)."""
+    name = _FAMILY_TREE_PARENTS_SNAPSHOT if parents_only else _FAMILY_TREE_SNAPSHOT
+    return _named_snapshot_swr(
+        name, lambda: _build_parent_child_tree(parents_only=parents_only), refresh=refresh
+    )
 
 
 from .storefront_options import (
@@ -4277,7 +4392,7 @@ def get_existing_metafield_values(namespace, key):
         return []
 
 
-def get_products_parent_child():
+def _build_products_parent_child():
     """
     Return the list of parent products for "Create from Parent". Scan-first: finds
     all products with a Parent metafield, supplements with PARENT_PRODUCTS for types
@@ -4337,6 +4452,12 @@ def get_products_parent_child():
     except Exception as e:
         print(f"Error get_products_parent_child: {e}", flush=True)
         return {"parentProducts": [], "takenParentValues": [], "takenParents": {}}
+
+
+def get_products_parent_child(refresh=False):
+    """Parent-products list for "Create from Parent", served from the shared office
+    snapshot (SWR) so it doesn't re-scan the catalog on every editor open."""
+    return _named_snapshot_swr(_FAMILY_PARENTS_SNAPSHOT, _build_products_parent_child, refresh=refresh)
 
 
 def get_product_templates():

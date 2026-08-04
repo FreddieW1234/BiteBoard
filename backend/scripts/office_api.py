@@ -1260,6 +1260,14 @@ def put_snapshot(name: str, payload, updated_by: str | None = None) -> dict:
     return result
 
 
+def delete_snapshot(name: str) -> bool:
+    """Remove a named document. Returns False if it was not there."""
+    url = f"{_snapshots_base()}/{_path(name)}"
+    resp = _request("DELETE", url)
+    result = _handle_response(resp, allow_404=True)
+    return bool(result)
+
+
 def get_snapshot_items(
     kind: str, *, include_payload: bool = False, since: str | None = None
 ) -> list[dict]:

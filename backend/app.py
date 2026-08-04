@@ -1993,7 +1993,8 @@ def api_products_parent_child():
     """Return products that have a Parent - X parent_child metafield and which Parent values are taken."""
     try:
         from scripts.product_creator.Product_Creator import get_products_parent_child
-        result = get_products_parent_child()
+        refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
+        result = get_products_parent_child(refresh=refresh)
         return jsonify(result)
     except Exception as e:
         return jsonify({'parentProducts': [], 'takenParentValues': [], 'error': str(e)}), 500
@@ -2004,7 +2005,8 @@ def api_products_parent_child_tree():
     try:
         from scripts.product_creator.Product_Creator import get_parent_child_tree
         parents_only = request.args.get('parents_only', '').strip() in ('1', 'true', 'yes')
-        result = get_parent_child_tree(parents_only=parents_only)
+        refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
+        result = get_parent_child_tree(parents_only=parents_only, refresh=refresh)
         return jsonify(result)
     except Exception as e:
         return jsonify({'tree': [], 'error': str(e)}), 500
