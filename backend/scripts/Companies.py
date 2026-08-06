@@ -29,6 +29,16 @@ logger = logging.getLogger(__name__)
 _COMPANIES_LIST_CACHE: dict | None = None
 _COMPANIES_LIST_CACHE_AT = 0.0
 _COMPANIES_LIST_CACHE_TTL = 30  # seconds
+_COMPANIES_REFRESHING = False
+_COMPANIES_REFRESH_LOCK = None
+
+
+def _companies_refresh_lock():
+    global _COMPANIES_REFRESH_LOCK
+    if _COMPANIES_REFRESH_LOCK is None:
+        import threading
+        _COMPANIES_REFRESH_LOCK = threading.Lock()
+    return _COMPANIES_REFRESH_LOCK
 
 
 def invalidate_companies_cache() -> None:
@@ -121,22 +131,52 @@ def _enrich_members(company: dict) -> dict:
     return out
 
 
-def get_companies_overview(*, refresh: bool = False) -> dict:
-    global _COMPANIES_LIST_CACHE, _COMPANIES_LIST_CACHE_AT
+def _build_companies_overview() -> dict:
+    companies = _load_companies_list()
+    return {"success": True, "companies": companies, "total": len(companies)}
 
+
+def _refresh_companies_overview_bg() -> None:
+    global _COMPANIES_LIST_CACHE, _COMPANIES_LIST_CACHE_AT, _COMPANIES_REFRESHING
+    try:
+        result = _build_companies_overview()
+        _COMPANIES_LIST_CACHE = result
+        _COMPANIES_LIST_CACHE_AT = time.time()
+    except Exception as exc:
+        logger.warning("Companies background refresh failed: %s", exc)
+    finally:
+        with _companies_refresh_lock():
+            _COMPANIES_REFRESHING = False
+
+
+def _kick_companies_refresh() -> None:
+    global _COMPANIES_REFRESHING
+    import threading
+    with _companies_refresh_lock():
+        if _COMPANIES_REFRESHING:
+            return
+        _COMPANIES_REFRESHING = True
+    threading.Thread(target=_refresh_companies_overview_bg, daemon=True).start()
+
+
+def get_companies_overview(*, refresh: bool = False) -> dict:
+    """Company list with stale-while-revalidate — never blocks a request thread
+    on the office round-trip when we already have a copy (or while building)."""
     now = time.time()
+    cached = _COMPANIES_LIST_CACHE
     if (
         not refresh
-        and _COMPANIES_LIST_CACHE is not None
+        and cached is not None
         and (now - _COMPANIES_LIST_CACHE_AT) < _COMPANIES_LIST_CACHE_TTL
     ):
-        return _COMPANIES_LIST_CACHE
+        return cached
 
-    companies = _load_companies_list()
-    result = {"success": True, "companies": companies, "total": len(companies)}
-    _COMPANIES_LIST_CACHE = result
-    _COMPANIES_LIST_CACHE_AT = now
-    return result
+    _kick_companies_refresh()
+    if cached is not None:
+        out = dict(cached)
+        out["building"] = True
+        return out
+    return {"success": True, "companies": [], "total": 0, "building": True}
 
 
 def get_company_detail(company_id: str) -> dict:

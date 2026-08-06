@@ -1925,15 +1925,15 @@
             render();
         }
 
+        let _cuBuildingPoll = null;
+
         async function loadCustomers(forceRefresh) {
             const content = document.getElementById('cu-content');
-            document.getElementById('cu-flagged').innerHTML = '';
-            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
-            const slowHint = setTimeout(() => {
-                if (content.querySelector('.spinner')) {
-                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Still loading customers from Shopify…<br><span style="font-size:0.85rem;color:#6b7280;margin-top:8px;display:inline-block;">First load after a deploy can take a minute.</span></div>`;
-                }
-            }, 8000);
+            const hasRows = (CU_DATA.customers || []).length > 0;
+            if (!hasRows) {
+                document.getElementById('cu-flagged').innerHTML = '';
+                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
+            }
             try {
                 const url = forceRefresh ? '/api/customers?refresh=1' : '/api/customers';
                 const resp = await fetch(url, { credentials: 'same-origin' });
@@ -1951,20 +1951,62 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                CU_DATA = {
-                    customers: data.customers || [],
-                    total: data.total || 0,
-                    conflict_count: data.conflict_count || 0,
-                };
-                window.CU_DATA = CU_DATA;
-                render();
-                if (window.CompaniesPanel && window.CompaniesPanel.onCustomersLoaded) {
-                    window.CompaniesPanel.onCustomersLoaded();
+                const list = data.customers || [];
+                if (data.success === false && !list.length && !data.building) {
+                    throw new Error(data.error || 'Failed to load customers');
+                }
+                if (list.length) {
+                    CU_DATA = {
+                        customers: list,
+                        total: data.total || list.length,
+                        conflict_count: data.conflict_count || 0,
+                    };
+                    window.CU_DATA = CU_DATA;
+                    render();
+                    if (window.CompaniesPanel && window.CompaniesPanel.onCustomersLoaded) {
+                        window.CompaniesPanel.onCustomersLoaded();
+                    }
+                    // Keep a subtle note while more pages are still arriving.
+                    if (data.building) {
+                        let note = document.getElementById('cu-building-note');
+                        const html = `<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Loading more customers… (${list.length} so far)`;
+                        if (!note) {
+                            const flagged = document.getElementById('cu-flagged');
+                            if (flagged) {
+                                flagged.insertAdjacentHTML('afterbegin',
+                                    `<div class="state-msg" id="cu-building-note" style="margin-bottom:12px;">${html}</div>`);
+                            }
+                        } else {
+                            note.innerHTML = html;
+                        }
+                    }
+                } else if (data.building) {
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers from Shopify…<br><span style="font-size:0.85rem;color:#6b7280;margin-top:8px;display:inline-block;">Results appear as each page loads.</span></div>`;
+                } else {
+                    CU_DATA = { customers: [], total: 0, conflict_count: 0 };
+                    window.CU_DATA = CU_DATA;
+                    render();
+                }
+                if (!data.building) {
+                    const note = document.getElementById('cu-building-note');
+                    if (note) note.remove();
+                    const flagged = document.getElementById('cu-flagged');
+                    if (flagged) delete flagged.dataset.buildingNote;
+                }
+                // Server builds off the request thread; poll until ready.
+                if (data.building) {
+                    if (_cuBuildingPoll) clearTimeout(_cuBuildingPoll);
+                    _cuBuildingPoll = setTimeout(() => loadCustomers(false), 1500);
+                } else if (_cuBuildingPoll) {
+                    clearTimeout(_cuBuildingPoll);
+                    _cuBuildingPoll = null;
                 }
             } catch (err) {
-                content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers()"><i class="fas fa-rotate"></i> Try again</button></div>`;
-            } finally {
-                clearTimeout(slowHint);
+                if (_cuBuildingPoll) {
+                    clearTimeout(_cuBuildingPoll);
+                    _cuBuildingPoll = null;
+                }
+                content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers(true)"><i class="fas fa-rotate"></i> Try again</button></div>`;
             }
         }
 
@@ -2070,7 +2112,7 @@
             });
         });
     </script>
-    <script src="/static/companies_panel.js?v=9"></script>
+    <script src="/static/companies_panel.js?v=10"></script>
     <script src="/static/production_note_print.js?v=2"></script>
     <script src="/static/office_tracking.js?v=39"></script>
 </body>

@@ -75,6 +75,22 @@ try:
 except Exception as _sw_err:
     print(f"⚠️ Save worker not started: {_sw_err}", flush=True)
 
+# Warm the customers overview off the request path so the first staff visit
+# after boot does not compete with Render's /healthz for a free gunicorn thread.
+try:
+    from scripts.Customers import warm_customers_cache_async as _warm_customers  # type: ignore
+
+    def _warm_caches_soon():
+        time.sleep(2)  # let gunicorn finish binding before we hit Shopify
+        try:
+            _warm_customers()
+        except Exception as _warm_err:
+            print(f"⚠️ Customers cache warm skipped: {_warm_err}", flush=True)
+
+    threading.Thread(target=_warm_caches_soon, daemon=True).start()
+except Exception as _warm_imp_err:
+    print(f"⚠️ Customers cache warm not scheduled: {_warm_imp_err}", flush=True)
+
 
 @app.errorhandler(413)
 def request_entity_too_large(_e):

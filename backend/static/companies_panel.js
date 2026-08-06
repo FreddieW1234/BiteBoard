@@ -617,15 +617,25 @@
             if (!resp.ok || !data.success) {
                 throw new Error((data && data.error) || 'Failed to load companies');
             }
-            companies = data.companies || [];
-            companies.forEach(function (company) {
-                const cached = companyDetailsCache[company.id];
-                if (cached && Array.isArray(cached.members)) {
-                    company.members = cached.members;
-                }
-            });
-            companiesListLoaded = true;
-            renderCompaniesTable();
+            const list = data.companies || [];
+            if (list.length || !data.building) {
+                companies = list;
+                companies.forEach(function (company) {
+                    const cached = companyDetailsCache[company.id];
+                    if (cached && Array.isArray(cached.members)) {
+                        company.members = cached.members;
+                    }
+                });
+                companiesListLoaded = !data.building;
+                renderCompaniesTable();
+            }
+            // Office list builds off the request thread; poll until ready.
+            if (data.building) {
+                companiesListLoaded = false;
+                setTimeout(function () {
+                    loadCompanies({ force: false, silent: silent }).catch(function () {});
+                }, 1500);
+            }
         })();
 
         try {
@@ -634,7 +644,7 @@
             if (!silent) throw err;
             companiesListLoaded = false;
         } finally {
-            if (force) companiesLoadPromise = null;
+            companiesLoadPromise = null;
         }
     }
 

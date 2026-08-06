@@ -31,9 +31,11 @@ CUSTOMER_METAFIELD_KEYS = (
     "linked_company_id",
 )
 
+# One metafields connection per customer is cheaper than five separate metafield
+# lookups, and avoids the old ordersCount field that broke on API 2025-07.
 CUSTOMERS_GRAPHQL_QUERY = """
 query GetCustomersOverview($cursor: String) {
-  customers(first: 100, after: $cursor) {
+  customers(first: 50, after: $cursor) {
     edges {
       node {
         legacyResourceId
@@ -46,11 +48,9 @@ query GetCustomersOverview($cursor: String) {
         amountSpent { amount }
         state
         createdAt
-        companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") { value }
-        invoiceAddressNew: metafield(namespace: "custom_fields", key: "invoice_address_new") { value }
-        landlinePhoneNumber: metafield(namespace: "custom_fields", key: "landline_phone_number") { value }
-        mobileNumber: metafield(namespace: "custom_fields", key: "mobile_number") { value }
-        linkedCompanyId: metafield(namespace: "custom_fields", key: "linked_company_id") { value }
+        metafields(first: 15, namespace: "custom_fields") {
+          edges { node { key value } }
+        }
       }
     }
     pageInfo { hasNextPage endCursor }
@@ -76,20 +76,37 @@ def _graphql_request(query, variables=None):
             url,
             json={"query": query, "variables": variables or {}},
             headers=HEADERS,
-            timeout=30,
+            timeout=60,
         )
         if resp.status_code == 429:
             time.sleep(2)
             continue
         resp.raise_for_status()
-        data = resp.json()
-        if data.get("errors"):
-            err_str = str(data["errors"])
+        payload = resp.json()
+        errors = payload.get("errors") or []
+        if errors:
+            err_str = str(errors)
             if "THROTTLED" in err_str.upper():
-                time.sleep(2)
+                # Honour Shopify's suggested wait when present.
+                wait = 2.0
+                try:
+                    for err in errors:
+                        tw = ((err.get("extensions") or {}).get("cost") or {}).get(
+                            "throttleStatus", {}
+                        ).get("restoreRate")
+                        if tw:
+                            wait = max(wait, 1.0)
+                except Exception:
+                    pass
+                time.sleep(wait)
                 continue
+            # If Shopify still returned a customers page, use it (partial success).
+            data = payload.get("data") or {}
+            if data.get("customers"):
+                print(f"⚠️ Customers GraphQL warnings (using data anyway): {err_str[:300]}", flush=True)
+                return data
             raise RuntimeError(err_str)
-        return data.get("data") or {}
+        return payload.get("data") or {}
 
 
 def _fetch_all_customers_rest():
@@ -445,6 +462,30 @@ def update_customer_details(customer_id, payload, *, allow_company_override: boo
     return _fetch_single_customer(customer_id)
 
 
+def _metafields_map_from_graphql_node(node):
+    """Map custom_fields keys from either aliased metafields or a metafields connection."""
+    by_key = {}
+    # Legacy aliased shape (companyNameNew: metafield(...))
+    alias_to_key = {
+        "companyNameNew": "company_name_new",
+        "invoiceAddressNew": "invoice_address_new",
+        "landlinePhoneNumber": "landline_phone_number",
+        "mobileNumber": "mobile_number",
+        "linkedCompanyId": "linked_company_id",
+    }
+    for alias, key in alias_to_key.items():
+        val = _metafield_graphql_value(node, alias)
+        if val:
+            by_key[key] = val
+    edges = ((node.get("metafields") or {}).get("edges")) or []
+    for edge in edges:
+        mf = (edge or {}).get("node") or {}
+        key = mf.get("key")
+        if key in CUSTOMER_METAFIELD_KEYS:
+            by_key[key] = (mf.get("value") or "").strip()
+    return by_key
+
+
 def _format_customer_graphql(node):
     first = (node.get("firstName") or "").strip()
     last = (node.get("lastName") or "").strip()
@@ -452,18 +493,20 @@ def _format_customer_graphql(node):
     tags = _parse_tags(node.get("tags"))
     matched = _matched_type_tags(tags)
     amount_spent = (node.get("amountSpent") or {}).get("amount") or "0.00"
+    mf = _metafields_map_from_graphql_node(node)
+    linked = mf.get("linked_company_id", "")
     return {
         "id": node.get("legacyResourceId"),
         "name": name,
         "first_name": first,
         "last_name": last,
         "email": node.get("email") or "",
-        "company_name": _metafield_graphql_value(node, "companyNameNew"),
-        "invoice_address": _metafield_graphql_value(node, "invoiceAddressNew"),
-        "landline_phone": _metafield_graphql_value(node, "landlinePhoneNumber"),
-        "mobile_number": _metafield_graphql_value(node, "mobileNumber"),
-        "linked_company_id": _metafield_graphql_value(node, "linkedCompanyId"),
-        "company_locked": bool(_metafield_graphql_value(node, "linkedCompanyId")),
+        "company_name": mf.get("company_name_new", ""),
+        "invoice_address": mf.get("invoice_address_new", ""),
+        "landline_phone": mf.get("landline_phone_number", ""),
+        "mobile_number": mf.get("mobile_number", ""),
+        "linked_company_id": linked,
+        "company_locked": bool(linked),
         "phone": node.get("phone") or "",
         "tags": tags,
         "matched_tags": matched,
@@ -506,10 +549,36 @@ def _format_customer_rest(raw, metafields_by_key=None):
     }
 
 
-def _fetch_all_customers_graphql():
+def _publish_customers_partial(customers, *, building: bool, error=None):
+    """Publish overview state so the UI can show rows while Shopify pages load."""
+    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT, _CUSTOMERS_LAST_ERROR
+    conflict_count = sum(1 for c in customers if c.get("tag_conflict"))
+    result = {
+        "success": error is None,
+        "customers": list(customers),
+        "total": len(customers),
+        "conflict_count": conflict_count,
+        "building": building,
+    }
+    if error:
+        result["error"] = str(error)
+        _CUSTOMERS_LAST_ERROR = str(error)
+    elif not building:
+        _CUSTOMERS_LAST_ERROR = None
+    _CUSTOMERS_CACHE = result
+    # Only treat a finished successful build as "fresh" for the TTL window.
+    if not building and error is None:
+        _CUSTOMERS_CACHE_AT = time.time()
+    return result
+
+
+def _fetch_all_customers_graphql(on_page=None):
+    """Paginate customers from Shopify GraphQL. on_page(customers_so_far) optional."""
     customers = []
     cursor = None
+    page = 0
     while True:
+        page += 1
         variables = {"cursor": cursor} if cursor else {}
         data = _graphql_request(CUSTOMERS_GRAPHQL_QUERY, variables)
         customers_data = data.get("customers") or {}
@@ -517,6 +586,9 @@ def _fetch_all_customers_graphql():
             node = edge.get("node") or {}
             if node:
                 customers.append(_format_customer_graphql(node))
+        print(f"📥 Customers GraphQL page {page}: {len(customers)} so far", flush=True)
+        if on_page is not None:
+            on_page(customers)
         page_info = customers_data.get("pageInfo") or {}
         if not page_info.get("hasNextPage"):
             break
@@ -526,18 +598,13 @@ def _fetch_all_customers_graphql():
     return customers
 
 
-def _fetch_all_customers():
-    try:
-        return _fetch_all_customers_graphql()
-    except Exception as exc:
-        # REST + per-customer metafields is extremely slow; only use as last resort.
-        print(f"⚠️ Customers GraphQL failed ({exc}); falling back to REST (slow)", flush=True)
-        raw_customers = _fetch_all_customers_rest()
-        customers = []
-        for raw in raw_customers:
-            mf = _metafields_map_from_rest(_fetch_customer_metafields_rest(raw.get("id")))
-            customers.append(_format_customer_rest(raw, mf))
-        return customers
+def _fetch_all_customers(on_page=None):
+    """GraphQL only for the overview list.
+
+    The old REST fallback fetched metafields per customer and could take many
+    minutes, which looked like a permanent spinner. Fail fast instead.
+    """
+    return _fetch_all_customers_graphql(on_page=on_page)
 
 
 _CUSTOMERS_CACHE: dict | None = None
@@ -545,6 +612,7 @@ _CUSTOMERS_CACHE_AT = 0.0
 _CUSTOMERS_CACHE_TTL = 90  # seconds — avoids repeated full Shopify pulls on tab switches
 _CUSTOMERS_REFRESH_LOCK = None  # lazy threading.Lock
 _CUSTOMERS_REFRESHING = False
+_CUSTOMERS_LAST_ERROR = None
 
 
 def _customers_refresh_lock():
@@ -561,27 +629,20 @@ def invalidate_customers_cache() -> None:
     _CUSTOMERS_CACHE_AT = 0.0
 
 
-def _build_customers_overview():
-    customers = _fetch_all_customers()
-    conflict_count = sum(1 for c in customers if c.get("tag_conflict"))
-    return {
-        "success": True,
-        "customers": customers,
-        "total": len(customers),
-        "conflict_count": conflict_count,
-    }
-
-
 def _refresh_customers_overview_bg():
-    """Background rebuild; never blocks the request that kicked it."""
-    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT, _CUSTOMERS_REFRESHING
+    """Background rebuild; publishes partial pages so the UI is not stuck empty."""
+    global _CUSTOMERS_REFRESHING
     try:
-        result = _build_customers_overview()
-        _CUSTOMERS_CACHE = result
-        _CUSTOMERS_CACHE_AT = time.time()
-        print(f"✅ Customers overview refreshed ({result.get('total', 0)} customers)", flush=True)
+        def _on_page(partial):
+            _publish_customers_partial(partial, building=True)
+
+        customers = _fetch_all_customers(on_page=_on_page)
+        _publish_customers_partial(customers, building=False)
+        print(f"✅ Customers overview refreshed ({len(customers)} customers)", flush=True)
     except Exception as exc:
         print(f"⚠️ Customers background refresh failed: {exc}", flush=True)
+        existing = (_CUSTOMERS_CACHE or {}).get("customers") or []
+        _publish_customers_partial(existing, building=False, error=exc)
     finally:
         with _customers_refresh_lock():
             _CUSTOMERS_REFRESHING = False
@@ -600,28 +661,53 @@ def _kick_customers_refresh():
 def get_customers_overview(*, refresh: bool = False):
     """Return all Shopify customers as a flat list (stale-while-revalidate).
 
-    Fresh mem cache is returned immediately. A stale copy is returned while one
-    background Shopify rebuild runs, so the Customers page never holds a gunicorn
-    thread for the full catalog scan on every visit. Cold miss / explicit refresh
-    still builds once on the caller (unavoidable with an empty cache).
+    Never runs the full Shopify scan on a gunicorn request thread — that is what
+    saturates the pool and makes Render's 5s /healthz check time out. Fresh cache
+    is returned immediately; stale/cold/refresh always rebuild in a background
+    thread and return whatever we have now (possibly empty with building=True).
     """
-    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT
     now = time.time()
+    cached = _CUSTOMERS_CACHE
     if (
         not refresh
-        and _CUSTOMERS_CACHE is not None
+        and cached is not None
+        and not cached.get("building")
+        and cached.get("success") is not False
         and (now - _CUSTOMERS_CACHE_AT) < _CUSTOMERS_CACHE_TTL
     ):
-        return _CUSTOMERS_CACHE
+        return cached
 
-    if not refresh and _CUSTOMERS_CACHE is not None:
-        _kick_customers_refresh()
-        return _CUSTOMERS_CACHE
+    # Already building — just return the latest partial/empty snapshot.
+    with _customers_refresh_lock():
+        already = _CUSTOMERS_REFRESHING
+    if already and cached is not None:
+        return cached
+    if already and cached is None:
+        return {
+            "success": True,
+            "customers": [],
+            "total": 0,
+            "conflict_count": 0,
+            "building": True,
+        }
 
-    result = _build_customers_overview()
-    _CUSTOMERS_CACHE = result
-    _CUSTOMERS_CACHE_AT = now
-    return result
+    _kick_customers_refresh()
+    if cached is not None:
+        out = dict(cached)
+        out["building"] = True
+        return out
+    return {
+        "success": True,
+        "customers": [],
+        "total": 0,
+        "conflict_count": 0,
+        "building": True,
+    }
+
+
+def warm_customers_cache_async():
+    """Kick a background customers rebuild (call once at process start)."""
+    _kick_customers_refresh()
 
 
 def get_customers_id_map(*, refresh: bool = False) -> dict[str, dict]:

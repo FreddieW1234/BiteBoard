@@ -5,10 +5,10 @@ services:
     plan: free
     region: oregon
     buildCommand: pip install -r backend/requirements.txt
-    # Worker class, count and threads live in gunicorn.conf.py, not here — this
-    # file is overridden by the start command set in the Render dashboard, so
-    # concurrency settings put here are silently ignored. Keep -c on both.
-    startCommand: gunicorn app:app -c gunicorn.conf.py --chdir backend --bind 0.0.0.0:$PORT
+    # IMPORTANT: the Render dashboard Start Command overrides this file. Keep
+    # both in sync. -c must point at backend/gunicorn.conf.py after --chdir, and
+    # CLI flags make gthread/threads visible even if the conf file is missed.
+    startCommand: gunicorn app:app --chdir backend -c gunicorn.conf.py --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 300
     autoDeploy: true
     envVars:
       - key: SHOPIFY_STORE_DOMAIN
