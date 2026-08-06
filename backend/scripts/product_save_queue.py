@@ -208,16 +208,18 @@ def get_job(job_id: str):
     return None
 
 
-def claim_next(worker_id: str):
+def claim_next(worker_id: str, jobs=None):
     """Claim the oldest queued job for this worker, or None if none are queued.
 
     Marks it running (attempts++), then re-reads it to confirm ownership. The
     re-read narrows the window where two Render instances grab the same job
     (last write wins on the office side).
+
+    Pass an already-fetched job list to avoid a second office round-trip.
     """
     if not _available():
         return None
-    for job in list_jobs():
+    for job in (jobs if jobs is not None else list_jobs()):
         if job.get("status") != "queued":
             continue
         job["status"] = "running"
@@ -323,14 +325,17 @@ def retry(job_id: str):
     return job
 
 
-def reap_stale(timeout=None):
-    """Requeue (or fail) running jobs orphaned by a restart/crash mid-run."""
+def reap_stale(timeout=None, jobs=None):
+    """Requeue (or fail) running jobs orphaned by a restart/crash mid-run.
+
+    Pass an already-fetched job list to avoid a second office round-trip.
+    """
     if not _available():
         return 0
     limit = int(timeout if timeout is not None else SAVE_JOB_TIMEOUT_SEC)
     now = datetime.now(timezone.utc).timestamp()
     reaped = 0
-    for job in list_jobs():
+    for job in (jobs if jobs is not None else list_jobs()):
         if job.get("status") != "running":
             continue
         age = _age_seconds(job.get("started_at"), now)
@@ -374,7 +379,7 @@ def locked_product_ids(jobs=None) -> list:
     return sorted(ids)
 
 
-def prune(retention_h=None):
+def prune(retention_h=None, jobs=None):
     """Delete terminal jobs older than the retention window."""
     if not _available():
         return 0
@@ -382,7 +387,7 @@ def prune(retention_h=None):
     cutoff = hours * 3600.0
     now = datetime.now(timezone.utc).timestamp()
     removed = 0
-    for job in list_jobs():
+    for job in (jobs if jobs is not None else list_jobs()):
         if job.get("status") not in TERMINAL:
             continue
         age = _age_seconds(job.get("finished_at") or job.get("created_at"), now)

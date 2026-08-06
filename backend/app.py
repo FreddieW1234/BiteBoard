@@ -320,6 +320,67 @@ def api_health():
         info["shopify_status"] = "skipped — missing config"
     return jsonify(info)
 
+@app.route('/api/perf-check')
+def api_perf_check():
+    """Where is the time actually going?
+
+    Page data is served from cache, so when the site feels slow it is nearly
+    always one of the things underneath: the office server (every cached read
+    goes through it) or Shopify. Times each separately and reports whether this
+    instance's caches are warm — each instance has its own, so a freshly scaled
+    instance starts cold.
+    """
+    out = {'instance': os.environ.get('RENDER_INSTANCE_ID', '?')}
+
+    start = time.perf_counter()
+    try:
+        from scripts import office_api
+        office_api.get_snapshot('parent_child_tree')
+        out['office_ms'] = round((time.perf_counter() - start) * 1000)
+    except Exception as e:
+        out['office_ms'] = round((time.perf_counter() - start) * 1000)
+        out['office_error'] = f"{type(e).__name__}: {e}"
+
+    start = time.perf_counter()
+    try:
+        r = requests.get(
+            f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/shop.json",
+            headers={"X-Shopify-Access-Token": ACCESS_TOKEN},
+            timeout=15,
+        )
+        out['shopify_ms'] = round((time.perf_counter() - start) * 1000)
+        out['shopify_status'] = r.status_code
+        # "32/40" means 32 of 40 cost points used — near the cap means throttling.
+        out['shopify_call_limit'] = r.headers.get('X-Shopify-Shop-Api-Call-Limit')
+    except Exception as e:
+        out['shopify_ms'] = round((time.perf_counter() - start) * 1000)
+        out['shopify_error'] = f"{type(e).__name__}: {e}"
+
+    try:
+        from scripts.product_creator import Product_Creator as pc
+        overview_at = pc._PRODUCTS_OVERVIEW_CACHE_AT
+        out['cache'] = {
+            'products_overview_warm': pc._PRODUCTS_OVERVIEW_CACHE is not None,
+            'products_overview_age_s': round(time.time() - overview_at) if overview_at else None,
+            'named_snapshots_warm': sorted(pc._NAMED_CACHE.keys()),
+            'product_details_cached': len(pc._PRODUCT_DETAIL_CACHE),
+        }
+    except Exception as e:
+        out['cache_error'] = f"{type(e).__name__}: {e}"
+
+    try:
+        from scripts import product_save_queue as queue
+        start = time.perf_counter()
+        jobs = queue.list_jobs()
+        out['queue_list_ms'] = round((time.perf_counter() - start) * 1000)
+        out['queue_jobs'] = len(jobs)
+        out['queue_active'] = sum(1 for j in jobs if j.get('status') in ('queued', 'running'))
+    except Exception as e:
+        out['queue_error'] = f"{type(e).__name__}: {e}"
+
+    return jsonify(out)
+
+
 @app.route('/')
 def index():
     try:

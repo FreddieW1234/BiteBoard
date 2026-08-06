@@ -80,6 +80,9 @@ PRODUCTS_MEM_TTL = int(os.environ.get("PRODUCTS_MEM_TTL", "30"))
 # reaped/requeued. SAVE_JOB_RETENTION_H: terminal jobs pruned after this many hours.
 SAVE_WORKER_ENABLED = os.environ.get("SAVE_WORKER_ENABLED", "true").lower() in ("1", "true", "yes")
 SAVE_QUEUE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_POLL_SEC", "2"))
+# Poll interval when nothing is queued or running. The worker loop runs forever
+# on every instance, so this is the floor on background office traffic.
+SAVE_QUEUE_IDLE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_IDLE_POLL_SEC", "15"))
 SAVE_MAX_ATTEMPTS = int(os.environ.get("SAVE_MAX_ATTEMPTS", "3"))
 SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "1800"))
 SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "6"))

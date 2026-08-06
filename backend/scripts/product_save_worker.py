@@ -30,12 +30,14 @@ try:
     from config import (  # type: ignore
         SAVE_WORKER_ENABLED,
         SAVE_QUEUE_POLL_SEC,
+        SAVE_QUEUE_IDLE_POLL_SEC,
         SAVE_JOB_TIMEOUT_SEC,
         SAVE_MIN_FREE_MB,
     )
 except Exception:
     SAVE_WORKER_ENABLED = True
     SAVE_QUEUE_POLL_SEC = 2
+    SAVE_QUEUE_IDLE_POLL_SEC = 15
     SAVE_JOB_TIMEOUT_SEC = 1800
     SAVE_MIN_FREE_MB = 150
 
@@ -205,15 +207,24 @@ def _enough_memory() -> bool:
 
 def _loop() -> None:
     poll = max(1, int(SAVE_QUEUE_POLL_SEC))
+    idle_poll = max(poll, int(SAVE_QUEUE_IDLE_POLL_SEC))
     last_prune = 0.0
     last_mem_warn = 0.0
-    print(f"[save-worker] started ({_WORKER_ID}), polling every {poll}s", flush=True)
+    print(f"[save-worker] started ({_WORKER_ID}), polling every {poll}s (idle {idle_poll}s)", flush=True)
     while True:
+        idle = True
         try:
-            queue.reap_stale()
+            # One office round-trip per pass, shared by reap/prune/claim. This
+            # loop runs forever on every instance, so an extra call here is a
+            # permanent tax on the office server that every page read competes
+            # with.
+            jobs = queue.list_jobs()
+            idle = not any(j.get("status") in ("queued", "running") for j in jobs)
+
+            queue.reap_stale(jobs=jobs)
             now = time.time()
             if now - last_prune > _PRUNE_EVERY_SEC:
-                queue.prune()
+                queue.prune(jobs=jobs)
                 last_prune = now
             # Defer starting a heavy save subprocess when memory is tight, so we
             # never OOM-kill the web process. Jobs stay queued and run later.
@@ -223,14 +234,15 @@ def _loop() -> None:
                     last_mem_warn = now
                 time.sleep(poll)
                 continue
-            job = queue.claim_next(_WORKER_ID)
+            job = queue.claim_next(_WORKER_ID, jobs=jobs)
             if job:
                 print(f"[save-worker] claimed job {job['job_id']} ({job.get('title')})", flush=True)
                 _run_job(job)
                 continue  # drain the queue without waiting a full poll
         except Exception as exc:
             print(f"[save-worker] loop error: {exc}", flush=True)
-        time.sleep(poll)
+            idle = True
+        time.sleep(idle_poll if idle else poll)
 
 
 def start_worker(app=None) -> None:
