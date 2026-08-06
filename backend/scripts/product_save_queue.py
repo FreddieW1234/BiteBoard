@@ -47,11 +47,13 @@ try:
         SAVE_MAX_ATTEMPTS,
         SAVE_JOB_TIMEOUT_SEC,
         SAVE_JOB_RETENTION_H,
+        SAVE_HEARTBEAT_STALE_SEC,
     )
 except Exception:
     SAVE_MAX_ATTEMPTS = 3
     SAVE_JOB_TIMEOUT_SEC = 600
     SAVE_JOB_RETENTION_H = 24
+    SAVE_HEARTBEAT_STALE_SEC = 180
 
 KIND = "save_job"
 # Big/append-heavy fields live in their own items so the polled job list stays
@@ -208,37 +210,96 @@ def get_job(job_id: str):
     return None
 
 
-def claim_next(worker_id: str, jobs=None):
-    """Claim the oldest queued job for this worker, or None if none are queued.
+def _yield_to_earlier_runner(job_id, claimed) -> bool:
+    """Put a just-claimed job back if another worker started one at the same moment.
 
-    Marks it running (attempts++), then re-reads it to confirm ownership. The
-    re-read narrows the window where two Render instances grab the same job
-    (last write wins on the office side).
+    Both sides break the tie on (started_at, worker_id), which is a total order,
+    so exactly one of them wins and the other returns its job to the queue.
+    """
+    try:
+        others = [j for j in list_jobs()
+                  if j.get("status") == "running" and j.get("job_id") != job_id]
+    except Exception:
+        return False
+    if not others:
+        return False
+
+    def rank(j):
+        return (j.get("started_at") or "", str(j.get("worker_id") or ""))
+
+    if all(rank(claimed) <= rank(o) for o in others):
+        return False  # we got there first
+
+    claimed["status"] = "queued"
+    claimed["worker_id"] = None
+    claimed["started_at"] = None
+    claimed["attempts"] = max(0, int(claimed.get("attempts", 1)) - 1)
+    try:
+        _save(claimed)
+    except Exception:
+        pass
+    return True
+
+
+def claim_next(worker_id: str, jobs=None):
+    """Claim the oldest queued job for this worker, or None.
+
+    Saves run one at a time across *every* instance, not just within one worker.
+    Each instance runs its own worker, and two saves at once would share the same
+    Shopify rate budget and each spawn a subprocess on an already small CPU
+    share. The office store is last-write-wins with no compare-and-swap, so
+    exclusivity is done in two steps: never claim while something is running,
+    then re-read and stand down if another worker claimed at the same moment.
 
     Pass an already-fetched job list to avoid a second office round-trip.
     """
     if not _available():
         return None
-    for job in (jobs if jobs is not None else list_jobs()):
+    jobs = jobs if jobs is not None else list_jobs()
+    if any(j.get("status") == "running" for j in jobs):
+        return None
+
+    for job in jobs:
         if job.get("status") != "queued":
             continue
+        job_id = job["job_id"]
         job["status"] = "running"
         job["worker_id"] = worker_id
         job["started_at"] = _now_iso()
+        job["heartbeat_at"] = _now_iso()
         job["attempts"] = int(job.get("attempts", 0)) + 1
         try:
             _save(job)
         except Exception:
             continue
-        confirm = get_job(job["job_id"])
-        if (
+        confirm = get_job(job_id)
+        if not (
             confirm
             and confirm.get("worker_id") == worker_id
             and confirm.get("status") == "running"
         ):
-            return confirm
-        # Lost the race — someone else owns it now; try the next queued job.
+            continue  # lost the race for this job; try the next queued one
+        if _yield_to_earlier_runner(job_id, confirm):
+            return None
+        return confirm
     return None
+
+
+def heartbeat(job_id: str) -> None:
+    """Mark a running job as still alive.
+
+    Because saves are serialised across instances, a job left 'running' by an
+    instance that died would otherwise block the whole queue until the full job
+    timeout. reap_stale uses this to tell a crashed worker from a slow one.
+    """
+    job = get_job(job_id)
+    if not job or job.get("status") != "running":
+        return
+    job["heartbeat_at"] = _now_iso()
+    try:
+        _save(job)
+    except Exception:
+        pass
 
 
 def complete(job_id: str, status: str, verify=None, logs=None, error=None):
@@ -328,19 +389,31 @@ def retry(job_id: str):
 def reap_stale(timeout=None, jobs=None):
     """Requeue (or fail) running jobs orphaned by a restart/crash mid-run.
 
+    A live worker heartbeats, so a job that has stopped beating is treated as
+    dead well before the full job timeout. That matters now saves are
+    serialised: one abandoned job would otherwise hold up the whole queue.
+
     Pass an already-fetched job list to avoid a second office round-trip.
     """
     if not _available():
         return 0
     limit = int(timeout if timeout is not None else SAVE_JOB_TIMEOUT_SEC)
+    stale_after = int(SAVE_HEARTBEAT_STALE_SEC)
     now = datetime.now(timezone.utc).timestamp()
     reaped = 0
     for job in (jobs if jobs is not None else list_jobs()):
         if job.get("status") != "running":
             continue
-        age = _age_seconds(job.get("started_at"), now)
-        if age is None or age <= limit:
-            continue
+        beat = job.get("heartbeat_at")
+        if beat:
+            age = _age_seconds(beat, now)
+            if age is None or age <= stale_after:
+                continue
+        else:
+            # Older job, or one claimed before heartbeats existed.
+            age = _age_seconds(job.get("started_at"), now)
+            if age is None or age <= limit:
+                continue
         if int(job.get("attempts", 0)) < int(job.get("max_attempts", SAVE_MAX_ATTEMPTS)):
             job["status"] = "queued"
             job["worker_id"] = None

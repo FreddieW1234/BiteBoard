@@ -52,6 +52,7 @@ _started = False
 _started_lock = threading.Lock()
 _PRUNE_EVERY_SEC = 3600.0
 _LOG_FLUSH_SEC = 3.0        # how often to push partial logs to the job record
+_HEARTBEAT_SEC = 30.0       # how often to prove this worker is still alive
 _MAX_LOG_CHARS = 200_000    # cap stored log size (keep the most recent output)
 
 
@@ -113,6 +114,7 @@ def _run_job(job: dict) -> None:
 
     start = time.time()
     last_flush = 0.0
+    last_beat = start
     timed_out = False
     while True:
         finished = proc.poll() is not None and not reader.is_alive()
@@ -124,6 +126,9 @@ def _run_job(job: dict) -> None:
             except Exception:
                 pass
             break
+        if now - last_beat >= _HEARTBEAT_SEC:
+            last_beat = now
+            queue.heartbeat(job_id)
         if now - last_flush >= _LOG_FLUSH_SEC:
             last_flush = now
             # If the job was cancelled externally, stop the subprocess.

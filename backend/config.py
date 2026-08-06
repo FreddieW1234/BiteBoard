@@ -85,6 +85,10 @@ SAVE_QUEUE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_POLL_SEC", "2"))
 SAVE_QUEUE_IDLE_POLL_SEC = int(os.environ.get("SAVE_QUEUE_IDLE_POLL_SEC", "15"))
 SAVE_MAX_ATTEMPTS = int(os.environ.get("SAVE_MAX_ATTEMPTS", "3"))
 SAVE_JOB_TIMEOUT_SEC = int(os.environ.get("SAVE_JOB_TIMEOUT_SEC", "1800"))
+# A running job heartbeats while its worker is alive. Saves are serialised across
+# instances, so a job abandoned by a dead instance must be reclaimed quickly or
+# it holds up the whole queue.
+SAVE_HEARTBEAT_STALE_SEC = int(os.environ.get("SAVE_HEARTBEAT_STALE_SEC", "180"))
 SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "6"))
 # SAVE_MIN_FREE_MB: the worker defers claiming a job (leaving it queued) when the
 # instance has less available memory than this, so the save subprocess can't push
