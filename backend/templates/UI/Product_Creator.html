@@ -6432,6 +6432,7 @@
 
             setupParentRadioListeners();
             setupCalendarRadioListeners();
+            setupMainImageToChildrenListener();
             syncCalendarFoilOptionVisibility();
 
             // Load products for search (cached)
@@ -7778,24 +7779,11 @@
             // Add remove button event listener
             const removeBtn = previewItem.querySelector('.remove-media');
             removeBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent event bubbling
-                e.preventDefault(); // Prevent any default behavior
-                // Store file reference for comparison
-                const fileToRemove = file;
-                console.log(`🗑️ Remove button clicked for uploaded file: ${fileToRemove.name}`);
-                console.log(`📋 Current selectedMediaFiles before removal: ${selectedMediaFiles.length} files`);
-                
-                // Find and remove by file reference (more reliable than index)
-                const indexToRemove = selectedMediaFiles.findIndex(f => f === fileToRemove);
-                
-                if (indexToRemove !== -1) {
-                    selectedMediaFiles.splice(indexToRemove, 1);
-                    console.log(`✅ Removed uploaded file: ${fileToRemove.name}, Index was ${indexToRemove}`);
-                    console.log(`📋 selectedMediaFiles after removal: ${selectedMediaFiles.length} files`);
-                } else {
-                    console.error(`❌ Could not find file ${fileToRemove.name} in selectedMediaFiles array!`);
-                }
-                
+                e.stopPropagation();
+                e.preventDefault();
+                mediaItems = mediaItems.filter(entry => !(entry.type === 'uploaded' && entry.item === file));
+                syncMediaArraysFromItems();
+                if (!mediaItems.length) mediaExplicitlyCleared = true;
                 updateMediaPreview();
             });
 
@@ -7933,17 +7921,28 @@
             return '';
         }
 
-        function askRemoveAcrossFamily(message) {
+        function askRemoveAcrossFamily(message, opts) {
+            opts = opts || {};
             return new Promise(resolve => {
                 const modal = document.getElementById('familyImageRemoveModal');
                 const text = document.getElementById('familyImageRemoveText');
                 const yes = document.getElementById('familyImageRemoveYes');
                 const no = document.getElementById('familyImageRemoveNo');
+                const titleEl = modal ? modal.querySelector('h3') : null;
                 if (!modal || !yes || !no) { resolve(false); return; }
                 if (text) text.textContent = message;
+                const prevYes = yes.textContent;
+                const prevNo = no.textContent;
+                const prevTitle = titleEl ? titleEl.innerHTML : '';
+                if (opts.yesLabel) yes.textContent = opts.yesLabel;
+                if (opts.noLabel) no.textContent = opts.noLabel;
+                if (opts.title && titleEl) titleEl.innerHTML = opts.title;
 
                 function finish(answer) {
                     modal.style.display = 'none';
+                    yes.textContent = prevYes;
+                    no.textContent = prevNo;
+                    if (titleEl) titleEl.innerHTML = prevTitle;
                     yes.removeEventListener('click', onYes);
                     no.removeEventListener('click', onNo);
                     resolve(answer);
@@ -7955,6 +7954,50 @@
                 no.addEventListener('click', onNo);
                 modal.style.display = 'flex';
             });
+        }
+
+        function currentMainImageMedia() {
+            reconcileMediaItems();
+            if (!mediaItems.length) return null;
+            const entry = mediaItems[0];
+            if (!entry || entry.type !== 'shopify') return null;
+            return entry.item;
+        }
+
+        // Unticking "main image across children" means stop sharing — and delete
+        // that shared main image from the children on save.
+        async function onMainImageToChildrenChange(e) {
+            const box = e && e.target;
+            if (!box || box.checked) return; // ticking on is a no-op prompt
+            const parentYes = document.getElementById('parentYes');
+            if (!parentYes || !parentYes.checked) return;
+            const main = currentMainImageMedia();
+            const src = main && main.url;
+            if (!src) return;
+
+            const confirmed = await askRemoveAcrossFamily(
+                'Unticking this will delete this main image from all child products in the family. The image stays on this parent until you remove it here.',
+                {
+                    title: '<i class="fas fa-images" style="color: #4f46e5;"></i> Stop sharing main image',
+                    yesLabel: 'Delete from children',
+                    noLabel: 'Keep ticked',
+                }
+            );
+            if (!confirmed) {
+                box.checked = true;
+                return;
+            }
+            if (!familyImageRemovals.includes(src)) {
+                familyImageRemovals.push(src);
+                console.log('🗑️ Queued family-wide removal after unticking main-image-to-children:', src);
+            }
+        }
+
+        function setupMainImageToChildrenListener() {
+            const box = document.getElementById('mainImageToChildren');
+            if (!box || box.dataset.wired === '1') return;
+            box.dataset.wired = '1';
+            box.addEventListener('change', onMainImageToChildrenChange);
         }
 
         async function maybeOfferFamilyImageRemoval(media) {
@@ -8212,19 +8255,10 @@
             removeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                const mediaIdToRemove = media.id;
-                const mediaIdToRemoveStr = String(mediaIdToRemove);
                 const wasMainImage = index === 0;
-
-                const indexToRemove = selectedShopifyMedia.findIndex(m => {
-                    return String(m.id) === mediaIdToRemoveStr || 
-                           String(m.rest_api_id || m.id) === mediaIdToRemoveStr;
-                });
-                
-                if (indexToRemove !== -1) {
-                    selectedShopifyMedia.splice(indexToRemove, 1);
-                }
-                
+                mediaItems = mediaItems.filter(entry => !(entry.type === 'shopify' && entry.item === media));
+                syncMediaArraysFromItems();
+                if (!mediaItems.length) mediaExplicitlyCleared = true;
                 updateMediaPreview();
 
                 // Removing the main image from a product in a family may mean

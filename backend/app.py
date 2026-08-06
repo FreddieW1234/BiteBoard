@@ -1855,11 +1855,13 @@ def _parse_product_form(req):
                         media_files.append({'filename': file.filename, 'content': file.read(), 'content_type': file.content_type})
         data['media_files'] = media_files
 
-        # Selected Shopify media IDs to keep.
+        # Selected Shopify media IDs to keep. Only set when the editor sent a
+        # media state (media_order present) — an omitted key means "leave images
+        # alone", while media_order=[] with no ids means "delete all".
         shopify_media_ids = req.form.getlist('shopify_media_ids')
         if shopify_media_ids:
             data['shopify_media_ids'] = [int(i) if i.isdigit() else i for i in shopify_media_ids]
-        else:
+        elif 'media_order' in req.form:
             data['shopify_media_ids'] = []
 
         data['media_explicitly_cleared'] = req.form.get('media_explicitly_cleared', 'false').lower() in ('true', '1', 'yes')
@@ -1875,11 +1877,12 @@ def _parse_product_form(req):
         else:
             data['family_image_removals'] = []
 
-        media_order_str = req.form.get('media_order', '[]')
-        try:
-            data['media_order'] = json.loads(media_order_str) if media_order_str else []
-        except (json.JSONDecodeError, ValueError):
-            data['media_order'] = []
+        if 'media_order' in req.form:
+            media_order_str = req.form.get('media_order') or '[]'
+            try:
+                data['media_order'] = json.loads(media_order_str) if media_order_str else []
+            except (json.JSONDecodeError, ValueError):
+                data['media_order'] = []
 
         media_urls_str = req.form.get('media_urls', '')
         if media_urls_str and media_urls_str.strip():

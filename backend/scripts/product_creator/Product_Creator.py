@@ -4311,7 +4311,16 @@ def create_product(product_data):
                     media_explicitly_cleared = str(product_data.get("media_explicitly_cleared", "")).lower() in (
                         "1", "true", "yes",
                     )
-                    should_manage_media = bool(shopify_media_ids or media_files or media_explicitly_cleared)
+                    # FormData edits always send media_order (even []). An empty
+                    # keep-list used to skip this step entirely, so images the
+                    # user removed in the editor were left on Shopify.
+                    media_order = product_data.get("media_order")
+                    should_manage_media = bool(
+                        media_files
+                        or media_explicitly_cleared
+                        or media_order is not None
+                        or "shopify_media_ids" in product_data
+                    )
 
                     # Step 2a: Remove media not in the keep list (only when user changed media)
                     if should_manage_media:
