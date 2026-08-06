@@ -2205,6 +2205,7 @@ def start_force_rebuild_products_snapshot(shopify_domain=None):
     Returns (started: bool, state: dict). Rejects a second start while one is
     already running so two catalog scans can't pile onto the same instance.
     """
+    global _FORCE_REBUILD_STATE
     with _FORCE_REBUILD_LOCK:
         if _FORCE_REBUILD_STATE.get("status") == "running":
             return False, dict(_FORCE_REBUILD_STATE)
@@ -2967,7 +2968,7 @@ MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRON
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside", "productinfo",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
-    "case_weight", "leadtime1", "leadtime2", "commodity_code",
+    "case_weight", "leadtime1", "leadtime2", "commodity_code", "alternative_spellings",
     "vegan", "vegetarian", "halal", "coeliac", "kosher",
     "peanuts", "nuts", "sesame", "egg", "cereals", "soya", "milk",
     "celery", "crustaceans", "fish", "lupin", "molluscs", "mustard", "sulphurdioxide",

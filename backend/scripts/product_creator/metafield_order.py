@@ -42,7 +42,8 @@ DEFAULT_METAFIELD_ORDER = [
     "soya",
     "sulphurdioxide",
     "product_size",
-    "commodity_code"
+    "commodity_code",
+    "alternative_spellings",
 ]
 
 # Alternative ordering options (can be used for different views)
@@ -62,7 +63,7 @@ ALTERNATIVE_ORDERS = {
         "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard",
         "nuts", "peanuts", "sesame", "soya", "sulphurdioxide",
         # Additional Fields
-        "product_size", "commodity_code"
+        "product_size", "commodity_code", "alternative_spellings",
     ],
     "priority": [
         # High Priority
@@ -74,7 +75,7 @@ ALTERNATIVE_ORDERS = {
         "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard",
         "nuts", "peanuts", "sesame", "soya", "sulphurdioxide",
         "ingredients", "nutritional_info", "whats_inside", "print_info", "recycle_info", "leadtime1", "leadtime2", "packingfee",
-        "product_size", "commodity_code"
+        "product_size", "commodity_code", "alternative_spellings",
     ]
 }
 

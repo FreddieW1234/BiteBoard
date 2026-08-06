@@ -767,6 +767,101 @@
             border-color: #4f46e5;
             box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.1);
         }
+
+        /* Free-text list.single_line_text_field editor (e.g. Alternative Spellings) */
+        .string-list-editor {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+        .string-list-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .string-list-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 4px 6px 4px 4px;
+        }
+        .string-list-row.dragging {
+            opacity: 0.55;
+        }
+        .string-list-handle {
+            cursor: grab;
+            color: #9ca3af;
+            padding: 4px 6px;
+            user-select: none;
+            font-size: 0.85rem;
+            line-height: 1;
+        }
+        .string-list-handle:active { cursor: grabbing; }
+        .string-list-row input.string-list-input {
+            flex: 1;
+            min-width: 0;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            background: #fff;
+            min-height: 0;
+            resize: none;
+        }
+        .string-list-row input.string-list-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+        }
+        .string-list-remove {
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+        .string-list-remove:hover { color: #dc2626; background: #fef2f2; }
+        .string-list-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 2px;
+        }
+        .string-list-add {
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #374151;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .string-list-add:hover { border-color: #4f46e5; color: #4f46e5; }
+        .string-list-clear {
+            border: none;
+            background: transparent;
+            color: #6b7280;
+            font-size: 0.82rem;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: underline;
+            padding: 4px 0;
+        }
+        .string-list-clear:hover { color: #dc2626; }
+        .string-list-type-hint {
+            font-size: 0.7rem;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
         
         /* Custom dropdown styling */
         .custom-dropdown {
@@ -1350,6 +1445,7 @@
         .pc-create-from-parent .metafield-item[data-metafield-key="leadtime2"],
         .pc-create-from-parent .metafield-item[data-metafield-key="packingfee"],
         .pc-create-from-parent .metafield-item[data-metafield-key="commodity_code"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="alternative_spellings"],
         .pc-create-from-parent .metafield-item.dietary-metafield-item { display: none !important; }
         /* Create-from-parent: fewer fields — let cat/subcat dropdown extend over the action buttons */
         #productForm.pc-create-from-parent .field-finder-container,
@@ -3592,6 +3688,16 @@
                                 value: value
                             });
                         }
+                    } else if (item.querySelector('.string-list-editor')) {
+                        const listEditor = item.querySelector('.string-list-editor');
+                        const values = getStringListEditorValues(listEditor);
+                        metafieldsData.push({
+                            namespace: listEditor.dataset.namespace || 'custom',
+                            key: listEditor.dataset.key || '',
+                            type: 'list.single_line_text_field',
+                            // Empty string clears the metafield when the user removes every item.
+                            value: values.length ? JSON.stringify(values) : ''
+                        });
                     } else {
                     // Check for custom dropdown first (category/subcategory), then other input types
                     let inputElement = item.querySelector('.custom-dropdown');
@@ -4722,6 +4828,15 @@
                         });
                         console.log('Added stub subcategory metafield (missing from template)');
                     }
+                    if (!existingKeys.has('alternative_spellings')) {
+                        emptyMetafields.push({
+                            namespace: 'custom',
+                            key: 'alternative_spellings',
+                            type: 'list.single_line_text_field',
+                            value: [],
+                            id: null
+                        });
+                    }
                     // Subcategory_2, subcategory_3 etc. are overflow keys only; one UI dropdown covers all
                     
                     console.log('Displaying metafields with cleared values for new product');
@@ -4774,6 +4889,7 @@
                 'sku': 'Product Code',
                 'recycle_info': 'Recycle Info',
                 'commodity_code': 'Commodity Code',
+                'alternative_spellings': 'Alternative Spellings',
                 'product_size': 'Product Size in mm (l*w*h)',
                 'custom_category': 'Category',
                 'subcategory': 'Subcategory',
@@ -4796,6 +4912,110 @@
             return nameMap.default;
         }
 
+        function parseStringListMetafieldValue(raw) {
+            if (Array.isArray(raw)) {
+                return raw.map(v => String(v == null ? '' : v).trim()).filter(Boolean);
+            }
+            if (raw == null || raw === '') return [];
+            const s = String(raw).trim();
+            if (!s) return [];
+            if (s.startsWith('[')) {
+                try {
+                    const arr = JSON.parse(s);
+                    if (Array.isArray(arr)) {
+                        return arr.map(v => String(v == null ? '' : v).trim()).filter(Boolean);
+                    }
+                } catch (e) { /* fall through */ }
+            }
+            return [s];
+        }
+
+        function buildStringListRowHtml(value) {
+            const safe = String(value == null ? '' : value)
+                .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            return `<div class="string-list-row" draggable="true">
+                <span class="string-list-handle" title="Drag to reorder" aria-hidden="true"><i class="fas fa-grip-vertical"></i></span>
+                <input type="text" class="string-list-input" value="${safe}" placeholder="Enter item" autocomplete="off">
+                <button type="button" class="string-list-remove" title="Remove item" aria-label="Remove item"><i class="fas fa-times"></i></button>
+            </div>`;
+        }
+
+        function buildStringListEditorHtml(metafield, values) {
+            const rows = (values && values.length) ? values : [''];
+            const id = metafield.id || 'null';
+            const ns = metafield.namespace || 'custom';
+            const key = metafield.key || '';
+            return `<div class="string-list-editor" data-id="${id}" data-namespace="${ns}" data-key="${key}" data-type="list.single_line_text_field">
+                <div class="string-list-rows">${rows.map(buildStringListRowHtml).join('')}</div>
+                <div class="string-list-footer">
+                    <button type="button" class="string-list-add"><i class="fas fa-plus" style="margin-right:6px;"></i>Add item</button>
+                    <button type="button" class="string-list-clear">Clear all</button>
+                </div>
+                <div class="string-list-type-hint">Single line text (List)</div>
+            </div>`;
+        }
+
+        function wireStringListEditor(root) {
+            if (!root || root.dataset.wired === '1') return;
+            root.dataset.wired = '1';
+            const rowsEl = root.querySelector('.string-list-rows');
+            if (!rowsEl) return;
+
+            function ensureAtLeastOneRow() {
+                if (!rowsEl.querySelector('.string-list-row')) {
+                    rowsEl.insertAdjacentHTML('beforeend', buildStringListRowHtml(''));
+                }
+            }
+
+            root.querySelector('.string-list-add')?.addEventListener('click', () => {
+                rowsEl.insertAdjacentHTML('beforeend', buildStringListRowHtml(''));
+                const inputs = rowsEl.querySelectorAll('.string-list-input');
+                const last = inputs[inputs.length - 1];
+                if (last) last.focus();
+            });
+            root.querySelector('.string-list-clear')?.addEventListener('click', () => {
+                rowsEl.innerHTML = buildStringListRowHtml('');
+                const input = rowsEl.querySelector('.string-list-input');
+                if (input) input.focus();
+            });
+            root.addEventListener('click', (e) => {
+                const btn = e.target.closest('.string-list-remove');
+                if (!btn || !root.contains(btn)) return;
+                const row = btn.closest('.string-list-row');
+                if (row) row.remove();
+                ensureAtLeastOneRow();
+            });
+
+            let dragRow = null;
+            rowsEl.addEventListener('dragstart', (e) => {
+                const row = e.target.closest('.string-list-row');
+                if (!row) return;
+                dragRow = row;
+                row.classList.add('dragging');
+                try { e.dataTransfer.setData('text/plain', 'string-list-row'); } catch (_) {}
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            rowsEl.addEventListener('dragend', () => {
+                if (dragRow) dragRow.classList.remove('dragging');
+                dragRow = null;
+            });
+            rowsEl.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const over = e.target.closest('.string-list-row');
+                if (!dragRow || !over || over === dragRow) return;
+                const rect = over.getBoundingClientRect();
+                const before = (e.clientY - rect.top) < rect.height / 2;
+                rowsEl.insertBefore(dragRow, before ? over : over.nextSibling);
+            });
+        }
+
+        function getStringListEditorValues(editor) {
+            if (!editor) return [];
+            return Array.from(editor.querySelectorAll('.string-list-input'))
+                .map(inp => (inp.value || '').trim())
+                .filter(Boolean);
+        }
+
         // Display metafields in 3-column grid - using Field_Finder logic
         function displayMetafields(metafields) {
             console.log('🔍 displayMetafields called with:', metafields);
@@ -4808,6 +5028,16 @@
             // Ensure the combined Category & Subcategory dropdown always renders (virtual UI field)
             if (!metafields.some(m => m && m.key === 'categorysub' && (m.namespace || 'custom') === 'custom')) {
                 metafields = metafields.concat([{ namespace: 'custom', key: 'categorysub', type: 'list.single_line_text_field', value: '', id: null }]);
+            }
+            // Ensure Alternative Spellings always shows, even when the definition has no value yet.
+            if (!metafields.some(m => m && m.key === 'alternative_spellings' && (m.namespace || 'custom') === 'custom')) {
+                metafields = metafields.concat([{
+                    namespace: 'custom',
+                    key: 'alternative_spellings',
+                    type: 'list.single_line_text_field',
+                    value: [],
+                    id: null,
+                }]);
             }
 
             metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
@@ -4840,6 +5070,7 @@
                 "leadtime1",
                 "leadtime2",
                 "commodity_code",
+                "alternative_spellings",
             ].concat((window.AllergenMapping && AllergenMapping.defaultMetafieldOrderDietaryTail())
                 ? AllergenMapping.defaultMetafieldOrderDietaryTail()
                 : ["vegan", "vegetarian", "halal", "coeliac", "kosher", "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs", "mustard", "nuts", "peanuts", "sesame", "soya", "sulphurdioxide"]);
@@ -4847,13 +5078,22 @@
             // Mirror Field Finder: apply saved box order from localStorage (metafieldOrder)
             try {
                 const saved = localStorage.getItem('metafieldOrder');
-                let order = DEFAULT_METAFIELD_ORDER; // Use default as fallback
+                let order = DEFAULT_METAFIELD_ORDER.slice(); // Use default as fallback
                 
                 if (saved) {
                     const parsedOrder = JSON.parse(saved);
                     if (Array.isArray(parsedOrder) && parsedOrder.length > 0) {
-                        order = parsedOrder; // Use saved order if valid
+                        order = parsedOrder.slice(); // Use saved order if valid
                     }
+                }
+                // Insert new field between commodity code and vegans even if a
+                // saved localStorage order predates this field.
+                if (!order.includes('alternative_spellings')) {
+                    const cc = order.indexOf('commodity_code');
+                    const vg = order.indexOf('vegan');
+                    if (cc >= 0) order.splice(cc + 1, 0, 'alternative_spellings');
+                    else if (vg >= 0) order.splice(vg, 0, 'alternative_spellings');
+                    else order.push('alternative_spellings');
                 }
                 
                         const byKey = new Map();
@@ -4940,14 +5180,20 @@
                 
                 const hasOptions = (!hasEmojiButtons && !isLongTextField && (metafield.available_options && metafield.available_options.length > 1));
                 const currentValue = metafield.value || '';
+                const isFreeTextList = metafield.key === 'alternative_spellings'
+                    || (metafield.type === 'list.single_line_text_field'
+                        && metafield.key === 'alternative_spellings');
                 
                 // For fields with multiple real options (but NOT emoji fields), create a dropdown; otherwise use textarea
                 let inputElement;
                 
                 console.log(`🔍 Processing ${metafield.key}: isProductSize=${isProductSize}, hasEmojiButtons=${hasEmojiButtons}, hasOptions=${hasOptions}`);
                 
-                // Special case for product_size - create 3 separate input fields
-                if (isProductSize) {
+                // Free-text list (Shopify "Single line text (List)") — row editor, not a dropdown.
+                if (isFreeTextList) {
+                    inputElement = buildStringListEditorHtml(metafield, parseStringListMetafieldValue(currentValue));
+                } else if (isProductSize) {
+                    // Special case for product_size - create 3 separate input fields
                     const sizeParts = (currentValue || '').split('*').map(part => part.trim());
                     const length = sizeParts[0] || '';
                     const width = sizeParts[1] || '';
@@ -5120,6 +5366,9 @@
                 }
                 
                 container.appendChild(metafieldDiv);
+
+                const listEditor = metafieldDiv.querySelector('.string-list-editor');
+                if (listEditor) wireStringListEditor(listEditor);
 
                 // Card quick-fill button: fill Print Info + Recycle Info
                 if (isPrintInfo) {
