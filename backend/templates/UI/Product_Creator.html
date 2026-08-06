@@ -857,11 +857,6 @@
             padding: 4px 0;
         }
         .string-list-clear:hover { color: #dc2626; }
-        .string-list-type-hint {
-            font-size: 0.7rem;
-            color: #9ca3af;
-            margin-top: 2px;
-        }
         
         /* Custom dropdown styling */
         .custom-dropdown {
@@ -4951,7 +4946,6 @@
                     <button type="button" class="string-list-add"><i class="fas fa-plus" style="margin-right:6px;"></i>Add item</button>
                     <button type="button" class="string-list-clear">Clear all</button>
                 </div>
-                <div class="string-list-type-hint">Single line text (List)</div>
             </div>`;
         }
 
@@ -7555,15 +7549,18 @@
             metafields.forEach(metafield => {
                 const key = metafield.key;
                 const namespace = metafield.namespace;
-                let value = metafield.value || '';
+                let value = metafield.value;
+                if (value == null) value = '';
                 
                 // Handle JSON array values for list type metafields (like category/subcategory)
                 let parsedValues = [];
-                if (metafield.type === 'list.single_line_text_field' && value.startsWith('[') && value.endsWith(']')) {
+                if (Array.isArray(value)) {
+                    parsedValues = value.map(v => String(v == null ? '' : v).trim()).filter(Boolean);
+                } else if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
                     try {
                         const parsed = JSON.parse(value);
                         if (Array.isArray(parsed)) {
-                            parsedValues = parsed;
+                            parsedValues = parsed.map(v => String(v == null ? '' : v).trim()).filter(Boolean);
                             console.log(`🔍 Parsed ${key} values from JSON array:`, parsedValues);
                         }
                     } catch (e) {
@@ -7601,6 +7598,25 @@
                         });
                         updateDropdownText(filtersDropdown);
                     }
+                    return;
+                }
+
+                // Free-text list editors (e.g. Alternative Spellings) — rebuild rows from saved list.
+                const listEditor = document.querySelector(
+                    `.string-list-editor[data-key="${key}"][data-namespace="${namespace}"]`
+                );
+                if (listEditor) {
+                    const rowsEl = listEditor.querySelector('.string-list-rows');
+                    const items = parsedValues.length
+                        ? parsedValues
+                        : parseStringListMetafieldValue(value);
+                    if (rowsEl) {
+                        rowsEl.innerHTML = (items.length ? items : [''])
+                            .map(buildStringListRowHtml).join('');
+                    }
+                    listEditor.dataset.wired = '';
+                    wireStringListEditor(listEditor);
+                    console.log(`✅ Set ${key} string-list editor to:`, items);
                     return;
                 }
 
