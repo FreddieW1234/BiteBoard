@@ -256,7 +256,9 @@ def claim_next(worker_id: str, jobs=None):
     if not _available():
         return None
     jobs = jobs if jobs is not None else list_jobs()
-    if any(j.get("status") == "running" for j in jobs):
+    # A stalled job is one reap_stale is about to requeue, so it must not count
+    # as the live save that holds everyone else back.
+    if any(j.get("status") == "running" and not is_stalled(j) for j in jobs):
         return None
 
     for job in jobs:
@@ -369,55 +371,64 @@ def cancel(job_id: str):
     return job
 
 
+def is_stalled(job, now=None) -> bool:
+    """True when a running job has stopped proving its worker is alive.
+
+    claim_next always stamps a heartbeat, so a running job whose heartbeat — or,
+    for one claimed by an older build, whose start time — is older than the
+    window has lost its worker. Saves are serialised across instances, so a
+    stalled job holds up everything behind it until it is reclaimed.
+    """
+    if job.get("status") != "running":
+        return False
+    now = now if now is not None else datetime.now(timezone.utc).timestamp()
+    silent = _age_seconds(job.get("heartbeat_at") or job.get("started_at"), now)
+    if silent is not None and silent > int(SAVE_HEARTBEAT_STALE_SEC):
+        return True
+    ran_for = _age_seconds(job.get("started_at"), now)
+    return ran_for is not None and ran_for > int(SAVE_JOB_TIMEOUT_SEC)
+
+
 def retry(job_id: str):
-    """Requeue a failed/cancelled job from scratch (attempts reset)."""
+    """Requeue a job from scratch (attempts reset).
+
+    Failed and cancelled jobs can always be retried. A *stalled* running job can
+    too: that is the manual escape hatch for a worker that died mid-save and is
+    now blocking the queue.
+    """
     job = get_job(job_id)
     if not job:
         return None
-    if job.get("status") not in ("failed", "cancelled"):
+    if job.get("status") not in ("failed", "cancelled") and not is_stalled(job):
         return job
     job["status"] = "queued"
     job["attempts"] = 0
     job["worker_id"] = None
     job["started_at"] = None
+    job["heartbeat_at"] = None
     job["finished_at"] = None
     job["error"] = None
     _save(job)
     return job
 
 
-def reap_stale(timeout=None, jobs=None):
-    """Requeue (or fail) running jobs orphaned by a restart/crash mid-run.
-
-    A live worker heartbeats, so a job that has stopped beating is treated as
-    dead well before the full job timeout. That matters now saves are
-    serialised: one abandoned job would otherwise hold up the whole queue.
+def reap_stale(jobs=None):
+    """Requeue (or fail) running jobs whose worker died mid-run.
 
     Pass an already-fetched job list to avoid a second office round-trip.
     """
     if not _available():
         return 0
-    limit = int(timeout if timeout is not None else SAVE_JOB_TIMEOUT_SEC)
-    stale_after = int(SAVE_HEARTBEAT_STALE_SEC)
     now = datetime.now(timezone.utc).timestamp()
     reaped = 0
     for job in (jobs if jobs is not None else list_jobs()):
-        if job.get("status") != "running":
+        if not is_stalled(job, now):
             continue
-        beat = job.get("heartbeat_at")
-        if beat:
-            age = _age_seconds(beat, now)
-            if age is None or age <= stale_after:
-                continue
-        else:
-            # Older job, or one claimed before heartbeats existed.
-            age = _age_seconds(job.get("started_at"), now)
-            if age is None or age <= limit:
-                continue
         if int(job.get("attempts", 0)) < int(job.get("max_attempts", SAVE_MAX_ATTEMPTS)):
             job["status"] = "queued"
             job["worker_id"] = None
             job["started_at"] = None
+            job["heartbeat_at"] = None
             job["error"] = "Requeued after stalling (worker restart/timeout)"
         else:
             job["status"] = "failed"

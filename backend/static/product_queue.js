@@ -148,7 +148,7 @@
   // because a second passed).
   function queueSig() {
     return jobs.map(function (j) {
-      return [j.job_id, j.status, j.attempts, j.verify_ok].join(':');
+      return [j.job_id, j.status, j.attempts, j.verify_ok, j.stalled].join(':');
     }).join('|');
   }
 
@@ -165,15 +165,18 @@
     var rows = jobs.slice().reverse().map(function (j) {
       var st = STATUS[j.status] || { label: j.status, cls: 'pq-b-cancel' };
       var label = st.label;
+      var cls = st.cls;
       if (j.status === 'done' && j.verify_ok === false) label = 'Done (mismatch)';
+      if (j.stalled) { label = 'Stalled'; cls = 'pq-b-failed'; }
       var acts = '';
-      if (j.status === 'failed' || j.status === 'cancelled') {
-        acts += '<button type="button" class="pq-act" data-retry="' + esc(j.job_id) + '">Retry</button>';
+      if (j.status === 'failed' || j.status === 'cancelled' || j.stalled) {
+        acts += '<button type="button" class="pq-act" data-retry="' + esc(j.job_id) + '">'
+          + (j.stalled ? 'Requeue' : 'Retry') + '</button>';
       }
       acts += '<button type="button" class="pq-act" data-logs="' + esc(j.job_id) + '">Logs</button>';
       var attempts = (j.attempts && j.max_attempts) ? (' · try ' + j.attempts + '/' + j.max_attempts) : '';
       return '<div class="pq-job">'
-        + '<span class="pq-badge ' + st.cls + '">' + esc(label) + '</span>'
+        + '<span class="pq-badge ' + cls + '">' + esc(label) + '</span>'
         + '<span class="pq-title" title="' + esc(j.title) + '">' + esc(j.title) + '</span>'
         + '<span class="pq-time" data-created="' + esc(j.created_at) + '" data-attempts="' + esc(attempts) + '">'
         + esc(ago(j.created_at)) + esc(attempts) + '</span>'

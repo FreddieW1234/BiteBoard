@@ -2181,6 +2181,8 @@ def api_product_queue_list():
                 'finished_at': j.get('finished_at'),
                 'error': j.get('error'),
                 'verify_ok': (all(r.get('ok') for r in verify) if verify else None),
+                # Running, but its worker has gone quiet — offer a manual requeue.
+                'stalled': queue.is_stalled(j),
             })
         payload = {'jobs': summary, 'locked': queue.locked_product_ids(jobs=jobs)}
         _QUEUE_LIST_CACHE['payload'] = payload
