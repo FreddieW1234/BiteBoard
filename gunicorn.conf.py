@@ -8,6 +8,8 @@ file apply wherever the process is launched from, and the boot log below prints
 what is actually in effect so a mismatch can never hide again.
 """
 
+import os
+
 # One worker: each is a full copy of the app and its caches, and the instance is
 # memory-constrained. Concurrency comes from threads instead, which is the right
 # trade here because requests are spent almost entirely waiting on Shopify and
@@ -17,7 +19,14 @@ what is actually in effect so a mismatch can never hide again.
 # which Render sets to 1 based on available CPUs.
 workers = 1
 worker_class = "gthread"
-threads = 12
+
+# Threads are the concurrency budget, but each in-flight request also holds its
+# working set (parsed Shopify JSON is several times the wire size) in a 512MB
+# instance. Twelve was enough to trade the old one-at-a-time stall for memory
+# pressure, so this is deliberately more conservative — still a large multiple of
+# the single request the sync worker allowed. Raise via WEB_THREADS once the
+# memory graph shows headroom.
+threads = int(os.environ.get("WEB_THREADS", "6"))
 
 # Deliberately no max_requests: with a single worker, recycling would blip the
 # whole site and wipe the in-process caches, forcing a cold rebuild every time.

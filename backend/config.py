@@ -72,6 +72,10 @@ ORDER_ACCESS_CACHE_TTL_SEC = int(os.environ.get("ORDER_ACCESS_CACHE_TTL_SEC", "3
 # Shopify rebuild. PRODUCTS_MEM_TTL: seconds the per-instance memory tier is trusted.
 PRODUCTS_SNAPSHOT_TTL = int(os.environ.get("PRODUCTS_SNAPSHOT_TTL", "1800"))
 PRODUCTS_MEM_TTL = int(os.environ.get("PRODUCTS_MEM_TTL", "30"))
+# Ceiling on the per-instance product-detail cache. Entries are full product
+# blobs, so on a 512MB instance an uncapped cache eventually triggers an OOM
+# kill. Evicted entries cost one office read to restore.
+PRODUCT_DETAIL_CACHE_MAX = int(os.environ.get("PRODUCT_DETAIL_CACHE_MAX", "150"))
 
 # Background product-save queue (write-behind saves + post-save verification).
 # SAVE_WORKER_ENABLED: run the in-process worker thread on this instance.

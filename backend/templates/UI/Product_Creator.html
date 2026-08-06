@@ -339,6 +339,10 @@
         .form-row-status-vat-colour .form-group-parent {
             flex-shrink: 0;
         }
+        /* .form-group { display:flex } beats the UA [hidden] rule, so force it. */
+        #calendar-foil-option-wrap[hidden] {
+            display: none !important;
+        }
         .form-row-status-vat-colour #status {
             width: auto;
             min-width: 90px;
@@ -2173,6 +2177,29 @@
                         <span class="muted">Loading…</span>
                     </div>
                 </div>
+                <script>
+                // Deep-link (?edit=id): skip the Product Families home and go straight
+                // into the editor shell with a loading overlay, before any async work.
+                (function () {
+                    try {
+                        if (!new URLSearchParams(window.location.search).get('edit')) return;
+                        var actions = document.getElementById('product-action-buttons');
+                        var diagram = document.getElementById('parent-child-diagram-section');
+                        var back = document.getElementById('product-back-button');
+                        var loading = document.getElementById('product-loading-overlay');
+                        if (actions) actions.style.display = 'none';
+                        if (diagram) diagram.style.display = 'none';
+                        if (back) back.style.display = 'inline-flex';
+                        if (loading) loading.classList.add('visible');
+                        document.querySelectorAll('.collapsible-section').forEach(function (s) {
+                            s.style.display = 'block';
+                        });
+                        var saveBar = document.querySelector('.action-buttons');
+                        if (saveBar) saveBar.style.display = 'block';
+                        window.__PC_EDIT_DEEPLINK__ = true;
+                    } catch (_) { /* ignore */ }
+                })();
+                </script>
 
                 <!-- Edit Existing Product Modal -->
                 <div id="editProductModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: transparent; z-index: 10000; align-items: center; justify-content: center;" class="edit-modal-overlay">
@@ -2299,7 +2326,7 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="form-group form-group-calendar-foil calendar-foil-option-row" id="calendar-foil-option-wrap" hidden>
+                            <div class="form-group form-group-calendar-foil calendar-foil-option-row" id="calendar-foil-option-wrap" hidden style="display: none;">
                                 <label class="form-label">Foil option</label>
                                 <div class="radio-group">
                                     <label class="radio-label">
@@ -2822,6 +2849,21 @@
             if (diagramSection) diagramSection.style.display = 'none';
         }
 
+        // Used by the Products shell when opening an already-warm manager iframe:
+        // hide the families home and show the loading overlay before populate starts.
+        function prepareProductEditorDeepLink() {
+            showBackButtonAndHideActions();
+            document.querySelectorAll('.collapsible-section').forEach(function (section) {
+                section.style.display = 'block';
+            });
+            const saveBar = document.querySelector('.action-buttons');
+            if (saveBar) saveBar.style.display = 'block';
+            const loadingEl = document.getElementById('product-loading-overlay');
+            if (loadingEl) loadingEl.classList.add('visible');
+            window.__PC_EDIT_DEEPLINK__ = true;
+        }
+        window.prepareProductEditorDeepLink = prepareProductEditorDeepLink;
+
         function resetProductCreatorHomeUI() {
             // Clear any ?edit=<id> deep-link from the URL so a later refresh starts blank
             // instead of reloading the product we just came from.
@@ -2961,6 +3003,7 @@
                     applyChildModeVisibility();
                 }
                 updateMainImageToChildrenVisibility();
+                if (typeof syncCalendarFoilOptionVisibility === 'function') syncCalendarFoilOptionVisibility();
             }
             function updateChildUI() {
                 if (childYes && childYes.checked) {
@@ -2984,6 +3027,7 @@
                     applyChildModeVisibility();
                 }
                 updateMainImageToChildrenVisibility();
+                if (typeof syncCalendarFoilOptionVisibility === 'function') syncCalendarFoilOptionVisibility();
             }
             parentYes.addEventListener('change', updateParentUI);
             parentNo.addEventListener('change', updateParentUI);
@@ -3041,8 +3085,11 @@
                 stageArtworkTemplates(files);
             });
 
-            // Product Families diagram: parents load immediately (hardcoded), children from cache or background
-            (function() {
+                // Product Families diagram — skip when deep-linking straight into a product.
+                (function() {
+                if (window.__PC_EDIT_DEEPLINK__ || new URLSearchParams(window.location.search).get('edit')) {
+                    return;
+                }
                 function esc(s) {
                     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 }
@@ -3174,6 +3221,7 @@
             if (!wrap) return;
             const show = isCalendarProduct() && !isChildProduct();
             wrap.hidden = !show;
+            wrap.style.display = show ? '' : 'none';
             if (!show) {
                 setCalendarFoilEnabled(false, false);
                 return;
@@ -6772,7 +6820,8 @@
                         });
                     }
                 }
-                // Opt in per save rather than inheriting the tick from the last product
+                // Default off; for parents whose main image is already shared with
+                // children, restore the tick so the editor matches the live state.
                 const mainImgToChildrenBox = document.getElementById('mainImageToChildren');
                 if (mainImgToChildrenBox) mainImgToChildrenBox.checked = false;
                 updateMainImageToChildrenVisibility();
@@ -6887,6 +6936,13 @@
                             console.log(`✅ Added image to selectedShopifyMedia: REST ID ${img.id}, Global ID ${globalId}`);
                         });
                         console.log(`📦 Total images loaded into selectedShopifyMedia: ${selectedShopifyMedia.length}`);
+                        // Parent whose main image is already on the children: tick the box.
+                        if (!isDuplicate && parentChildVal && parentChildVal.startsWith('Parent - ') && media.length) {
+                            const mainImg = media.slice().sort((a, b) => (a.position || 999) - (b.position || 999))[0];
+                            if (mainImg && mainImg.src) {
+                                restoreMainImageToChildrenTick(parentChildVal, mainImg.src, productId);
+                            }
+                        }
                     }
                     updateMediaPreview();
                 } catch (e) { 
@@ -7808,6 +7864,28 @@
             if (!isParent) {
                 const box = document.getElementById('mainImageToChildren');
                 if (box) box.checked = false;
+            }
+        }
+
+        // Ask the server whether this parent's main image is already the family's
+        // shared one, and tick the box if so. Fire-and-forget so load stays fast.
+        async function restoreMainImageToChildrenTick(parentChild, mainSrc, productId) {
+            if (!parentChild || !mainSrc) return;
+            try {
+                const params = new URLSearchParams({ parent_child: parentChild, src: mainSrc });
+                if (productId) params.set('product_id', productId);
+                const resp = await fetch(`/api/product-family-image-check?${params.toString()}`);
+                const info = await resp.json();
+                if (!info || !info.shared) return;
+                // Bail if the user has already switched product or unchecked Parent.
+                const parentYes = document.getElementById('parentYes');
+                if (!parentYes || !parentYes.checked) return;
+                if (selectedProduct && String(selectedProduct.id) !== String(productId)) return;
+                const box = document.getElementById('mainImageToChildren');
+                if (box) box.checked = true;
+                updateMainImageToChildrenVisibility();
+            } catch (err) {
+                console.warn('Could not restore main-image-to-children tick:', err);
             }
         }
 

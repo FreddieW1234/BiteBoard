@@ -28,10 +28,11 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from config import PRODUCTS_SNAPSHOT_TTL, PRODUCTS_MEM_TTL
+    from config import PRODUCTS_SNAPSHOT_TTL, PRODUCTS_MEM_TTL, PRODUCT_DETAIL_CACHE_MAX
 except Exception:
     PRODUCTS_SNAPSHOT_TTL = 1800
     PRODUCTS_MEM_TTL = 30
+    PRODUCT_DETAIL_CACHE_MAX = 150
 
 logger = logging.getLogger(__name__)
 
@@ -2189,7 +2190,7 @@ def sync_product_snapshot(product_id, shopify_domain=None):
         detail = _build_product_detail_from_shopify(product_id, shopify_domain)
         if detail and detail.get("id"):
             _write_product_detail_snapshot(product_id, detail)
-            _PRODUCT_DETAIL_CACHE[str(product_id)] = {"at": time.time(), "data": detail}
+            _store_product_detail(product_id, detail)
         else:
             invalidate_product_detail_cache(product_id)
     except Exception as exc:
@@ -2276,6 +2277,24 @@ _PRODUCT_DETAIL_LOCK = threading.Lock()
 _PRODUCT_DETAIL_REFRESHING = set()    # str(pid) currently refreshing in background
 
 
+def _store_product_detail(product_id, data, now=None):
+    """Cache one product's detail, bounded.
+
+    Each entry is a full blob (variants, metafields, images) and the instance is
+    memory-constrained, so an uncapped cache would grow with every product ever
+    opened until the worker is OOM-killed. Oldest entries are evicted first; they
+    cost only one office read to bring back.
+    """
+    pid = str(product_id)
+    with _PRODUCT_DETAIL_LOCK:
+        _PRODUCT_DETAIL_CACHE[pid] = {"at": now if now is not None else time.time(), "data": data}
+        overflow = len(_PRODUCT_DETAIL_CACHE) - int(PRODUCT_DETAIL_CACHE_MAX)
+        if overflow > 0:
+            oldest = sorted(_PRODUCT_DETAIL_CACHE, key=lambda k: _PRODUCT_DETAIL_CACHE[k]["at"])
+            for stale in oldest[:overflow]:
+                _PRODUCT_DETAIL_CACHE.pop(stale, None)
+
+
 def _iso_age(updated_at, now):
     """Seconds since an ISO-8601 timestamp, or None if it can't be parsed."""
     if not updated_at:
@@ -2351,7 +2370,7 @@ def _refresh_product_detail_bg(product_id, shopify_domain=None):
         data = _build_product_detail_from_shopify(product_id, shopify_domain)
         if data and data.get("id"):
             _write_product_detail_snapshot(product_id, data)
-            _PRODUCT_DETAIL_CACHE[pid] = {"at": time.time(), "data": data}
+            _store_product_detail(pid, data)
     except Exception as exc:
         logger.warning("Product detail: background refresh failed for %s (%s)", pid, exc)
     finally:
@@ -2414,7 +2433,7 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
             logger.warning("Product detail: snapshot read failed for %s (%s)", pid, exc)
         if isinstance(item, dict) and isinstance(item.get("payload"), dict):
             data = item["payload"]
-            _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+            _store_product_detail(pid, data, now)
             age = _iso_age(item.get("updated_at"), now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_product_detail_refresh(product_id, shopify_domain)
@@ -2424,13 +2443,13 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
         data = _build_product_detail_from_shopify(product_id, shopify_domain)
         if data and data.get("id"):
             _write_product_detail_snapshot(product_id, data)
-            _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+            _store_product_detail(pid, data, now)
         return data
 
     # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
     data = _build_product_detail_from_shopify(product_id, shopify_domain)
     if data and data.get("id"):
-        _PRODUCT_DETAIL_CACHE[pid] = {"at": now, "data": data}
+        _store_product_detail(pid, data, now)
     return data
 
 
@@ -3299,13 +3318,15 @@ def family_image_usage(parent_child_value, image_src, product_id=None):
         return out
 
     # Editing the parent: confirm it actually reached a child before asking.
+    # Skip children we can't read or that have no images; the first readable
+    # child that carries the stem is enough to treat the family as sharing.
     for cid in child_ids:
         child_images = _product_image_stems(cid, domain, headers)
-        if child_images is None:
+        if not child_images:
             continue
         if any(_stems_match(cstem, stem) for _, cstem, _ in child_images):
             out["shared"] = True
-        break  # one sample is enough; the removal matches across all members
+            break
 
     return out
 

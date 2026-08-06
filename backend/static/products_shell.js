@@ -41,6 +41,10 @@
             if (!win.document || win.document.readyState !== 'complete') return false;
             var current = frame.getAttribute('data-src') || '';
             if (!current.startsWith(MANAGER_BASE_SRC)) return false;
+            // Hide the families home before populate so the switch never flashes it.
+            if (typeof win.prepareProductEditorDeepLink === 'function') {
+                win.prepareProductEditorDeepLink();
+            }
             win.pcPopulateFromProduct(String(productId), '');
             return true;
         } catch (_) {
@@ -171,6 +175,26 @@
         setView('manager', { editId: productId, returnView: 'all' });
     }
 
+    // Prefer in-place open over a full Products page navigation so All Products
+    // Edit never reloads into the families home first.
+    function handleEditLinkClick(e) {
+        var link = e.target && e.target.closest ? e.target.closest('a.edit-btn') : null;
+        if (!link) return;
+        var href = link.getAttribute('href') || '';
+        var m = href.match(/[?&]edit=([^&]+)/);
+        if (!m) return;
+        var productId = decodeURIComponent(m[1]);
+        if (window.ProductQueue && window.ProductQueue.isLocked && window.ProductQueue.isLocked(productId)) {
+            e.preventDefault();
+            e.stopPropagation();
+            alert('This product is being saved in the background and is locked until the save finishes. Check the Queue for progress.');
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        openEditor(productId);
+    }
+
     function backFromEditor(options) {
         options = options || {};
         var ret = getReturnView();
@@ -201,6 +225,7 @@
                 setView(view);
             });
         });
+        document.addEventListener('click', handleEditLinkClick, true);
     }
 
     function initFromUrl() {
