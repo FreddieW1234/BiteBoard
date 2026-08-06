@@ -42,7 +42,7 @@ query GetCustomersOverview($cursor: String) {
         email
         phone
         tags
-        ordersCount
+        numberOfOrders
         amountSpent { amount }
         state
         createdAt
@@ -468,7 +468,8 @@ def _format_customer_graphql(node):
         "tags": tags,
         "matched_tags": matched,
         "tag_conflict": len(matched) > 1,
-        "orders_count": node.get("ordersCount") or 0,
+        # Shopify renamed ordersCount -> numberOfOrders (API 2022+); accept either.
+        "orders_count": node.get("numberOfOrders") or node.get("ordersCount") or 0,
         "total_spent": amount_spent,
         "state": node.get("state") or "",
         "created_at": node.get("createdAt") or "",
@@ -528,7 +529,9 @@ def _fetch_all_customers_graphql():
 def _fetch_all_customers():
     try:
         return _fetch_all_customers_graphql()
-    except Exception:
+    except Exception as exc:
+        # REST + per-customer metafields is extremely slow; only use as last resort.
+        print(f"⚠️ Customers GraphQL failed ({exc}); falling back to REST (slow)", flush=True)
         raw_customers = _fetch_all_customers_rest()
         customers = []
         for raw in raw_customers:
@@ -540,6 +543,16 @@ def _fetch_all_customers():
 _CUSTOMERS_CACHE: dict | None = None
 _CUSTOMERS_CACHE_AT = 0.0
 _CUSTOMERS_CACHE_TTL = 90  # seconds — avoids repeated full Shopify pulls on tab switches
+_CUSTOMERS_REFRESH_LOCK = None  # lazy threading.Lock
+_CUSTOMERS_REFRESHING = False
+
+
+def _customers_refresh_lock():
+    global _CUSTOMERS_REFRESH_LOCK
+    if _CUSTOMERS_REFRESH_LOCK is None:
+        import threading
+        _CUSTOMERS_REFRESH_LOCK = threading.Lock()
+    return _CUSTOMERS_REFRESH_LOCK
 
 
 def invalidate_customers_cache() -> None:
@@ -548,8 +561,50 @@ def invalidate_customers_cache() -> None:
     _CUSTOMERS_CACHE_AT = 0.0
 
 
+def _build_customers_overview():
+    customers = _fetch_all_customers()
+    conflict_count = sum(1 for c in customers if c.get("tag_conflict"))
+    return {
+        "success": True,
+        "customers": customers,
+        "total": len(customers),
+        "conflict_count": conflict_count,
+    }
+
+
+def _refresh_customers_overview_bg():
+    """Background rebuild; never blocks the request that kicked it."""
+    global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT, _CUSTOMERS_REFRESHING
+    try:
+        result = _build_customers_overview()
+        _CUSTOMERS_CACHE = result
+        _CUSTOMERS_CACHE_AT = time.time()
+        print(f"✅ Customers overview refreshed ({result.get('total', 0)} customers)", flush=True)
+    except Exception as exc:
+        print(f"⚠️ Customers background refresh failed: {exc}", flush=True)
+    finally:
+        with _customers_refresh_lock():
+            _CUSTOMERS_REFRESHING = False
+
+
+def _kick_customers_refresh():
+    global _CUSTOMERS_REFRESHING
+    import threading
+    with _customers_refresh_lock():
+        if _CUSTOMERS_REFRESHING:
+            return
+        _CUSTOMERS_REFRESHING = True
+    threading.Thread(target=_refresh_customers_overview_bg, daemon=True).start()
+
+
 def get_customers_overview(*, refresh: bool = False):
-    """Return all Shopify customers as a flat list."""
+    """Return all Shopify customers as a flat list (stale-while-revalidate).
+
+    Fresh mem cache is returned immediately. A stale copy is returned while one
+    background Shopify rebuild runs, so the Customers page never holds a gunicorn
+    thread for the full catalog scan on every visit. Cold miss / explicit refresh
+    still builds once on the caller (unavoidable with an empty cache).
+    """
     global _CUSTOMERS_CACHE, _CUSTOMERS_CACHE_AT
     now = time.time()
     if (
@@ -559,14 +614,11 @@ def get_customers_overview(*, refresh: bool = False):
     ):
         return _CUSTOMERS_CACHE
 
-    customers = _fetch_all_customers()
-    conflict_count = sum(1 for c in customers if c["tag_conflict"])
-    result = {
-        "success": True,
-        "customers": customers,
-        "total": len(customers),
-        "conflict_count": conflict_count,
-    }
+    if not refresh and _CUSTOMERS_CACHE is not None:
+        _kick_customers_refresh()
+        return _CUSTOMERS_CACHE
+
+    result = _build_customers_overview()
     _CUSTOMERS_CACHE = result
     _CUSTOMERS_CACHE_AT = now
     return result

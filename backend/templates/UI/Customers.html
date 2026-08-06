@@ -1929,10 +1929,25 @@
             const content = document.getElementById('cu-content');
             document.getElementById('cu-flagged').innerHTML = '';
             content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers…</div>`;
+            const slowHint = setTimeout(() => {
+                if (content.querySelector('.spinner')) {
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Still loading customers from Shopify…<br><span style="font-size:0.85rem;color:#6b7280;margin-top:8px;display:inline-block;">First load after a deploy can take a minute.</span></div>`;
+                }
+            }, 8000);
             try {
                 const url = forceRefresh ? '/api/customers?refresh=1' : '/api/customers';
                 const resp = await fetch(url, { credentials: 'same-origin' });
-                const data = await resp.json().catch(() => ({}));
+                const text = await resp.text();
+                const trimmed = (text || '').trim();
+                const ctype = (resp.headers.get('content-type') || '').toLowerCase();
+                const looksJson = ctype.includes('application/json') || trimmed.startsWith('{') || trimmed.startsWith('[');
+                if (!looksJson) {
+                    throw new Error('Service temporarily unavailable. Please try again in a moment.');
+                }
+                let data = {};
+                try { data = trimmed ? JSON.parse(trimmed) : {}; } catch (_) {
+                    throw new Error('Service temporarily unavailable. Please try again in a moment.');
+                }
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
@@ -1948,6 +1963,8 @@
                 }
             } catch (err) {
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(err.message || 'Failed to load customers')}<br><br><button type="button" class="btn-ghost" onclick="loadCustomers()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+            } finally {
+                clearTimeout(slowHint);
             }
         }
 
