@@ -2807,6 +2807,10 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "print", "foil", "mailer", "mailerpacking", "calendar",
 })
 
+# Parent-only preference: keep pushing this parent's main image to its children on save.
+# Not inherited — children do not carry the flag.
+MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY = "main_image_to_children"
+
 
 def _get_parent_product_id_for_child(child_parent_child_value, shopify_domain=None):
     """
@@ -4645,6 +4649,34 @@ def create_product(product_data):
                     print("📅 Calendar product flag enabled", flush=True)
                 else:
                     print("📅 Clearing calendar product flag", flush=True)
+
+                # Persist the parent-only "main image across children" preference so
+                # reopening the product restores the tickbox.
+                metafields = [
+                    mf for mf in metafields
+                    if mf.get("key") != MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY
+                ]
+                if is_parent_product:
+                    prefer_main = bool(product_data.get("main_image_to_children"))
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
+                        "value": "true" if prefer_main else "",
+                        "type": "single_line_text_field",
+                    })
+                    print(
+                        "🖼️ Main image → children preference: "
+                        + ("enabled" if prefer_main else "cleared"),
+                        flush=True,
+                    )
+                else:
+                    # Standalone / non-parent: drop any leftover flag.
+                    metafields.append({
+                        "namespace": "custom",
+                        "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
+                        "value": "",
+                        "type": "single_line_text_field",
+                    })
 
                 resolved_storefront_options = resolve_storefront_options(
                     product_data.get("storefront_options"),

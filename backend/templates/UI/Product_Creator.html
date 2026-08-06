@@ -6820,10 +6820,18 @@
                         });
                     }
                 }
-                // Default off; for parents whose main image is already shared with
-                // children, restore the tick so the editor matches the live state.
+                // Restore the parent preference from its metafield. Fall back to
+                // detecting a shared main image for products saved before we
+                // started persisting the flag.
                 const mainImgToChildrenBox = document.getElementById('mainImageToChildren');
-                if (mainImgToChildrenBox) mainImgToChildrenBox.checked = false;
+                const mfMainImgKids = mfs.find(m => m.namespace === 'custom' && m.key === 'main_image_to_children');
+                const mfMainImgKidsOn = !!(mfMainImgKids && ['true', '1', 'yes'].includes(
+                    String(mfMainImgKids.value == null ? '' : mfMainImgKids.value).trim().toLowerCase()
+                ));
+                const isParentProduct = !!(parentChildVal && parentChildVal.startsWith('Parent - '));
+                if (mainImgToChildrenBox) {
+                    mainImgToChildrenBox.checked = !!(mfMainImgKidsOn && isParentProduct && !isDuplicate);
+                }
                 updateMainImageToChildrenVisibility();
                 familyImageRemovals = [];
 
@@ -6936,8 +6944,15 @@
                             console.log(`✅ Added image to selectedShopifyMedia: REST ID ${img.id}, Global ID ${globalId}`);
                         });
                         console.log(`📦 Total images loaded into selectedShopifyMedia: ${selectedShopifyMedia.length}`);
-                        // Parent whose main image is already on the children: tick the box.
-                        if (!isDuplicate && parentChildVal && parentChildVal.startsWith('Parent - ') && media.length) {
+                        // Older products may not have the preference metafield yet —
+                        // if the main image is already on the children, tick it.
+                        if (
+                            !isDuplicate
+                            && isParentProduct
+                            && media.length
+                            && mainImgToChildrenBox
+                            && !mainImgToChildrenBox.checked
+                        ) {
                             const mainImg = media.slice().sort((a, b) => (a.position || 999) - (b.position || 999))[0];
                             if (mainImg && mainImg.src) {
                                 restoreMainImageToChildrenTick(parentChildVal, mainImg.src, productId);
