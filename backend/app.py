@@ -1406,7 +1406,11 @@ def load_tool(tool_name):
 
     if tool_name == 'Product_Creator':
         if request.args.get('embed') == '1':
-            return render_template('UI/Product_Creator.html')
+            response = make_response(render_template('UI/Product_Creator.html'))
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
         qs = request.query_string.decode('utf-8')
         target = '/app/Products?view=manager'
         if qs:
@@ -1414,7 +1418,11 @@ def load_tool(tool_name):
         return redirect(target)
 
     if tool_name == 'Products':
-        return render_template('UI/Products.html')
+        response = make_response(render_template('UI/Products.html'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
 
     template_path = f'UI/{tool_name}.html'
     try:

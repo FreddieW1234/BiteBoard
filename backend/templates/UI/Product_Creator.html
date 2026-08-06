@@ -4775,8 +4775,22 @@
             });
         }
 
+        // Shared so warm-iframe product opens wait for the template UI before filling values.
+        let _loadMetafieldsPromise = null;
+        let _metafieldsUiReady = false;
+
+        async function ensureMetafieldsUiReady() {
+            if (_metafieldsUiReady && document.querySelector('#metafields-container .metafield-item')) {
+                return;
+            }
+            await loadMetafields();
+        }
+
         // Load metafields automatically when page loads - using specific template product
         async function loadMetafields() {
+            if (_loadMetafieldsPromise) return _loadMetafieldsPromise;
+            _metafieldsUiReady = false;
+            _loadMetafieldsPromise = (async () => {
             try {
                 console.log('Loading metafields from template product ID: 15285916696954...');
                 
@@ -4846,6 +4860,15 @@
                 console.log('Error loading metafields:', error.message);
                 console.error('Full error:', error);
                 displayMetafieldsWithFallback();
+            } finally {
+                _metafieldsUiReady = true;
+            }
+            })();
+            try {
+                await _loadMetafieldsPromise;
+            } finally {
+                // Allow a later explicit reload (Create New Product) to rebuild the form.
+                _loadMetafieldsPromise = null;
             }
         }
 
@@ -5172,18 +5195,17 @@
                     console.log(`🔍 Processing category field: ${metafield.key}`);
                 }
                 
-                const hasOptions = (!hasEmojiButtons && !isLongTextField && (metafield.available_options && metafield.available_options.length > 1));
+                const isFreeTextList = String(metafield.key || '').toLowerCase() === 'alternative_spellings';
+                const hasOptions = (!isFreeTextList && !hasEmojiButtons && !isLongTextField
+                    && (metafield.available_options && metafield.available_options.length > 1));
                 const currentValue = metafield.value || '';
-                const isFreeTextList = metafield.key === 'alternative_spellings'
-                    || (metafield.type === 'list.single_line_text_field'
-                        && metafield.key === 'alternative_spellings');
                 
                 // For fields with multiple real options (but NOT emoji fields), create a dropdown; otherwise use textarea
                 let inputElement;
                 
                 console.log(`🔍 Processing ${metafield.key}: isProductSize=${isProductSize}, hasEmojiButtons=${hasEmojiButtons}, hasOptions=${hasOptions}`);
                 
-                // Free-text list (Shopify "Single line text (List)") — row editor, not a dropdown.
+                // Free-text list editor for Alternative Spellings (not a choices dropdown).
                 if (isFreeTextList) {
                     inputElement = buildStringListEditorHtml(metafield, parseStringListMetafieldValue(currentValue));
                 } else if (isProductSize) {
@@ -6874,7 +6896,13 @@
                 let resp;
                 let data;
                 try {
-                    data = await fetchProductDetailForEditor(productId, { signal: _fetchCtrl.signal });
+                    // Wait for template metafield UI (incl. Alternative Spellings list)
+                    // before filling values — warm iframe opens can race DOMContentLoaded.
+                    const [detail] = await Promise.all([
+                        fetchProductDetailForEditor(productId, { signal: _fetchCtrl.signal }),
+                        ensureMetafieldsUiReady(),
+                    ]);
+                    data = detail;
                 } catch (fetchErr) {
                     clearTimeout(_fetchTimeout);
                     clearTimeout(_slowTimer);
@@ -7548,7 +7576,7 @@
 
             metafields.forEach(metafield => {
                 const key = metafield.key;
-                const namespace = metafield.namespace;
+                const namespace = (metafield.namespace || 'custom').trim() || 'custom';
                 let value = metafield.value;
                 if (value == null) value = '';
                 
@@ -7602,22 +7630,26 @@
                 }
 
                 // Free-text list editors (e.g. Alternative Spellings) — rebuild rows from saved list.
-                const listEditor = document.querySelector(
-                    `.string-list-editor[data-key="${key}"][data-namespace="${namespace}"]`
-                );
-                if (listEditor) {
-                    const rowsEl = listEditor.querySelector('.string-list-rows');
-                    const items = parsedValues.length
-                        ? parsedValues
-                        : parseStringListMetafieldValue(value);
-                    if (rowsEl) {
-                        rowsEl.innerHTML = (items.length ? items : [''])
-                            .map(buildStringListRowHtml).join('');
+                if (String(key || '').toLowerCase() === 'alternative_spellings'
+                    || document.querySelector(`.string-list-editor[data-key="${key}"]`)) {
+                    const listEditor =
+                        document.querySelector(`.string-list-editor[data-key="${key}"][data-namespace="${namespace}"]`)
+                        || document.querySelector(`.metafield-item[data-metafield-key="${key}"] .string-list-editor`)
+                        || document.querySelector(`.string-list-editor[data-key="${key}"]`);
+                    if (listEditor) {
+                        const rowsEl = listEditor.querySelector('.string-list-rows');
+                        const items = parsedValues.length
+                            ? parsedValues
+                            : parseStringListMetafieldValue(value);
+                        if (rowsEl) {
+                            rowsEl.innerHTML = (items.length ? items : [''])
+                                .map(buildStringListRowHtml).join('');
+                        }
+                        listEditor.dataset.wired = '';
+                        wireStringListEditor(listEditor);
+                        console.log(`✅ Set ${key} string-list editor to:`, items);
+                        return;
                     }
-                    listEditor.dataset.wired = '';
-                    wireStringListEditor(listEditor);
-                    console.log(`✅ Set ${key} string-list editor to:`, items);
-                    return;
                 }
 
                 // Find the corresponding input element (including custom dropdowns)
@@ -7647,6 +7679,18 @@
                         heightField.value = height;
                         console.log(`✅ Set ${key} height field to: ${height}`);
                     }
+                } else if (input && input.classList.contains('string-list-editor')) {
+                    const rowsEl = input.querySelector('.string-list-rows');
+                    const items = parsedValues.length
+                        ? parsedValues
+                        : parseStringListMetafieldValue(value);
+                    if (rowsEl) {
+                        rowsEl.innerHTML = (items.length ? items : [''])
+                            .map(buildStringListRowHtml).join('');
+                    }
+                    input.dataset.wired = '';
+                    wireStringListEditor(input);
+                    console.log(`✅ Set ${key} string-list editor (fallback) to:`, items);
                 } else if (input) {
                     if (input.classList.contains('allergen-dropdown') || (input.tagName === 'SELECT' && window.AllergenMapping && AllergenMapping.isAllergenKey(key))) {
                         const level = AllergenMapping.inferAllergenLevel(key, value);

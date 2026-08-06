@@ -5,7 +5,9 @@
     var DEFAULT_VIEW = 'all';
     var PREFETCH_PREFIX = 'pcProductPrefetch:';
     var PREFETCH_TTL_MS = 5 * 60 * 1000;
-    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1';
+    // Bump v= when Product_Creator.html changes so the warm manager iframe
+    // does not keep serving a stale editor after deploy.
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=altspell3';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
@@ -54,7 +56,10 @@
 
     function warmManagerFrame() {
         var frame = document.getElementById('products-manager-frame');
-        if (!frame || frame.getAttribute('data-src')) return;
+        if (!frame) return;
+        var current = frame.getAttribute('data-src') || '';
+        // Reload when empty or still on a pre-cache-bust URL so deploys are picked up.
+        if (current === MANAGER_BASE_SRC || current.indexOf(MANAGER_BASE_SRC + '&') === 0) return;
         frame.src = MANAGER_BASE_SRC;
         frame.setAttribute('data-src', MANAGER_BASE_SRC);
     }
@@ -129,7 +134,7 @@
     }
 
     function syncManagerFrameUrl() {
-        var homeSrc = '/app/Product_Creator?embed=1';
+        var homeSrc = MANAGER_BASE_SRC;
         var frame = document.getElementById('products-manager-frame');
         if (frame) frame.setAttribute('data-src', homeSrc);
         try {
@@ -144,7 +149,7 @@
     function resetManagerFrame() {
         var frame = document.getElementById('products-manager-frame');
         if (!frame) return;
-        var homeSrc = '/app/Product_Creator?embed=1';
+        var homeSrc = MANAGER_BASE_SRC;
         frame.removeAttribute('data-src');
         frame.src = homeSrc;
     }
@@ -152,7 +157,7 @@
     function resetManagerFrameInPlace() {
         var frame = document.getElementById('products-manager-frame');
         if (!frame) return;
-        var homeSrc = '/app/Product_Creator?embed=1';
+        var homeSrc = MANAGER_BASE_SRC;
         if (frame.contentWindow && typeof frame.contentWindow.resetProductCreatorHomeUI === 'function') {
             try {
                 frame.contentWindow.resetProductCreatorHomeUI();
