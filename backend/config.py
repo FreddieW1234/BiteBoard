@@ -95,6 +95,20 @@ SAVE_JOB_RETENTION_H = int(os.environ.get("SAVE_JOB_RETENTION_H", "6"))
 # a small (e.g. 512MB) instance into an OOM kill that takes the whole site down.
 SAVE_MIN_FREE_MB = int(os.environ.get("SAVE_MIN_FREE_MB", "150"))
 
+# Request-thread watchdog. The app runs on one gunicorn worker with a fixed
+# thread pool, so a few slow requests can occupy every thread and leave the site
+# unable to answer anything at all — even /healthz, which does no I/O. Only a
+# stack dump taken from inside the process while it is saturated shows what the
+# threads are actually stuck on.
+# WATCHDOG_BUSY: in-flight requests that count as saturated. WATCHDOG_SLOW_SEC: a
+# single request running longer than this also triggers a dump.
+# WATCHDOG_COOLDOWN_SEC: minimum gap between dumps, so logs can't flood.
+THREAD_WATCHDOG_ENABLED = os.environ.get("THREAD_WATCHDOG_ENABLED", "true").lower() in ("1", "true", "yes")
+THREAD_WATCHDOG_POLL_SEC = int(os.environ.get("THREAD_WATCHDOG_POLL_SEC", "10"))
+THREAD_WATCHDOG_BUSY = int(os.environ.get("THREAD_WATCHDOG_BUSY", "8"))
+THREAD_WATCHDOG_SLOW_SEC = int(os.environ.get("THREAD_WATCHDOG_SLOW_SEC", "30"))
+THREAD_WATCHDOG_COOLDOWN_SEC = int(os.environ.get("THREAD_WATCHDOG_COOLDOWN_SEC", "120"))
+
 # Klaviyo — production update emails (transactional Flow triggered by Events API)
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
 KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")

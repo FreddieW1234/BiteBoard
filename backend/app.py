@@ -51,6 +51,15 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
 
 print("🔐 Staff login enabled", flush=True)
 
+# Tracks in-flight requests and dumps thread stacks when the pool saturates.
+# Registered first so every request is accounted for; it never short-circuits,
+# so the maintenance/auth ordering below is unaffected.
+try:
+    from scripts.thread_watchdog import init_watchdog as _init_watchdog  # type: ignore
+    _init_watchdog(app)
+except Exception as _wd_err:
+    print(f"⚠️ Thread watchdog not started: {_wd_err}", flush=True)
+
 # Registered before portal_auth_gate below: Flask runs before_request handlers
 # in registration order, so the maintenance page must win over the staff auth
 # redirect. Also registers /healthz and /maint-exit.
@@ -331,6 +340,14 @@ def api_perf_check():
     instance starts cold.
     """
     out = {'instance': os.environ.get('RENDER_INSTANCE_ID', '?')}
+
+    # Sampled first: the timed calls below take ~1s, by which point other
+    # requests may have finished. Includes this request itself.
+    try:
+        from scripts import thread_watchdog
+        out['inflight'] = thread_watchdog.snapshot()
+    except Exception as e:
+        out['inflight_error'] = f"{type(e).__name__}: {e}"
 
     start = time.perf_counter()
     try:
