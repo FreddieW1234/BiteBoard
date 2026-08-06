@@ -98,6 +98,14 @@ def main(argv) -> int:
         for r in bad:
             print(f"   - {r.get('field')}: intended={r.get('intended')!r} actual={r.get('actual')!r}", flush=True)
 
+    # Collect every product this save wrote (parent + children + family image edits)
+    # so the worker can cross-check them into the office DB immediately.
+    try:
+        from product_creator.Product_Creator import product_ids_from_save_result  # type: ignore
+    except Exception:
+        from scripts.product_creator.Product_Creator import product_ids_from_save_result  # type: ignore
+    cross_check_ids = product_ids_from_save_result(result if isinstance(result, dict) else {}, product_id)
+
     # Verification is advisory: a successful create_product completes the job.
     # The diff is surfaced in the logs/Queue for inspection, but a mismatch does
     # not fail the save (create_product normalises some values, and the write did
@@ -106,6 +114,7 @@ def main(argv) -> int:
         "ok": success,
         "success": success,
         "product_id": product_id,
+        "cross_check_ids": cross_check_ids,
         "verify": verify,
         "verify_ok": ok,
         "error": None,

@@ -4,7 +4,8 @@
 Loop: reap stale jobs, claim the next queued job, run it in a subprocess
 (``product_save_runner.py``), capture its stdout as the job log, then either
 requeue (attempts remaining) or move the job to a terminal state. A verified
-success refreshes the overview/detail/family caches via ``sync_product_snapshot``.
+success cross-checks every touched product via ``sync_products_after_save``
+(immediate Shopify → office sync, not gated by the 30-minute catalog TTL).
 
 Guarded by ``SAVE_WORKER_ENABLED``. Free-tier Render instances sleep when idle,
 which pauses the worker; ``reap_stale`` requeues anything left running when the
@@ -158,7 +159,12 @@ def _run_job(job: dict) -> None:
 
     if ok:
         queue.complete(job_id, "done", verify=verify, logs=logs, error=None)
-        _refresh_caches(product_id)
+        # Immediate Shopify → office cross-check for every product this save
+        # touched (not gated by the 30-minute full-catalog TTL).
+        cross_ids = result.get("cross_check_ids") or []
+        if product_id and product_id not in cross_ids and str(product_id) not in {str(x) for x in cross_ids}:
+            cross_ids = [product_id] + list(cross_ids)
+        _refresh_caches(cross_ids or product_id)
         print(f"[save-worker] job {job_id} done (product {product_id})", flush=True)
         return
 
@@ -174,20 +180,23 @@ def _run_job(job: dict) -> None:
         print(f"[save-worker] job {job_id} FAILED after {attempts} attempt(s): {error}", flush=True)
 
 
-def _refresh_caches(product_id) -> None:
-    if not product_id:
+def _refresh_caches(product_ids) -> None:
+    """Pull live Shopify state into office caches for each saved product id."""
+    if not product_ids:
         return
+    if not isinstance(product_ids, (list, tuple, set)):
+        product_ids = [product_ids]
     try:
-        from product_creator.Product_Creator import sync_product_snapshot  # type: ignore
+        from product_creator.Product_Creator import sync_products_after_save  # type: ignore
     except Exception:
         try:
-            from scripts.product_creator.Product_Creator import sync_product_snapshot  # type: ignore
+            from scripts.product_creator.Product_Creator import sync_products_after_save  # type: ignore
         except Exception:
             return
     try:
-        sync_product_snapshot(product_id)
+        sync_products_after_save(list(product_ids))
     except Exception as exc:
-        print(f"[save-worker] snapshot refresh skipped for {product_id}: {exc}", flush=True)
+        print(f"[save-worker] snapshot refresh skipped: {exc}", flush=True)
 
 
 def _available_mb():

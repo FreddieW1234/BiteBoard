@@ -1927,13 +1927,17 @@ def api_create_product():
 
         result = create_product(data)
 
-        # Keep the All Products snapshot consistent with this save (best-effort).
+        # Immediate Shopify → office cross-check for every product this save
+        # touched (bypasses the 30-minute full-catalog TTL window).
         try:
             if isinstance(result, dict) and result.get('success'):
-                pid = (result.get('product') or {}).get('id') or result.get('product_id')
-                if pid:
-                    from scripts.product_creator.Product_Creator import sync_product_snapshot
-                    sync_product_snapshot(pid)
+                from scripts.product_creator.Product_Creator import (
+                    product_ids_from_save_result,
+                    sync_products_after_save,
+                )
+                ids = product_ids_from_save_result(result)
+                if ids:
+                    sync_products_after_save(ids)
         except Exception as _sync_err:
             print(f"[API] product snapshot sync skipped: {_sync_err}", flush=True)
 
@@ -2027,7 +2031,12 @@ def api_product_queue_enqueue():
             payload, status = err
             return jsonify(payload), status
 
-        from scripts.product_creator.Product_Creator import create_product, validate_product_data, sync_product_snapshot
+        from scripts.product_creator.Product_Creator import (
+            create_product,
+            validate_product_data,
+            product_ids_from_save_result,
+            sync_products_after_save,
+        )
         from scripts import product_save_queue as queue
 
         validation = validate_product_data(data)
@@ -2093,7 +2102,10 @@ def api_product_queue_enqueue():
                 except Exception:
                     verify = []
                 try:
-                    sync_product_snapshot(pid)
+                    ids = product_ids_from_save_result(
+                        result if isinstance(result, dict) else {}, pid
+                    )
+                    sync_products_after_save(ids)
                 except Exception as _e:
                     print(f"[API] snapshot sync skipped: {_e}", flush=True)
 

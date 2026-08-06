@@ -2173,7 +2173,7 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
         _write_products_snapshot(flat, updated_by="force-rebuild")
         _store_overview_cache(flat)
         try:
-            refresh_family_snapshots()
+            refresh_family_snapshots(force=True)
         except Exception as exc:
             logger.warning("Force rebuild: family snapshot refresh failed (%s)", exc)
         count = len(flat or [])
@@ -2252,8 +2252,13 @@ def _sync_product_row_to_snapshot(row):
     _upsert_flat_cache(row)
 
 
-def sync_product_snapshot(product_id, shopify_domain=None):
-    """After a save: fetch one product's overview row from Shopify and sync it everywhere."""
+def sync_product_snapshot(product_id, shopify_domain=None, refresh_families=True):
+    """After a save: fetch one product from Shopify into office/mem caches immediately.
+
+    Bypasses PRODUCTS_SNAPSHOT_TTL — saved products are always re-read from Shopify
+    so the All Products list and editor stay accurate without waiting for the
+    30-minute full-catalog rebuild window.
+    """
     try:
         row = fetch_product_overview_by_id(product_id, shopify_domain)
     except Exception as exc:
@@ -2278,10 +2283,62 @@ def sync_product_snapshot(product_id, shopify_domain=None):
         invalidate_product_detail_cache(product_id)
 
     # A save can change parent/child relationships, so rebuild the family snapshots.
+    if refresh_families:
+        try:
+            refresh_family_snapshots(force=True)
+        except Exception as exc:
+            logger.warning("Products: family snapshot refresh failed (%s)", exc)
+
+
+def sync_products_after_save(product_ids, shopify_domain=None):
+    """Cross-check every product touched by a save (parent + children + family edits).
+
+    Always pulls live Shopify data into the office snapshot for each id — not
+    gated by PRODUCTS_SNAPSHOT_TTL. Family trees are force-rebuilt once at the end.
+    """
+    seen = set()
+    ordered = []
+    for raw in product_ids or []:
+        if raw in (None, "", "null"):
+            continue
+        key = str(raw)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(raw)
+    if not ordered:
+        return
+    print(f"🔄 Post-save cross-check: syncing {len(ordered)} product(s) from Shopify…", flush=True)
+    for pid in ordered:
+        try:
+            sync_product_snapshot(pid, shopify_domain, refresh_families=False)
+            print(f"✅ Post-save cross-check synced product {pid}", flush=True)
+        except Exception as exc:
+            logger.warning("Products: post-save sync failed for %s (%s)", pid, exc)
+            print(f"⚠️ Post-save cross-check failed for {pid}: {exc}", flush=True)
     try:
-        refresh_family_snapshots()
+        refresh_family_snapshots(force=True)
     except Exception as exc:
         logger.warning("Products: family snapshot refresh failed (%s)", exc)
+
+
+def product_ids_from_save_result(result, fallback_id=None):
+    """Collect product ids that a successful create_product touched."""
+    ids = []
+    if fallback_id not in (None, "", "null"):
+        ids.append(fallback_id)
+    if not isinstance(result, dict):
+        return ids
+    pid = (result.get("product") or {}).get("id") or result.get("product_id")
+    if pid not in (None, "", "null"):
+        ids.append(pid)
+    for item in result.get("propagated_list") or []:
+        if isinstance(item, dict) and item.get("id") not in (None, "", "null"):
+            ids.append(item["id"])
+    for cid in result.get("cross_check_ids") or []:
+        if cid not in (None, "", "null"):
+            ids.append(cid)
+    return ids
 
 
 def get_all_products_overview(shopify_domain=None, refresh=False):
@@ -2543,43 +2600,69 @@ _NAMED_LOCK = threading.Lock()
 _NAMED_REFRESHING = set()         # names currently refreshing in background
 
 
-def _kick_named_refresh(name, builder):
+_NAMED_FORCE_PENDING = set()  # names that must rebuild from Shopify (ignore TTL)
+
+
+def _kick_named_refresh(name, builder, force=False):
+    """Background named-snapshot refresh.
+
+    force=True: always rebuild from Shopify (used after saves). Otherwise the
+    cheap path reloads from the office snapshot when it is still inside
+    PRODUCTS_SNAPSHOT_TTL so steady traffic does not scan the whole catalog.
+    """
     with _NAMED_LOCK:
+        if force:
+            _NAMED_FORCE_PENDING.add(name)
         if name in _NAMED_REFRESHING:
             return
         _NAMED_REFRESHING.add(name)
 
     def _run():
         try:
-            now = time.time()
-            # Cheap path: refresh the mem tier from the office snapshot and only
-            # rebuild from Shopify (builder) when the office copy is missing or
-            # older than PRODUCTS_SNAPSHOT_TTL. Prevents a full Shopify family
-            # scan on every mem-TTL expiry under steady traffic.
-            if _office_snapshots_available():
-                doc = None
-                try:
-                    doc = office_api.get_snapshot(name)
-                except Exception:
+            while True:
+                with _NAMED_LOCK:
+                    do_force = name in _NAMED_FORCE_PENDING
+                    _NAMED_FORCE_PENDING.discard(name)
+                now = time.time()
+                # Cheap path: refresh the mem tier from the office snapshot and only
+                # rebuild from Shopify (builder) when the office copy is missing or
+                # older than PRODUCTS_SNAPSHOT_TTL. Prevents a full Shopify family
+                # scan on every mem-TTL expiry under steady traffic.
+                if not do_force and _office_snapshots_available():
                     doc = None
-                if isinstance(doc, dict) and doc.get("payload") is not None:
-                    _NAMED_CACHE[name] = {"at": now, "data": doc["payload"]}
-                    age = _iso_age(doc.get("updated_at"), now)
-                    if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
-                        return
-            data = builder()
-            if data is not None:
-                if _office_snapshots_available():
                     try:
-                        office_api.put_snapshot(name, data)
-                    except Exception as exc:
-                        logger.warning("Named snapshot write failed for %s (%s)", name, exc)
-                _NAMED_CACHE[name] = {"at": time.time(), "data": data}
+                        doc = office_api.get_snapshot(name)
+                    except Exception:
+                        doc = None
+                    if isinstance(doc, dict) and doc.get("payload") is not None:
+                        _NAMED_CACHE[name] = {"at": now, "data": doc["payload"]}
+                        age = _iso_age(doc.get("updated_at"), now)
+                        if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
+                            with _NAMED_LOCK:
+                                if name in _NAMED_FORCE_PENDING:
+                                    continue  # a save asked for a forced rebuild
+                            return
+                data = builder()
+                if data is not None:
+                    if _office_snapshots_available():
+                        try:
+                            office_api.put_snapshot(name, data)
+                        except Exception as exc:
+                            logger.warning("Named snapshot write failed for %s (%s)", name, exc)
+                    _NAMED_CACHE[name] = {"at": time.time(), "data": data}
+                with _NAMED_LOCK:
+                    if name not in _NAMED_FORCE_PENDING:
+                        break
         except Exception as exc:
             logger.warning("Named snapshot refresh failed for %s (%s)", name, exc)
         finally:
+            restart = False
             with _NAMED_LOCK:
                 _NAMED_REFRESHING.discard(name)
+                if name in _NAMED_FORCE_PENDING:
+                    restart = True
+            if restart:
+                _kick_named_refresh(name, builder, force=True)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -2667,11 +2750,17 @@ _FAMILY_TREE_PARENTS_SNAPSHOT = "parent_child_tree_parents"
 _FAMILY_PARENTS_SNAPSHOT = "products_parent_child"
 
 
-def refresh_family_snapshots():
-    """Kick background rebuilds of the catalog-wide family snapshots (used after a
-    save, which may change parent/child relationships)."""
-    _kick_named_refresh(_FAMILY_TREE_SNAPSHOT, lambda: _build_parent_child_tree(parents_only=False))
-    _kick_named_refresh(_FAMILY_PARENTS_SNAPSHOT, _build_products_parent_child)
+def refresh_family_snapshots(force=False):
+    """Kick background rebuilds of the catalog-wide family snapshots.
+
+    force=True after a save so the rebuild is not skipped by PRODUCTS_SNAPSHOT_TTL.
+    """
+    _kick_named_refresh(
+        _FAMILY_TREE_SNAPSHOT,
+        lambda: _build_parent_child_tree(parents_only=False),
+        force=force,
+    )
+    _kick_named_refresh(_FAMILY_PARENTS_SNAPSHOT, _build_products_parent_child, force=force)
     # Parents-only variant is rarely used; just drop it so it rebuilds on demand.
     invalidate_named_snapshot(_FAMILY_TREE_PARENTS_SNAPSHOT)
 
@@ -3560,7 +3649,7 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
         time.sleep(0.2)
 
     print(f"📊 Family image removal: {removed} image(s) removed across {len(members)} product(s)", flush=True)
-    return {"success": True, "removed": removed}
+    return {"success": True, "removed": removed, "product_ids": members}
 
 
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
@@ -5033,14 +5122,16 @@ def create_product(product_data):
             # An image the user deleted here that the whole family shared, if they
             # confirmed removing it family-wide. Runs for parents and children alike.
             family_removals = product_data.get("family_image_removals") or []
+            family_touched_ids = []
             if family_removals and parent_child_value:
                 try:
-                    remove_images_across_family(
+                    removal = remove_images_across_family(
                         parent_child_value,
                         family_removals,
                         skip_product_id=product_id,
                         shopify_domain=actual_shopify_domain,
                     )
+                    family_touched_ids = list((removal or {}).get("product_ids") or [])
                 except Exception as e:
                     print(f"⚠️ Family image removal failed: {e}", flush=True)
 
@@ -5056,6 +5147,19 @@ def create_product(product_data):
             }
             if propagated_list:
                 result["propagated_list"] = propagated_list
+            # Ids the post-save cross-check must pull from Shopify immediately
+            # (bypasses the 30-minute full-catalog TTL window).
+            cross_check_ids = [product_id]
+            for item in propagated_list or []:
+                if isinstance(item, dict) and item.get("id") not in (None, "", "null"):
+                    cross_check_ids.append(item["id"])
+            cross_check_ids.extend(family_touched_ids)
+            # Dedupe while preserving order
+            seen_cc = set()
+            result["cross_check_ids"] = [
+                x for x in cross_check_ids
+                if x not in (None, "", "null") and not (str(x) in seen_cc or seen_cc.add(str(x)))
+            ]
             return result
         else:
             error_msg = f"Failed to {method.lower()} product: {response.status_code} - {response.text}"
