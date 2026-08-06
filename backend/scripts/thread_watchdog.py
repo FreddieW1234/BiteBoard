@@ -8,6 +8,14 @@ to tell which operation is holding the threads is to look at their stacks while
 it is happening, so this samples in the background and dumps to stdout (i.e. the
 Render logs) when the pool looks saturated.
 
+Note the blind spot: this can only see requests the app has actually been handed.
+Requests still waiting in the kernel's accept backlog are invisible, so if the
+server is configured to handle very few at once, a total outage can show up here
+as an almost idle process. That is exactly what happened while gunicorn was
+running its default sync worker — one request at a time, everything else queued
+out of sight. The concurrency in gunicorn.conf.py is what makes these numbers
+mean anything.
+
 Costs nothing when healthy: two dict operations per request and one wakeup every
 WATCHDOG_POLL_SEC that usually does nothing.
 """
