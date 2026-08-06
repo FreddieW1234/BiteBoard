@@ -37,7 +37,7 @@ try:
 except Exception:  # config not importable (e.g. standalone tooling)
     THREAD_WATCHDOG_ENABLED = True
     THREAD_WATCHDOG_POLL_SEC = 10
-    THREAD_WATCHDOG_BUSY = 8
+    THREAD_WATCHDOG_BUSY = 5
     THREAD_WATCHDOG_SLOW_SEC = 30
     THREAD_WATCHDOG_COOLDOWN_SEC = 120
 

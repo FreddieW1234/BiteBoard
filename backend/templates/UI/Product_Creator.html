@@ -2803,10 +2803,7 @@
         async function applyDefaultArtworkGuideline() {
             selectedGuideline = null;
             try {
-                if (!artworkGuidelinesFilesCache.length) {
-                    const resp = await (fetch)('/api/shopify/files', { credentials: 'same-origin' });
-                    artworkGuidelinesFilesCache = (await resp.json()) || [];
-                }
+                await ensureArtworkGuidelinesFiles();
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
             } catch (e) {
                 console.log('Could not apply default artwork guideline', e);
@@ -2835,6 +2832,8 @@
             applyNewProductFieldDefaults();
             // Hide the three action buttons and show the back button
             showBackButtonAndHideActions();
+            // Kick off Shopify Files load only once the editor is open (not on page load).
+            ensureArtworkGuidelinesFiles().catch(() => {});
         }
 
         function showBackButtonAndHideActions() {
@@ -3047,9 +3046,34 @@
         let artworkGuidelinesLeft = [];
         let artworkGuidelinesRight = [];
         let artworkGuidelinesFilesCache = [];
+        let artworkGuidelinesFilesPromise = null;
         let stagedArtworkTemplateFiles = [];
         let pcStagedRemoteEntries = [];
         let pcCurrentTemplatesFileGlobalId = '';
+
+        // Lazy + singleflight: do not block page open / health threads on a full
+        // Shopify Files scan until artwork guidelines are actually needed.
+        async function ensureArtworkGuidelinesFiles() {
+            if (artworkGuidelinesFilesCache.length) return artworkGuidelinesFilesCache;
+            if (artworkGuidelinesFilesPromise) return artworkGuidelinesFilesPromise;
+            artworkGuidelinesFilesPromise = (async () => {
+                try {
+                    const resp = await fetch('/api/shopify/files', { credentials: 'same-origin' });
+                    artworkGuidelinesFilesCache = (await resp.json()) || [];
+                    renderGuidelinesColumns(artworkGuidelinesFilesCache);
+                    return artworkGuidelinesFilesCache;
+                } catch (e) {
+                    const left = document.getElementById('artworkGuidelinesLeft');
+                    const right = document.getElementById('artworkGuidelinesRight');
+                    if (left) left.innerHTML = '<div class="danger">Failed to load files</div>';
+                    if (right) right.innerHTML = '<div class="danger">Failed to load files</div>';
+                    throw e;
+                } finally {
+                    artworkGuidelinesFilesPromise = null;
+                }
+            })();
+            return artworkGuidelinesFilesPromise;
+        }
 
         // Track if we're editing an existing product
         let selectedProduct = null;
@@ -3058,16 +3082,6 @@
         let pcCreateFromParentItems = [];
 
         document.addEventListener('DOMContentLoaded', async function () {
-            try {
-                const resp = await (fetch)('/api/shopify/files', { credentials: 'same-origin' });
-                const files = await resp.json();
-                artworkGuidelinesFilesCache = files || [];
-                renderGuidelinesColumns(artworkGuidelinesFilesCache);
-            } catch (e) {
-                document.getElementById('artworkGuidelinesLeft').innerHTML = '<div class="danger">Failed to load files</div>';
-                document.getElementById('artworkGuidelinesRight').innerHTML = '<div class="danger">Failed to load files</div>';
-            }
-
             // Templates upload box wiring
             const area = document.getElementById('artworkTemplatesUploadArea');
             const input = document.getElementById('artworkTemplatesInput');
@@ -7987,10 +8001,7 @@
                 box.checked = true;
                 return;
             }
-            if (!familyImageRemovals.includes(src)) {
-                familyImageRemovals.push(src);
-                console.log('🗑️ Queued family-wide removal after unticking main-image-to-children:', src);
-            }
+            queueFamilyImageRemoval(main);
         }
 
         function setupMainImageToChildrenListener() {
@@ -7998,6 +8009,25 @@
             if (!box || box.dataset.wired === '1') return;
             box.dataset.wired = '1';
             box.addEventListener('change', onMainImageToChildrenChange);
+        }
+
+        function familyRemovalKey(entry) {
+            if (!entry) return '';
+            if (typeof entry === 'string') return entry;
+            return String(entry.id || entry.src || entry.url || '');
+        }
+
+        function queueFamilyImageRemoval(media) {
+            const src = media && media.url;
+            if (!src) return;
+            const id = media.rest_api_id || media.id || null;
+            const entry = id ? { src: src, id: String(id) } : { src: src };
+            const key = familyRemovalKey(entry);
+            const already = familyImageRemovals.some(e => familyRemovalKey(e) === key || (e && e.src === src) || e === src);
+            if (!already) {
+                familyImageRemovals.push(entry);
+                console.log('🗑️ Queued family-wide removal:', entry);
+            }
         }
 
         async function maybeOfferFamilyImageRemoval(media) {
@@ -8009,6 +8039,8 @@
             try {
                 const params = new URLSearchParams({ parent_child: parentChild, src: src });
                 if (selectedProduct && selectedProduct.id) params.set('product_id', selectedProduct.id);
+                const imageId = media.rest_api_id || media.id;
+                if (imageId) params.set('image_id', String(imageId));
                 const resp = await fetch(`/api/product-family-image-check?${params.toString()}`);
                 info = await resp.json();
             } catch (err) {
@@ -8026,9 +8058,8 @@
                 `This is the main image shared across the "${info.family}" family. ` +
                 `Remove it from ${where} as well?`
             );
-            if (confirmed && !familyImageRemovals.includes(src)) {
-                familyImageRemovals.push(src);
-                console.log('🗑️ Queued family-wide removal for', src);
+            if (confirmed) {
+                queueFamilyImageRemoval(media);
             }
         }
 

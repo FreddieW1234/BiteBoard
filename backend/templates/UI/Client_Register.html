@@ -310,6 +310,36 @@
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
         }
 
+        // Parse API JSON safely. When the host is restarting or saturated, Render
+        // often returns an HTML error page — unconditional res.json() then shows
+        // customers a raw "<!DOCTYPE … is not valid JSON" message.
+        async function parseApiJson(res) {
+            const text = await res.text();
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            const trimmed = (text || '').trim();
+            const looksJson = ctype.includes('application/json')
+                || trimmed.startsWith('{')
+                || trimmed.startsWith('[');
+            if (!looksJson) {
+                const err = new Error(
+                    'Service temporarily unavailable. Please try again in a moment.'
+                );
+                err.temporary = true;
+                err.status = res.status;
+                throw err;
+            }
+            try {
+                return trimmed ? JSON.parse(trimmed) : {};
+            } catch (e) {
+                const err = new Error(
+                    'Service temporarily unavailable. Please try again in a moment.'
+                );
+                err.temporary = true;
+                err.status = res.status;
+                throw err;
+            }
+        }
+
         (function () {
             const stepEmail = document.getElementById('co-step-email');
             const emailForm = document.getElementById('co-email-form');
@@ -400,7 +430,7 @@
                         credentials: 'same-origin',
                         body: JSON.stringify(body),
                     });
-                    const data = await res.json();
+                    const data = await parseApiJson(res);
                     if (!res.ok || !data.success) {
                         throw new Error(data.error || 'Could not check email');
                     }
@@ -462,7 +492,7 @@
                         credentials: 'same-origin',
                         body: JSON.stringify(body),
                     });
-                    const data = await res.json();
+                    const data = await parseApiJson(res);
                     if (!res.ok || !data.success) throw new Error(data.error || 'Registration failed');
 
                     const successText = document.getElementById('co-success-text');

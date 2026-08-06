@@ -109,9 +109,16 @@ SAVE_MIN_FREE_MB = int(os.environ.get("SAVE_MIN_FREE_MB", "150"))
 # WATCHDOG_COOLDOWN_SEC: minimum gap between dumps, so logs can't flood.
 THREAD_WATCHDOG_ENABLED = os.environ.get("THREAD_WATCHDOG_ENABLED", "true").lower() in ("1", "true", "yes")
 THREAD_WATCHDOG_POLL_SEC = int(os.environ.get("THREAD_WATCHDOG_POLL_SEC", "10"))
-THREAD_WATCHDOG_BUSY = int(os.environ.get("THREAD_WATCHDOG_BUSY", "8"))
+# Default 5 so dumps can fire on a 6-thread worker (the old default of 8 was
+# unreachable and left thread-saturation outages invisible in logs).
+THREAD_WATCHDOG_BUSY = int(os.environ.get("THREAD_WATCHDOG_BUSY", "5"))
 THREAD_WATCHDOG_SLOW_SEC = int(os.environ.get("THREAD_WATCHDOG_SLOW_SEC", "30"))
 THREAD_WATCHDOG_COOLDOWN_SEC = int(os.environ.get("THREAD_WATCHDOG_COOLDOWN_SEC", "120"))
+
+# In-process cache for GET /api/shopify/files (full Shopify Content > Files scan).
+# Cold loads paginate hundreds of files and can saturate the gunicorn thread pool
+# when several staff open Product Creator at once.
+SHOPIFY_FILES_MEM_TTL = int(os.environ.get("SHOPIFY_FILES_MEM_TTL", "120"))
 
 # Klaviyo — production update emails (transactional Flow triggered by Events API)
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""

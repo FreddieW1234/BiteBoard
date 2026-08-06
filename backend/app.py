@@ -463,35 +463,97 @@ def api_live_products_count():
             pass
         return jsonify({'success': False, 'count': 0})
 
+# Full Shopify Content > Files list is expensive (paginated GraphQL). Cache in
+# this process so concurrent Product Creator tabs don't each hold a request
+# thread for the entire scan. Singleflight: one rebuild at a time.
+_SHOPIFY_FILES_CACHE = {"at": 0.0, "files": None}
+_SHOPIFY_FILES_LOCK = threading.Lock()
+_SHOPIFY_FILES_BUILDING = False
+try:
+    from config import SHOPIFY_FILES_MEM_TTL  # type: ignore
+except Exception:
+    SHOPIFY_FILES_MEM_TTL = 120
+
+
+def _invalidate_shopify_files_cache():
+    with _SHOPIFY_FILES_LOCK:
+        _SHOPIFY_FILES_CACHE["at"] = 0.0
+        _SHOPIFY_FILES_CACHE["files"] = None
+
+
+def _build_shopify_files_cache():
+    """Fetch Shopify Files into the in-process cache. Caller owns the build flag."""
+    global _SHOPIFY_FILES_BUILDING
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
+    from Artwork_Updater import fetch_files_with_graphql  # type: ignore
+    try:
+        files = fetch_files_with_graphql() or []
+        with _SHOPIFY_FILES_LOCK:
+            _SHOPIFY_FILES_CACHE["files"] = files
+            _SHOPIFY_FILES_CACHE["at"] = time.time()
+        try:
+            print(f"📁 Loaded {len(files)} files (cached {SHOPIFY_FILES_MEM_TTL}s)", flush=True)
+        except (OSError, ValueError):
+            pass
+        return files
+    finally:
+        with _SHOPIFY_FILES_LOCK:
+            _SHOPIFY_FILES_BUILDING = False
+
+
 @app.route('/api/shopify/files')
 def api_shopify_files():
+    global _SHOPIFY_FILES_BUILDING
     try:
-        import sys
-        import os
-        sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
-        
-        from Artwork_Updater import fetch_files_with_graphql  # type: ignore
-        
-        # Use the GraphQL function from Artwork_Updater
-        files = fetch_files_with_graphql()
-        
-        if files:
-            try:
-                print(f"📁 Loaded {len(files)} files")
-            except (OSError, ValueError):
-                pass
-            return jsonify(files)
-        else:
-            try:
-                print("📁 No files found")
-            except (OSError, ValueError):
-                pass
+        now = time.time()
+        refresh = (request.args.get("refresh") or "").strip().lower() in ("1", "true", "yes")
+        ttl = float(SHOPIFY_FILES_MEM_TTL)
+
+        with _SHOPIFY_FILES_LOCK:
+            cached = _SHOPIFY_FILES_CACHE.get("files")
+            age = now - float(_SHOPIFY_FILES_CACHE.get("at") or 0)
+            fresh = cached is not None and age < ttl
+            building = _SHOPIFY_FILES_BUILDING
+            if fresh and not refresh:
+                return jsonify(cached)
+
+            # Stale-while-revalidate: return the last list immediately and rebuild
+            # in a background thread so this request (and /healthz) stay free.
+            if cached is not None and not refresh:
+                if not building:
+                    _SHOPIFY_FILES_BUILDING = True
+                    threading.Thread(target=_build_shopify_files_cache, daemon=True).start()
+                return jsonify(cached)
+
+            # Cold miss (or explicit refresh with no cache yet): one thread builds.
+            if building:
+                claim = False
+            else:
+                _SHOPIFY_FILES_BUILDING = True
+                claim = True
+
+        if not claim:
+            # Wait briefly for the in-flight cold build; do not hold a thread for
+            # the full Shopify pagination (that is what starved /healthz before).
+            for _ in range(40):
+                time.sleep(0.25)
+                with _SHOPIFY_FILES_LOCK:
+                    cached = _SHOPIFY_FILES_CACHE.get("files")
+                    if cached is not None:
+                        return jsonify(cached)
+                    if not _SHOPIFY_FILES_BUILDING:
+                        break
             return jsonify([])
+
+        files = _build_shopify_files_cache()
+        return jsonify(files)
     except Exception as e:
+        with _SHOPIFY_FILES_LOCK:
+            _SHOPIFY_FILES_BUILDING = False
         try:
-            print(f"💥 Error loading files: {str(e)}")
+            print(f"💥 Error loading files: {str(e)}", flush=True)
         except (OSError, ValueError):
-            # stdout might be closed or corrupted
             pass
         return jsonify([])
 
@@ -538,6 +600,7 @@ def api_upload_file():
 
             if isinstance(result, dict) and result.get('success'):
                 print(f"✅ Upload successful: {file.filename}")
+                _invalidate_shopify_files_cache()
                 return jsonify({
                     'success': True,
                     'filename': result.get('filename') or file.filename,
@@ -2169,7 +2232,12 @@ def api_product_family_image_check():
         if not src or not parent_child:
             return jsonify({'shared': False})
         from scripts.product_creator.Product_Creator import family_image_usage
-        return jsonify(family_image_usage(parent_child, src, request.args.get('product_id')))
+        return jsonify(family_image_usage(
+            parent_child,
+            src,
+            request.args.get('product_id'),
+            request.args.get('image_id'),
+        ))
     except Exception as e:
         return jsonify({'shared': False, 'error': str(e)})
 

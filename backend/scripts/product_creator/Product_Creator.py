@@ -3525,24 +3525,117 @@ def get_family_product_ids(parent_child_value):
     return None, []
 
 
-def _product_image_stems(product_id, domain, headers):
-    """[(image_id, stem, position)] for a product, or None if it can't be read."""
+def resolve_family_product_ids(parent_child_value, shopify_domain=None, allow_live=False):
+    """(parent_id, [child_ids]) — warm tree first, optional live Shopify fallback.
+
+    ``allow_live=True`` is for the save worker (not web-request clicks): when the
+    families snapshot is cold/missing, fall back to the same GraphQL child lookup
+    used by parent→child propagation so family image removal still finds members.
+    """
+    parent_id, child_ids = get_family_product_ids(parent_child_value)
+    if parent_id or child_ids:
+        return parent_id, child_ids
+    if not allow_live:
+        return None, []
+
+    family = _family_key_from_parent_child(parent_child_value)
+    if not family:
+        return None, []
+    parent_value = "Parent - " + family
+    print(f"ℹ️ Family lookup: cache miss for {parent_value!r} — resolving live from Shopify", flush=True)
     try:
-        r = requests.get(f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images.json",
-                         headers=headers, timeout=20)
+        live_children = get_child_product_ids_by_parent_child_value(parent_value, shopify_domain) or []
+    except Exception as exc:
+        print(f"⚠️ Family lookup: live child scan failed: {exc}", flush=True)
+        live_children = []
+    live_parent = None
+    try:
+        live_parent = _find_parent_product_id_by_parent_value(parent_value, shopify_domain)
+    except Exception as exc:
+        print(f"⚠️ Family lookup: live parent scan failed: {exc}", flush=True)
+    return live_parent, list(live_children)
+
+
+def _product_images(product_id, domain, headers):
+    """Full image dicts for a product, or None if it can't be read."""
+    try:
+        r = requests.get(
+            f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images.json",
+            headers=headers,
+            timeout=20,
+        )
         if r.status_code != 200:
             return None
-        return [(img.get("id"), _image_name_stem(img.get("src")), img.get("position") or 999)
-                for img in (r.json().get("images", []) or [])]
+        return list(r.json().get("images", []) or [])
     except Exception:
         return None
+
+
+def _product_image_stems(product_id, domain, headers):
+    """[(image_id, stem, position)] for a product, or None if it can't be read."""
+    images = _product_images(product_id, domain, headers)
+    if images is None:
+        return None
+    return [
+        (img.get("id"), _image_name_stem(img.get("src")), img.get("position") or 999)
+        for img in images
+    ]
 
 
 def _stems_match(a, b):
     return _is_same_image_stem(a, b) or _is_same_image_stem(b, a)
 
 
-def family_image_usage(parent_child_value, image_src, product_id=None):
+def _normalize_family_removal_targets(image_srcs):
+    """Parse family_image_removals into (stems, parent_image_ids).
+
+    Accepts plain URL strings or ``{src, id}`` objects from the editor.
+    """
+    stems = []
+    parent_image_ids = []
+    seen_stems = set()
+    seen_ids = set()
+    for item in image_srcs or []:
+        src = ""
+        raw_id = None
+        if isinstance(item, dict):
+            src = (item.get("src") or item.get("url") or "").strip()
+            raw_id = item.get("id") or item.get("image_id") or item.get("rest_api_id")
+        else:
+            src = str(item or "").strip()
+        stem = _image_name_stem(src)
+        if stem and stem not in seen_stems:
+            seen_stems.add(stem)
+            stems.append(stem)
+        if raw_id in (None, "", "null"):
+            continue
+        sid = str(raw_id).strip()
+        if sid.startswith("gid://"):
+            sid = sid.rsplit("/", 1)[-1]
+        if not sid or sid in seen_ids:
+            continue
+        try:
+            parent_image_ids.append(int(sid))
+            seen_ids.add(sid)
+        except (TypeError, ValueError):
+            pass
+    return stems, parent_image_ids
+
+
+def _image_matches_family_removal(img, stems, parent_image_ids):
+    """True if this Shopify image is a copy of a queued family-removal target."""
+    if not img:
+        return False
+    istem = _image_name_stem(img.get("src"))
+    if istem and any(_stems_match(istem, s) for s in stems):
+        return True
+    for pid in parent_image_ids or []:
+        if _image_has_parent_main_marker(img, pid):
+            return True
+    return False
+
+
+def family_image_usage(parent_child_value, image_src, product_id=None, image_id=None):
     """Is image_src the image this product family shares as its main image?
 
     Costs at most two reads (the parent's images, and one child's to confirm the
@@ -3557,7 +3650,16 @@ def family_image_usage(parent_child_value, image_src, product_id=None):
         "child_count": 0,
     }
     stem = _image_name_stem(image_src)
-    if not stem:
+    parent_image_ids = []
+    if image_id not in (None, "", "null"):
+        try:
+            sid = str(image_id).strip()
+            if sid.startswith("gid://"):
+                sid = sid.rsplit("/", 1)[-1]
+            parent_image_ids.append(int(sid))
+        except (TypeError, ValueError):
+            pass
+    if not stem and not parent_image_ids:
         return out
 
     parent_id, child_ids = get_family_product_ids(parent_child_value)
@@ -3569,12 +3671,21 @@ def family_image_usage(parent_child_value, image_src, product_id=None):
     domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
 
-    parent_images = _product_image_stems(parent_id, domain, headers)
+    parent_images = _product_images(parent_id, domain, headers)
     if not parent_images:
         return out
-    parent_main = sorted(parent_images, key=lambda t: t[2])[0][1]
-    if not _stems_match(stem, parent_main):
+    parent_main = sorted(parent_images, key=lambda i: i.get("position") or 999)[0]
+    parent_main_stem = _image_name_stem(parent_main.get("src"))
+    parent_main_id = parent_main.get("id")
+    is_parent_main = False
+    if stem and _stems_match(stem, parent_main_stem):
+        is_parent_main = True
+    if parent_image_ids and parent_main_id is not None and int(parent_main_id) in parent_image_ids:
+        is_parent_main = True
+    if not is_parent_main:
         return out  # not the family's main image
+    if parent_main_id is not None and int(parent_main_id) not in parent_image_ids:
+        parent_image_ids.append(int(parent_main_id))
 
     try:
         editing_parent = int(product_id) == parent_id if product_id else False
@@ -3587,13 +3698,13 @@ def family_image_usage(parent_child_value, image_src, product_id=None):
         return out
 
     # Editing the parent: confirm it actually reached a child before asking.
-    # Skip children we can't read or that have no images; the first readable
-    # child that carries the stem is enough to treat the family as sharing.
+    # Match stem OR the bb-parent-main:{id} alt tag written during propagation.
     for cid in child_ids:
-        child_images = _product_image_stems(cid, domain, headers)
+        child_images = _product_images(cid, domain, headers)
         if not child_images:
             continue
-        if any(_stems_match(cstem, stem) for _, cstem, _ in child_images):
+        if any(_image_matches_family_removal(img, [stem] if stem else [], parent_image_ids)
+               for img in child_images):
             out["shared"] = True
             break
 
@@ -3603,47 +3714,75 @@ def family_image_usage(parent_child_value, image_src, product_id=None):
 def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=None, shopify_domain=None):
     """Delete the given image(s) from every other product in the family.
 
-    Matched on filename the same way the main image is propagated, so a child's
-    copy still counts even where Shopify renamed it to name_1.jpg. The product
-    being saved is skipped: its own removal goes through the normal keep-list.
+    Matched on filename stem (including Shopify ``_1`` renames) and on the
+    ``bb-parent-main:{parentImageId}`` alt marker written during propagation.
+    Uses a live Shopify family lookup when the warm tree cache is empty (save
+    worker). The product being saved is skipped: its own removal goes through
+    the normal keep-list.
     """
-    stems = [s for s in (_image_name_stem(src) for src in (image_srcs or [])) if s]
-    if not stems:
-        return {"success": True, "removed": 0}
+    stems, parent_image_ids = _normalize_family_removal_targets(image_srcs)
+    if not stems and not parent_image_ids:
+        print("ℹ️ Family image removal: no usable src/id targets", flush=True)
+        return {"success": True, "removed": 0, "product_ids": []}
 
-    parent_id, child_ids = get_family_product_ids(parent_child_value)
-    members = ([parent_id] if parent_id else []) + list(child_ids)
+    parent_id, child_ids = resolve_family_product_ids(
+        parent_child_value, shopify_domain=shopify_domain, allow_live=True
+    )
+    members = ([parent_id] if parent_id else []) + list(child_ids or [])
     try:
         skip = int(skip_product_id) if skip_product_id else None
     except (TypeError, ValueError):
         skip = None
+    # When the cache/live lookup couldn't name the parent but we're saving the
+    # parent, children alone are enough — and vice versa for a child save.
+    if skip is not None and skip not in members:
+        # Still fine; skip just won't match anything in the list.
+        pass
     members = [m for m in members if m and m != skip]
     if not members:
-        print("ℹ️ Family image removal: no other products found in this family", flush=True)
-        return {"success": True, "removed": 0}
+        print(
+            f"ℹ️ Family image removal: no other products found for "
+            f"{(parent_child_value or '').strip()!r} (stems={stems}, ids={parent_image_ids})",
+            flush=True,
+        )
+        return {"success": True, "removed": 0, "product_ids": []}
 
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
 
-    print(f"🗑️ Removing shared image from {len(members)} other product(s) in the family", flush=True)
+    print(
+        f"🗑️ Removing shared image from {len(members)} other product(s) "
+        f"(stems={stems}, parent_image_ids={parent_image_ids})",
+        flush=True,
+    )
     removed = 0
     for mid in members:
-        images = _product_image_stems(mid, domain, headers)
+        images = _product_images(mid, domain, headers)
         if images is None:
             print(f"⚠️ Family image removal: could not read images for product {mid}", flush=True)
             continue
-        for image_id, istem, _pos in images:
-            if not any(_stems_match(istem, s) for s in stems):
+        for img in images:
+            if not _image_matches_family_removal(img, stems, parent_image_ids):
+                continue
+            image_id = img.get("id")
+            if not image_id:
                 continue
             try:
-                d = requests.delete(f"{base_url}/products/{mid}/images/{image_id}.json",
-                                    headers=headers, timeout=20)
+                d = requests.delete(
+                    f"{base_url}/products/{mid}/images/{image_id}.json",
+                    headers=headers,
+                    timeout=20,
+                )
                 if d.status_code in (200, 204):
                     removed += 1
                     print(f"✅ Removed shared image {image_id} from product {mid}", flush=True)
                 else:
-                    print(f"⚠️ Could not remove image {image_id} from product {mid}: {d.status_code}", flush=True)
+                    print(
+                        f"⚠️ Could not remove image {image_id} from product {mid}: "
+                        f"{d.status_code} {d.text[:160]}",
+                        flush=True,
+                    )
             except Exception as e:
                 print(f"⚠️ Error removing image {image_id} from product {mid}: {e}", flush=True)
         time.sleep(0.2)
@@ -5099,9 +5238,37 @@ def create_product(product_data):
             except (requests.Timeout, requests.ConnectionError) as e:
                 print(f"⚠️ Warning: Verification request skipped ({type(e).__name__}) - product was still created", flush=True)
             
+            # An image the user deleted here that the whole family shared, if they
+            # confirmed removing it family-wide. Runs before parent→child
+            # propagation so a still-ticked "main image to children" cannot
+            # re-copy the image we just agreed to delete from children.
+            parent_child_value = (product_data.get("parent_child") or "").strip()
+            family_removals = product_data.get("family_image_removals") or []
+            family_touched_ids = []
+            if family_removals and parent_child_value:
+                print(
+                    f"🗑️ Family image removal requested ({len(family_removals)} target(s)) "
+                    f"for {parent_child_value!r}",
+                    flush=True,
+                )
+                try:
+                    removal = remove_images_across_family(
+                        parent_child_value,
+                        family_removals,
+                        skip_product_id=product_id,
+                        shopify_domain=actual_shopify_domain,
+                    )
+                    family_touched_ids = list((removal or {}).get("product_ids") or [])
+                    print(
+                        f"📊 Family image removal result: removed={(removal or {}).get('removed')} "
+                        f"products={family_touched_ids}",
+                        flush=True,
+                    )
+                except Exception as e:
+                    print(f"⚠️ Family image removal failed: {e}", flush=True)
+
             # When saving a parent product, propagate inherited fields to all corresponding child products
             propagated_list = []
-            parent_child_value = (product_data.get("parent_child") or "").strip()
             if _is_parent_child_type(parent_child_value, "parent"):
                 parent_title = (product.get("title") or "").strip() or "Product"
                 propagated_list.append({"id": product_id, "title": parent_title, "is_parent": True})
@@ -5118,22 +5285,6 @@ def create_product(product_data):
                     print(f"✅ Propagated inherited fields to {len(child_saved)} child product(s)", flush=True)
                 else:
                     print(f"ℹ️ No child products updated for {parent_child_value}", flush=True)
-
-            # An image the user deleted here that the whole family shared, if they
-            # confirmed removing it family-wide. Runs for parents and children alike.
-            family_removals = product_data.get("family_image_removals") or []
-            family_touched_ids = []
-            if family_removals and parent_child_value:
-                try:
-                    removal = remove_images_across_family(
-                        parent_child_value,
-                        family_removals,
-                        skip_product_id=product_id,
-                        shopify_domain=actual_shopify_domain,
-                    )
-                    family_touched_ids = list((removal or {}).get("product_ids") or [])
-                except Exception as e:
-                    print(f"⚠️ Family image removal failed: {e}", flush=True)
 
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available
