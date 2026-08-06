@@ -13,7 +13,7 @@ import json
 import base64
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 
 # UTF-8 encoding handled at subprocess level in backend
@@ -2143,6 +2143,86 @@ def invalidate_products_overview_cache():
     _PRODUCTS_OVERVIEW_CACHE = None
     _PRODUCTS_OVERVIEW_CACHE_AT = 0.0
     _PRODUCTS_FLAT_CACHE = None
+
+
+# Manual full Shopify → office overwrite (Dev tab). Separate from the SWR
+# background refresh so a forced rebuild always hits Shopify even when the
+# office snapshot is still inside PRODUCTS_SNAPSHOT_TTL.
+_FORCE_REBUILD_LOCK = threading.Lock()
+_FORCE_REBUILD_STATE = {
+    "status": "idle",       # idle | running | done | error
+    "started_at": None,
+    "finished_at": None,
+    "product_count": None,
+    "error": None,
+}
+
+
+def force_rebuild_products_snapshot_status():
+    """Latest forced rebuild progress for the Dev UI."""
+    with _FORCE_REBUILD_LOCK:
+        return dict(_FORCE_REBUILD_STATE)
+
+
+def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
+    global _FORCE_REBUILD_STATE
+    started = started_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        print("🔄 Force rebuild: scanning all Shopify products…", flush=True)
+        flat = _build_products_overview_from_shopify(shopify_domain)
+        _write_products_snapshot(flat, updated_by="force-rebuild")
+        _store_overview_cache(flat)
+        try:
+            refresh_family_snapshots()
+        except Exception as exc:
+            logger.warning("Force rebuild: family snapshot refresh failed (%s)", exc)
+        count = len(flat or [])
+        print(f"✅ Force rebuild complete: {count} products written to office snapshot", flush=True)
+        with _FORCE_REBUILD_LOCK:
+            _FORCE_REBUILD_STATE = {
+                "status": "done",
+                "started_at": started,
+                "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "product_count": count,
+                "error": None,
+            }
+    except Exception as exc:
+        logger.warning("Force rebuild failed (%s)", exc)
+        print(f"❌ Force rebuild failed: {exc}", flush=True)
+        with _FORCE_REBUILD_LOCK:
+            _FORCE_REBUILD_STATE = {
+                "status": "error",
+                "started_at": started,
+                "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "product_count": None,
+                "error": str(exc),
+            }
+
+
+def start_force_rebuild_products_snapshot(shopify_domain=None):
+    """Start a full Shopify → office overwrite in the background.
+
+    Returns (started: bool, state: dict). Rejects a second start while one is
+    already running so two catalog scans can't pile onto the same instance.
+    """
+    with _FORCE_REBUILD_LOCK:
+        if _FORCE_REBUILD_STATE.get("status") == "running":
+            return False, dict(_FORCE_REBUILD_STATE)
+        started = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _FORCE_REBUILD_STATE = {
+            "status": "running",
+            "started_at": started,
+            "finished_at": None,
+            "product_count": None,
+            "error": None,
+        }
+    threading.Thread(
+        target=_force_rebuild_products_snapshot_bg,
+        kwargs={"shopify_domain": shopify_domain, "started_at": started},
+        name="force-products-rebuild",
+        daemon=True,
+    ).start()
+    return True, force_rebuild_products_snapshot_status()
 
 
 def _upsert_flat_cache(row):

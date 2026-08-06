@@ -72,6 +72,18 @@
         .dv-code { margin: 0; padding: 14px 16px; overflow: auto; flex: 1; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; font-size: 0.78rem; line-height: 1.55; color: #1f2937; white-space: pre; tab-size: 4; }
         .dv-state { padding: 40px 20px; text-align: center; color: #6b7280; font-size: 0.875rem; }
         .dv-err { color: #dc2626; }
+
+        .dv-tools { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+        .dv-tools-title { font-size: 0.9rem; font-weight: 600; color: #111827; margin: 0 0 4px 0; }
+        .dv-tools-desc { font-size: 0.8rem; color: #6b7280; margin: 0 0 12px 0; line-height: 1.45; }
+        .dv-tools-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .dv-btn-primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+        .dv-btn-primary:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+        .dv-btn-primary:disabled { background: #a5b4fc; border-color: #a5b4fc; }
+        .dv-status { font-size: 0.825rem; color: #374151; }
+        .dv-status.ok { color: #15803d; }
+        .dv-status.err { color: #dc2626; }
+        .dv-status.run { color: #b45309; }
     </style>
 </head>
 <body>
@@ -96,6 +108,22 @@
         <div class="main-wrap">
             <h1 class="page-title"><i class="fas fa-code"></i> Dev Files</h1>
             <p class="page-desc">Read-only view of the code deployed on this Render instance. This is not the Office server.</p>
+
+            <div class="dv-tools">
+                <p class="dv-tools-title"><i class="fas fa-database"></i> Products snapshot</p>
+                <p class="dv-tools-desc">
+                    Force a full Shopify catalog scan and overwrite the office product database.
+                    Normally this only runs in the background when the snapshot is older than 30 minutes
+                    and someone loads Products. A forced rebuild can take several minutes and uses the
+                    Shopify API budget — avoid clicking it during busy saves.
+                </p>
+                <div class="dv-tools-row">
+                    <button type="button" class="dv-btn dv-btn-primary" id="dv-rebuild-snapshot">
+                        <i class="fas fa-cloud-download-alt"></i> Full Shopify → DB overwrite
+                    </button>
+                    <span class="dv-status" id="dv-rebuild-status">Idle</span>
+                </div>
+            </div>
 
             <div class="dv-bar">
                 <button type="button" class="dv-btn" id="dv-up"><i class="fas fa-arrow-up"></i> Up</button>
@@ -218,6 +246,81 @@
     document.getElementById('dv-up').addEventListener('click', function () { if (!atRoot) loadTree(parentPath); });
     document.getElementById('dv-refresh').addEventListener('click', function () { loadTree(currentPath); });
     document.getElementById('dv-filter').addEventListener('input', renderList);
+
+    // ---- Force Shopify → office products overwrite ----
+    var rebuildTimer = null;
+    var rebuildBtn = document.getElementById('dv-rebuild-snapshot');
+    var rebuildStatus = document.getElementById('dv-rebuild-status');
+
+    function setRebuildUi(state) {
+        state = state || {};
+        var st = state.status || 'idle';
+        rebuildBtn.disabled = st === 'running';
+        rebuildStatus.className = 'dv-status';
+        if (st === 'running') {
+            rebuildStatus.classList.add('run');
+            rebuildStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning Shopify… started ' + esc(state.started_at || '');
+        } else if (st === 'done') {
+            rebuildStatus.classList.add('ok');
+            rebuildStatus.textContent = 'Done — wrote ' + (state.product_count != null ? state.product_count : '?') +
+                ' products' + (state.finished_at ? ' at ' + state.finished_at : '');
+        } else if (st === 'error') {
+            rebuildStatus.classList.add('err');
+            rebuildStatus.textContent = 'Failed: ' + (state.error || 'unknown error');
+        } else {
+            rebuildStatus.textContent = 'Idle';
+        }
+    }
+
+    function pollRebuildStatus() {
+        fetch('/api/dev/products-snapshot-status', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'status failed');
+                setRebuildUi(d.state);
+                if (d.state && d.state.status === 'running') {
+                    rebuildTimer = setTimeout(pollRebuildStatus, 2500);
+                } else {
+                    rebuildTimer = null;
+                }
+            })
+            .catch(function (err) {
+                rebuildStatus.className = 'dv-status err';
+                rebuildStatus.textContent = err.message || 'Status check failed';
+                rebuildTimer = null;
+                rebuildBtn.disabled = false;
+            });
+    }
+
+    rebuildBtn.addEventListener('click', function () {
+        if (!confirm('Overwrite the office products database from a full Shopify scan?\n\nThis can take several minutes and uses API quota.')) return;
+        rebuildBtn.disabled = true;
+        rebuildStatus.className = 'dv-status run';
+        rebuildStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting…';
+        fetch('/api/dev/products-snapshot-rebuild', { method: 'POST', credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'Could not start rebuild');
+                setRebuildUi(d.state);
+                if (d.state && d.state.status === 'running' && !rebuildTimer) {
+                    rebuildTimer = setTimeout(pollRebuildStatus, 2500);
+                }
+            })
+            .catch(function (err) {
+                rebuildStatus.className = 'dv-status err';
+                rebuildStatus.textContent = err.message || 'Start failed';
+                rebuildBtn.disabled = false;
+            });
+    });
+
+    // Restore in-progress state if the page is reopened mid-scan.
+    fetch('/api/dev/products-snapshot-status', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (d.success) setRebuildUi(d.state);
+            if (d.state && d.state.status === 'running') pollRebuildStatus();
+        })
+        .catch(function () { /* ignore */ });
 
     loadTree('');
 })();

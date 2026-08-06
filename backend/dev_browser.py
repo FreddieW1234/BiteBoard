@@ -138,11 +138,54 @@ def _dev_file():
     })
 
 
-def init_dev_browser(app):
-    """Register the Dev browser page and its two read-only JSON endpoints.
+def _dev_products_snapshot_rebuild():
+    """Force a full Shopify → office products snapshot overwrite.
 
-    All three sit behind portal_auth_gate, so staff login is required.
+    Runs in the background: a catalog scan can take minutes and must not hold a
+    request thread. Staff-only via portal_auth_gate.
+    """
+    try:
+        from scripts.product_creator.Product_Creator import (  # type: ignore
+            start_force_rebuild_products_snapshot,
+        )
+        started, state = start_force_rebuild_products_snapshot()
+        return jsonify({
+            "success": True,
+            "started": started,
+            "already_running": not started,
+            "state": state,
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+def _dev_products_snapshot_status():
+    try:
+        from scripts.product_creator.Product_Creator import (  # type: ignore
+            force_rebuild_products_snapshot_status,
+        )
+        return jsonify({"success": True, "state": force_rebuild_products_snapshot_status()})
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+def init_dev_browser(app):
+    """Register the Dev browser page and its JSON endpoints.
+
+    All sit behind portal_auth_gate, so staff login is required.
     """
     app.add_url_rule("/app/Dev", "dev_files_page", _dev_page, methods=["GET"])
     app.add_url_rule("/api/dev/tree", "dev_files_tree", _dev_tree, methods=["GET"])
     app.add_url_rule("/api/dev/file", "dev_files_file", _dev_file, methods=["GET"])
+    app.add_url_rule(
+        "/api/dev/products-snapshot-rebuild",
+        "dev_products_snapshot_rebuild",
+        _dev_products_snapshot_rebuild,
+        methods=["POST"],
+    )
+    app.add_url_rule(
+        "/api/dev/products-snapshot-status",
+        "dev_products_snapshot_status",
+        _dev_products_snapshot_status,
+        methods=["GET"],
+    )
