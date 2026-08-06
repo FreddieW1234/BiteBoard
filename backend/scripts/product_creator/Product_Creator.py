@@ -3078,6 +3078,17 @@ def _inherit_metafields_with_clears(metafields):
     return result
 
 
+# Written onto a child's copy of the parent's main image so later saves can tell
+# "already applied" apart from a coincidentally similar filename. Shopify often
+# renames the file when copying via src, so stem matching alone is not enough.
+_PARENT_MAIN_ALT_PREFIX = "bb-parent-main:"
+_SHOPIFY_SIZE_SUFFIX = re.compile(
+    r"_(pico|icon|thumb|small|compact|medium|large|grande|\d+x\d+)$",
+    re.I,
+)
+_TRAILING_COPY_NUM = re.compile(r"_\d+$")
+
+
 def _image_name_stem(src):
     """Filename stem of a Shopify CDN image URL, ignoring the ?v= cache buster."""
     if not src:
@@ -3086,15 +3097,67 @@ def _image_name_stem(src):
     return base.rsplit(".", 1)[0].strip().lower()
 
 
+def _normalize_image_stem(stem):
+    """Strip Shopify size tokens and trailing _1/_2 copy numbers for comparison."""
+    s = (stem or "").strip().lower()
+    if not s:
+        return ""
+    prev = None
+    while prev != s:
+        prev = s
+        s = _SHOPIFY_SIZE_SUFFIX.sub("", s)
+        s = _TRAILING_COPY_NUM.sub("", s)
+    return s
+
+
 def _is_same_image_stem(child_stem, parent_stem):
     """True when a child image looks like a copy of the parent's image.
 
     Shopify appends _1, _2 ... when a filename is already taken on the product,
-    so a copy of "front.jpg" can land as "front_1.jpg".
+    so a copy of "front.jpg" can land as "front_1.jpg". It also renames copies
+    after the destination product, so we compare normalized stems too.
     """
     if not child_stem or not parent_stem:
         return False
-    return child_stem == parent_stem or child_stem.startswith(parent_stem + "_")
+    if child_stem == parent_stem:
+        return True
+    if child_stem.startswith(parent_stem + "_") or parent_stem.startswith(child_stem + "_"):
+        return True
+    return _normalize_image_stem(child_stem) == _normalize_image_stem(parent_stem)
+
+
+def _parent_main_alt_marker(parent_image_id):
+    return f"{_PARENT_MAIN_ALT_PREFIX}{parent_image_id}"
+
+
+def _image_has_parent_main_marker(img, parent_image_id):
+    alt = (img.get("alt") or "").strip()
+    marker = _parent_main_alt_marker(parent_image_id)
+    return alt == marker or alt.startswith(marker + " ") or alt.startswith(marker + "|")
+
+
+def _find_parent_main_copies_on_child(child_images, parent_stem, parent_image_id):
+    """All child images that look like copies of this parent's main image."""
+    matches = []
+    seen = set()
+    for img in child_images or []:
+        iid = img.get("id")
+        if iid in seen:
+            continue
+        if _image_has_parent_main_marker(img, parent_image_id) or _stems_match(
+            _image_name_stem(img.get("src")), parent_stem
+        ):
+            seen.add(iid)
+            matches.append(img)
+    # Prefer an already-tagged copy, then whichever is already at position 1.
+    matches.sort(
+        key=lambda img: (
+            0 if _image_has_parent_main_marker(img, parent_image_id) else 1,
+            0 if (img.get("position") or 999) == 1 else 1,
+            img.get("position") or 999,
+        )
+    )
+    return matches
 
 
 def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domain=None):
@@ -3103,6 +3166,8 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
     Nothing is deleted: the image is added at position 1 and the child's existing
     images shift down. If the child already has a copy of that image it is just
     moved to the front, so re-saving the parent does not pile up duplicates.
+    Copies are tagged with an alt marker keyed to the parent image id so later
+    saves still recognise them even when Shopify renames the file.
     """
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
@@ -3156,14 +3221,17 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
 
     main_image = sorted(parent_images, key=lambda i: i.get("position") or 999)[0]
     main_src = (main_image.get("src") or "").strip()
-    if not main_src:
-        print("ℹ️ Main image propagation: parent main image has no source URL", flush=True)
+    parent_image_id = main_image.get("id")
+    if not main_src or not parent_image_id:
+        print("ℹ️ Main image propagation: parent main image has no source URL/id", flush=True)
         return {"success": True, "updated": 0}
     parent_stem = _image_name_stem(main_src)
+    marker = _parent_main_alt_marker(parent_image_id)
 
     print(f"🖼️ Pushing parent main image to {len(child_ids)} child product(s): {main_src.split('/')[-1][:60]}", flush=True)
 
     updated = 0
+    skipped = 0
     for cid in child_ids:
         try:
             child_resp = _request_with_retry("GET", f"{base_url}/products/{cid}/images.json", label=f"child {cid} images")
@@ -3172,28 +3240,52 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                 continue
             child_images = child_resp.json().get("images", []) or []
 
-            existing = next(
-                (img for img in child_images if _is_same_image_stem(_image_name_stem(img.get("src")), parent_stem)),
-                None,
-            )
+            copies = _find_parent_main_copies_on_child(child_images, parent_stem, parent_image_id)
+            existing = copies[0] if copies else None
+
+            # Earlier saves could pile up duplicates when rename broke stem matching.
+            # Keep one copy and delete the rest.
+            for dup in copies[1:]:
+                dup_id = dup.get("id")
+                if not dup_id:
+                    continue
+                deleted = _request_with_retry(
+                    "DELETE",
+                    f"{base_url}/products/{cid}/images/{dup_id}.json",
+                    label=f"child {cid} dup image",
+                )
+                if deleted.status_code in (200, 204):
+                    print(f"🗑️ Removed duplicate parent-main image {dup_id} from child {cid}", flush=True)
+                time.sleep(0.15)
 
             if existing:
                 image_id = existing.get("id")
-                if (existing.get("position") or 0) != 1:
-                    move = _request_with_retry(
-                        "PUT",
-                        f"{base_url}/products/{cid}/images/{image_id}.json",
-                        {"image": {"id": int(image_id), "position": 1}},
-                        label=f"child {cid} image position",
-                    )
-                    if move.status_code != 200:
-                        print(f"⚠️ Could not move existing image to front on child {cid}: {move.status_code}", flush=True)
-                        continue
+                already_main = (existing.get("position") or 0) == 1
+                already_tagged = _image_has_parent_main_marker(existing, parent_image_id)
+                if already_main and already_tagged and len(copies) <= 1:
+                    skipped += 1
+                    print(f"ℹ️ Child {cid} already has this parent main image — skipped", flush=True)
+                    continue
+
+                patch = {"id": int(image_id)}
+                if not already_main:
+                    patch["position"] = 1
+                if not already_tagged:
+                    patch["alt"] = marker
+                move = _request_with_retry(
+                    "PUT",
+                    f"{base_url}/products/{cid}/images/{image_id}.json",
+                    {"image": patch},
+                    label=f"child {cid} image position",
+                )
+                if move.status_code != 200:
+                    print(f"⚠️ Could not update existing image on child {cid}: {move.status_code}", flush=True)
+                    continue
             else:
                 created = _request_with_retry(
                     "POST",
                     f"{base_url}/products/{cid}/images.json",
-                    {"image": {"src": main_src, "position": 1}},
+                    {"image": {"src": main_src, "position": 1, "alt": marker}},
                     label=f"child {cid} image add",
                 )
                 if created.status_code not in (200, 201):
@@ -3215,8 +3307,12 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
             print(f"⚠️ Main image propagation failed for child {cid}: {e}", flush=True)
         time.sleep(0.3)
 
-    print(f"📊 Main image propagation: {updated}/{len(child_ids)} child product(s) updated", flush=True)
-    return {"success": True, "updated": updated}
+    print(
+        f"📊 Main image propagation: {updated} updated, {skipped} already applied "
+        f"({len(child_ids)} child product(s))",
+        flush=True,
+    )
+    return {"success": True, "updated": updated, "skipped": skipped}
 
 
 def _family_key_from_parent_child(value):
