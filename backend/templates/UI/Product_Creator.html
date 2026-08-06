@@ -2223,6 +2223,19 @@
                     <p style="margin: 8px 0 0 0; font-size: 0.95rem;">This product is a child. You can edit the fields shown below. To change pricing, VAT, ingredients, artwork, colour options, or other inherited details, edit the parent product instead.</p>
                 </div>
 
+                <!-- Asked when the image removed is the one shared across the product family -->
+                <div id="familyImageRemoveModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 10001; align-items: center; justify-content: center;">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 480px; width: 90%;">
+                        <h3 style="margin: 0 0 12px 0; font-size: 1.15rem;"><i class="fas fa-images" style="color: #4f46e5;"></i> Shared main image</h3>
+                        <p id="familyImageRemoveText" style="margin: 0 0 8px 0; color: #444; font-size: 0.95rem;"></p>
+                        <p style="margin: 0 0 20px 0; color: #777; font-size: 0.85rem;">Other images on those products are left alone. Nothing changes until you save.</p>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                            <button type="button" class="btn btn-secondary" id="familyImageRemoveNo">Just this product</button>
+                            <button type="button" class="btn btn-primary" id="familyImageRemoveYes">Remove across family</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Basic Information Section -->
                 <div class="collapsible-section" style="display: none;">
                     <div class="section-content" id="basicInfo-content">
@@ -2744,6 +2757,7 @@
 
             selectedMediaFiles = [];
             selectedShopifyMedia = [];
+            familyImageRemovals = [];
             const mediaInput = document.getElementById('mediaFiles');
             if (mediaInput) mediaInput.value = '';
             if (typeof updateMediaPreview === 'function') updateMediaPreview();
@@ -5512,6 +5526,9 @@
                 // Parent products only: push the main image down to every child.
                 productData.main_image_to_children = mainImageToChildrenChecked();
 
+                // Images the user confirmed should be removed family-wide.
+                productData.family_image_removals = familyImageRemovals.slice();
+
                 console.log('🔍 Product colours:', productData.product_colours);
                 console.log('🔍 Packaging colours:', productData.packaging_colours);
                 console.log('🔍 Foil colours:', productData.foil_colours);
@@ -5690,6 +5707,8 @@
                             } else if (key === 'storefront_options' && typeof productData[key] === 'object') {
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else if ((key === 'categories' || key === 'subcategories') && Array.isArray(productData[key])) {
+                                formData.append(key, JSON.stringify(productData[key]));
+                            } else if (key === 'family_image_removals' && Array.isArray(productData[key])) {
                                 formData.append(key, JSON.stringify(productData[key]));
                             } else {
                                 formData.append(key, productData[key]);
@@ -6320,6 +6339,7 @@
         let selectedMediaFiles = [];
         let selectedShopifyMedia = []; // Declare early to prevent ReferenceError
         let mediaItems = [];           // display order across both lists (see reconcileMediaItems)
+        let familyImageRemovals = [];  // image URLs confirmed for family-wide removal on save
         let mediaExplicitlyCleared = false;
         const maxFiles = 250;
 
@@ -6756,6 +6776,7 @@
                 const mainImgToChildrenBox = document.getElementById('mainImageToChildren');
                 if (mainImgToChildrenBox) mainImgToChildrenBox.checked = false;
                 updateMainImageToChildrenVisibility();
+                familyImageRemovals = [];
 
                 // Close dropdown and set main search input (leave empty when duplicating)
                 if (pcInput) pcInput.value = isDuplicate ? '' : (data.title || title || '');
@@ -7796,6 +7817,85 @@
             return !!(box && box.checked && parentYes && parentYes.checked);
         }
 
+        // ------------------------------------------------------------------
+        // Removing an image the whole product family shares.
+        // The page only holds this product's images, so whether an image is
+        // shared is answered by the server; if it is, we offer to remove it from
+        // the rest of the family as part of the save.
+        // ------------------------------------------------------------------
+
+        function currentParentChildValue() {
+            const hidden = document.getElementById('parent-child-create-from-parent-value');
+            if (hidden && hidden.value.trim()) return hidden.value.trim();
+            const parentYes = document.getElementById('parentYes');
+            const parentSelect = document.getElementById('parent-child-select');
+            if (parentYes && parentYes.checked && parentSelect && parentSelect.value) {
+                return String(parentSelect.value).trim();
+            }
+            const childYes = document.getElementById('childYes');
+            const childSelect = document.getElementById('parent-child-child-select');
+            if (childYes && childYes.checked && childSelect && childSelect.value) {
+                return String(childSelect.value).trim();
+            }
+            return '';
+        }
+
+        function askRemoveAcrossFamily(message) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('familyImageRemoveModal');
+                const text = document.getElementById('familyImageRemoveText');
+                const yes = document.getElementById('familyImageRemoveYes');
+                const no = document.getElementById('familyImageRemoveNo');
+                if (!modal || !yes || !no) { resolve(false); return; }
+                if (text) text.textContent = message;
+
+                function finish(answer) {
+                    modal.style.display = 'none';
+                    yes.removeEventListener('click', onYes);
+                    no.removeEventListener('click', onNo);
+                    resolve(answer);
+                }
+                function onYes() { finish(true); }
+                function onNo() { finish(false); }
+
+                yes.addEventListener('click', onYes);
+                no.addEventListener('click', onNo);
+                modal.style.display = 'flex';
+            });
+        }
+
+        async function maybeOfferFamilyImageRemoval(media) {
+            const src = media && media.url;
+            const parentChild = currentParentChildValue();
+            if (!src || !parentChild) return;
+
+            let info;
+            try {
+                const params = new URLSearchParams({ parent_child: parentChild, src: src });
+                if (selectedProduct && selectedProduct.id) params.set('product_id', selectedProduct.id);
+                const resp = await fetch(`/api/product-family-image-check?${params.toString()}`);
+                info = await resp.json();
+            } catch (err) {
+                console.warn('Family image check failed:', err);
+                return;
+            }
+            if (!info || !info.shared) return;
+
+            // Either way round this is the family minus the product being edited:
+            // from the parent it's every child, from a child it's the parent plus
+            // the remaining siblings.
+            const others = info.child_count || 0;
+            const where = others === 1 ? '1 other product' : `${others} other products`;
+            const confirmed = await askRemoveAcrossFamily(
+                `This is the main image shared across the "${info.family}" family. ` +
+                `Remove it from ${where} as well?`
+            );
+            if (confirmed && !familyImageRemovals.includes(src)) {
+                familyImageRemovals.push(src);
+                console.log('🗑️ Queued family-wide removal for', src);
+            }
+        }
+
         function moveMediaItem(fromIndex, direction) {
             reconcileMediaItems();
             const toIndex = fromIndex + direction;
@@ -8021,7 +8121,8 @@
                 e.preventDefault();
                 const mediaIdToRemove = media.id;
                 const mediaIdToRemoveStr = String(mediaIdToRemove);
-                
+                const wasMainImage = index === 0;
+
                 const indexToRemove = selectedShopifyMedia.findIndex(m => {
                     return String(m.id) === mediaIdToRemoveStr || 
                            String(m.rest_api_id || m.id) === mediaIdToRemoveStr;
@@ -8032,6 +8133,10 @@
                 }
                 
                 updateMediaPreview();
+
+                // Removing the main image from a product in a family may mean
+                // removing it everywhere; ask once the grid has already updated.
+                if (wasMainImage) maybeOfferFamilyImageRemoval(media);
             });
             
             // Explicitly prevent image/video from starting drag

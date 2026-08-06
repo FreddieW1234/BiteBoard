@@ -840,6 +840,107 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
             "errors": [error_msg]
         }
 
+def _custom_sku_from_payload(data):
+    """SKU from the save payload's custom.sku metafield, for media filenames."""
+    try:
+        for mf in (data.get("metafields") or []):
+            if mf.get("namespace") == "custom" and mf.get("key") == "sku":
+                val = mf.get("value", "")
+                if isinstance(val, str) and val:
+                    v = val.strip()
+                    if v.startswith("[") and v.endswith("]"):
+                        try:
+                            parsed = json.loads(v)
+                            if isinstance(parsed, list) and parsed:
+                                return str(parsed[0])
+                        except Exception:
+                            return v
+                    return v
+                return str(val)
+    except Exception:
+        return ""
+    return ""
+
+
+def preupload_media_for_background_save(product_id, data, shopify_domain=None):
+    """Upload a save's new image files now, and rewrite the job to reference them.
+
+    This is what lets a save with new images be backgrounded like any other. The
+    bytes have to go up while we still hold the request (they can't be parked in
+    the queue store), but everything after that — metafields, pricing, child
+    propagation — is left for the worker. The queued job comes out describing its
+    media purely as Shopify media IDs, so the worker only has to reorder.
+
+    Mutates data in place. Returns True if the job is safe to background; False
+    means the caller should fall back to saving synchronously.
+    """
+    media_files = data.get("media_files") or []
+    if not product_id or not media_files:
+        return False
+
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    images_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images.json"
+
+    def _fetch_images():
+        r = requests.get(images_url, headers=headers, timeout=20)
+        if r.status_code != 200:
+            return None
+        return r.json().get("images", []) or []
+
+    try:
+        existing = _fetch_images()
+        if existing is None:
+            print(f"⚠️ Pre-upload: could not read images for product {product_id}", flush=True)
+            return False
+        before_ids = {str(img.get("id")) for img in existing}
+
+        result = upload_media_to_product(
+            product_id,
+            media_files,
+            None,  # don't re-attach existing media; the worker's keep list handles that
+            data.get("title") or "",
+            product_sku=_custom_sku_from_payload(data) or data.get("sku") or "",
+            shopify_domain=domain,
+        )
+        if not result.get("success"):
+            print(f"⚠️ Pre-upload failed, falling back to a synchronous save: {result.get('errors')}", flush=True)
+            return False
+
+        after = result.get("product_images") or _fetch_images() or []
+        new_images = [img for img in after if str(img.get("id")) not in before_ids]
+        new_images.sort(key=lambda x: (x.get("created_at") or "", x.get("id") or 0))
+        new_ids = [str(img.get("id")) for img in new_images]
+
+        if len(new_ids) != len(media_files):
+            print(f"⚠️ Pre-upload: expected {len(media_files)} new images, found {len(new_ids)}; "
+                  f"saving synchronously so the order isn't guessed", flush=True)
+            return False
+
+        # Point the 'upload' slots at the images we just created, keeping position.
+        remapped = []
+        next_new = 0
+        for item in (data.get("media_order") or []):
+            if item.get("type") == "upload":
+                remapped.append({"type": "shopify", "id": new_ids[next_new], "position": item.get("position")})
+                next_new += 1
+            else:
+                remapped.append(item)
+        data["media_order"] = remapped
+
+        keep = [str(x) for x in (data.get("shopify_media_ids") or [])]
+        data["shopify_media_ids"] = keep + new_ids
+        data["media_files"] = []
+        data["media_count"] = len(remapped)
+
+        print(f"📤 Pre-uploaded {len(new_ids)} image(s) to product {product_id}; "
+              f"queuing the rest of the save", flush=True)
+        return True
+    except Exception as e:
+        print(f"⚠️ Pre-upload error, falling back to a synchronous save: {e}", flush=True)
+        return False
+
+
 def _zero_all_variant_prices(product_id, shopify_domain=None):
     """Set every variant price to 0.00 when pricing tables are cleared."""
     domain = (shopify_domain or STORE_DOMAIN).replace("https://", "").replace("http://", "").rstrip("/")
@@ -1004,6 +1105,42 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
             print(f"⚠️ get_child_product_ids error: {e}", flush=True)
             break
     return ids
+
+
+def get_child_product_ids_cached(parent_child_value):
+    """Child product IDs for a parent, read from the cached families tree.
+
+    get_child_product_ids_by_parent_child_value() paginates the entire catalog,
+    which is far too slow to sit inside a web request. This answers from the
+    warm families tree only — never building it, since a cold build is that same
+    full scan — and returns None when it can't, so the caller can carry on.
+    """
+    val = (parent_child_value or "").strip()
+    if not val or not _is_parent_child_type(val, "parent"):
+        return None
+    try:
+        cached = _named_snapshot_peek(_FAMILY_TREE_SNAPSHOT)
+    except Exception as e:
+        print(f"⚠️ get_child_product_ids_cached: {e}", flush=True)
+        return None
+    if not cached:
+        # Warm it for next time, but don't wait for it.
+        try:
+            _kick_named_refresh(_FAMILY_TREE_SNAPSHOT, lambda: _build_parent_child_tree(parents_only=False))
+        except Exception:
+            pass
+        return None
+    for entry in (cached.get("tree") or []):
+        if (entry.get("parent_value") or "").strip() != val:
+            continue
+        ids = []
+        for child in entry.get("children") or []:
+            try:
+                ids.append(int(child.get("id")))
+            except (TypeError, ValueError):
+                continue
+        return ids
+    return None
 
 
 def _parse_child_family(metafield_value):
@@ -2348,6 +2485,28 @@ def _kick_named_refresh(name, builder):
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _named_snapshot_peek(name):
+    """Cached value for a named snapshot, without ever building it.
+
+    _named_snapshot_swr() falls back to a blocking rebuild on a cold miss (for
+    the families tree that is a full catalog scan), which must never happen
+    inside a web request. Returns None when nothing is cached yet.
+    """
+    ent = _NAMED_CACHE.get(name)
+    if ent:
+        return ent["data"]
+    if _office_snapshots_available():
+        try:
+            doc = office_api.get_snapshot(name)
+        except Exception as exc:
+            logger.warning("Named snapshot peek failed for %s (%s)", name, exc)
+            return None
+        if isinstance(doc, dict) and doc.get("payload") is not None:
+            _NAMED_CACHE[name] = {"at": time.time(), "data": doc["payload"]}
+            return doc["payload"]
+    return None
+
+
 def _named_snapshot_swr(name, builder, refresh=False):
     """Serve a named snapshot with stale-while-revalidate. builder() produces the
     fresh value on cold miss / background rebuild."""
@@ -3035,6 +3194,172 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
 
     print(f"📊 Main image propagation: {updated}/{len(child_ids)} child product(s) updated", flush=True)
     return {"success": True, "updated": updated}
+
+
+def _family_key_from_parent_child(value):
+    """Family key from either a 'Parent - X' or a 'Child - X' value."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    return _parse_parent_family(v) or _parse_child_family(v)
+
+
+def get_family_product_ids(parent_child_value):
+    """(parent_id, [child_ids]) for a family, read from the warm families tree.
+
+    Never builds the tree — a cold build is a full catalog scan — so returns
+    (None, []) when it can't answer.
+    """
+    family = _family_key_from_parent_child(parent_child_value)
+    if not family:
+        return None, []
+    try:
+        cached = _named_snapshot_peek(_FAMILY_TREE_SNAPSHOT)
+    except Exception:
+        cached = None
+    if not cached:
+        return None, []
+    target = ("Parent - " + family).strip().lower()
+    for entry in (cached.get("tree") or []):
+        if (entry.get("parent_value") or "").strip().lower() != target:
+            continue
+        try:
+            parent_id = int((entry.get("parent") or {}).get("id"))
+        except (TypeError, ValueError):
+            parent_id = None
+        child_ids = []
+        for child in entry.get("children") or []:
+            try:
+                child_ids.append(int(child.get("id")))
+            except (TypeError, ValueError):
+                continue
+        return parent_id, child_ids
+    return None, []
+
+
+def _product_image_stems(product_id, domain, headers):
+    """[(image_id, stem, position)] for a product, or None if it can't be read."""
+    try:
+        r = requests.get(f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images.json",
+                         headers=headers, timeout=20)
+        if r.status_code != 200:
+            return None
+        return [(img.get("id"), _image_name_stem(img.get("src")), img.get("position") or 999)
+                for img in (r.json().get("images", []) or [])]
+    except Exception:
+        return None
+
+
+def _stems_match(a, b):
+    return _is_same_image_stem(a, b) or _is_same_image_stem(b, a)
+
+
+def family_image_usage(parent_child_value, image_src, product_id=None):
+    """Is image_src the image this product family shares as its main image?
+
+    Costs at most two reads (the parent's images, and one child's to confirm the
+    image actually propagated); everything else comes from the warm families
+    tree. Used by the editor to decide whether removing an image is worth asking
+    about, so it must stay cheap.
+    """
+    out = {
+        "shared": False,
+        "family": _family_key_from_parent_child(parent_child_value) or "",
+        "parent_id": None,
+        "child_count": 0,
+    }
+    stem = _image_name_stem(image_src)
+    if not stem:
+        return out
+
+    parent_id, child_ids = get_family_product_ids(parent_child_value)
+    out["parent_id"] = parent_id
+    out["child_count"] = len(child_ids)
+    if not parent_id:
+        return out
+
+    domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+
+    parent_images = _product_image_stems(parent_id, domain, headers)
+    if not parent_images:
+        return out
+    parent_main = sorted(parent_images, key=lambda t: t[2])[0][1]
+    if not _stems_match(stem, parent_main):
+        return out  # not the family's main image
+
+    try:
+        editing_parent = int(product_id) == parent_id if product_id else False
+    except (TypeError, ValueError):
+        editing_parent = False
+
+    if not editing_parent:
+        # Editing a child: matching the parent's main image is enough.
+        out["shared"] = True
+        return out
+
+    # Editing the parent: confirm it actually reached a child before asking.
+    for cid in child_ids:
+        child_images = _product_image_stems(cid, domain, headers)
+        if child_images is None:
+            continue
+        if any(_stems_match(cstem, stem) for _, cstem, _ in child_images):
+            out["shared"] = True
+        break  # one sample is enough; the removal matches across all members
+
+    return out
+
+
+def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=None, shopify_domain=None):
+    """Delete the given image(s) from every other product in the family.
+
+    Matched on filename the same way the main image is propagated, so a child's
+    copy still counts even where Shopify renamed it to name_1.jpg. The product
+    being saved is skipped: its own removal goes through the normal keep-list.
+    """
+    stems = [s for s in (_image_name_stem(src) for src in (image_srcs or [])) if s]
+    if not stems:
+        return {"success": True, "removed": 0}
+
+    parent_id, child_ids = get_family_product_ids(parent_child_value)
+    members = ([parent_id] if parent_id else []) + list(child_ids)
+    try:
+        skip = int(skip_product_id) if skip_product_id else None
+    except (TypeError, ValueError):
+        skip = None
+    members = [m for m in members if m and m != skip]
+    if not members:
+        print("ℹ️ Family image removal: no other products found in this family", flush=True)
+        return {"success": True, "removed": 0}
+
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+
+    print(f"🗑️ Removing shared image from {len(members)} other product(s) in the family", flush=True)
+    removed = 0
+    for mid in members:
+        images = _product_image_stems(mid, domain, headers)
+        if images is None:
+            print(f"⚠️ Family image removal: could not read images for product {mid}", flush=True)
+            continue
+        for image_id, istem, _pos in images:
+            if not any(_stems_match(istem, s) for s in stems):
+                continue
+            try:
+                d = requests.delete(f"{base_url}/products/{mid}/images/{image_id}.json",
+                                    headers=headers, timeout=20)
+                if d.status_code in (200, 204):
+                    removed += 1
+                    print(f"✅ Removed shared image {image_id} from product {mid}", flush=True)
+                else:
+                    print(f"⚠️ Could not remove image {image_id} from product {mid}: {d.status_code}", flush=True)
+            except Exception as e:
+                print(f"⚠️ Error removing image {image_id} from product {mid}: {e}", flush=True)
+        time.sleep(0.2)
+
+    print(f"📊 Family image removal: {removed} image(s) removed across {len(members)} product(s)", flush=True)
+    return {"success": True, "removed": removed}
 
 
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
@@ -4466,6 +4791,20 @@ def create_product(product_data):
                     print(f"✅ Propagated inherited fields to {len(child_saved)} child product(s)", flush=True)
                 else:
                     print(f"ℹ️ No child products updated for {parent_child_value}", flush=True)
+
+            # An image the user deleted here that the whole family shared, if they
+            # confirmed removing it family-wide. Runs for parents and children alike.
+            family_removals = product_data.get("family_image_removals") or []
+            if family_removals and parent_child_value:
+                try:
+                    remove_images_across_family(
+                        parent_child_value,
+                        family_removals,
+                        skip_product_id=product_id,
+                        shopify_domain=actual_shopify_domain,
+                    )
+                except Exception as e:
+                    print(f"⚠️ Family image removal failed: {e}", flush=True)
 
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available

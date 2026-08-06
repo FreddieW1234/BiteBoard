@@ -3,6 +3,8 @@ import os
 import subprocess
 import requests
 import time
+import threading
+import sys
 from datetime import datetime
 import json
 
@@ -1785,6 +1787,16 @@ def _parse_product_form(req):
         data['media_explicitly_cleared'] = req.form.get('media_explicitly_cleared', 'false').lower() in ('true', '1', 'yes')
         data['main_image_to_children'] = req.form.get('main_image_to_children', 'false').lower() in ('true', '1', 'yes')
 
+        removals_str = req.form.get('family_image_removals', '')
+        if removals_str and removals_str.strip():
+            try:
+                parsed = json.loads(removals_str)
+                data['family_image_removals'] = parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                data['family_image_removals'] = []
+        else:
+            data['family_image_removals'] = []
+
         media_order_str = req.form.get('media_order', '[]')
         try:
             data['media_order'] = json.loads(media_order_str) if media_order_str else []
@@ -1863,15 +1875,70 @@ def _queue_extract_product_id(data):
         return None
 
 
+# Shared answer for the queue poll. Every open tab hits /api/product-queue on a
+# timer; without this each one costs a separate office round trip.
+_QUEUE_LIST_CACHE = {'at': 0.0, 'payload': None}
+_QUEUE_LIST_TTL = 2.5
+_QUEUE_LIST_LOCK = threading.Lock()
+
+
+def _invalidate_queue_list_cache():
+    """Drop the cached poll answer so a queue change shows up on the next poll."""
+    _QUEUE_LIST_CACHE['at'] = 0.0
+
+
+class _ThreadStdoutCapture:
+    """Tee this thread's stdout into a buffer, leaving other threads alone.
+
+    A synchronous save runs for minutes, and contextlib.redirect_stdout swaps
+    sys.stdout for the whole process — with a single gunicorn worker running 12
+    threads that swallows every other request's logging into this buffer for the
+    duration of the save.
+    """
+
+    MAX_CHARS = 200_000
+
+    def __init__(self):
+        import io
+        self._buf = io.StringIO()
+        self._size = 0
+        self._owner = threading.get_ident()
+        self._prev = sys.stdout
+
+    def write(self, s):
+        if threading.get_ident() == self._owner and self._size < self.MAX_CHARS:
+            self._buf.write(s)
+            self._size += len(s)
+        return self._prev.write(s)
+
+    def flush(self):
+        self._prev.flush()
+
+    def getvalue(self):
+        return self._buf.getvalue()
+
+    def __enter__(self):
+        sys.stdout = self
+        return self
+
+    def __exit__(self, *exc):
+        sys.stdout = self._prev
+        return False
+
+
 @app.route('/api/product-queue', methods=['POST'])
 def api_product_queue_enqueue():
     """Enqueue a write-behind product save.
 
-    New images (binary media, or copy-from-URL duplicates) are applied
-    synchronously here so the upload happens while the user waits; the rest of
-    the save (metafields, Price Bandit, child propagation) is applied by the
-    background worker and verified against Shopify. Metadata-only edits are fully
-    backgrounded and return instantly.
+    New image files are uploaded here, because binary content can't be parked in
+    the queue store — but only the upload. Everything after it (metafields, Price
+    Bandit, child propagation) goes to the background worker and is verified
+    against Shopify, so a save never occupies this single-worker web process for
+    longer than the upload takes.
+
+    Falls back to a fully synchronous save when the job can't be made
+    self-describing: a brand-new product (nothing to attach images to yet), a
+    copy-from-URL duplicate, or the office queue store being down.
     """
     try:
         data, err = _parse_product_form(request)
@@ -1907,20 +1974,30 @@ def api_product_queue_enqueue():
             queue_ready = queue._available()
         except Exception:
             queue_ready = False
+
+        # New images can't be parked in the queue store, so upload them now and
+        # rewrite the job to reference the media IDs that came back. That keeps
+        # the expensive part of the save (metafields, pricing, child propagation)
+        # out of this single-worker web process. Editing an existing product only:
+        # a brand-new product has nothing to attach images to yet.
+        if queue_ready and product_id and data.get('media_files') and not data.get('media_urls'):
+            try:
+                from scripts.product_creator.Product_Creator import preupload_media_for_background_save
+                preupload_media_for_background_save(product_id, data)
+            except Exception as _ue:
+                print(f"[API] media pre-upload skipped: {_ue}", flush=True)
+
         needs_sync = bool(data.get('media_files')) or bool(data.get('media_urls'))
 
         # Synchronous path: new images present, or the office queue store is down.
         if needs_sync or not queue_ready:
-            import io, contextlib
-            buf = io.StringIO()
+            cap = _ThreadStdoutCapture()
             try:
-                with contextlib.redirect_stdout(buf):
+                with cap:
                     result = create_product(data)
             except Exception as exc:
                 result = {'success': False, 'error': str(exc)}
-            logs = buf.getvalue()
-            if logs:
-                print(logs, flush=True)  # keep Render console visibility
+            logs = cap.getvalue()
 
             success = bool(isinstance(result, dict) and result.get('success'))
             pid = None
@@ -1960,19 +2037,21 @@ def api_product_queue_enqueue():
         # Background path: metadata-only edit — return instantly.
         # If this is a parent product, lock its children too — the save
         # propagates parent fields to every child in the family.
+        # Resolved from the cached families tree: the live lookup paginates the
+        # whole catalog and would stall this request (and the instance) for as
+        # long as that takes. If the cache can't answer, the children simply
+        # aren't greyed out until the tree next refreshes.
         locked_ids = None
         try:
             pcv = (data.get('parent_child') or '').strip()
             if pcv:
-                from scripts.product_creator.Product_Creator import (
-                    _is_parent_child_type, get_child_product_ids_by_parent_child_value,
-                )
-                if _is_parent_child_type(pcv, 'parent'):
-                    locked_ids = get_child_product_ids_by_parent_child_value(pcv) or []
+                from scripts.product_creator.Product_Creator import get_child_product_ids_cached
+                locked_ids = get_child_product_ids_cached(pcv)
         except Exception as _le:
             print(f"[API] child lock resolution skipped: {_le}", flush=True)
 
         job = queue.enqueue(data, product_id, title, locked_ids=locked_ids)
+        _invalidate_queue_list_cache()
         return jsonify({
             'success': True,
             'queued': True,
@@ -1983,10 +2062,48 @@ def api_product_queue_enqueue():
         return jsonify({'success': False, 'error': f"Failed to enqueue save: {str(e)}"}), 500
 
 
+@app.route('/api/product-family-image-check', methods=['GET'])
+def api_product_family_image_check():
+    """Is this image the one the product family shares as its main image?
+
+    The editor asks before removing an image so it can offer to remove it across
+    the family. Answered from the warm families tree plus at most two image
+    reads, so it stays cheap enough to run on a click.
+    """
+    try:
+        src = (request.args.get('src') or '').strip()
+        parent_child = (request.args.get('parent_child') or '').strip()
+        if not src or not parent_child:
+            return jsonify({'shared': False})
+        from scripts.product_creator.Product_Creator import family_image_usage
+        return jsonify(family_image_usage(parent_child, src, request.args.get('product_id')))
+    except Exception as e:
+        return jsonify({'shared': False, 'error': str(e)})
+
+
 @app.route('/api/product-queue', methods=['GET'])
 def api_product_queue_list():
-    """Queue summary + locked product ids, for polling/greying on both pages."""
+    """Queue summary + locked product ids, for polling/greying on both pages.
+
+    Every open editor/Products tab polls this, so the office round trip is
+    shared. Within the TTL everyone gets the same cached answer, and while one
+    thread is refreshing the rest are handed the previous one rather than
+    queueing up behind it — with a single gunicorn worker, a pile-up here is
+    enough to stop the whole site responding.
+    """
+    now = time.time()
+    cached = _QUEUE_LIST_CACHE.get('payload')
+    if cached is not None and (now - _QUEUE_LIST_CACHE.get('at', 0)) < _QUEUE_LIST_TTL:
+        return jsonify(cached)
+
+    # Only wait for the refresh if we have nothing at all to serve.
+    if not _QUEUE_LIST_LOCK.acquire(blocking=(cached is None)):
+        return jsonify(cached)
     try:
+        cached = _QUEUE_LIST_CACHE.get('payload')
+        if cached is not None and (time.time() - _QUEUE_LIST_CACHE.get('at', 0)) < _QUEUE_LIST_TTL:
+            return jsonify(cached)  # another thread just refreshed it
+
         from scripts import product_save_queue as queue
         jobs = queue.list_jobs()
         summary = []
@@ -2004,9 +2121,16 @@ def api_product_queue_list():
                 'error': j.get('error'),
                 'verify_ok': (all(r.get('ok') for r in verify) if verify else None),
             })
-        return jsonify({'jobs': summary, 'locked': queue.locked_product_ids(jobs=jobs)})
+        payload = {'jobs': summary, 'locked': queue.locked_product_ids(jobs=jobs)}
+        _QUEUE_LIST_CACHE['payload'] = payload
+        _QUEUE_LIST_CACHE['at'] = time.time()
+        return jsonify(payload)
     except Exception as e:
+        if cached is not None:
+            return jsonify(cached)
         return jsonify({'jobs': [], 'locked': [], 'error': str(e)})
+    finally:
+        _QUEUE_LIST_LOCK.release()
 
 
 @app.route('/api/product-queue/<job_id>', methods=['GET'])
@@ -2030,6 +2154,7 @@ def api_product_queue_cancel(job_id):
         job = queue.cancel(job_id)
         if not job:
             return jsonify({'success': False, 'error': 'Job not found'}), 404
+        _invalidate_queue_list_cache()
         return jsonify({'success': True, 'status': job.get('status')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -2042,6 +2167,7 @@ def api_product_queue_retry(job_id):
         job = queue.retry(job_id)
         if not job:
             return jsonify({'success': False, 'error': 'Job not found'}), 404
+        _invalidate_queue_list_cache()
         return jsonify({'success': True, 'status': job.get('status')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
