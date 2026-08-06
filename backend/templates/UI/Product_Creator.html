@@ -383,11 +383,38 @@
             min-width: 65px;
             flex-shrink: 0;
         }
+        .colour-cell .colour-sku-input {
+            width: 90px !important;
+            min-width: 90px;
+            flex-shrink: 0;
+            display: none;
+        }
+        .colour-cell.colour-cell-with-sku .colour-sku-input,
+        .colour-cell.colour-cell-with-sku .colour-sku-divider {
+            display: block;
+        }
         .colour-cell-divider {
             width: 1px;
             background: #ddd;
             flex-shrink: 0;
             align-self: stretch;
+        }
+        .colour-sku-divider { display: none; }
+        .different-product-codes-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #4a5568;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+            margin: 0;
+        }
+        .different-product-codes-label input {
+            margin: 0;
+            cursor: pointer;
         }
 
         .form-label {
@@ -2359,7 +2386,7 @@
                     <div class="section-content" id="basicInfo-content">
                     <div class="form-grid">
                         <div class="form-row-product-code-title">
-                            <div class="form-group">
+                            <div class="form-group" id="product-code-group">
                                 <label class="form-label">Product Code *</label>
                                 <input type="text" id="product-code" name="product-code" class="form-input" placeholder="Enter product code">
                             </div>
@@ -2479,9 +2506,13 @@
                             </div>
                             <div class="colour-sections-stack">
                                 <div class="form-group form-group-colour-options form-group-product-colours">
-                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="margin: 0;">Product Colours</label>
                                         <button type="button" id="reset-product-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                        <label class="different-product-codes-label">
+                                            <input type="checkbox" class="different-product-codes-cb" id="different-sku-product-colours" data-colour-section="product">
+                                            Different Product Codes?
+                                        </label>
                                     </div>
                                     <div id="product-colour-inputs-container" class="colour-inputs-container">
                                         <div class="colour-cell">
@@ -2498,9 +2529,13 @@
                                     </div>
                                 </div>
                                 <div class="form-group form-group-colour-options form-group-packaging-colours">
-                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="margin: 0;">Packaging Colours</label>
                                         <button type="button" id="reset-packaging-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                        <label class="different-product-codes-label">
+                                            <input type="checkbox" class="different-product-codes-cb" id="different-sku-packaging-colours" data-colour-section="packaging">
+                                            Different Product Codes?
+                                        </label>
                                     </div>
                                     <div id="packaging-colour-inputs-container" class="colour-inputs-container">
                                         <div class="colour-cell">
@@ -2517,10 +2552,14 @@
                                     </div>
                                 </div>
                                 <div class="form-group form-group-colour-options form-group-foil-colours">
-                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="margin: 0;">Foil Colours</label>
                                         <button type="button" id="fill-foil-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Foil Colours</button>
                                         <button type="button" id="reset-foil-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                        <label class="different-product-codes-label">
+                                            <input type="checkbox" class="different-product-codes-cb" id="different-sku-foil-colours" data-colour-section="foil">
+                                            Different Product Codes?
+                                        </label>
                                     </div>
                                     <div id="foil-colour-inputs-container" class="colour-inputs-container">
                                         <div class="colour-cell">
@@ -2537,10 +2576,14 @@
                                     </div>
                                 </div>
                                 <div class="form-group form-group-colour-options form-group-bag-colours">
-                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="margin: 0;">Bag Colours</label>
                                         <button type="button" id="fill-bag-colours-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">All Bag Colours</button>
                                         <button type="button" id="reset-bag-colours-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                                        <label class="different-product-codes-label">
+                                            <input type="checkbox" class="different-product-codes-cb" id="different-sku-bag-colours" data-colour-section="bag">
+                                            Different Product Codes?
+                                        </label>
                                     </div>
                                     <div id="bag-colour-inputs-container" class="colour-inputs-container">
                                         <div class="colour-cell">
@@ -2835,6 +2878,8 @@
             if (titleEl) titleEl.value = '';
             const productCodeEl = document.getElementById('product-code');
             if (productCodeEl) productCodeEl.value = '';
+            document.querySelectorAll('.different-product-codes-cb').forEach(cb => { cb.checked = false; });
+            if (typeof syncDifferentProductCodesUi === 'function') syncDifferentProductCodesUi();
             const statusEl = document.getElementById('status');
             if (statusEl) statusEl.value = 'active';
 
@@ -3615,11 +3660,10 @@
         // Collect all metafield data from the form
         function collectMetafieldsData() {
             const metafieldsData = [];
-            // Product Code lives in Basic Info; include it as custom.sku metafield
-            const productCodeEl = document.getElementById('product-code');
-            const productCodeValue = (productCodeEl && productCodeEl.value) ? String(productCodeEl.value).trim() : '';
-            if (productCodeValue) {
-                metafieldsData.push({ namespace: 'custom', key: 'sku', type: 'single_line_text_field', value: productCodeValue });
+            // Product Code / per-colour SKUs → custom.sku (single string; plain or JSON array)
+            const skuValue = collectCustomSkuValue();
+            if (skuValue) {
+                metafieldsData.push({ namespace: 'custom', key: 'sku', type: 'single_line_text_field', value: skuValue });
             }
             const metafieldItems = document.querySelectorAll('.metafield-item');
             
@@ -5698,6 +5742,7 @@
                 await loadMetafields();
                 await pricingTask;
             }
+            if (typeof syncDifferentProductCodesUi === 'function') syncDifferentProductCodesUi();
         });
 
         function toggleConverter() {
@@ -5864,12 +5909,11 @@
                 console.log('🔍 Colour images mapping:', colourImages);
             }
             
-            // Require Product Code (Basic Info) before creating product
+            // Require Product Code (top) or per-colour SKUs when Different Product Codes? is on
             try {
-                const productCodeEl = document.getElementById('product-code');
-                const skuValue = (productCodeEl && productCodeEl.value) ? (productCodeEl.value || '').trim() : '';
-                if (!skuValue) {
-                    alert('Please enter a Product Code in Basic Information before creating the product.');
+                const skuCheck = validateProductCodesBeforeSave();
+                if (!skuCheck.ok) {
+                    alert(skuCheck.message);
                     return;
                 }
             } catch (e) {}
@@ -7598,9 +7642,13 @@
                 
                 // Product Code (sku) is in Basic Info, not in metafields UI
                 if (key === 'sku' && namespace === 'custom') {
+                    // Plain SKUs go in the top Product Code box. JSON list SKUs are applied
+                    // later by loadSkuFromMetafields (needs colour rows first).
+                    const parsedSku = parseCustomSkuEntries(value);
+                    if (parsedSku.mode === 'list') return;
                     const productCodeEl = document.getElementById('product-code');
                     if (productCodeEl) {
-                        productCodeEl.value = typeof value === 'string' ? value : (value != null ? String(value) : '');
+                        productCodeEl.value = parsedSku.value || '';
                     }
                     return;
                 }
@@ -8724,6 +8772,97 @@
             syncCalendarFoilOptionVisibility();
         }
 
+        const COLOUR_SKU_SECTIONS = [
+            { key: 'product', containerId: 'product-colour-inputs-container', checkboxId: 'different-sku-product-colours', optionType: 'ProductColour' },
+            { key: 'packaging', containerId: 'packaging-colour-inputs-container', checkboxId: 'different-sku-packaging-colours', optionType: 'PackagingColour' },
+            { key: 'foil', containerId: 'foil-colour-inputs-container', checkboxId: 'different-sku-foil-colours', optionType: 'FoilColour' },
+            { key: 'bag', containerId: 'bag-colour-inputs-container', checkboxId: 'different-sku-bag-colours', optionType: 'BagColour' },
+        ];
+
+        function getColourSectionByKey(key) {
+            return COLOUR_SKU_SECTIONS.find(s => s.key === key) || null;
+        }
+
+        function getColourSectionForContainer(container) {
+            if (!container) return null;
+            return COLOUR_SKU_SECTIONS.find(s => s.containerId === container.id) || null;
+        }
+
+        function isDifferentProductCodesEnabled(sectionKey) {
+            const section = getColourSectionByKey(sectionKey);
+            if (!section) return false;
+            const cb = document.getElementById(section.checkboxId);
+            return !!(cb && cb.checked);
+        }
+
+        function getActiveDifferentSkuSections() {
+            return COLOUR_SKU_SECTIONS.filter(s => {
+                const cb = document.getElementById(s.checkboxId);
+                return cb && cb.checked;
+            });
+        }
+
+        function escapeColourAttr(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
+        }
+
+        function createColourCellElement(index, name, code, sku, withSku) {
+            const cell = document.createElement('div');
+            cell.className = 'colour-cell' + (withSku ? ' colour-cell-with-sku' : '');
+            cell.innerHTML = `
+                <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${escapeColourAttr(name)}" style="border: none;">
+                <span class="colour-cell-divider"></span>
+                <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${escapeColourAttr(code)}" style="border: none;">
+                <span class="colour-cell-divider colour-sku-divider"></span>
+                <input type="text" class="colour-sku-input form-input" placeholder="SKU" data-index="${index}" data-part="sku" value="${escapeColourAttr(sku)}" style="border: none;">
+            `;
+            return cell;
+        }
+
+        function ensureColourCellSkuSlot(cell) {
+            if (!cell) return;
+            if (!cell.querySelector('.colour-sku-input')) {
+                const skuDivider = document.createElement('span');
+                skuDivider.className = 'colour-cell-divider colour-sku-divider';
+                const skuInput = document.createElement('input');
+                skuInput.type = 'text';
+                skuInput.className = 'colour-sku-input form-input';
+                skuInput.placeholder = 'SKU';
+                skuInput.dataset.part = 'sku';
+                skuInput.style.border = 'none';
+                const nameInput = cell.querySelector('.colour-name-input');
+                if (nameInput && nameInput.dataset.index != null) {
+                    skuInput.dataset.index = nameInput.dataset.index;
+                }
+                cell.appendChild(skuDivider);
+                cell.appendChild(skuInput);
+            }
+        }
+
+        function setColourCellSkuVisible(cell, visible) {
+            ensureColourCellSkuSlot(cell);
+            cell.classList.toggle('colour-cell-with-sku', !!visible);
+        }
+
+        function syncDifferentProductCodesUi() {
+            const active = getActiveDifferentSkuSections();
+            const any = active.length > 0;
+            const group = document.getElementById('product-code-group');
+            if (group) group.style.display = any ? 'none' : '';
+
+            COLOUR_SKU_SECTIONS.forEach(section => {
+                const enabled = active.some(s => s.key === section.key);
+                const container = document.getElementById(section.containerId);
+                if (!container) return;
+                container.querySelectorAll('.colour-cell').forEach(cell => {
+                    setColourCellSkuVisible(cell, enabled);
+                });
+            });
+        }
+
         function collectColoursString(containerId) {
             const container = document.getElementById(containerId);
             if (!container) return '';
@@ -8740,6 +8879,197 @@
             return colours.join(', ');
         }
 
+        function collectCustomSkuValue() {
+            const active = getActiveDifferentSkuSections();
+            if (!active.length) {
+                const productCodeEl = document.getElementById('product-code');
+                return (productCodeEl && productCodeEl.value) ? String(productCodeEl.value).trim() : '';
+            }
+            const includeOptionType = active.length > 1;
+            const entries = [];
+            active.forEach(section => {
+                const container = document.getElementById(section.containerId);
+                if (!container) return;
+                container.querySelectorAll('.colour-cell').forEach(cell => {
+                    const name = (cell.querySelector('.colour-name-input')?.value || '').trim();
+                    const pantone = (cell.querySelector('.colour-code-input')?.value || '').trim();
+                    const sku = (cell.querySelector('.colour-sku-input')?.value || '').trim();
+                    if (!name || !sku) return;
+                    let entry = `${name}:${pantone}:${sku}`;
+                    if (includeOptionType) entry += `:${section.optionType}`;
+                    entries.push(entry);
+                });
+            });
+            return entries.length ? JSON.stringify(entries) : '';
+        }
+
+        function validateProductCodesBeforeSave() {
+            const active = getActiveDifferentSkuSections();
+            if (!active.length) {
+                const productCodeEl = document.getElementById('product-code');
+                const skuValue = (productCodeEl && productCodeEl.value) ? String(productCodeEl.value).trim() : '';
+                if (!skuValue) {
+                    return { ok: false, message: 'Please enter a Product Code in Basic Information before saving the product.' };
+                }
+                return { ok: true };
+            }
+            for (const section of active) {
+                const container = document.getElementById(section.containerId);
+                if (!container) continue;
+                const namedCells = [...container.querySelectorAll('.colour-cell')].filter(cell => {
+                    return (cell.querySelector('.colour-name-input')?.value || '').trim();
+                });
+                if (!namedCells.length) {
+                    return {
+                        ok: false,
+                        message: `Different Product Codes? is on for ${section.optionType.replace('Colour', ' Colours')}, but no colours are filled in that row.`,
+                    };
+                }
+                for (const cell of namedCells) {
+                    const name = (cell.querySelector('.colour-name-input')?.value || '').trim();
+                    const sku = (cell.querySelector('.colour-sku-input')?.value || '').trim();
+                    if (!sku) {
+                        return {
+                            ok: false,
+                            message: `Please enter a SKU for colour "${name}" in ${section.optionType.replace('Colour', ' Colours')}.`,
+                        };
+                    }
+                }
+            }
+            return { ok: true };
+        }
+
+        function parseCustomSkuEntries(raw) {
+            if (raw == null || raw === '') return { mode: 'plain', value: '', entries: [] };
+            const s = String(raw).trim();
+            if (!s) return { mode: 'plain', value: '', entries: [] };
+            if (s.startsWith('[')) {
+                try {
+                    const arr = JSON.parse(s);
+                    if (Array.isArray(arr)) {
+                        const entries = arr.map(item => {
+                            const str = String(item == null ? '' : item).trim();
+                            if (!str) return null;
+                            const parts = str.split(':').map(p => p.trim());
+                            if (parts.length >= 4) {
+                                return {
+                                    colour: parts[0],
+                                    pantone: parts[1],
+                                    sku: parts[2],
+                                    optionType: parts.slice(3).join(':'),
+                                };
+                            }
+                            if (parts.length === 3) {
+                                return {
+                                    colour: parts[0],
+                                    pantone: parts[1],
+                                    sku: parts[2],
+                                    optionType: '',
+                                };
+                            }
+                            return null;
+                        }).filter(Boolean);
+                        if (entries.length) return { mode: 'list', value: s, entries };
+                    }
+                } catch (e) { /* fall through */ }
+            }
+            return { mode: 'plain', value: s, entries: [] };
+        }
+
+        function applySkuEntriesToColourSections(entries) {
+            COLOUR_SKU_SECTIONS.forEach(section => {
+                const cb = document.getElementById(section.checkboxId);
+                if (cb) cb.checked = false;
+            });
+
+            if (!entries.length) {
+                syncDifferentProductCodesUi();
+                return;
+            }
+
+            const hasOptionTypes = entries.some(e => e.optionType);
+            const byType = {};
+            if (hasOptionTypes) {
+                entries.forEach(e => {
+                    const type = e.optionType || '';
+                    if (!type) return;
+                    (byType[type] || (byType[type] = [])).push(e);
+                });
+            } else {
+                // Single-section save: match colours to the row that contains them.
+                let bestSection = null;
+                let bestScore = -1;
+                COLOUR_SKU_SECTIONS.forEach(section => {
+                    const container = document.getElementById(section.containerId);
+                    if (!container) return;
+                    const names = new Set(
+                        [...container.querySelectorAll('.colour-name-input')]
+                            .map(inp => (inp.value || '').trim().toLowerCase())
+                            .filter(Boolean)
+                    );
+                    let score = 0;
+                    entries.forEach(e => {
+                        if (names.has(String(e.colour || '').toLowerCase())) score += 1;
+                    });
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestSection = section;
+                    }
+                });
+                if (!bestSection) bestSection = COLOUR_SKU_SECTIONS[0];
+                byType[bestSection.optionType] = entries;
+            }
+
+            COLOUR_SKU_SECTIONS.forEach(section => {
+                const sectionEntries = byType[section.optionType] || [];
+                const cb = document.getElementById(section.checkboxId);
+                if (cb) cb.checked = sectionEntries.length > 0;
+            });
+            syncDifferentProductCodesUi();
+
+            COLOUR_SKU_SECTIONS.forEach(section => {
+                const sectionEntries = byType[section.optionType] || [];
+                if (!sectionEntries.length) return;
+                const container = document.getElementById(section.containerId);
+                if (!container) return;
+                const byColour = new Map(
+                    sectionEntries.map(e => [String(e.colour || '').toLowerCase(), e])
+                );
+                container.querySelectorAll('.colour-cell').forEach(cell => {
+                    const name = (cell.querySelector('.colour-name-input')?.value || '').trim().toLowerCase();
+                    const match = byColour.get(name);
+                    if (!match) return;
+                    ensureColourCellSkuSlot(cell);
+                    const skuInput = cell.querySelector('.colour-sku-input');
+                    if (skuInput) skuInput.value = match.sku || '';
+                    // Prefer pantone from colour metafield; fill from sku entry if empty.
+                    const codeInput = cell.querySelector('.colour-code-input');
+                    if (codeInput && !(codeInput.value || '').trim() && match.pantone) {
+                        codeInput.value = match.pantone;
+                    }
+                });
+            });
+        }
+
+        function loadSkuFromMetafields(metafields) {
+            const skuMf = (metafields || []).find(m => m.key === 'sku' && (m.namespace || 'custom') === 'custom');
+            const raw = skuMf ? skuMf.value : '';
+            const parsed = parseCustomSkuEntries(raw);
+            const productCodeEl = document.getElementById('product-code');
+
+            if (parsed.mode === 'list') {
+                if (productCodeEl) productCodeEl.value = '';
+                applySkuEntriesToColourSections(parsed.entries);
+            } else {
+                COLOUR_SKU_SECTIONS.forEach(section => {
+                    const cb = document.getElementById(section.checkboxId);
+                    if (cb) cb.checked = false;
+                });
+                if (productCodeEl) productCodeEl.value = parsed.value || '';
+                syncDifferentProductCodesUi();
+            }
+        }
+
         function loadColoursFromMetafields(metafields) {
             if (isChildProduct()) {
                 resetColourOptions();
@@ -8754,10 +9084,17 @@
             loadColoursIntoInputs(packagingMf && packagingMf.value ? packagingMf.value : '', 'packaging-colour-inputs-container');
             loadColoursIntoInputs(foilMf && foilMf.value ? foilMf.value : '', 'foil-colour-inputs-container');
             loadColoursIntoInputs(bagMf && bagMf.value ? bagMf.value : '', 'bag-colour-inputs-container');
+            loadSkuFromMetafields(metafields);
             loadCalendarFromMetafields(metafields);
         }
 
-        // Handle dynamic colour inputs
+        // Handle dynamic colour inputs + Different Product Codes? toggles
+        document.addEventListener('change', function(e) {
+            if (e.target && e.target.classList && e.target.classList.contains('different-product-codes-cb')) {
+                syncDifferentProductCodesUi();
+            }
+        });
+
         document.addEventListener('click', function(e) {
             if (e.target.classList.contains('add-colour-btn')) {
                 e.preventDefault();
@@ -8766,14 +9103,9 @@
 
                 const existingCells = container.querySelectorAll('.colour-cell');
                 const index = existingCells.length;
-
-                const newCell = document.createElement('div');
-                newCell.className = 'colour-cell';
-                newCell.innerHTML = `
-                    <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none;">
-                    <span class="colour-cell-divider"></span>
-                    <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none;">
-                `;
+                const section = getColourSectionForContainer(container);
+                const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
+                const newCell = createColourCellElement(index, '', '', '', withSku);
 
                 const plusButton = container.querySelector('.add-colour-btn');
                 container.insertBefore(newCell, plusButton);
@@ -8799,23 +9131,33 @@
         });
 
         function resetColourOptions(type) {
+            const resetSectionCheckbox = (key) => {
+                const section = getColourSectionByKey(key);
+                const cb = section ? document.getElementById(section.checkboxId) : null;
+                if (cb) cb.checked = false;
+            };
             if (!type || type === 'product') {
                 loadColoursIntoInputs('', 'product-colour-inputs-container');
+                resetSectionCheckbox('product');
                 colourImageMap = {};
                 colourImagePreview = {};
             }
             if (!type || type === 'packaging') {
                 loadColoursIntoInputs('', 'packaging-colour-inputs-container');
+                resetSectionCheckbox('packaging');
             }
             if (!type || type === 'foil') {
                 loadColoursIntoInputs('', 'foil-colour-inputs-container');
+                resetSectionCheckbox('foil');
             }
             if (!type || type === 'bag') {
                 loadColoursIntoInputs('', 'bag-colour-inputs-container');
+                resetSectionCheckbox('bag');
             }
             if (!type) {
                 resetCalendarProductToggle();
             }
+            syncDifferentProductCodesUi();
             console.log('✅ Reset colour options', type ? `(${type})` : '(all)');
         }
         
@@ -8824,20 +9166,22 @@
             // Check if the key is backspace and the target is a colour input
             if (e.key === 'Backspace' || e.key === 'Delete') {
                 const target = e.target;
-                if (target.classList.contains('colour-name-input') || target.classList.contains('colour-code-input')) {
+                if (target.classList.contains('colour-name-input') || target.classList.contains('colour-code-input') || target.classList.contains('colour-sku-input')) {
                     const colourCell = target.closest('.colour-cell');
                     if (!colourCell) return;
                     
                     const nameInput = colourCell.querySelector('.colour-name-input');
                     const codeInput = colourCell.querySelector('.colour-code-input');
+                    const skuInput = colourCell.querySelector('.colour-sku-input');
                     
-                    // Check if both inputs are empty
-                    const nameValue = nameInput.value.trim();
-                    const codeValue = codeInput.value.trim();
+                    // Check if colour inputs are empty
+                    const nameValue = nameInput ? nameInput.value.trim() : '';
+                    const codeValue = codeInput ? codeInput.value.trim() : '';
+                    const skuValue = skuInput ? skuInput.value.trim() : '';
                     
-                    // If both inputs are empty and user presses backspace, delete the cell
+                    // If inputs are empty and user presses backspace, delete the cell
                     // This allows deleting empty cells by backspacing when already blank
-                    if (nameValue === '' && codeValue === '') {
+                    if (nameValue === '' && codeValue === '' && skuValue === '') {
                         const container = colourCell.closest('.colour-inputs-container');
                         if (!container) return;
                         const allCells = container.querySelectorAll('.colour-cell');
@@ -8863,6 +9207,7 @@
                             remainingCells.forEach((cell, newIndex) => {
                                 const nameInp = cell.querySelector('.colour-name-input');
                                 const codeInp = cell.querySelector('.colour-code-input');
+                                const skuInp = cell.querySelector('.colour-sku-input');
                                 const imgBtn = cell.querySelector('.colour-image-btn');
                                 
                                 if (nameInp) {
@@ -8870,6 +9215,9 @@
                                 }
                                 if (codeInp) {
                                     codeInp.setAttribute('data-index', newIndex);
+                                }
+                                if (skuInp) {
+                                    skuInp.setAttribute('data-index', newIndex);
                                 }
                                 if (imgBtn) {
                                     imgBtn.setAttribute('data-index', newIndex);
@@ -8935,20 +9283,13 @@
                 const existingCells = container.querySelectorAll('.colour-cell');
                 existingCells.forEach(cell => cell.remove());
                 
-                // Create colour cells for each foil colour
+                const section = getColourSectionForContainer(container);
+                const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
+
+                // Create colour cells for each preset colour
                 data.colours.forEach((colourTuple, index) => {
                     const [name, code] = colourTuple;
-                    
-                    const cell = document.createElement('div');
-                    cell.className = 'colour-cell';
-                    
-                    cell.innerHTML = `
-                        <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name}" style="border: none;">
-                        <span class="colour-cell-divider"></span>
-                        <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code}" style="border: none;">
-                    `;
-
-                    container.appendChild(cell);
+                    container.appendChild(createColourCellElement(index, name, code, '', withSku));
                 });
                 
                 // Add the + button at the end
@@ -8976,14 +9317,9 @@
         }
 
         function appendEmptyColourCell(container, index) {
-            const cell = document.createElement('div');
-            cell.className = 'colour-cell';
-            cell.innerHTML = `
-                <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" style="border: none;">
-                <span class="colour-cell-divider"></span>
-                <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" style="border: none;">
-            `;
-            container.appendChild(cell);
+            const section = getColourSectionForContainer(container);
+            const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
+            container.appendChild(createColourCellElement(index, '', '', '', withSku));
         }
 
         // Function to load colours into the inputs (called when loading a product for editing)
@@ -8993,6 +9329,8 @@
             container.innerHTML = '';
 
             const colours = parseColourTokens(coloursStr);
+            const section = getColourSectionForContainer(container);
+            const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
 
             if (colours.length === 0) {
                 appendEmptyColourCell(container, 0);
@@ -9009,15 +9347,7 @@
                         name = colour;
                     }
                     if (!name || name === '-') return;
-
-                    const cell = document.createElement('div');
-                    cell.className = 'colour-cell';
-                    cell.innerHTML = `
-                        <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${name.replace(/"/g, '&quot;')}" style="border: none;">
-                        <span class="colour-cell-divider"></span>
-                        <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${code.replace(/"/g, '&quot;')}" style="border: none;">
-                    `;
-                    container.appendChild(cell);
+                    container.appendChild(createColourCellElement(index, name, code, '', withSku));
                 });
             }
 

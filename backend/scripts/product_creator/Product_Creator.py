@@ -842,7 +842,11 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         }
 
 def _custom_sku_from_payload(data):
-    """SKU from the save payload's custom.sku metafield, for media filenames."""
+    """SKU from the save payload's custom.sku metafield, for media filenames.
+
+    custom.sku may be a plain code, or a JSON array of
+    Colour:Pantone:ProductCode[:OptionType] entries — use the first product code.
+    """
     try:
         for mf in (data.get("metafields") or []):
             if mf.get("namespace") == "custom" and mf.get("key") == "sku":
@@ -853,7 +857,12 @@ def _custom_sku_from_payload(data):
                         try:
                             parsed = json.loads(v)
                             if isinstance(parsed, list) and parsed:
-                                return str(parsed[0])
+                                first = str(parsed[0] or "").strip()
+                                parts = first.split(":")
+                                # Colour:Pantone:ProductCode[:OptionType]
+                                if len(parts) >= 3:
+                                    return parts[2].strip()
+                                return first
                         except Exception:
                             return v
                     return v
@@ -1660,8 +1669,33 @@ def _has_parent_child_allocation(mf_map):
 
 
 def _sku_from_metafield(mf_map):
-    """SKU for All Products: custom.sku metafield (Product Manager product code)."""
-    return str(mf_map.get("sku") or "").strip()
+    """SKU for All Products: custom.sku metafield (Product Manager product code).
+
+    Supports plain codes and JSON arrays of Colour:Pantone:ProductCode[:OptionType].
+    """
+    raw = str(mf_map.get("sku") or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                codes = []
+                for item in parsed:
+                    parts = str(item or "").strip().split(":")
+                    if len(parts) >= 3 and parts[2].strip():
+                        codes.append(parts[2].strip())
+                # De-dupe, keep order
+                seen = set()
+                uniq = []
+                for c in codes:
+                    if c not in seen:
+                        seen.add(c)
+                        uniq.append(c)
+                return ", ".join(uniq) if uniq else raw
+        except Exception:
+            return raw
+    return raw
 
 
 def _build_overview_product(pid, title, mf_map, graphql_node=None):
