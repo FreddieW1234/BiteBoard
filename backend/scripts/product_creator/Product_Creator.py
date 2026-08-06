@@ -1387,6 +1387,7 @@ ALL_PRODUCTS_FIELD_KEYS = {
     "unit_weight": "unit_weight",
     "case_quantity": "case_quantity",
     "case_weight": "case_weight",
+    "leadtime3": "leadtime3",
     "leadtime1": "leadtime1",
     "leadtime2": "leadtime2",
     "commodity_code": "commodity_code",
@@ -3002,7 +3003,7 @@ MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRON
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside", "productinfo",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
-    "case_weight", "leadtime1", "leadtime2", "commodity_code", "alternative_spellings",
+    "case_weight", "leadtime3", "leadtime1", "leadtime2", "commodity_code", "alternative_spellings",
     "vegan", "vegetarian", "halal", "coeliac", "kosher",
     "peanuts", "nuts", "sesame", "egg", "cereals", "soya", "milk",
     "celery", "crustaceans", "fish", "lupin", "molluscs", "mustard", "sulphurdioxide",
@@ -3965,6 +3966,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "artworkguidelines", "artworktemplates", "custom_category", "subcategory",
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
+            "leadtime3",
         ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or [])
 
         def _is_clearable(ns, k):
