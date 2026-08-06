@@ -1783,6 +1783,7 @@ def _parse_product_form(req):
             data['shopify_media_ids'] = []
 
         data['media_explicitly_cleared'] = req.form.get('media_explicitly_cleared', 'false').lower() in ('true', '1', 'yes')
+        data['main_image_to_children'] = req.form.get('main_image_to_children', 'false').lower() in ('true', '1', 'yes')
 
         media_order_str = req.form.get('media_order', '[]')
         try:

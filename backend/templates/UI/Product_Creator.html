@@ -2020,6 +2020,23 @@
         }
         .reorder-instructions i { color: #4f46e5; flex-shrink: 0; }
 
+        /* 'Make this main image across all child products' — parent products only */
+        .main-image-children-row {
+            border: 1px solid #e0e0e0; border-radius: 8px;
+            background: #fff; padding: 10px 16px; margin-bottom: 12px;
+        }
+        .main-image-children-row label {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 600; color: #333; cursor: pointer;
+        }
+        .main-image-children-row input[type="checkbox"] {
+            width: 16px; height: 16px; accent-color: #4f46e5; cursor: pointer;
+        }
+        .main-image-children-hint {
+            display: block; margin: 4px 0 0 24px;
+            font-size: 12px; color: #777;
+        }
+
         /* Drag states — pointer-events:none lets events reach slots/items underneath */
         .media-preview-item.dragging {
             opacity: 0.25; transform: scale(0.92);
@@ -2443,6 +2460,13 @@
                                 <div class="reorder-instructions">
                                     <i class="fas fa-arrows-alt"></i>
                                     <span>Drag an image to a slot line between others to reorder, or use the arrow buttons. The first image becomes the main product image.</span>
+                                </div>
+                                <div class="main-image-children-row" id="mainImageToChildrenRow" style="display: none;">
+                                    <label for="mainImageToChildren">
+                                        <input type="checkbox" id="mainImageToChildren">
+                                        <span>Make this main image across all child products</span>
+                                    </label>
+                                    <span class="main-image-children-hint">Adds the first image above to every child product and makes it their main image. Images already on the children are kept.</span>
                                 </div>
                                 <div class="media-preview-grid" id="mediaPreviewGrid">
                                     <!-- Media previews will be added here -->
@@ -2922,6 +2946,7 @@
                     if (childOptionWrap) childOptionWrap.style.display = '';
                     applyChildModeVisibility();
                 }
+                updateMainImageToChildrenVisibility();
             }
             function updateChildUI() {
                 if (childYes && childYes.checked) {
@@ -2944,6 +2969,7 @@
                     if (parentOptionWrap) parentOptionWrap.style.display = '';
                     applyChildModeVisibility();
                 }
+                updateMainImageToChildrenVisibility();
             }
             parentYes.addEventListener('change', updateParentUI);
             parentNo.addEventListener('change', updateParentUI);
@@ -5483,6 +5509,9 @@
                 }
                 productData.colour_images = colourImages;
 
+                // Parent products only: push the main image down to every child.
+                productData.main_image_to_children = mainImageToChildrenChecked();
+
                 console.log('🔍 Product colours:', productData.product_colours);
                 console.log('🔍 Packaging colours:', productData.packaging_colours);
                 console.log('🔍 Foil colours:', productData.foil_colours);
@@ -6290,6 +6319,7 @@
         // Media Upload Functionality
         let selectedMediaFiles = [];
         let selectedShopifyMedia = []; // Declare early to prevent ReferenceError
+        let mediaItems = [];           // display order across both lists (see reconcileMediaItems)
         let mediaExplicitlyCleared = false;
         const maxFiles = 250;
 
@@ -6722,6 +6752,10 @@
                         });
                     }
                 }
+                // Opt in per save rather than inheriting the tick from the last product
+                const mainImgToChildrenBox = document.getElementById('mainImageToChildren');
+                if (mainImgToChildrenBox) mainImgToChildrenBox.checked = false;
+                updateMainImageToChildrenVisibility();
 
                 // Close dropdown and set main search input (leave empty when duplicating)
                 if (pcInput) pcInput.value = isDuplicate ? '' : (data.title || title || '');
@@ -7706,19 +7740,70 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
-        function moveMediaItem(fromIndex, direction) {
+        // ------------------------------------------------------------------
+        // Media ordering.
+        // selectedMediaFiles (new uploads) and selectedShopifyMedia (images
+        // already on the product) stay as separate lists because the rest of the
+        // editor reads them, but the *display order* is owned by mediaItems so
+        // new and existing images can be interleaved. Reordering used to rebuild
+        // the two lists by type, which silently threw away any move that crossed
+        // the new/existing boundary.
+        // ------------------------------------------------------------------
+
+        // Bring mediaItems back in step with the two arrays after code elsewhere
+        // adds or removes entries directly, keeping the order of what remains.
+        function reconcileMediaItems() {
             if (!selectedMediaFiles) selectedMediaFiles = [];
             if (!selectedShopifyMedia) selectedShopifyMedia = [];
-            const allMedia = [
-                ...selectedMediaFiles.map((file, i) => ({ type: 'uploaded', item: file })),
-                ...selectedShopifyMedia.map((media, i) => ({ type: 'shopify', item: media }))
-            ];
+            mediaItems = mediaItems.filter(e => e.type === 'uploaded'
+                ? selectedMediaFiles.includes(e.item)
+                : selectedShopifyMedia.includes(e.item));
+            selectedMediaFiles.forEach(f => {
+                if (!mediaItems.some(e => e.type === 'uploaded' && e.item === f)) {
+                    mediaItems.push({ type: 'uploaded', item: f });
+                }
+            });
+            selectedShopifyMedia.forEach(m => {
+                if (!mediaItems.some(e => e.type === 'shopify' && e.item === m)) {
+                    mediaItems.push({ type: 'shopify', item: m });
+                }
+            });
+            return mediaItems;
+        }
+
+        function syncMediaArraysFromItems() {
+            selectedMediaFiles = mediaItems.filter(e => e.type === 'uploaded').map(e => e.item);
+            selectedShopifyMedia = mediaItems.filter(e => e.type === 'shopify').map(e => e.item);
+        }
+
+        // The tickbox only means anything on a parent product, and must not stay
+        // ticked if the product is switched to a child or standalone.
+        function updateMainImageToChildrenVisibility() {
+            const row = document.getElementById('mainImageToChildrenRow');
+            if (!row) return;
+            const parentYes = document.getElementById('parentYes');
+            const isParent = !!(parentYes && parentYes.checked);
+            row.style.display = isParent ? 'block' : 'none';
+            if (!isParent) {
+                const box = document.getElementById('mainImageToChildren');
+                if (box) box.checked = false;
+            }
+        }
+
+        function mainImageToChildrenChecked() {
+            const box = document.getElementById('mainImageToChildren');
+            const parentYes = document.getElementById('parentYes');
+            return !!(box && box.checked && parentYes && parentYes.checked);
+        }
+
+        function moveMediaItem(fromIndex, direction) {
+            reconcileMediaItems();
             const toIndex = fromIndex + direction;
-            if (toIndex < 0 || toIndex >= allMedia.length) return;
-            const item = allMedia.splice(fromIndex, 1)[0];
-            allMedia.splice(toIndex, 0, item);
-            selectedMediaFiles = allMedia.filter(m => m.type === 'uploaded').map(m => m.item);
-            selectedShopifyMedia = allMedia.filter(m => m.type === 'shopify').map(m => m.item);
+            if (fromIndex < 0 || fromIndex >= mediaItems.length) return;
+            if (toIndex < 0 || toIndex >= mediaItems.length) return;
+            const entry = mediaItems.splice(fromIndex, 1)[0];
+            mediaItems.splice(toIndex, 0, entry);
+            syncMediaArraysFromItems();
             updateMediaPreview();
         }
 
@@ -7789,21 +7874,15 @@
         }
 
         function performSlotDrop(slotIndex) {
-            if (draggedIndex === null || draggedIndex === undefined) return;
-            if (!selectedMediaFiles) selectedMediaFiles = [];
-            if (!selectedShopifyMedia) selectedShopifyMedia = [];
-            const allMedia = [
-                ...selectedMediaFiles.map(f => ({ type: 'uploaded', item: f })),
-                ...selectedShopifyMedia.map(m => ({ type: 'shopify', item: m }))
-            ];
-            if (draggedIndex < 0 || draggedIndex >= allMedia.length) return;
+            if (draggedIndex === null || draggedIndex === undefined) { cleanupDragState(); return; }
+            reconcileMediaItems();
+            if (draggedIndex < 0 || draggedIndex >= mediaItems.length) { cleanupDragState(); return; }
             let insertAt = slotIndex;
             if (draggedIndex < slotIndex) insertAt = slotIndex - 1;
             if (insertAt === draggedIndex) { cleanupDragState(); return; }
-            const item = allMedia.splice(draggedIndex, 1)[0];
-            allMedia.splice(insertAt, 0, item);
-            selectedMediaFiles = allMedia.filter(m => m.type === 'uploaded').map(m => m.item);
-            selectedShopifyMedia = allMedia.filter(m => m.type === 'shopify').map(m => m.item);
+            const entry = mediaItems.splice(draggedIndex, 1)[0];
+            mediaItems.splice(insertAt, 0, entry);
+            syncMediaArraysFromItems();
             cleanupDragState();
             updateMediaPreview();
         }
@@ -7844,10 +7923,10 @@
         }
 
         function updateMediaPreview() {
-            if (!selectedMediaFiles) selectedMediaFiles = [];
-            if (!selectedShopifyMedia) selectedShopifyMedia = [];
+            reconcileMediaItems();
+            updateMainImageToChildrenVisibility();
 
-            const totalFiles = selectedMediaFiles.length + selectedShopifyMedia.length;
+            const totalFiles = mediaItems.length;
             const mediaPreviewContainer = document.getElementById('mediaPreviewContainer');
             const mediaCount = document.querySelector('.media-count');
             const mediaPreviewGrid = document.getElementById('mediaPreviewGrid');
@@ -7863,20 +7942,17 @@
             if (mediaCount) mediaCount.textContent = `${totalFiles} file${totalFiles !== 1 ? 's' : ''} selected`;
 
             mediaPreviewGrid.innerHTML = '';
-            let itemIndex = 0;
 
             mediaPreviewGrid.appendChild(createDropSlot(0));
 
-            selectedMediaFiles.forEach((file, i) => {
-                mediaPreviewGrid.appendChild(createMediaPreview(file, itemIndex, 'uploaded'));
-                itemIndex++;
-                mediaPreviewGrid.appendChild(createDropSlot(itemIndex));
-            });
-
-            selectedShopifyMedia.forEach((media, i) => {
-                mediaPreviewGrid.appendChild(createShopifyMediaPreview(media, itemIndex));
-                itemIndex++;
-                mediaPreviewGrid.appendChild(createDropSlot(itemIndex));
+            // One pass over the display order, so uploads and existing Shopify
+            // images appear exactly where the user put them.
+            mediaItems.forEach((entry, idx) => {
+                const el = entry.type === 'uploaded'
+                    ? createMediaPreview(entry.item, idx, 'uploaded')
+                    : createShopifyMediaPreview(entry.item, idx);
+                mediaPreviewGrid.appendChild(el);
+                mediaPreviewGrid.appendChild(createDropSlot(idx + 1));
             });
 
             // Grid-level fallback: allow drop anywhere on the grid
@@ -7985,56 +8061,52 @@
 
         // Update the addMediaToFormData function to handle both types
         function addMediaToFormData(formData) {
-            // Build the complete media order combining both uploaded files and Shopify media
-            // Position starts from 1 (Shopify's position numbering)
+            reconcileMediaItems();
+
+            // Walk the single display-ordered list so new uploads and existing
+            // images keep the exact order shown in the grid. The backend matches
+            // 'upload' entries to newly created images in the order they appear
+            // here, which is also the order the files are appended below.
             const mediaOrder = [];
-            let currentPosition = 1;
-            
-            // First, add uploaded files in order
-            selectedMediaFiles.forEach((file, index) => {
-                formData.append('media_files', file);
-                mediaOrder.push({ type: 'upload', index: index, position: currentPosition });
+            let currentPosition = 1;   // Shopify positions start at 1
+            let uploadIndex = 0;
+
+            mediaItems.forEach(entry => {
+                if (entry.type === 'uploaded') {
+                    formData.append('media_files', entry.item);
+                    mediaOrder.push({ type: 'upload', index: uploadIndex, position: currentPosition });
+                    uploadIndex++;
+                } else {
+                    // The backend compares against the REST API numeric ID, not the global ID
+                    const restApiId = entry.item.rest_api_id || entry.item.id;
+                    const mediaIdForBackend = String(restApiId);
+                    formData.append('shopify_media_ids', mediaIdForBackend);
+                    mediaOrder.push({ type: 'shopify', id: mediaIdForBackend, position: currentPosition });
+                }
                 currentPosition++;
             });
-            
+
             // When creating a new product (e.g. duplicate), send image URLs so backend can create media from URL
             const isNewProductWithCopyMedia = !isEditingProduct && selectedShopifyMedia.length > 0;
             if (isNewProductWithCopyMedia) {
-                const urls = selectedShopifyMedia.map(m => m.url).filter(u => u && typeof u === 'string');
+                const urls = mediaItems
+                    .filter(e => e.type === 'shopify')
+                    .map(e => e.item.url)
+                    .filter(u => u && typeof u === 'string');
                 if (urls.length > 0) {
                     formData.append('media_urls', JSON.stringify(urls));
                     console.log(`📦 Sending ${urls.length} media URLs for new product (duplicate/copy)`);
                 }
             }
-            // Then, add selected Shopify media IDs with their positions
-            console.log(`📦 About to send ${selectedShopifyMedia.length} Shopify media items:`, selectedShopifyMedia);
-            selectedShopifyMedia.forEach((media, index) => {
-                // Use rest_api_id if available, otherwise fall back to id (REST API numeric ID)
-                // The backend compares against the REST API numeric ID, not the global ID
-                const restApiId = media.rest_api_id || media.id;
-                const mediaIdForBackend = String(restApiId);  // Ensure it's a string for backend comparison
-                console.log(`📤 Appending media ID ${index + 1}/${selectedShopifyMedia.length}: REST ID ${mediaIdForBackend} (also has global_id: ${media.global_id})`);
-                formData.append('shopify_media_ids', mediaIdForBackend);
-                mediaOrder.push({ type: 'shopify', id: mediaIdForBackend, position: currentPosition });
-                currentPosition++;
-            });
-            
+
             // Send the complete ordered list as JSON
             formData.append('media_order', JSON.stringify(mediaOrder));
-            formData.append('media_count', selectedMediaFiles.length + selectedShopifyMedia.length);
+            formData.append('media_count', mediaItems.length);
             formData.append('media_explicitly_cleared', mediaExplicitlyCleared ? 'true' : 'false');
-            
+
             console.log('📦 Media order being sent:', mediaOrder);
-            console.log('📦 Total Shopify media IDs being sent:', selectedShopifyMedia.length);
-            const shopifyIdsBeingSent = selectedShopifyMedia.map(m => {
-                const restId = m.rest_api_id || m.id;
-                return { rest_api_id: restId, global_id: m.global_id, id: m.id };
-            });
-            console.log('📦 Shopify media IDs list (for removal check):', shopifyIdsBeingSent);
-            
-            // Also log what will be in shopify_media_ids (the keep list)
-            const keepListIds = selectedShopifyMedia.map(m => String(m.rest_api_id || m.id));
-            console.log('📦 shopify_media_ids (keep list) being sent to backend:', keepListIds);
+            console.log('📦 shopify_media_ids (keep list) being sent to backend:',
+                mediaItems.filter(e => e.type === 'shopify').map(e => String(e.item.rest_api_id || e.item.id)));
         }
 
         function isChildProduct() {

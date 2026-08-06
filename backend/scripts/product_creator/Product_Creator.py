@@ -2896,6 +2896,147 @@ def _inherit_metafields_with_clears(metafields):
     return result
 
 
+def _image_name_stem(src):
+    """Filename stem of a Shopify CDN image URL, ignoring the ?v= cache buster."""
+    if not src:
+        return ""
+    base = str(src).split("?")[0].rsplit("/", 1)[-1]
+    return base.rsplit(".", 1)[0].strip().lower()
+
+
+def _is_same_image_stem(child_stem, parent_stem):
+    """True when a child image looks like a copy of the parent's image.
+
+    Shopify appends _1, _2 ... when a filename is already taken on the product,
+    so a copy of "front.jpg" can land as "front_1.jpg".
+    """
+    if not child_stem or not parent_stem:
+        return False
+    return child_stem == parent_stem or child_stem.startswith(parent_stem + "_")
+
+
+def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domain=None):
+    """Give every child the parent's main image as its own main image.
+
+    Nothing is deleted: the image is added at position 1 and the child's existing
+    images shift down. If the child already has a copy of that image it is just
+    moved to the front, so re-saving the parent does not pile up duplicates.
+    """
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    base_url = f"https://{domain}/admin/api/{API_VERSION}"
+    headers = {
+        "X-Shopify-Access-Token": ACCESS_TOKEN,
+        "Content-Type": "application/json",
+    }
+
+    def _request_with_retry(method, url, payload=None, label=""):
+        """Request with 429 retry and manual redirect follow.
+
+        requests turns a redirected POST/PUT into a GET, which would silently
+        drop the write, so redirects are re-issued with the original method.
+        """
+        for attempt in range(3):
+            if attempt > 0:
+                time.sleep(0.4)
+            r = requests.request(method, url, headers=headers, json=payload, timeout=30, allow_redirects=False)
+            if r.status_code in (301, 302, 303, 307, 308):
+                from urllib.parse import urlparse
+                loc = r.headers.get("Location", url)
+                if loc.startswith("/"):
+                    p = urlparse(url)
+                    loc = f"{p.scheme}://{p.netloc}{loc}"
+                r = requests.request(method, loc, headers=headers, json=payload, timeout=30)
+            if r.status_code == 429 and attempt < 2:
+                wait = 2.0
+                try:
+                    wait = max(2.0, float(r.headers.get("retry-after", 2)))
+                except (ValueError, TypeError):
+                    pass
+                print(f"⚠️ Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
+                time.sleep(wait)
+                continue
+            return r
+        return r
+
+    try:
+        parent_resp = _request_with_retry("GET", f"{base_url}/products/{parent_product_id}/images.json", label="parent images")
+        if parent_resp.status_code != 200:
+            print(f"⚠️ Main image propagation: could not read parent images ({parent_resp.status_code})", flush=True)
+            return {"success": False, "updated": 0}
+        parent_images = parent_resp.json().get("images", []) or []
+    except Exception as e:
+        print(f"⚠️ Main image propagation: error reading parent images: {e}", flush=True)
+        return {"success": False, "updated": 0}
+
+    if not parent_images:
+        print("ℹ️ Main image propagation: parent has no images to share", flush=True)
+        return {"success": True, "updated": 0}
+
+    main_image = sorted(parent_images, key=lambda i: i.get("position") or 999)[0]
+    main_src = (main_image.get("src") or "").strip()
+    if not main_src:
+        print("ℹ️ Main image propagation: parent main image has no source URL", flush=True)
+        return {"success": True, "updated": 0}
+    parent_stem = _image_name_stem(main_src)
+
+    print(f"🖼️ Pushing parent main image to {len(child_ids)} child product(s): {main_src.split('/')[-1][:60]}", flush=True)
+
+    updated = 0
+    for cid in child_ids:
+        try:
+            child_resp = _request_with_retry("GET", f"{base_url}/products/{cid}/images.json", label=f"child {cid} images")
+            if child_resp.status_code != 200:
+                print(f"⚠️ Main image propagation: could not read images for child {cid} ({child_resp.status_code})", flush=True)
+                continue
+            child_images = child_resp.json().get("images", []) or []
+
+            existing = next(
+                (img for img in child_images if _is_same_image_stem(_image_name_stem(img.get("src")), parent_stem)),
+                None,
+            )
+
+            if existing:
+                image_id = existing.get("id")
+                if (existing.get("position") or 0) != 1:
+                    move = _request_with_retry(
+                        "PUT",
+                        f"{base_url}/products/{cid}/images/{image_id}.json",
+                        {"image": {"id": int(image_id), "position": 1}},
+                        label=f"child {cid} image position",
+                    )
+                    if move.status_code != 200:
+                        print(f"⚠️ Could not move existing image to front on child {cid}: {move.status_code}", flush=True)
+                        continue
+            else:
+                created = _request_with_retry(
+                    "POST",
+                    f"{base_url}/products/{cid}/images.json",
+                    {"image": {"src": main_src, "position": 1}},
+                    label=f"child {cid} image add",
+                )
+                if created.status_code not in (200, 201):
+                    print(f"⚠️ Could not add main image to child {cid}: {created.status_code} - {created.text[:200]}", flush=True)
+                    continue
+                image_id = (created.json().get("image") or {}).get("id")
+
+            # Mirror the reorder path: point the product's featured image at it too.
+            if image_id:
+                _request_with_retry(
+                    "PUT",
+                    f"{base_url}/products/{cid}.json",
+                    {"product": {"id": cid, "image": {"id": int(image_id)}}},
+                    label=f"child {cid} main image",
+                )
+            updated += 1
+            print(f"✅ Main image set on child product {cid}", flush=True)
+        except Exception as e:
+            print(f"⚠️ Main image propagation failed for child {cid}: {e}", flush=True)
+        time.sleep(0.3)
+
+    print(f"📊 Main image propagation: {updated}/{len(child_ids)} child product(s) updated", flush=True)
+    return {"success": True, "updated": updated}
+
+
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
     """
     After saving a parent product, push the same inherited fields to all products
@@ -2910,6 +3051,12 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
         print(f"📋 No child products found for {parent_child_value}", flush=True)
         return []
     print(f"📋 Propagating parent fields to {len(child_ids)} child product(s) for {parent_child_value}", flush=True)
+
+    if product_data.get("main_image_to_children"):
+        try:
+            propagate_main_image_to_children(parent_product_id, child_ids, shopify_domain)
+        except Exception as e:
+            print(f"⚠️ Main image propagation failed: {e}", flush=True)
 
     # Re-read parent after save so children always get the full current inherited state
     time.sleep(0.5)
