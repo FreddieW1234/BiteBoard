@@ -1549,9 +1549,65 @@ def api_stock_designs_upload(product_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# Storefront origins allowed to call GET /exists from the product page (JS fetch).
+# /latest is a plain <a href> download, so it does not need CORS.
+_STOCK_CORS_ORIGINS = {
+    "https://bitepromotions.co.uk",
+    "https://www.bitepromotions.co.uk",
+    "https://bitepromotions.uk",
+    "https://www.bitepromotions.uk",
+}
+if STOREFRONT_URL:
+    _STOCK_CORS_ORIGINS.add(STOREFRONT_URL.rstrip("/"))
+if STORE_DOMAIN:
+    _STOCK_CORS_ORIGINS.add(f"https://{STORE_DOMAIN.replace('https://', '').replace('http://', '').rstrip('/')}")
+
+
+def _stock_designs_apply_cors(resp):
+    origin = request.headers.get("Origin", "")
+    if origin in _STOCK_CORS_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+    return resp
+
+
+@app.route('/api/stock-designs/<product_id>/exists', methods=['GET', 'OPTIONS'])
+def api_stock_designs_exists(product_id):
+    """Public: storefront product page uses this to show/hide the download button."""
+    if request.method == 'OPTIONS':
+        resp = Response(status=204)
+        resp.headers['Access-Control-Allow-Methods'] = 'GET'
+        resp.headers['Access-Control-Max-Age'] = '86400'
+        return _stock_designs_apply_cors(resp)
+
+    pid = str(product_id or '').strip()
+    if not pid.isdigit():
+        return _stock_designs_apply_cors(jsonify({'exists': False, 'count': 0, 'error': 'bad id'})), 400
+
+    try:
+        from scripts.office_api import list_stock_designs, OfficeApiError  # type: ignore
+        data = list_stock_designs(pid)
+        count = int((data or {}).get('count') or 0)
+        if not count and isinstance((data or {}).get('files'), list):
+            count = len(data['files'])
+        resp = jsonify({
+            'exists': count > 0,
+            'count': count,
+            'latest': (data or {}).get('latest'),
+        })
+        # Short cache so busy product pages do not each hit the office tunnel.
+        resp.headers['Cache-Control'] = 'public, max-age=300'
+        return _stock_designs_apply_cors(resp)
+    except OfficeApiError:
+        # Office down → hide the button rather than surface an error on the storefront.
+        return _stock_designs_apply_cors(jsonify({'exists': False, 'count': 0, 'offline': True}))
+    except Exception:
+        return _stock_designs_apply_cors(jsonify({'exists': False, 'count': 0, 'offline': True}))
+
+
 @app.route('/api/stock-designs/<product_id>/latest', methods=['GET'])
 def api_stock_designs_latest(product_id):
-    """Staff + storefront-friendly download of the newest ZIP for a product."""
+    """Public download of the newest ZIP for a product (storefront <a href>)."""
     try:
         from scripts.office_api import fetch_latest_stock_design, OfficeApiError  # type: ignore
         resp = fetch_latest_stock_design(product_id)

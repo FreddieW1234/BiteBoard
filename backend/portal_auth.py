@@ -73,7 +73,15 @@ def is_staff_public_path(path: str) -> bool:
     # /healthz must stay reachable for Render's health check, and /maint-exit
     # must stay reachable to clear the maintenance bypass cookie.
     public = {"/staff/login", "/api/health", "/test", "/healthz", "/maint-exit"}
-    return path in public
+    if path in public:
+        return True
+    # Storefront stock-designs: product page checks /exists and downloads /latest
+    # without a portal staff session. Staff list/upload/delete stay protected.
+    if path.startswith("/api/stock-designs/") and (
+        path.endswith("/exists") or path.endswith("/latest")
+    ):
+        return True
+    return False
 
 
 def can_access_order(order_id: str | int) -> bool:
