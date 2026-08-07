@@ -59,8 +59,9 @@ def fetch_metafield_artworktemplates(product_id):
     items = r.json().get('metafields', [])
     return items[0] if items else None
 
-def set_metafield_artworktemplates(product_id, global_file_id):
-    # Use metafieldsSet to set file_reference
+def set_metafield_file_reference(product_id, global_file_id, metafield_key='artworktemplates'):
+    # Use metafieldsSet to set file_reference on custom.<metafield_key>
+    key = (metafield_key or 'artworktemplates').strip() or 'artworktemplates'
     mutation = """
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
@@ -73,7 +74,7 @@ def set_metafield_artworktemplates(product_id, global_file_id):
         'metafields': [{
             'ownerId': f"gid://shopify/Product/{product_id}",
             'namespace': 'custom',
-            'key': 'artworktemplates',
+            'key': key,
             'type': 'file_reference',
             'value': global_file_id
         }]
@@ -83,6 +84,10 @@ def set_metafield_artworktemplates(product_id, global_file_id):
     if errors:
         raise RuntimeError(f"Metafield set errors: {errors}")
     return True
+
+
+def set_metafield_artworktemplates(product_id, global_file_id):
+    return set_metafield_file_reference(product_id, global_file_id, 'artworktemplates')
 
 def staged_upload(filename, mime_type):
     mutation = """
@@ -148,7 +153,14 @@ def zip_files_to_bytes(file_list):
     buf.seek(0)
     return buf.read()
 
-def upload_zip_and_set_metafield(product_id, filename, files, explicit_version: int | None = None):
+def upload_zip_and_set_metafield(
+    product_id,
+    filename,
+    files,
+    explicit_version: int | None = None,
+    metafield_key: str = 'artworktemplates',
+    default_base: str = 'artwork_templates',
+):
     # files is list of { filename, content(bytes), content_type }
     zip_bytes = zip_files_to_bytes(files)
     # sanitize base name server-side as well (without extension)
@@ -159,7 +171,7 @@ def upload_zip_and_set_metafield(product_id, filename, files, explicit_version: 
     if base.lower().endswith('.zip'):
         base = base[:-4]
     if not base:
-        base = 'artwork_templates'
+        base = default_base or 'artwork_templates'
 
     if explicit_version and isinstance(explicit_version, int) and explicit_version >= 1:
         next_version = explicit_version
@@ -199,8 +211,8 @@ def upload_zip_and_set_metafield(product_id, filename, files, explicit_version: 
         raise RuntimeError('Failed uploading ZIP to staged target')
     file_gid = file_create_from_staged(staged_target, '')
     # file_gid is a global id already
-    set_metafield_artworktemplates(product_id, file_gid)
-    return {'success': True, 'file_gid': file_gid}
+    set_metafield_file_reference(product_id, file_gid, metafield_key=metafield_key)
+    return {'success': True, 'file_gid': file_gid, 'metafield_key': metafield_key}
 
 if __name__ == '__main__':
     print('Templates Uploader script loaded')

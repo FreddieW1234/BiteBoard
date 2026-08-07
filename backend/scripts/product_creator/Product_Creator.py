@@ -3077,7 +3077,7 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "vegan", "vegetarian", "halal", "coeliac", "kosher",
     "peanuts", "nuts", "sesame", "egg", "cereals", "soya", "milk",
     "celery", "crustaceans", "fish", "lupin", "molluscs", "mustard", "sulphurdioxide",
-    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates",
+    "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates", "stockdesigns",
     "product_colours", "packaging_colours", "foil_colours", "bag_colours",
     *CUSTOM_OPTION_METAFIELD_KEYS,
     "print", "foil", "mailer", "mailerpacking", "calendar",
@@ -3336,6 +3336,7 @@ def _inherit_metafields_with_clears(metafields):
         (CALENDAR_METAFIELD_KEY, "boolean"),
         ("artworkguidelines", "file_reference"),
         ("artworktemplates", "file_reference"),
+        ("stockdesigns", "file_reference"),
         ("pricejsontr", "single_line_text_field"),
         ("pricejsoner", "single_line_text_field"),
     ]
@@ -4034,7 +4035,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         except Exception:
             FILTER_GROUP_KEYS = []
         clearable_keys = set([
-            "artworkguidelines", "artworktemplates", "custom_category", "subcategory",
+            "artworkguidelines", "artworktemplates", "stockdesigns", "custom_category", "subcategory",
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",

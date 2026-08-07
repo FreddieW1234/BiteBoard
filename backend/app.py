@@ -1453,6 +1453,11 @@ def api_templates_uploader_upload_zip():
         product_id = request.form.get('product_id')
         zip_name = request.form.get('zip_name', 'artwork_templates')
         explicit_version = request.form.get('explicit_version')
+        metafield_key = (request.form.get('metafield_key') or 'artworktemplates').strip() or 'artworktemplates'
+        # Only allow known artwork file_reference keys from this endpoint.
+        if metafield_key not in ('artworktemplates', 'stockdesigns'):
+            return jsonify({'success': False, 'error': f'Unsupported metafield_key: {metafield_key}'}), 400
+        default_base = 'stock_designs' if metafield_key == 'stockdesigns' else 'artwork_templates'
         if not product_id:
             return jsonify({'success': False, 'error': 'Missing product_id'}), 400
         files = request.files.getlist('files')
@@ -1481,7 +1486,14 @@ def api_templates_uploader_upload_zip():
         except Exception:
             ver_int = None
 
-        result = upload_zip_and_set_metafield(product_id=str(product_id), filename=zip_name, files=prepared, explicit_version=ver_int)
+        result = upload_zip_and_set_metafield(
+            product_id=str(product_id),
+            filename=zip_name,
+            files=prepared,
+            explicit_version=ver_int,
+            metafield_key=metafield_key,
+            default_base=default_base,
+        )
         return jsonify({'success': True, **result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

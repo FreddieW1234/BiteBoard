@@ -2884,28 +2884,53 @@
                             </div>
 
                             <div class="form-group full-width">
-                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                                    <label class="form-label" style="margin-bottom:0;">Templates</label>
-                                    <span id="template-status" style="display:none;font-size:0.85rem;color:#666;">
-                                        Template attached
-                                        <button type="button" onclick="clearAllTemplates()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove all templates"><i class="fas fa-times"></i> Remove</button>
-                                    </span>
-                                </div>
-                                <div class="media-upload-container">
-                                    <div class="media-upload-area" id="artworkTemplatesUploadArea">
-                                        <div class="upload-icon">
-                                            <i class="fas fa-cloud-upload-alt"></i>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                                            <label class="form-label" style="margin-bottom:0;">Templates</label>
+                                            <span id="template-status" style="display:none;font-size:0.85rem;color:#666;">
+                                                Template attached
+                                                <button type="button" onclick="clearAllTemplates()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove all templates"><i class="fas fa-times"></i> Remove</button>
+                                            </span>
                                         </div>
-                                        <div class="upload-text">
-                                            <p>Drag & drop files here or click to browse</p>
-                                            <p class="upload-limit">• Multiple files allowed •</p>
+                                        <div class="media-upload-container">
+                                            <div class="media-upload-area" id="artworkTemplatesUploadArea">
+                                                <div class="upload-icon">
+                                                    <i class="fas fa-cloud-upload-alt"></i>
+                                                </div>
+                                                <div class="upload-text">
+                                                    <p>Drag & drop files here or click to browse</p>
+                                                    <p class="upload-limit">• Multiple files allowed •</p>
+                                                </div>
+                                                <input type="file" id="artworkTemplatesInput" multiple style="display:none;">
+                                            </div>
                                         </div>
-                                        <input type="file" id="artworkTemplatesInput" multiple style="display:none;">
+                                        <div id="artworkTemplatesList" style="margin-top:10px;"></div>
+                                        <div id="pcVersionsPanel" class="mf" style="margin-top:12px; display:none;"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                                            <label class="form-label" style="margin-bottom:0;">Stock Designs</label>
+                                            <span id="stock-designs-status" style="display:none;font-size:0.85rem;color:#666;">
+                                                Stock designs attached
+                                                <button type="button" onclick="clearAllStockDesigns()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove all stock designs"><i class="fas fa-times"></i> Remove</button>
+                                            </span>
+                                        </div>
+                                        <div class="media-upload-container">
+                                            <div class="media-upload-area" id="stockDesignsUploadArea">
+                                                <div class="upload-icon">
+                                                    <i class="fas fa-cloud-upload-alt"></i>
+                                                </div>
+                                                <div class="upload-text">
+                                                    <p>Drag & drop files here or click to browse</p>
+                                                    <p class="upload-limit">• Multiple files allowed •</p>
+                                                </div>
+                                                <input type="file" id="stockDesignsInput" multiple style="display:none;">
+                                            </div>
+                                        </div>
+                                        <div id="stockDesignsList" style="margin-top:10px;"></div>
                                     </div>
                                 </div>
-                                <div id="artworkTemplatesList" style="margin-top:10px;"></div>
-                                <div id="pcVersionsPanel" class="mf" style="margin-top:12px; display:none;"></div>
-                                
                             </div>
                         </div>
                     </div>
@@ -3024,6 +3049,7 @@
 
             if (typeof resetPricingTables === 'function') resetPricingTables();
             if (typeof clearAllTemplates === 'function') clearAllTemplates();
+            if (typeof clearAllStockDesigns === 'function') clearAllStockDesigns();
             if (typeof resetColourOptions === 'function') resetColourOptions();
 
             selectedMediaFiles = [];
@@ -3399,6 +3425,9 @@
         let stagedArtworkTemplateFiles = [];
         let pcStagedRemoteEntries = [];
         let pcCurrentTemplatesFileGlobalId = '';
+        let stagedStockDesignFiles = [];
+        let pcStagedStockDesignRemoteEntries = [];
+        let pcCurrentStockDesignsFileGlobalId = '';
 
         // Lazy + singleflight: do not block page open / health threads on a full
         // Shopify Files scan until artwork guidelines are actually needed.
@@ -3434,19 +3463,38 @@
             // Templates upload box wiring
             const area = document.getElementById('artworkTemplatesUploadArea');
             const input = document.getElementById('artworkTemplatesInput');
-            area.addEventListener('click', () => input.click());
-            area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
-            area.addEventListener('dragleave', () => area.classList.remove('dragover'));
-            area.addEventListener('drop', e => {
-                e.preventDefault();
-                area.classList.remove('dragover');
-                const files = Array.from(e.dataTransfer.files);
-                stageArtworkTemplates(files);
-            });
-            input.addEventListener('change', e => {
-                const files = Array.from(e.target.files);
-                stageArtworkTemplates(files);
-            });
+            if (area && input) {
+                area.addEventListener('click', () => input.click());
+                area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+                area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+                area.addEventListener('drop', e => {
+                    e.preventDefault();
+                    area.classList.remove('dragover');
+                    const files = Array.from(e.dataTransfer.files);
+                    stageArtworkTemplates(files);
+                });
+                input.addEventListener('change', e => {
+                    const files = Array.from(e.target.files);
+                    stageArtworkTemplates(files);
+                });
+            }
+
+            // Stock Designs upload box wiring
+            const sdArea = document.getElementById('stockDesignsUploadArea');
+            const sdInput = document.getElementById('stockDesignsInput');
+            if (sdArea && sdInput) {
+                sdArea.addEventListener('click', () => sdInput.click());
+                sdArea.addEventListener('dragover', e => { e.preventDefault(); sdArea.classList.add('dragover'); });
+                sdArea.addEventListener('dragleave', () => sdArea.classList.remove('dragover'));
+                sdArea.addEventListener('drop', e => {
+                    e.preventDefault();
+                    sdArea.classList.remove('dragover');
+                    stageStockDesigns(Array.from(e.dataTransfer.files));
+                });
+                sdInput.addEventListener('change', e => {
+                    stageStockDesigns(Array.from(e.target.files));
+                });
+            }
 
                 // Product Families diagram — skip when deep-linking straight into a product.
                 (function() {
@@ -3819,6 +3867,109 @@
             stageArtworkTemplates([]);
             updateTemplateStatus();
             console.log('🎨 Templates cleared');
+        }
+
+        function updateStockDesignsStatus() {
+            const statusEl = document.getElementById('stock-designs-status');
+            if (statusEl) {
+                statusEl.style.display = pcCurrentStockDesignsFileGlobalId ? 'inline' : 'none';
+            }
+        }
+
+        function clearAllStockDesigns() {
+            pcCurrentStockDesignsFileGlobalId = '';
+            pcStagedStockDesignRemoteEntries = [];
+            stagedStockDesignFiles = [];
+            stageStockDesigns([]);
+            updateStockDesignsStatus();
+            console.log('🎨 Stock designs cleared');
+        }
+
+        function stageStockDesigns(files) {
+            const list = document.getElementById('stockDesignsList');
+            if (!list) return;
+            (files || []).forEach(f => stagedStockDesignFiles.push(f));
+            const remoteItems = (pcStagedStockDesignRemoteEntries || []).map(e => ({
+                name: e.name,
+                size: e.size || 0,
+                is_image: !!e.is_image,
+                _type: 'remote'
+            }));
+            const localItems = (stagedStockDesignFiles || []).map((f, i) => ({
+                name: f.name,
+                size: f.size || 0,
+                is_image: f.type && f.type.startsWith('image/'),
+                preview: URL.createObjectURL(f),
+                _type: 'local',
+                _index: i
+            }));
+            const items = remoteItems.concat(localItems);
+            if (!items.length) {
+                list.innerHTML = '<div class="muted"></div>';
+                return;
+            }
+            list.innerHTML = '<div style="font-weight:600;margin-bottom:8px;">Current contents</div>' + items.map(it => {
+                const viewUrl = it._type === 'remote'
+                    ? `/api/templates-uploader/zip-file?file_global_id=${encodeURIComponent(pcCurrentStockDesignsFileGlobalId)}&name=${encodeURIComponent(it.name)}`
+                    : it.preview;
+                const removeBtn = it._type === 'remote'
+                    ? `<button type="button" title="Remove" onclick="removePcStockDesign('${it.name.replace(/'/g, "\\'")}', 'remote')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`
+                    : `<button type="button" title="Remove" onclick="removePcStockDesign(${it._index}, 'local')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`;
+                return `<div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
+                    <div style="width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;"><i class="fas fa-file"></i></div>
+                    <div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.name}</div>
+                    <a href="${viewUrl}" target="_blank" rel="noopener" title="Open" style="color:#4f46e5;"><i class="fas fa-eye"></i></a>
+                    ${removeBtn}
+                </div>`;
+            }).join('');
+        }
+
+        function removePcStockDesign(arg, type) {
+            if (type === 'local') {
+                const idx = Number(arg);
+                if (!Number.isNaN(idx)) {
+                    stagedStockDesignFiles.splice(idx, 1);
+                }
+            } else if (type === 'remote') {
+                pcStagedStockDesignRemoteEntries = pcStagedStockDesignRemoteEntries.filter(e => e.name !== arg);
+            }
+            if (pcStagedStockDesignRemoteEntries.length === 0 && stagedStockDesignFiles.length === 0) {
+                pcCurrentStockDesignsFileGlobalId = '';
+            }
+            stageStockDesigns([]);
+            updateStockDesignsStatus();
+        }
+
+        async function uploadStockDesignsAfterCreate(productId, productTitle) {
+            let sku = '';
+            try {
+                const pr = await fetch(`/api/product/${productId}/prices`);
+                const pdata = await pr.json();
+                const mfs = pdata.metafields || [];
+                const mfSku = (mfs.find(m => (m.namespace === 'custom' && m.key === 'sku')) || {}).value;
+                if (mfSku) sku = mfSku;
+                if (!sku && pdata.variants && pdata.variants.length) {
+                    sku = pdata.variants[0].sku || '';
+                }
+            } catch {}
+            if (!sku) sku = 'NOSKU';
+
+            const baseName = `${sanitizeBase(sku)}_${sanitizeBase(productTitle)}_stock_designs`;
+            const fd = new FormData();
+            fd.append('product_id', String(productId));
+            fd.append('zip_name', baseName);
+            fd.append('metafield_key', 'stockdesigns');
+            stagedStockDesignFiles.forEach(f => fd.append('files', f, f.name));
+
+            const resp = await fetch('/api/templates-uploader/upload-zip', { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (!data || !data.success) {
+                throw (data && data.error) || 'Upload failed';
+            }
+            if (data.file_gid) {
+                pcCurrentStockDesignsFileGlobalId = data.file_gid;
+            }
+            return true;
         }
 
         function selectGuideline(nameEnc, column, idEnc, buttonEl) {
@@ -5264,6 +5415,7 @@
                 'nutritional_info': 'Nutritional Info',
                 'whats_inside': 'What\'s Inside',
                 'artworktemplates': 'Artwork Templates',
+                'stockdesigns': 'Stock Designs',
                 'artworkguidelines': 'Artwork Guidelines',
                 'description': 'Description',
                 'leadtime3': 'Lead Time <1500 units (Working Days)',
@@ -5540,7 +5692,7 @@
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
-                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar','customoption1name','customoption1options','customoption2name','customoption2options','customoption3name','customoption3options'].includes(key)) return false;
+                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','stockdesigns','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar','customoption1name','customoption1options','customoption2name','customoption2options','customoption3name','customoption3options'].includes(key)) return false;
                     if (namespace === 'custom' && key === 'tree_nuts') return false;
                     if (namespace === 'custom' && key === 'productinfo') return false;
                     return true;
@@ -6376,7 +6528,8 @@
             // Artwork: always send guideline (empty when deselected so backend can remove it)
             const guidelineVal = (selectedGuideline && selectedGuideline.id) ? selectedGuideline.id : '';
             const templateVal = pcCurrentTemplatesFileGlobalId || '';
-            console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}"`);
+            const stockDesignsVal = pcCurrentStockDesignsFileGlobalId || '';
+            console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}", stockdesigns="${stockDesignsVal}"`);
             productData.metafields.push({
                 namespace: 'custom',
                 key: 'artworkguidelines',
@@ -6388,6 +6541,12 @@
                 key: 'artworktemplates',
                 type: 'file_reference',
                 value: templateVal
+            });
+            productData.metafields.push({
+                namespace: 'custom',
+                key: 'stockdesigns',
+                type: 'file_reference',
+                value: stockDesignsVal
             });
             
             // Add product ID for updates
@@ -6570,6 +6729,21 @@
                         }
                     } catch (e) {
                         resultDiv.innerHTML += `<p style="color:#c0392b;">Artwork templates upload failed: ${e}</p>`;
+                    }
+
+                    // After creation: if stock designs are staged, zip and save to custom.stockdesigns
+                    try {
+                        if (stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
+                            const pid = result.product.id;
+                            const title = result.product.title || 'Product';
+                            await uploadStockDesignsAfterCreate(pid, title);
+                            stagedStockDesignFiles = [];
+                            const sdList = document.getElementById('stockDesignsList');
+                            if (sdList) sdList.innerHTML = '<div class="muted">No files staged</div>';
+                            updateStockDesignsStatus();
+                        }
+                    } catch (e) {
+                        resultDiv.innerHTML += `<p style="color:#c0392b;">Stock designs upload failed: ${e}</p>`;
                     }
                 } else {
                     resultDiv.className = 'result-message result-error';
@@ -7237,6 +7411,35 @@
                     stageArtworkTemplates([]);
                     updateTemplateStatus();
                 } catch (e) { console.log('Templates prefill failed', e); }
+            })();
+            loadStockDesignsDeferred(mfs);
+        }
+
+        function loadStockDesignsDeferred(mfs) {
+            void (async function () {
+                try {
+                    const sdMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'stockdesigns') || {}).value || '';
+                    pcCurrentStockDesignsFileGlobalId = sdMf || '';
+                    pcStagedStockDesignRemoteEntries = [];
+                    stagedStockDesignFiles = [];
+                    if (sdMf) {
+                        const respZip = await fetch('/api/templates-uploader/zip-contents', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ file_global_id: sdMf })
+                        });
+                        const zipData = await respZip.json();
+                        if (zipData && zipData.success) {
+                            pcStagedStockDesignRemoteEntries = (zipData.entries || []).map(it => ({
+                                name: it.name,
+                                size: it.size,
+                                is_image: it.is_image
+                            }));
+                        }
+                    }
+                    stageStockDesigns([]);
+                    updateStockDesignsStatus();
+                } catch (e) { console.log('Stock designs prefill failed', e); }
             })();
         }
 
