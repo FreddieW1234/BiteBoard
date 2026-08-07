@@ -2971,12 +2971,7 @@
                                                 </div>
                                                 <div class="upload-text">
                                                     <p>Upload a single ZIP file of your stock designs</p>
-                                                    <p class="upload-limit" style="margin-top:8px;line-height:1.45;">
-                                                        Zip the files together on your computer first, then upload that one ZIP here (not several separate files).<br>
-                                                        To create the ZIP: highlight all the designs → right-click → <strong>Compress to</strong> → <strong>ZIP file</strong>.<br>
-                                                        Saved on the office server under <code>data/stock designs/{Product ID}/</code> as <code>{Product Name}_v1.zip</code> (folder created on first successful upload).<br>
-                                                        If you are editing an existing product, choosing a ZIP uploads immediately. For a brand-new product, create/save first so Shopify assigns an id, then upload.
-                                                    </p>
+                                                    <p class="upload-limit">• Single ZIP file •</p>
                                                 </div>
                                                 <input type="file" id="stockDesignsInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;">
                                             </div>
@@ -4062,9 +4057,28 @@
             console.log('🎨 Templates cleared');
         }
 
+        let stockDesignsUploading = false;
+
         function currentStockDesignProductId() {
             const pid = selectedProduct && selectedProduct.id != null ? String(selectedProduct.id).trim() : '';
             return /^\d+$/.test(pid) ? pid : '';
+        }
+
+        function setStockDesignsUploading(on) {
+            stockDesignsUploading = !!on;
+            const btn = document.getElementById('stockDesignsUploadNowBtn');
+            if (btn) {
+                if (stockDesignsUploading) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Upload ZIP to office server now';
+                }
+            }
+            // Refresh list heading / spinner row without re-staging files.
+            stageStockDesigns([], { skipAutoUpload: true });
+            updateStockDesignsStatus();
         }
 
         function updateStockDesignsStatus() {
@@ -4075,13 +4089,19 @@
             const hasRemote = (pcStockDesignRemoteFiles || []).length > 0;
             const hasStaged = (stagedStockDesignFiles || []).length > 0;
             const pid = currentStockDesignProductId();
-            statusEl.style.display = (hasRemote || hasStaged) ? 'inline' : 'none';
+            statusEl.style.display = (hasRemote || hasStaged || stockDesignsUploading) ? 'inline' : 'none';
             if (uploadNowBtn) {
-                uploadNowBtn.style.display = (hasStaged && pid) ? 'inline-flex' : 'none';
+                uploadNowBtn.style.display = (hasStaged && pid && !stockDesignsUploading) ? 'inline-flex' : 'none';
+                if (stockDesignsUploading) {
+                    uploadNowBtn.style.display = 'inline-flex';
+                    uploadNowBtn.disabled = true;
+                    uploadNowBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+                }
             }
             if (textEl) {
-                if (hasStaged && pid) textEl.textContent = 'ZIP staged — upload now or on save';
-                else if (hasStaged) textEl.textContent = 'ZIP staged — create/save product first, then upload';
+                if (stockDesignsUploading) textEl.textContent = 'Uploading ZIP to office server…';
+                else if (hasStaged && pid) textEl.textContent = 'ZIP staged — uploads on save (or Upload now)';
+                else if (hasStaged) textEl.textContent = 'ZIP staged — create/save product first, then it uploads';
                 else if (hasRemote) {
                     const latest = pcStockDesignRemoteFiles[0];
                     textEl.textContent = latest && latest.version != null
@@ -4093,6 +4113,7 @@
 
         function clearAllStockDesigns() {
             stagedStockDesignFiles = [];
+            stockDesignsUploading = false;
             // Remote files stay on the office server until explicitly deleted per version.
             stageStockDesigns([]);
             updateStockDesignsStatus();
@@ -4103,7 +4124,6 @@
             const list = document.getElementById('stockDesignsList');
             if (!list) return;
             const incoming = Array.from(files || []);
-            let justStaged = false;
             if (incoming.length) {
                 const zipFile = incoming.find(f => /\.zip$/i.test(f.name || '') || (f.type || '').includes('zip'));
                 if (!zipFile) {
@@ -4111,7 +4131,6 @@
                     return;
                 }
                 stagedStockDesignFiles = [zipFile];
-                justStaged = true;
             }
             const pid = currentStockDesignProductId();
             const remoteItems = (pcStockDesignRemoteFiles || []).map(e => ({
@@ -4133,17 +4152,23 @@
                 updateStockDesignsStatus();
                 return;
             }
-            const heading = stagedStockDesignFiles.length
-                ? (pid ? 'ZIP ready — uploading to office server…' : 'ZIP staged — save/create the product first')
-                : 'Versions on office server';
+            let heading = 'Versions on office server';
+            if (stockDesignsUploading) heading = 'Uploading ZIP to office server…';
+            else if (stagedStockDesignFiles.length) {
+                heading = pid
+                    ? 'ZIP staged — will upload when you save'
+                    : 'ZIP staged — save/create the product first';
+            }
             list.innerHTML = `<div style="font-weight:600;margin-bottom:8px;">${heading}</div>` + items.map(it => {
                 const viewUrl = it._type === 'remote' && pid
                     ? `/api/stock-designs/${encodeURIComponent(pid)}/files/${encodeURIComponent(it.name)}`
                     : (it.preview || '#');
                 const verLabel = it._type === 'remote' && it.version != null ? ` <span style="color:#64748b;">(v${it.version})</span>` : '';
-                const removeBtn = it._type === 'remote'
+                const removeBtn = (it._type === 'remote' && !stockDesignsUploading)
                     ? `<button type="button" title="Archive on office server" onclick="removePcStockDesign('${String(it.name).replace(/'/g, "\\'")}', 'remote')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`
-                    : `<button type="button" title="Remove" onclick="removePcStockDesign(${it._index}, 'local')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`;
+                    : (it._type === 'local' && !stockDesignsUploading
+                        ? `<button type="button" title="Remove" onclick="removePcStockDesign(${it._index}, 'local')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`
+                        : '');
                 const icon = it._type === 'local' || /\.zip$/i.test(it.name || '') ? 'fa-file-archive' : 'fa-file';
                 return `<div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
                     <div style="width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;"><i class="fas ${icon}"></i></div>
@@ -4151,14 +4176,10 @@
                     <a href="${viewUrl}" target="_blank" rel="noopener" title="Download" style="color:#4f46e5;"><i class="fas fa-download"></i></a>
                     ${removeBtn}
                 </div>`;
-            }).join('');
+            }).join('') + (stockDesignsUploading
+                ? '<div style="margin-top:8px;color:#475569;"><i class="fas fa-spinner fa-spin"></i> Uploading…</div>'
+                : '');
             updateStockDesignsStatus();
-            // Editing an existing product: push to the office server immediately so the
-            // data/stock designs folder appears without needing a full product re-save.
-            const autoUpload = !(opts && opts.skipAutoUpload);
-            if (justStaged && autoUpload && pid) {
-                void uploadStagedStockDesignsNow();
-            }
         }
 
         async function uploadStagedStockDesignsNow() {
@@ -4171,27 +4192,19 @@
                 alert('Choose a ZIP file first.');
                 return false;
             }
+            if (stockDesignsUploading) return false;
             const title = (document.getElementById('title') || {}).value
                 || (selectedProduct && selectedProduct.title)
                 || 'product';
-            const btn = document.getElementById('stockDesignsUploadNowBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
-            }
+            setStockDesignsUploading(true);
             try {
                 await uploadStockDesignsAfterCreate(pid, title);
-                updateStockDesignsStatus();
                 return true;
             } catch (e) {
                 alert('Stock designs upload failed: ' + e);
-                updateStockDesignsStatus();
                 return false;
             } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Upload ZIP to office server now';
-                }
+                setStockDesignsUploading(false);
             }
         }
 
@@ -4257,28 +4270,34 @@
             if (!pid || !/^\d+$/.test(pid)) {
                 throw 'Stock designs need a Shopify product id — save/create the product first, then the ZIP uploads.';
             }
-            const zipFile = stagedStockDesignFiles[0];
-            const fd = new FormData();
-            fd.append('file', zipFile, zipFile.name || 'stock-designs.zip');
-            fd.append('product_name', productTitle || 'product');
-            const resp = await fetch(`/api/stock-designs/${encodeURIComponent(pid)}`, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-            });
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || !data || data.success === false) {
-                throw (data && data.error) || (`Stock designs upload failed (HTTP ${resp.status})`);
+            const ownedSpinner = !stockDesignsUploading;
+            if (ownedSpinner) setStockDesignsUploading(true);
+            try {
+                const zipFile = stagedStockDesignFiles[0];
+                const fd = new FormData();
+                fd.append('file', zipFile, zipFile.name || 'stock-designs.zip');
+                fd.append('product_name', productTitle || 'product');
+                const resp = await fetch(`/api/stock-designs/${encodeURIComponent(pid)}`, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data || data.success === false) {
+                    throw (data && data.error) || (`Stock designs upload failed (HTTP ${resp.status})`);
+                }
+                stagedStockDesignFiles = [];
+                if (typeof selectedProduct === 'object' && selectedProduct) {
+                    selectedProduct.id = pid;
+                } else {
+                    selectedProduct = { id: pid, title: productTitle || 'product' };
+                }
+                await loadStockDesignsFromOffice(pid);
+                console.log('Stock designs uploaded to office:', data.filename || data);
+                return true;
+            } finally {
+                if (ownedSpinner) setStockDesignsUploading(false);
             }
-            stagedStockDesignFiles = [];
-            if (typeof selectedProduct === 'object' && selectedProduct) {
-                selectedProduct.id = pid;
-            } else {
-                selectedProduct = { id: pid, title: productTitle || 'product' };
-            }
-            await loadStockDesignsFromOffice(pid);
-            console.log('Stock designs uploaded to office:', data.filename || data);
-            return true;
         }
 
         function selectGuideline(nameEnc, column, idEnc, buttonEl) {
