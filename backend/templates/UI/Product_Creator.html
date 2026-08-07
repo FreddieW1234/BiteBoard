@@ -2380,6 +2380,32 @@
                     </div>
                 </div>
 
+                <!-- Add custom product option modal -->
+                <div id="addCustomOptionModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 10000; align-items: center; justify-content: center;" onclick="if (event.target === this) closeAddCustomOptionModal()">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 640px; width: 94%; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.25rem;">Add different option</h3>
+                        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 0.9rem;">Create a custom option (up to 3). Choices use Option + Code, same as the colour rows.</p>
+                        <div class="form-group" style="margin-bottom: 14px;">
+                            <label class="form-label" for="custom-option-modal-name">Option name</label>
+                            <input type="text" id="custom-option-modal-name" class="form-input" placeholder="e.g. Size, Finish, Style" style="width: 100%;">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
+                            <label class="form-label" style="margin: 0;">Option choices</label>
+                            <label class="different-product-codes-label">
+                                <input type="checkbox" id="custom-option-modal-diff-sku">
+                                Different Product Codes?
+                            </label>
+                        </div>
+                        <div id="custom-option-modal-choices" class="colour-inputs-container" style="margin-bottom: 16px;"></div>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary" onclick="closeAddCustomOptionModal()">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="confirmAddCustomOptionFromModal()">
+                                <i class="fas fa-plus" style="margin-right: 6px;"></i>Add option
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Add Parent/Child type instructions modal -->
                 <div id="addParentTypeModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 10000; align-items: center; justify-content: center;" class="add-parent-type-modal-overlay" onclick="if (event.target === this) closeAddParentTypeModal()">
                     <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 560px; width: 92%; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
@@ -2387,9 +2413,8 @@
                         <p style="margin: 0 0 16px 0; color: #64748b; font-size: 0.9rem;">Follow these steps in Shopify Admin, then refresh the list here.</p>
                         <ol style="margin: 0 0 18px 0; padding-left: 22px; color: #1f2937; font-size: 0.95rem; line-height: 1.55;">
                             <li style="margin-bottom: 10px;">
-                                Go to the
-                                <a href="https://admin.shopify.com/store/mn7ui0-ur" target="_blank" rel="noopener noreferrer">Shopify admin page</a>
-                                (<span style="color: #64748b;"> (https://admin.shopify.com/store/mn7ui0-ur)</span>
+                                Go to the Shopify admin page:
+                                <a href="https://admin.shopify.com/store/mn7ui0-ur" target="_blank" rel="noopener noreferrer">https://admin.shopify.com/store/mn7ui0-ur</a>
                             </li>
                             <li style="margin-bottom: 10px;">Go to <strong>Settings</strong> in the bottom left</li>
                             <li style="margin-bottom: 10px;">Go to <strong>Metafields and metaobjects</strong></li>
@@ -2671,6 +2696,13 @@
                                         <button type="button" class="add-colour-btn" style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+</button>
                                     </div>
                                 </div>
+                                <div id="custom-options-stack" class="custom-options-stack"></div>
+                                <div style="margin-top: 4px;">
+                                    <button type="button" id="add-different-option-btn" class="btn btn-secondary" style="padding: 8px 14px; font-size: 13px;" onclick="openAddCustomOptionModal()">
+                                        <i class="fas fa-plus" style="margin-right: 6px;"></i>Add different option
+                                    </button>
+                                    <span id="add-different-option-hint" style="margin-left: 10px; color: #94a3b8; font-size: 12px; display: none;">Maximum of 3 custom options</span>
+                                </div>
                             </div>
                         </div>
                         
@@ -2886,13 +2918,13 @@
                         <i class="fas fa-arrow-left"></i>
                         Back
                     </button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-plus-circle"></i>
-                        Create Product
-                    </button>
                     <button type="button" id="delete-product-btn" class="btn btn-danger" style="display: none;" onclick="confirmDeleteProduct()">
                         <i class="fas fa-trash-alt"></i>
                         Delete Product
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-plus-circle"></i>
+                        Create Product
                     </button>
                 </div>
             </form>
@@ -5508,7 +5540,7 @@
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
                     if (namespace === 'custom' && ['packaging','size','brand','eco'].includes(key)) return false;
-                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar'].includes(key)) return false;
+                    if (namespace === 'custom' && ['artworkguidelines','artworktemplates','packaging if applicable','packaging_if_applicable','product_colours','packaging_colours','foil_colours','bag_colours','print','foil','mailer','mailerpacking','packingfee','packing_info','calendar','customoption1name','customoption1options','customoption2name','customoption2options','customoption3name','customoption3options'].includes(key)) return false;
                     if (namespace === 'custom' && key === 'tree_nuts') return false;
                     if (namespace === 'custom' && key === 'productinfo') return false;
                     return true;
@@ -6055,6 +6087,7 @@
                 await pricingTask;
             }
             if (typeof syncDifferentProductCodesUi === 'function') syncDifferentProductCodesUi();
+            if (typeof syncAddCustomOptionButton === 'function') syncAddCustomOptionButton();
         });
 
         function toggleConverter() {
@@ -6192,6 +6225,7 @@
                 productData.packaging_colours = collectColoursString('packaging-colour-inputs-container');
                 productData.foil_colours = collectColoursString('foil-colour-inputs-container');
                 productData.bag_colours = collectColoursString('bag-colour-inputs-container');
+                Object.assign(productData, collectCustomOptionProductData());
                 productData.storefront_options = collectStorefrontOptions();
 
                 const colourImages = {};
@@ -9096,14 +9130,33 @@
             { key: 'foil', containerId: 'foil-colour-inputs-container', checkboxId: 'different-sku-foil-colours', optionType: 'FoilColour' },
             { key: 'bag', containerId: 'bag-colour-inputs-container', checkboxId: 'different-sku-bag-colours', optionType: 'BagColour' },
         ];
+        const CUSTOM_OPTION_SLOTS = [1, 2, 3];
+
+        function getCustomOptionSkuSections() {
+            return CUSTOM_OPTION_SLOTS.map(slot => {
+                const sectionEl = document.querySelector(`.custom-option-section[data-slot="${slot}"]`);
+                if (!sectionEl) return null;
+                return {
+                    key: `custom${slot}`,
+                    containerId: `custom-option-${slot}-inputs-container`,
+                    checkboxId: `different-sku-custom-option-${slot}`,
+                    optionType: `CustomOption${slot}`,
+                    slot,
+                };
+            }).filter(Boolean);
+        }
+
+        function getAllSkuSections() {
+            return COLOUR_SKU_SECTIONS.concat(getCustomOptionSkuSections());
+        }
 
         function getColourSectionByKey(key) {
-            return COLOUR_SKU_SECTIONS.find(s => s.key === key) || null;
+            return getAllSkuSections().find(s => s.key === key) || null;
         }
 
         function getColourSectionForContainer(container) {
             if (!container) return null;
-            return COLOUR_SKU_SECTIONS.find(s => s.containerId === container.id) || null;
+            return getAllSkuSections().find(s => s.containerId === container.id) || null;
         }
 
         function isDifferentProductCodesEnabled(sectionKey) {
@@ -9114,7 +9167,7 @@
         }
 
         function getActiveDifferentSkuSections() {
-            return COLOUR_SKU_SECTIONS.filter(s => {
+            return getAllSkuSections().filter(s => {
                 const cb = document.getElementById(s.checkboxId);
                 return cb && cb.checked;
             });
@@ -9127,13 +9180,15 @@
                 .replace(/</g, '&lt;');
         }
 
-        function createColourCellElement(index, name, code, sku, withSku) {
+        function createColourCellElement(index, name, code, sku, withSku, placeholders) {
+            const namePh = (placeholders && placeholders.name) || 'Colour';
+            const codePh = (placeholders && placeholders.code) || 'Code';
             const cell = document.createElement('div');
             cell.className = 'colour-cell' + (withSku ? ' colour-cell-with-sku' : '');
             cell.innerHTML = `
-                <input type="text" class="colour-name-input form-input" placeholder="Colour" data-index="${index}" data-part="name" value="${escapeColourAttr(name)}" style="border: none;">
+                <input type="text" class="colour-name-input form-input" placeholder="${escapeColourAttr(namePh)}" data-index="${index}" data-part="name" value="${escapeColourAttr(name)}" style="border: none;">
                 <span class="colour-cell-divider"></span>
-                <input type="text" class="colour-code-input form-input" placeholder="Code" data-index="${index}" data-part="code" value="${escapeColourAttr(code)}" style="border: none;">
+                <input type="text" class="colour-code-input form-input" placeholder="${escapeColourAttr(codePh)}" data-index="${index}" data-part="code" value="${escapeColourAttr(code)}" style="border: none;">
                 <span class="colour-cell-divider colour-sku-divider"></span>
                 <input type="text" class="colour-sku-input form-input" placeholder="SKU" data-index="${index}" data-part="sku" value="${escapeColourAttr(sku)}" style="border: none;">
             `;
@@ -9171,7 +9226,7 @@
             const group = document.getElementById('product-code-group');
             if (group) group.style.display = any ? 'none' : '';
 
-            COLOUR_SKU_SECTIONS.forEach(section => {
+            getAllSkuSections().forEach(section => {
                 const enabled = active.some(s => s.key === section.key);
                 const container = document.getElementById(section.containerId);
                 if (!container) return;
@@ -9179,6 +9234,14 @@
                     setColourCellSkuVisible(cell, enabled);
                 });
             });
+            // Modal draft choices (while adding a custom option)
+            const modalChoices = document.getElementById('custom-option-modal-choices');
+            const modalDiff = document.getElementById('custom-option-modal-diff-sku');
+            if (modalChoices && modalDiff) {
+                modalChoices.querySelectorAll('.colour-cell').forEach(cell => {
+                    setColourCellSkuVisible(cell, !!modalDiff.checked);
+                });
+            }
         }
 
         function collectColoursString(containerId) {
@@ -9237,10 +9300,13 @@
                 const namedCells = [...container.querySelectorAll('.colour-cell')].filter(cell => {
                     return (cell.querySelector('.colour-name-input')?.value || '').trim();
                 });
+                const sectionLabel = section.optionType.startsWith('CustomOption')
+                    ? (document.querySelector(`.custom-option-section[data-slot="${section.slot}"] .custom-option-name-input`)?.value || section.optionType)
+                    : section.optionType.replace('Colour', ' Colours');
                 if (!namedCells.length) {
                     return {
                         ok: false,
-                        message: `Different Product Codes? is on for ${section.optionType.replace('Colour', ' Colours')}, but no colours are filled in that row.`,
+                        message: `Different Product Codes? is on for ${sectionLabel}, but no options are filled in that row.`,
                     };
                 }
                 for (const cell of namedCells) {
@@ -9249,7 +9315,7 @@
                     if (!sku) {
                         return {
                             ok: false,
-                            message: `Please enter a SKU for colour "${name}" in ${section.optionType.replace('Colour', ' Colours')}.`,
+                            message: `Please enter a SKU for "${name}" in ${sectionLabel}.`,
                         };
                     }
                 }
@@ -9295,7 +9361,7 @@
         }
 
         function applySkuEntriesToColourSections(entries) {
-            COLOUR_SKU_SECTIONS.forEach(section => {
+            getAllSkuSections().forEach(section => {
                 const cb = document.getElementById(section.checkboxId);
                 if (cb) cb.checked = false;
             });
@@ -9317,7 +9383,7 @@
                 // Single-section save: match colours to the row that contains them.
                 let bestSection = null;
                 let bestScore = -1;
-                COLOUR_SKU_SECTIONS.forEach(section => {
+                getAllSkuSections().forEach(section => {
                     const container = document.getElementById(section.containerId);
                     if (!container) return;
                     const names = new Set(
@@ -9338,14 +9404,14 @@
                 byType[bestSection.optionType] = entries;
             }
 
-            COLOUR_SKU_SECTIONS.forEach(section => {
+            getAllSkuSections().forEach(section => {
                 const sectionEntries = byType[section.optionType] || [];
                 const cb = document.getElementById(section.checkboxId);
                 if (cb) cb.checked = sectionEntries.length > 0;
             });
             syncDifferentProductCodesUi();
 
-            COLOUR_SKU_SECTIONS.forEach(section => {
+            getAllSkuSections().forEach(section => {
                 const sectionEntries = byType[section.optionType] || [];
                 if (!sectionEntries.length) return;
                 const container = document.getElementById(section.containerId);
@@ -9379,13 +9445,179 @@
                 if (productCodeEl) productCodeEl.value = '';
                 applySkuEntriesToColourSections(parsed.entries);
             } else {
-                COLOUR_SKU_SECTIONS.forEach(section => {
+                getAllSkuSections().forEach(section => {
                     const cb = document.getElementById(section.checkboxId);
                     if (cb) cb.checked = false;
                 });
                 if (productCodeEl) productCodeEl.value = parsed.value || '';
                 syncDifferentProductCodesUi();
             }
+        }
+
+        function nextFreeCustomOptionSlot() {
+            for (const slot of CUSTOM_OPTION_SLOTS) {
+                if (!document.querySelector(`.custom-option-section[data-slot="${slot}"]`)) return slot;
+            }
+            return null;
+        }
+
+        function syncAddCustomOptionButton() {
+            const btn = document.getElementById('add-different-option-btn');
+            const hint = document.getElementById('add-different-option-hint');
+            const free = nextFreeCustomOptionSlot();
+            if (btn) btn.style.display = free ? 'inline-flex' : 'none';
+            if (hint) hint.style.display = free ? 'none' : 'inline';
+        }
+
+        function resetCustomOptionModalChoices(withSku) {
+            const container = document.getElementById('custom-option-modal-choices');
+            if (!container) return;
+            container.innerHTML = '';
+            const ph = { name: 'Option', code: 'Code' };
+            container.appendChild(createColourCellElement(0, '', '', '', !!withSku, ph));
+            container.appendChild(createColourCellElement(1, '', '', '', !!withSku, ph));
+            const plus = document.createElement('button');
+            plus.type = 'button';
+            plus.className = 'add-colour-btn';
+            plus.textContent = '+';
+            plus.style.cssText = 'padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;';
+            container.appendChild(plus);
+        }
+
+        function openAddCustomOptionModal() {
+            if (!nextFreeCustomOptionSlot()) {
+                alert('You can add a maximum of 3 custom options.');
+                return;
+            }
+            const modal = document.getElementById('addCustomOptionModal');
+            const nameEl = document.getElementById('custom-option-modal-name');
+            const diffEl = document.getElementById('custom-option-modal-diff-sku');
+            if (nameEl) nameEl.value = '';
+            if (diffEl) diffEl.checked = false;
+            resetCustomOptionModalChoices(false);
+            if (modal) modal.style.display = 'flex';
+            if (nameEl) nameEl.focus();
+        }
+
+        function closeAddCustomOptionModal() {
+            const modal = document.getElementById('addCustomOptionModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function confirmAddCustomOptionFromModal() {
+            const slot = nextFreeCustomOptionSlot();
+            if (!slot) {
+                alert('You can add a maximum of 3 custom options.');
+                return;
+            }
+            const name = (document.getElementById('custom-option-modal-name')?.value || '').trim();
+            if (!name) {
+                alert('Please enter an option name.');
+                return;
+            }
+            const optionsStr = collectColoursString('custom-option-modal-choices');
+            if (!optionsStr) {
+                alert('Please add at least one option choice.');
+                return;
+            }
+            const diffSku = !!(document.getElementById('custom-option-modal-diff-sku')?.checked);
+            // Capture per-choice SKUs from the modal before it is cleared.
+            const modalSkuByName = {};
+            const modalContainer = document.getElementById('custom-option-modal-choices');
+            if (modalContainer) {
+                modalContainer.querySelectorAll('.colour-cell').forEach(cell => {
+                    const n = (cell.querySelector('.colour-name-input')?.value || '').trim();
+                    const s = (cell.querySelector('.colour-sku-input')?.value || '').trim();
+                    if (n && s) modalSkuByName[n.toLowerCase()] = s;
+                });
+            }
+            renderCustomOptionSection(slot, name, optionsStr, diffSku);
+            // Apply modal SKUs onto the new section cells.
+            const container = document.getElementById(`custom-option-${slot}-inputs-container`);
+            if (container && diffSku) {
+                container.querySelectorAll('.colour-cell').forEach(cell => {
+                    const n = (cell.querySelector('.colour-name-input')?.value || '').trim().toLowerCase();
+                    const sku = modalSkuByName[n];
+                    if (!sku) return;
+                    ensureColourCellSkuSlot(cell);
+                    const skuInput = cell.querySelector('.colour-sku-input');
+                    if (skuInput) skuInput.value = sku;
+                });
+            }
+            syncDifferentProductCodesUi();
+            closeAddCustomOptionModal();
+        }
+
+        function renderCustomOptionSection(slot, name, optionsStr, diffSku) {
+            const stack = document.getElementById('custom-options-stack');
+            if (!stack) return;
+            let section = stack.querySelector(`.custom-option-section[data-slot="${slot}"]`);
+            if (!section) {
+                section = document.createElement('div');
+                section.className = 'form-group form-group-colour-options custom-option-section';
+                section.dataset.slot = String(slot);
+                stack.appendChild(section);
+            }
+            const containerId = `custom-option-${slot}-inputs-container`;
+            const checkboxId = `different-sku-custom-option-${slot}`;
+            section.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
+                    <input type="text" class="form-input custom-option-name-input" value="${escapeColourAttr(name)}" placeholder="Option name" style="max-width: 220px; padding: 8px 10px; font-weight: 500;">
+                    <button type="button" class="custom-option-reset-btn" data-slot="${slot}" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Reset</button>
+                    <button type="button" class="custom-option-remove-btn" data-slot="${slot}" style="padding: 6px 12px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Remove</button>
+                    <label class="different-product-codes-label">
+                        <input type="checkbox" class="different-product-codes-cb" id="${checkboxId}" data-colour-section="custom${slot}" ${diffSku ? 'checked' : ''}>
+                        Different Product Codes?
+                    </label>
+                </div>
+                <div id="${containerId}" class="colour-inputs-container"></div>
+            `;
+            loadColoursIntoInputs(optionsStr || '', containerId, { name: 'Option', code: 'Code' });
+            const cb = document.getElementById(checkboxId);
+            if (cb) cb.checked = !!diffSku;
+            syncDifferentProductCodesUi();
+            syncAddCustomOptionButton();
+        }
+
+        function removeCustomOptionSection(slot) {
+            const section = document.querySelector(`.custom-option-section[data-slot="${slot}"]`);
+            if (section) section.remove();
+            syncDifferentProductCodesUi();
+            syncAddCustomOptionButton();
+        }
+
+        function collectCustomOptionProductData() {
+            const out = {};
+            CUSTOM_OPTION_SLOTS.forEach(slot => {
+                const nameKey = `customoption${slot}name`;
+                const optsKey = `customoption${slot}options`;
+                const section = document.querySelector(`.custom-option-section[data-slot="${slot}"]`);
+                if (!section) {
+                    out[nameKey] = '';
+                    out[optsKey] = '';
+                    return;
+                }
+                const name = (section.querySelector('.custom-option-name-input')?.value || '').trim();
+                const options = collectColoursString(`custom-option-${slot}-inputs-container`);
+                out[nameKey] = name;
+                out[optsKey] = name ? options : '';
+            });
+            return out;
+        }
+
+        function loadCustomOptionsFromMetafields(metafields) {
+            const stack = document.getElementById('custom-options-stack');
+            if (stack) stack.innerHTML = '';
+            CUSTOM_OPTION_SLOTS.forEach(slot => {
+                const nameMf = (metafields || []).find(m => m.key === `customoption${slot}name` && (m.namespace || 'custom') === 'custom');
+                const optsMf = (metafields || []).find(m => m.key === `customoption${slot}options` && (m.namespace || 'custom') === 'custom');
+                const name = nameMf && nameMf.value != null ? String(nameMf.value).trim() : '';
+                const options = optsMf && optsMf.value != null ? String(optsMf.value).trim() : '';
+                if (!name && !options) return;
+                // Different SKUs inferred later from custom.sku OptionType CustomOptionN
+                renderCustomOptionSection(slot, name || `Custom option ${slot}`, options, false);
+            });
+            syncAddCustomOptionButton();
         }
 
         function loadColoursFromMetafields(metafields) {
@@ -9402,6 +9634,7 @@
             loadColoursIntoInputs(packagingMf && packagingMf.value ? packagingMf.value : '', 'packaging-colour-inputs-container');
             loadColoursIntoInputs(foilMf && foilMf.value ? foilMf.value : '', 'foil-colour-inputs-container');
             loadColoursIntoInputs(bagMf && bagMf.value ? bagMf.value : '', 'bag-colour-inputs-container');
+            loadCustomOptionsFromMetafields(metafields);
             loadSkuFromMetafields(metafields);
             loadCalendarFromMetafields(metafields);
         }
@@ -9409,6 +9642,9 @@
         // Handle dynamic colour inputs + Different Product Codes? toggles
         document.addEventListener('change', function(e) {
             if (e.target && e.target.classList && e.target.classList.contains('different-product-codes-cb')) {
+                syncDifferentProductCodesUi();
+            }
+            if (e.target && e.target.id === 'custom-option-modal-diff-sku') {
                 syncDifferentProductCodesUi();
             }
         });
@@ -9422,11 +9658,30 @@
                 const existingCells = container.querySelectorAll('.colour-cell');
                 const index = existingCells.length;
                 const section = getColourSectionForContainer(container);
-                const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
-                const newCell = createColourCellElement(index, '', '', '', withSku);
+                const withSku = container.id === 'custom-option-modal-choices'
+                    ? !!(document.getElementById('custom-option-modal-diff-sku')?.checked)
+                    : !!(section && isDifferentProductCodesEnabled(section.key));
+                const ph = colourPlaceholdersForContainer(container);
+                const newCell = createColourCellElement(index, '', '', '', withSku, ph);
 
                 const plusButton = container.querySelector('.add-colour-btn');
                 container.insertBefore(newCell, plusButton);
+            } else if (e.target.classList.contains('custom-option-reset-btn') || e.target.closest('.custom-option-reset-btn')) {
+                e.preventDefault();
+                const btn = e.target.classList.contains('custom-option-reset-btn') ? e.target : e.target.closest('.custom-option-reset-btn');
+                const slot = btn && btn.getAttribute('data-slot');
+                if (!slot) return;
+                const section = document.querySelector(`.custom-option-section[data-slot="${slot}"]`);
+                const name = (section && section.querySelector('.custom-option-name-input')?.value) || '';
+                renderCustomOptionSection(Number(slot), name, '', false);
+            } else if (e.target.classList.contains('custom-option-remove-btn') || e.target.closest('.custom-option-remove-btn')) {
+                e.preventDefault();
+                const btn = e.target.classList.contains('custom-option-remove-btn') ? e.target : e.target.closest('.custom-option-remove-btn');
+                const slot = btn && btn.getAttribute('data-slot');
+                if (!slot) return;
+                if (window.confirm('Remove this custom option?')) {
+                    removeCustomOptionSection(Number(slot));
+                }
             } else if (e.target.id === 'fill-bag-colours-btn' || e.target.closest('#fill-bag-colours-btn')) {
                 e.preventDefault();
                 fillColourPreset('/api/bag-colours', 'bag-colour-inputs-container');
@@ -9473,6 +9728,9 @@
                 resetSectionCheckbox('bag');
             }
             if (!type) {
+                const stack = document.getElementById('custom-options-stack');
+                if (stack) stack.innerHTML = '';
+                syncAddCustomOptionButton();
                 resetCalendarProductToggle();
             }
             syncDifferentProductCodesUi();
@@ -9634,14 +9892,25 @@
             });
         }
 
-        function appendEmptyColourCell(container, index) {
+        function colourPlaceholdersForContainer(container) {
+            if (!container) return { name: 'Colour', code: 'Code' };
+            if (container.id === 'custom-option-modal-choices' || (container.id || '').startsWith('custom-option-')) {
+                return { name: 'Option', code: 'Code' };
+            }
+            return { name: 'Colour', code: 'Code' };
+        }
+
+        function appendEmptyColourCell(container, index, placeholders) {
             const section = getColourSectionForContainer(container);
-            const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
-            container.appendChild(createColourCellElement(index, '', '', '', withSku));
+            const withSku = container.id === 'custom-option-modal-choices'
+                ? !!(document.getElementById('custom-option-modal-diff-sku')?.checked)
+                : !!(section && isDifferentProductCodesEnabled(section.key));
+            const ph = placeholders || colourPlaceholdersForContainer(container);
+            container.appendChild(createColourCellElement(index, '', '', '', withSku, ph));
         }
 
         // Function to load colours into the inputs (called when loading a product for editing)
-        function loadColoursIntoInputs(coloursStr, containerId) {
+        function loadColoursIntoInputs(coloursStr, containerId, placeholders) {
             const container = document.getElementById(containerId);
             if (!container) return;
             container.innerHTML = '';
@@ -9649,10 +9918,11 @@
             const colours = parseColourTokens(coloursStr);
             const section = getColourSectionForContainer(container);
             const withSku = !!(section && isDifferentProductCodesEnabled(section.key));
+            const ph = placeholders || colourPlaceholdersForContainer(container);
 
             if (colours.length === 0) {
-                appendEmptyColourCell(container, 0);
-                appendEmptyColourCell(container, 1);
+                appendEmptyColourCell(container, 0, ph);
+                appendEmptyColourCell(container, 1, ph);
             } else {
                 colours.forEach((colour, index) => {
                     let name = '';
@@ -9665,7 +9935,7 @@
                         name = colour;
                     }
                     if (!name || name === '-') return;
-                    container.appendChild(createColourCellElement(index, name, code, '', withSku));
+                    container.appendChild(createColourCellElement(index, name, code, '', withSku, ph));
                 });
             }
 

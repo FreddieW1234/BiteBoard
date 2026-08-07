@@ -3048,10 +3048,12 @@ def get_parent_child_tree(parents_only=False, refresh=False):
 from .storefront_options import (
     CALENDAR_METAFIELD_KEY,
     COLOUR_METAFIELD_KEYS,
+    CUSTOM_OPTION_METAFIELD_KEYS,
     STOREFRONT_OPTION_KEYS,
     RETIRED_METAFIELD_KEYS,
     build_calendar_metafield_entry,
     build_colour_metafield_entries,
+    build_custom_option_metafield_entries,
     build_storefront_option_metafield_entries,
     resolve_storefront_options,
     retired_metafield_clear_entries,
@@ -3059,7 +3061,13 @@ from .storefront_options import (
     validate_storefront_options,
 )
 
-MANAGED_STOREFRONT_KEYS = frozenset(COLOUR_METAFIELD_KEYS) | frozenset(STOREFRONT_OPTION_KEYS) | frozenset(RETIRED_METAFIELD_KEYS) | frozenset({CALENDAR_METAFIELD_KEY})
+MANAGED_STOREFRONT_KEYS = (
+    frozenset(COLOUR_METAFIELD_KEYS)
+    | frozenset(CUSTOM_OPTION_METAFIELD_KEYS)
+    | frozenset(STOREFRONT_OPTION_KEYS)
+    | frozenset(RETIRED_METAFIELD_KEYS)
+    | frozenset({CALENDAR_METAFIELD_KEY})
+)
 
 # Metafield keys that are "inherited" from parent to children (same as hidden on child form).
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
@@ -3071,6 +3079,7 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "celery", "crustaceans", "fish", "lupin", "molluscs", "mustard", "sulphurdioxide",
     "pricejsontr", "pricejsoner", "artworkguidelines", "artworktemplates",
     "product_colours", "packaging_colours", "foil_colours", "bag_colours",
+    *CUSTOM_OPTION_METAFIELD_KEYS,
     "print", "foil", "mailer", "mailerpacking", "calendar",
 })
 
@@ -4029,7 +4038,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
-        ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or [])
+        ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or []) | set(CUSTOM_OPTION_METAFIELD_KEYS)
 
         def _is_clearable(ns, k):
             if ns != "custom":
@@ -5151,6 +5160,18 @@ def create_product(product_data):
                         print(f"🎨 {key} provided: {entry['value']}", flush=True)
                     else:
                         print(f"🎨 Clearing {key}", flush=True)
+                    metafields = [mf for mf in metafields if mf.get("key") != key]
+                    metafields.append(entry)
+
+                for entry in build_custom_option_metafield_entries(
+                    product_data,
+                    is_child=is_child_product,
+                ):
+                    key = entry["key"]
+                    if entry.get("value"):
+                        print(f"🧩 {key} provided: {entry['value']}", flush=True)
+                    else:
+                        print(f"🧩 Clearing {key}", flush=True)
                     metafields = [mf for mf in metafields if mf.get("key") != key]
                     metafields.append(entry)
 

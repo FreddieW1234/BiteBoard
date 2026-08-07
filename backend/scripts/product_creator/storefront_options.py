@@ -16,6 +16,13 @@ COLOUR_METAFIELD_KEYS = (
     "bag_colours",
 )
 
+CUSTOM_OPTION_SLOTS = (1, 2, 3)
+CUSTOM_OPTION_METAFIELD_KEYS = tuple(
+    key
+    for n in CUSTOM_OPTION_SLOTS
+    for key in (f"customoption{n}name", f"customoption{n}options")
+)
+
 STOREFRONT_OPTION_KEYS = ("print", "foil", "mailer", "mailerpacking")
 
 STOREFRONT_OPTION_CHOICES: Dict[str, List[str]] = {
@@ -119,6 +126,44 @@ def build_colour_metafield_entries(
     return entries
 
 
+def build_custom_option_metafield_entries(
+    product_data: dict,
+    *,
+    is_child: bool,
+) -> List[dict]:
+    """Build customoptionNname / customoptionNoptions payloads (max 3 slots)."""
+    if is_child:
+        return []
+    entries: List[dict] = []
+    any_present = any(
+        f"customoption{n}name" in product_data or f"customoption{n}options" in product_data
+        for n in CUSTOM_OPTION_SLOTS
+    )
+    if not any_present:
+        return []
+    for n in CUSTOM_OPTION_SLOTS:
+        name_key = f"customoption{n}name"
+        opts_key = f"customoption{n}options"
+        name_val = str(product_data.get(name_key) or "").strip()
+        opts_val = str(product_data.get(opts_key) or "").strip()
+        if not name_val:
+            name_val = ""
+            opts_val = ""
+        entries.append({
+            "namespace": "custom",
+            "key": name_key,
+            "value": name_val,
+            "type": "single_line_text_field",
+        })
+        entries.append({
+            "namespace": "custom",
+            "key": opts_key,
+            "value": opts_val,
+            "type": "single_line_text_field",
+        })
+    return entries
+
+
 def build_storefront_option_metafield_entries(storefront_options: Any) -> List[dict]:
     """
     Enabled options get the full choice list. Disabled options send empty values
@@ -161,4 +206,10 @@ def retired_metafield_clear_entries() -> List[dict]:
 
 
 def storefront_clearable_keys() -> set:
-    return set(COLOUR_METAFIELD_KEYS) | set(STOREFRONT_OPTION_KEYS) | set(RETIRED_METAFIELD_KEYS) | {CALENDAR_METAFIELD_KEY}
+    return (
+        set(COLOUR_METAFIELD_KEYS)
+        | set(CUSTOM_OPTION_METAFIELD_KEYS)
+        | set(STOREFRONT_OPTION_KEYS)
+        | set(RETIRED_METAFIELD_KEYS)
+        | {CALENDAR_METAFIELD_KEY}
+    )
