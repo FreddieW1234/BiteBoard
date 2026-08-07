@@ -2355,7 +2355,10 @@ def api_product_queue_enqueue():
         if queue_ready and product_id and data.get('media_files') and not data.get('media_urls'):
             try:
                 from scripts.product_creator.Product_Creator import preupload_media_for_background_save
-                preupload_media_for_background_save(product_id, data)
+                # False ⇒ leave media_files in place so the sync path below still
+                # uploads them; ignore return on exception (same fallback).
+                if not preupload_media_for_background_save(product_id, data):
+                    print("[API] media pre-upload incomplete — saving synchronously", flush=True)
             except Exception as _ue:
                 print(f"[API] media pre-upload skipped: {_ue}", flush=True)
 

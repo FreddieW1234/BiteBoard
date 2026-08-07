@@ -3391,16 +3391,21 @@ def _is_same_image_stem(child_stem, parent_stem):
     """True when a child image looks like a copy of the parent's image.
 
     Shopify appends _1, _2 ... when a filename is already taken on the product,
-    so a copy of "front.jpg" can land as "front_1.jpg". It also renames copies
-    after the destination product, so we compare normalized stems too.
+    so a copy of "front.jpg" can land as "front_1.jpg". We only treat those
+    numeric copy suffixes (via normalize) as the same image.
+
+    Do NOT use a broad startswith match: child-only assets like
+    ``product_lifestyle.jpg`` / ``product_detail.jpg`` must not be treated as
+    copies of ``product.jpg``, or "main image to children" will delete them as
+    false-positive duplicates on the next parent save.
     """
     if not child_stem or not parent_stem:
         return False
     if child_stem == parent_stem:
         return True
-    if child_stem.startswith(parent_stem + "_") or parent_stem.startswith(child_stem + "_"):
-        return True
-    return _normalize_image_stem(child_stem) == _normalize_image_stem(parent_stem)
+    cn = _normalize_image_stem(child_stem)
+    pn = _normalize_image_stem(parent_stem)
+    return bool(cn and pn and cn == pn)
 
 
 def _parent_main_alt_marker(parent_image_id):
@@ -3521,10 +3526,24 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
             existing = copies[0] if copies else None
 
             # Earlier saves could pile up duplicates when rename broke stem matching.
-            # Keep one copy and delete the rest.
+            # Keep one copy and delete the rest — but only when we are sure they are
+            # parent-main copies (alt marker, or exact/normalized stem). Never delete
+            # a vaguely similar child-only filename.
             for dup in copies[1:]:
                 dup_id = dup.get("id")
                 if not dup_id:
+                    continue
+                dup_stem = _image_name_stem(dup.get("src"))
+                confident = (
+                    _image_has_parent_main_marker(dup, parent_image_id)
+                    or _normalize_image_stem(dup_stem) == _normalize_image_stem(parent_stem)
+                )
+                if not confident:
+                    print(
+                        f"ℹ️ Skipping delete of child {cid} image {dup_id} "
+                        f"({dup_stem!r}) — not a confident parent-main duplicate",
+                        flush=True,
+                    )
                     continue
                 deleted = _request_with_retry(
                     "DELETE",

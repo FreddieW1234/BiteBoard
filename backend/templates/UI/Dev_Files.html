@@ -252,6 +252,26 @@
     var rebuildBtn = document.getElementById('dv-rebuild-snapshot');
     var rebuildStatus = document.getElementById('dv-rebuild-status');
 
+    function formatLondonTime(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return String(iso);
+        try {
+            return new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Europe/London',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+            }).format(d) + ' (London)';
+        } catch (e) {
+            return d.toLocaleString('en-GB');
+        }
+    }
+
     function setRebuildUi(state) {
         state = state || {};
         var st = state.status || 'idle';
@@ -259,11 +279,12 @@
         rebuildStatus.className = 'dv-status';
         if (st === 'running') {
             rebuildStatus.classList.add('run');
-            rebuildStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning Shopify… started ' + esc(state.started_at || '');
+            rebuildStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning Shopify… started ' +
+                esc(formatLondonTime(state.started_at) || state.started_at || '');
         } else if (st === 'done') {
             rebuildStatus.classList.add('ok');
             rebuildStatus.textContent = 'Done — wrote ' + (state.product_count != null ? state.product_count : '?') +
-                ' products' + (state.finished_at ? ' at ' + state.finished_at : '');
+                ' products' + (state.finished_at ? ' at ' + formatLondonTime(state.finished_at) : '');
         } else if (st === 'error') {
             rebuildStatus.classList.add('err');
             rebuildStatus.textContent = 'Failed: ' + (state.error || 'unknown error');
