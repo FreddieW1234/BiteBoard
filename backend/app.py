@@ -1531,8 +1531,17 @@ def api_stock_designs_upload(product_id):
         return jsonify({'success': False, 'error': 'No ZIP file provided'}), 400
     product_name = (request.form.get('product_name') or '').strip() or 'product'
     try:
+        from io import BytesIO
         from scripts.office_api import upload_stock_design, OfficeApiError  # type: ignore
-        result = upload_stock_design(pid, f.stream, f.filename, product_name)
+        # Read fully here so the office client always gets a complete ZIP body.
+        try:
+            f.stream.seek(0)
+        except Exception:
+            pass
+        raw = f.read() if hasattr(f, 'read') else f.stream.read()
+        if not raw:
+            return jsonify({'success': False, 'error': 'Uploaded ZIP was empty'}), 400
+        result = upload_stock_design(pid, BytesIO(raw), f.filename, product_name)
         return jsonify({'success': True, **result})
     except OfficeApiError as exc:
         return jsonify({'success': False, 'error': str(exc)}), 502
@@ -2027,11 +2036,11 @@ def _parse_product_form(req):
         for key, value in req.form.items():
             if key.startswith('media_'):
                 continue  # Media files live in req.files
-            if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options', 'is_calendar']:
+            if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options', 'is_calendar', 'clear_parent_child']:
                 try:
                     if key == 'metafields':
                         data[key] = json.loads(value) if (value and value.strip()) else []
-                    elif key in ('charge_vat', 'is_calendar'):
+                    elif key in ('charge_vat', 'is_calendar', 'clear_parent_child'):
                         data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
                     elif key == 'colour_images':
                         data[key] = json.loads(value) if (value and value.strip()) else {}
@@ -2294,9 +2303,16 @@ def api_product_queue_enqueue():
             except Exception as _ue:
                 print(f"[API] media pre-upload skipped: {_ue}", flush=True)
 
-        needs_sync = bool(data.get('media_files')) or bool(data.get('media_urls'))
+        # Brand-new products (no Shopify id yet) MUST run synchronously so the
+        # client gets a product_id back. Queuing a create left the form in
+        # "create" mode — a second Save then created a duplicate product.
+        needs_sync = (
+            bool(data.get('media_files'))
+            or bool(data.get('media_urls'))
+            or not product_id
+        )
 
-        # Synchronous path: new images present, or the office queue store is down.
+        # Synchronous path: new product, new images, or the office queue store is down.
         if needs_sync or not queue_ready:
             cap = _ThreadStdoutCapture()
             try:

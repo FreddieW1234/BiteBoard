@@ -2638,9 +2638,14 @@
                                     </div>
                                     <div id="child-dropdown-wrap" style="display: none; margin-top: 8px;">
                                         <label class="form-label" style="margin-bottom: 4px;">Child type</label>
-                                        <select id="parent-child-child-select" class="form-select" style="min-width: 160px;">
-                                            <option value="">— Select —</option>
-                                        </select>
+                                        <div class="child-type-combobox" style="position: relative; min-width: 220px; max-width: 420px;">
+                                            <input type="text" id="parent-child-child-search" class="form-select" placeholder="Search child types…" autocomplete="off" style="width: 100%; box-sizing: border-box;">
+                                            <div id="parent-child-child-results" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 280px; overflow-y: auto; z-index: 10020; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(15,23,42,0.12);"></div>
+                                            <!-- Kept in sync for existing save/load code -->
+                                            <select id="parent-child-child-select" class="form-select" style="display: none;" aria-hidden="true" tabindex="-1">
+                                                <option value="">— Select —</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2969,13 +2974,17 @@
                                                     <p class="upload-limit" style="margin-top:8px;line-height:1.45;">
                                                         Zip the files together on your computer first, then upload that one ZIP here (not several separate files).<br>
                                                         To create the ZIP: highlight all the designs → right-click → <strong>Compress to</strong> → <strong>ZIP file</strong>.<br>
-                                                        The ZIP is saved to the office server <strong>after</strong> the product exists in Shopify, named <code>{Product Name}_{Product ID}_v1.zip</code>.
+                                                        Saved on the office server under <code>data/stock designs/{Product ID}/</code> as <code>{Product Name}_v1.zip</code> (folder created on first successful upload).<br>
+                                                        If you are editing an existing product, choosing a ZIP uploads immediately. For a brand-new product, create/save first so Shopify assigns an id, then upload.
                                                     </p>
                                                 </div>
                                                 <input type="file" id="stockDesignsInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;">
                                             </div>
                                         </div>
                                         <div id="stockDesignsList" style="margin-top:10px;"></div>
+                                        <button type="button" id="stockDesignsUploadNowBtn" onclick="uploadStagedStockDesignsNow()" style="display:none;margin-top:8px;" class="btn btn-secondary">
+                                            <i class="fas fa-cloud-upload-alt"></i> Upload ZIP to office server now
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -3083,9 +3092,14 @@
             if (wrap) wrap.style.display = 'none';
             if (childWrap) childWrap.style.display = 'none';
             const selectEl = document.getElementById('parent-child-select');
-            const childSelectEl = document.getElementById('parent-child-child-select');
             if (selectEl) selectEl.value = '';
-            if (childSelectEl) childSelectEl.value = '';
+            if (typeof setChildTypeValue === 'function') setChildTypeValue('');
+            else {
+                const childSelectEl = document.getElementById('parent-child-child-select');
+                const childSearchEl = document.getElementById('parent-child-child-search');
+                if (childSelectEl) childSelectEl.value = '';
+                if (childSearchEl) childSearchEl.value = '';
+            }
             const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
             if (hiddenParentChildEl) hiddenParentChildEl.value = '';
 
@@ -3315,7 +3329,16 @@
                 }
                 selectEl.appendChild(o);
             });
-            if (prevVal && prevVal.startsWith('Parent - ') && choices.includes(prevVal)) selectEl.value = prevVal;
+            if (prevVal && prevVal.startsWith('Parent - ')) {
+                if (!choices.includes(prevVal)) {
+                    const o = document.createElement('option');
+                    o.value = prevVal;
+                    o.textContent = prevVal;
+                    selectEl.appendChild(o);
+                }
+                selectEl.value = prevVal;
+                if (typeof setParentChildHiddenValue === 'function') setParentChildHiddenValue(prevVal);
+            }
         }
 
         function openAddParentTypeModal() {
@@ -3355,19 +3378,115 @@
             }
         }
 
+        let pcChildTypeChoices = [];
+
+        function setChildTypeValue(value) {
+            const selectEl = document.getElementById('parent-child-child-select');
+            const searchEl = document.getElementById('parent-child-child-search');
+            const v = (value || '').trim();
+            if (selectEl) {
+                if (v && ![...selectEl.options].some(o => o.value === v)) {
+                    const o = document.createElement('option');
+                    o.value = v;
+                    o.textContent = v;
+                    selectEl.appendChild(o);
+                }
+                selectEl.value = v;
+            }
+            if (searchEl) searchEl.value = v;
+            if (v.startsWith('Child - ')) setParentChildHiddenValue(v);
+            else if (!v) setParentChildHiddenValue('');
+        }
+
+        function renderChildTypeResults(filterText) {
+            const resultsEl = document.getElementById('parent-child-child-results');
+            if (!resultsEl) return;
+            const q = (filterText || '').trim().toLowerCase();
+            const matches = !q
+                ? pcChildTypeChoices.slice()
+                : pcChildTypeChoices.filter(c => c.toLowerCase().includes(q));
+            if (!matches.length) {
+                resultsEl.innerHTML = '<div class="autocomplete-item" style="color:#64748b;cursor:default;">No matches</div>';
+                resultsEl.style.display = 'block';
+                return;
+            }
+            const selected = (document.getElementById('parent-child-child-select') || {}).value || '';
+            const esc = (s) => String(s || '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            resultsEl.innerHTML = matches.map(opt => {
+                const active = opt === selected ? 'background:#eef2ff;' : '';
+                const short = opt.startsWith('Child - ') ? opt.slice(8) : opt;
+                return `<div class="autocomplete-item" data-value="${esc(opt)}" style="${active}"><strong>${esc(short)}</strong><div style="font-size:0.75rem;color:#94a3b8;">${esc(opt)}</div></div>`;
+            }).join('');
+            resultsEl.style.display = 'block';
+            resultsEl.querySelectorAll('.autocomplete-item[data-value]').forEach(item => {
+                item.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    setChildTypeValue(item.getAttribute('data-value') || '');
+                    resultsEl.style.display = 'none';
+                });
+            });
+        }
+
+        function setupChildTypeSearch() {
+            const searchEl = document.getElementById('parent-child-child-search');
+            const resultsEl = document.getElementById('parent-child-child-results');
+            if (!searchEl || !resultsEl || searchEl.dataset.wired === '1') return;
+            searchEl.dataset.wired = '1';
+            searchEl.addEventListener('focus', function() {
+                renderChildTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('click', function() {
+                renderChildTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('input', function() {
+                renderChildTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    resultsEl.style.display = 'none';
+                    const selectEl = document.getElementById('parent-child-child-select');
+                    searchEl.value = selectEl ? selectEl.value : '';
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const first = resultsEl.querySelector('.autocomplete-item[data-value]');
+                    if (first) {
+                        setChildTypeValue(first.getAttribute('data-value') || '');
+                        resultsEl.style.display = 'none';
+                    }
+                }
+            });
+            document.addEventListener('mousedown', function(e) {
+                if (!e.target.closest('.child-type-combobox')) {
+                    resultsEl.style.display = 'none';
+                    const selectEl = document.getElementById('parent-child-child-select');
+                    if (selectEl && searchEl.value !== selectEl.value) {
+                        searchEl.value = selectEl.value || '';
+                    }
+                }
+            });
+        }
+
         async function refreshChildDropdown(currentChildValue, opts) {
             const selectEl = document.getElementById('parent-child-child-select');
             if (!selectEl) return;
+            setupChildTypeSearch();
             const forceRefresh = !!(opts && opts.forceRefresh);
             const choicesResp = await fetch(
                 '/api/metafield-choices/custom.parent_child?all=1' + (forceRefresh ? '&refresh=1' : '')
             );
             const choicesData = await choicesResp.json();
             const allChoices = (choicesData.choices || []).map(c => String(c || '').trim());
-            let choices = allChoices.filter(c => c.startsWith('Child - '));
-            if (choices.length === 0 && allChoices.length > 0) {
-                choices = allChoices.filter(c => c.startsWith('Parent - ')).map(p => 'Child - ' + p.slice(9));
-            }
+            // Prefer explicit Child - choices, but always merge in Child - X derived
+            // from every Parent - X. Shopify definitions often list only Parent
+            // values (or a partial Child list); without the merge the selected
+            // child value is not a valid <option> and the select silently goes blank.
+            const fromChild = allChoices.filter(c => c.startsWith('Child - '));
+            const fromParent = allChoices
+                .filter(c => c.startsWith('Parent - '))
+                .map(p => 'Child - ' + p.slice(9));
+            const choices = [...new Set(fromChild.concat(fromParent))].sort((a, b) => a.localeCompare(b));
+            pcChildTypeChoices = choices;
             const prevVal = (currentChildValue != null && currentChildValue !== '')
                 ? currentChildValue
                 : selectEl.value;
@@ -3378,7 +3497,16 @@
                 o.textContent = opt;
                 selectEl.appendChild(o);
             });
-            if (prevVal && prevVal.startsWith('Child - ') && choices.includes(prevVal)) selectEl.value = prevVal;
+            if (prevVal && prevVal.startsWith('Child - ')) {
+                setChildTypeValue(prevVal);
+            } else {
+                setChildTypeValue('');
+            }
+        }
+
+        function setParentChildHiddenValue(value) {
+            const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
+            if (hiddenEl) hiddenEl.value = (value || '').trim();
         }
 
         function setupParentRadioListeners() {
@@ -3408,18 +3536,29 @@
             function updateParentUI() {
                 if (parentYes.checked) {
                     wrap.style.display = 'block';
-                    refreshParentChildDropdown(selectEl ? selectEl.value : '');
+                    const keepParent = selectEl ? selectEl.value : '';
+                    refreshParentChildDropdown(keepParent);
                     if (childYes) { childYes.checked = false; childNo.checked = true; }
                     if (childWrap) childWrap.style.display = 'none';
+                    // Clear child selection UI but keep a durable Parent - value if we have one.
+                    const childSearchEl = document.getElementById('parent-child-child-search');
                     if (childSelectEl) childSelectEl.value = '';
+                    if (childSearchEl) childSearchEl.value = '';
+                    if (keepParent && keepParent.startsWith('Parent - ')) {
+                        setParentChildHiddenValue(keepParent);
+                    } else {
+                        // Drop a leftover Child - durable value when switching to Parent.
+                        const cur = (document.getElementById('parent-child-create-from-parent-value') || {}).value || '';
+                        if (String(cur).trim().startsWith('Child - ')) setParentChildHiddenValue('');
+                    }
                     if (childOptionWrap) childOptionWrap.style.display = 'none';
                     if (parentOptionWrap) parentOptionWrap.style.display = '';
                     applyChildModeVisibility();
                 } else {
                     wrap.style.display = 'none';
                     if (selectEl) selectEl.value = '';
-                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
-                    if (hiddenEl) hiddenEl.value = '';
+                    // Only clear durable value when Child isn't about to take over.
+                    if (!(childYes && childYes.checked)) setParentChildHiddenValue('');
                     if (childOptionWrap) childOptionWrap.style.display = '';
                     applyChildModeVisibility();
                 }
@@ -3429,20 +3568,22 @@
             function updateChildUI() {
                 if (childYes && childYes.checked) {
                     if (childWrap) childWrap.style.display = 'block';
-                    refreshChildDropdown(childSelectEl ? childSelectEl.value : '');
+                    const keepChild = childSelectEl ? childSelectEl.value : '';
+                    refreshChildDropdown(keepChild);
                     if (parentYes) { parentYes.checked = false; parentNo.checked = true; }
                     if (wrap) wrap.style.display = 'none';
                     if (selectEl) selectEl.value = '';
-                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
-                    if (hiddenEl) hiddenEl.value = '';
+                    // Keep / restore the durable Child - value; never blank it just
+                    // because the radio was toggled (async dropdown can still be empty).
+                    if (keepChild && keepChild.startsWith('Child - ')) {
+                        setParentChildHiddenValue(keepChild);
+                    }
                     if (parentOptionWrap) parentOptionWrap.style.display = 'none';
                     if (childOptionWrap) childOptionWrap.style.display = '';
                     applyChildModeVisibility();
                 } else {
                     if (childWrap) childWrap.style.display = 'none';
-                    if (childSelectEl) childSelectEl.value = '';
-                    const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
-                    if (hiddenEl) hiddenEl.value = '';
+                    setChildTypeValue('');
                     pcCreateFromParentMode = false;
                     if (parentOptionWrap) parentOptionWrap.style.display = '';
                     applyChildModeVisibility();
@@ -3456,10 +3597,16 @@
             if (childNo) childNo.addEventListener('change', updateChildUI);
             if (selectEl) {
                 selectEl.addEventListener('change', function() {
-                    if (selectEl.value && selectEl.value.startsWith('Parent - ')) {
-                        const hiddenEl = document.getElementById('parent-child-create-from-parent-value');
-                        if (hiddenEl) hiddenEl.value = '';
-                    }
+                    const v = (selectEl.value || '').trim();
+                    if (v.startsWith('Parent - ')) setParentChildHiddenValue(v);
+                    else if (!v && parentYes && parentYes.checked) setParentChildHiddenValue('');
+                });
+            }
+            if (childSelectEl) {
+                childSelectEl.addEventListener('change', function() {
+                    const v = (childSelectEl.value || '').trim();
+                    if (v.startsWith('Child - ')) setParentChildHiddenValue(v);
+                    else if (!v) setParentChildHiddenValue('');
                 });
             }
         }
@@ -3915,15 +4062,26 @@
             console.log('🎨 Templates cleared');
         }
 
+        function currentStockDesignProductId() {
+            const pid = selectedProduct && selectedProduct.id != null ? String(selectedProduct.id).trim() : '';
+            return /^\d+$/.test(pid) ? pid : '';
+        }
+
         function updateStockDesignsStatus() {
             const statusEl = document.getElementById('stock-designs-status');
             const textEl = document.getElementById('stock-designs-status-text');
+            const uploadNowBtn = document.getElementById('stockDesignsUploadNowBtn');
             if (!statusEl) return;
             const hasRemote = (pcStockDesignRemoteFiles || []).length > 0;
             const hasStaged = (stagedStockDesignFiles || []).length > 0;
+            const pid = currentStockDesignProductId();
             statusEl.style.display = (hasRemote || hasStaged) ? 'inline' : 'none';
+            if (uploadNowBtn) {
+                uploadNowBtn.style.display = (hasStaged && pid) ? 'inline-flex' : 'none';
+            }
             if (textEl) {
-                if (hasStaged) textEl.textContent = 'ZIP staged — uploads on save';
+                if (hasStaged && pid) textEl.textContent = 'ZIP staged — upload now or on save';
+                else if (hasStaged) textEl.textContent = 'ZIP staged — create/save product first, then upload';
                 else if (hasRemote) {
                     const latest = pcStockDesignRemoteFiles[0];
                     textEl.textContent = latest && latest.version != null
@@ -3941,10 +4099,11 @@
             console.log('🎨 Staged stock designs cleared');
         }
 
-        function stageStockDesigns(files) {
+        function stageStockDesigns(files, opts) {
             const list = document.getElementById('stockDesignsList');
             if (!list) return;
             const incoming = Array.from(files || []);
+            let justStaged = false;
             if (incoming.length) {
                 const zipFile = incoming.find(f => /\.zip$/i.test(f.name || '') || (f.type || '').includes('zip'));
                 if (!zipFile) {
@@ -3952,8 +4111,9 @@
                     return;
                 }
                 stagedStockDesignFiles = [zipFile];
+                justStaged = true;
             }
-            const pid = selectedProduct && selectedProduct.id ? String(selectedProduct.id) : '';
+            const pid = currentStockDesignProductId();
             const remoteItems = (pcStockDesignRemoteFiles || []).map(e => ({
                 name: e.name,
                 size: e.size_bytes || e.size || 0,
@@ -3970,10 +4130,11 @@
             const items = remoteItems.concat(localItems);
             if (!items.length) {
                 list.innerHTML = '<div class="muted"></div>';
+                updateStockDesignsStatus();
                 return;
             }
             const heading = stagedStockDesignFiles.length
-                ? 'ZIP ready to upload to office server'
+                ? (pid ? 'ZIP ready — uploading to office server…' : 'ZIP staged — save/create the product first')
                 : 'Versions on office server';
             list.innerHTML = `<div style="font-weight:600;margin-bottom:8px;">${heading}</div>` + items.map(it => {
                 const viewUrl = it._type === 'remote' && pid
@@ -3992,6 +4153,46 @@
                 </div>`;
             }).join('');
             updateStockDesignsStatus();
+            // Editing an existing product: push to the office server immediately so the
+            // data/stock designs folder appears without needing a full product re-save.
+            const autoUpload = !(opts && opts.skipAutoUpload);
+            if (justStaged && autoUpload && pid) {
+                void uploadStagedStockDesignsNow();
+            }
+        }
+
+        async function uploadStagedStockDesignsNow() {
+            const pid = currentStockDesignProductId();
+            if (!pid) {
+                alert('Create or open a Shopify product first — stock designs are stored under that product id on the office server.');
+                return false;
+            }
+            if (!stagedStockDesignFiles || !stagedStockDesignFiles.length) {
+                alert('Choose a ZIP file first.');
+                return false;
+            }
+            const title = (document.getElementById('title') || {}).value
+                || (selectedProduct && selectedProduct.title)
+                || 'product';
+            const btn = document.getElementById('stockDesignsUploadNowBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+            }
+            try {
+                await uploadStockDesignsAfterCreate(pid, title);
+                updateStockDesignsStatus();
+                return true;
+            } catch (e) {
+                alert('Stock designs upload failed: ' + e);
+                updateStockDesignsStatus();
+                return false;
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Upload ZIP to office server now';
+                }
+            }
         }
 
         async function removePcStockDesign(arg, type) {
@@ -4010,7 +4211,7 @@
                 try {
                     const resp = await fetch(
                         `/api/stock-designs/${encodeURIComponent(pid)}/files/${encodeURIComponent(arg)}`,
-                        { method: 'DELETE' }
+                        { method: 'DELETE', credentials: 'same-origin' }
                     );
                     const data = await resp.json().catch(() => ({}));
                     if (!resp.ok || data.success === false) {
@@ -4023,28 +4224,35 @@
             }
         }
 
-        async function loadStockDesignsFromOffice(productId) {
+        async function loadStockDesignsFromOffice(productId, opts) {
             pcStockDesignRemoteFiles = [];
-            stagedStockDesignFiles = [];
+            // Clearing staged is only for product switches / full reloads — not list refresh.
+            if (!(opts && opts.keepStaged)) {
+                stagedStockDesignFiles = [];
+            }
             if (!productId) {
-                stageStockDesigns([]);
+                stageStockDesigns([], { skipAutoUpload: true });
                 return;
             }
             try {
-                const resp = await fetch(`/api/stock-designs/${encodeURIComponent(productId)}`);
+                const resp = await fetch(`/api/stock-designs/${encodeURIComponent(productId)}`, {
+                    credentials: 'same-origin',
+                });
                 const data = await resp.json().catch(() => ({}));
                 if (resp.ok && data && data.success !== false) {
                     pcStockDesignRemoteFiles = Array.isArray(data.files) ? data.files : [];
+                } else if (data && data.error) {
+                    console.warn('Stock designs office list:', data.error);
                 }
             } catch (e) {
                 console.log('Stock designs office list failed', e);
             }
-            stageStockDesigns([]);
+            stageStockDesigns([], { skipAutoUpload: true });
         }
 
         async function uploadStockDesignsAfterCreate(productId, productTitle) {
             if (!stagedStockDesignFiles || !stagedStockDesignFiles.length) return true;
-            // Office path/filename includes the Shopify product id — product must exist first.
+            // Office path is keyed by Shopify product id — product must exist first.
             const pid = String(productId || '').trim();
             if (!pid || !/^\d+$/.test(pid)) {
                 throw 'Stock designs need a Shopify product id — save/create the product first, then the ZIP uploads.';
@@ -4056,10 +4264,11 @@
             const resp = await fetch(`/api/stock-designs/${encodeURIComponent(pid)}`, {
                 method: 'POST',
                 body: fd,
+                credentials: 'same-origin',
             });
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok || !data || data.success === false) {
-                throw (data && data.error) || 'Stock designs upload failed';
+                throw (data && data.error) || (`Stock designs upload failed (HTTP ${resp.status})`);
             }
             stagedStockDesignFiles = [];
             if (typeof selectedProduct === 'object' && selectedProduct) {
@@ -4068,6 +4277,7 @@
                 selectedProduct = { id: pid, title: productTitle || 'product' };
             }
             await loadStockDesignsFromOffice(pid);
+            console.log('Stock designs uploaded to office:', data.filename || data);
             return true;
         }
 
@@ -6483,20 +6693,35 @@
             productData.tags = getVatTag();
             productData.charge_vat = document.getElementById('chargeVatYes').checked;
             productData.is_calendar = isCalendarProduct();
-            const parentYesEl = document.getElementById('parentYes');
-            const parentSelectEl = document.getElementById('parent-child-select');
-            const childYesEl = document.getElementById('childYes');
-            const childSelectEl = document.getElementById('parent-child-child-select');
-            const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
-            if (hiddenParentChildEl && hiddenParentChildEl.value.trim()) {
-                productData.parent_child = hiddenParentChildEl.value.trim();
-            } else if (parentYesEl && parentYesEl.checked && parentSelectEl && parentSelectEl.value) {
-                productData.parent_child = String(parentSelectEl.value).trim();
-            } else if (childYesEl && childYesEl.checked && childSelectEl && childSelectEl.value) {
-                productData.parent_child = String(childSelectEl.value).trim();
-            } else {
-                productData.parent_child = '';
+            // Prefer the same helper used elsewhere so Child/Parent never depends
+            // on a race with the async dropdown refresh (blank select ⇒ metafield cleared).
+            productData.parent_child = (typeof currentParentChildValue === 'function')
+                ? currentParentChildValue()
+                : '';
+            if (!productData.parent_child) {
+                const parentYesEl = document.getElementById('parentYes');
+                const parentSelectEl = document.getElementById('parent-child-select');
+                const childYesEl = document.getElementById('childYes');
+                const childSelectEl = document.getElementById('parent-child-child-select');
+                const hiddenParentChildEl = document.getElementById('parent-child-create-from-parent-value');
+                if (hiddenParentChildEl && hiddenParentChildEl.value.trim()) {
+                    productData.parent_child = hiddenParentChildEl.value.trim();
+                } else if (parentYesEl && parentYesEl.checked && parentSelectEl && parentSelectEl.value) {
+                    productData.parent_child = String(parentSelectEl.value).trim();
+                } else if (childYesEl && childYesEl.checked && childSelectEl && childSelectEl.value) {
+                    productData.parent_child = String(childSelectEl.value).trim();
+                } else {
+                    productData.parent_child = '';
+                }
             }
+            // Explicit clear only when both Parent? and Child? are No. Empty
+            // parent_child alone must NOT wipe the Shopify metafield on update.
+            const parentYesForClear = document.getElementById('parentYes');
+            const childYesForClear = document.getElementById('childYes');
+            productData.clear_parent_child = !(
+                (parentYesForClear && parentYesForClear.checked) ||
+                (childYesForClear && childYesForClear.checked)
+            );
             
             // Get colour options from both sections (parent-only — children inherit from parent on save)
             if (!isChildProduct()) {
@@ -6779,6 +7004,22 @@
                     resultDiv.innerHTML = `
                         <h4><i class="fas fa-clock"></i> Queued — saving in the background</h4>
                         <p>Your changes are being applied to Shopify and verified. Track progress with the <strong>Queue</strong> button.</p>`;
+                    // Keep the form in edit mode when we already know the Shopify id,
+                    // so a second Save updates instead of creating another product.
+                    if (result.product_id != null) {
+                        isEditingProduct = true;
+                        if (typeof selectedProduct === 'object' && selectedProduct) {
+                            selectedProduct.id = result.product_id;
+                        } else {
+                            selectedProduct = {
+                                id: result.product_id,
+                                title: (document.getElementById('title') || {}).value || 'product',
+                            };
+                        }
+                        const submitBtnQueued = document.querySelector('#productForm button[type="submit"]');
+                        if (submitBtnQueued) submitBtnQueued.innerHTML = '<i class="fas fa-save"></i> Save Product';
+                        syncDeleteProductButtonVisibility();
+                    }
                     if (result.product_id != null && window.ProductQueue) {
                         try { window.ProductQueue.lockedIds.add(String(result.product_id)); } catch (e) {}
                         try { window.ProductQueue.refresh(); } catch (e) {}
@@ -7788,7 +8029,7 @@
                 if (childNoEl) childNoEl.checked = true;
                 if (childYesEl) childYesEl.checked = false;
                 if (childWrap) childWrap.style.display = 'none';
-                if (childSelect) childSelect.value = '';
+                setChildTypeValue('');
                 if (hiddenParentChildEl) hiddenParentChildEl.value = '';
                 if (parentOptionWrap) parentOptionWrap.style.display = '';
                 if (childOptionWrap) childOptionWrap.style.display = '';
@@ -7799,8 +8040,10 @@
                         if (childWrap) childWrap.style.display = 'block';
                         if (parentOptionWrap) parentOptionWrap.style.display = 'none';
                         if (childOptionWrap) childOptionWrap.style.display = '';
+                        // Durable copy — save must not wait on the async dropdown.
+                        setParentChildHiddenValue(parentChildVal);
                         refreshChildDropdown(parentChildVal).then(() => {
-                            if (childSelect && parentChildVal) childSelect.value = parentChildVal;
+                            setChildTypeValue(parentChildVal);
                         });
                         if (!isDuplicate) {
                             pcCreateFromParentMode = true;
@@ -7813,11 +8056,13 @@
                         if (parentYesEl) parentYesEl.checked = true;
                         if (parentNoEl) parentNoEl.checked = false;
                         if (parentWrap) parentWrap.style.display = 'block';
-                        if (hiddenParentChildEl) hiddenParentChildEl.value = '';
+                        // Durable Parent - value so save doesn't race the async dropdown.
+                        setParentChildHiddenValue(parentChildVal);
                         if (parentOptionWrap) parentOptionWrap.style.display = '';
                         if (childOptionWrap) childOptionWrap.style.display = 'none';
                         refreshParentChildDropdown(parentChildVal).then(() => {
                             if (parentSelect && parentChildVal) parentSelect.value = parentChildVal;
+                            setParentChildHiddenValue(parentChildVal);
                         });
                     }
                 }

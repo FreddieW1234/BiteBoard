@@ -1,41 +1,27 @@
-================================================================================
-MERGE INTO YOUR OFFICE FASTAPI APP (the long file you pasted)
-================================================================================
+Stock designs — quick merge into live office app.py
+===================================================
 
-1) Copy stock_designs_addon.py into the same folder as the office API .py file.
+Your pasted app.py already has the stock-design routes. You only need:
 
-2) After these existing lines:
+1) Create the folder at startup (so it always exists under DB_DIR):
 
-       init_db()
-       init_companies_db()
-       init_snapshots_db()
+   Right after ORDERS_DIR.mkdir(...), add:
 
-   add:
+       (DB_DIR / "stock designs").mkdir(parents=True, exist_ok=True)
 
-       from stock_designs_addon import register_stock_design_routes
-       register_stock_design_routes(
-           app,
-           db_dir=DB_DIR,
-           lock=LOCK,
-           require_key_dep=require_key,
-           max_upload_bytes=MAX_UPLOAD_BYTES,
-           max_upload_mb=MAX_UPLOAD_MB,
-       )
+2) Restart the Office Order API service.
 
-3) Restart the office Windows service / uvicorn process.
+3) Confirm path: open http://127.0.0.1:8000/ (or your HOST:PORT). Optionally
+   add to the health JSON:
 
-4) Confirm the folder appears after first upload:
-       {DB_DIR}\stock designs\<product_id>\<Product Name>_<product_id>_v1.zip
+       "stock_designs_dir": str(DB_DIR / "stock designs")
 
-   The Shopify product must be created first so the product id is known.
+   Look THERE for the folder — not a random "data" next to a copy of app.py.
 
-================================================================================
-ENDPOINT CONTRACT (X-API-Key required on all)
-================================================================================
+4) From Product Creator (edit an existing product): pick a ZIP → it should
+   upload immediately and create:
 
-GET    /stock-designs
-GET    /stock-designs/{product_id}
-POST   /stock-designs/{product_id}          form: file + product_name
-GET    /stock-designs/{product_id}/latest
-GET    /stock-designs/{product_id}/files/{filename}
-DELETE /stock-designs/{product_id}/files/{filename}?permanent=false
+       {DB_DIR}/stock designs/{shopify_product_id}/{Product Name}_v1.zip
+
+Portal side (Render) was fixed to buffer the ZIP bytes so the office API no
+longer receives an empty upload.

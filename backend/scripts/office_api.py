@@ -87,7 +87,18 @@ def _handle_response(resp: requests.Response, *, allow_404: bool = False):
         detail = ""
         try:
             body = resp.json()
-            detail = body.get("error") or body.get("message") or ""
+            raw = body.get("error") or body.get("message") or body.get("detail") or ""
+            # FastAPI returns detail as a string, or a list of validation objects.
+            if isinstance(raw, list):
+                parts = []
+                for item in raw:
+                    if isinstance(item, dict):
+                        parts.append(str(item.get("msg") or item))
+                    else:
+                        parts.append(str(item))
+                detail = "; ".join(parts)
+            else:
+                detail = str(raw)
         except Exception:
             detail = (resp.text or "")[:200]
         logger.error("Office API HTTP %s: %s", resp.status_code, detail or resp.reason)
@@ -1352,13 +1363,28 @@ def list_stock_designs(product_id: str | int) -> dict:
 
 
 def upload_stock_design(product_id: str | int, file_stream, filename: str, product_name: str) -> dict:
-    """Upload one ZIP; office server versions it as {Product Name}_vN.zip."""
+    """Upload one ZIP; office server versions it under data/stock designs/<product_id>/."""
+    from io import BytesIO
+
     url = _stock_designs_base(product_id)
+    # Always buffer: Werkzeug/Flask streams are often already at EOF or non-seekable,
+    # which made the office API receive an empty body and reject the upload.
+    if hasattr(file_stream, "read"):
+        raw = file_stream.read()
+    else:
+        raw = file_stream or b""
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    if not raw:
+        raise OfficeApiError("Stock designs ZIP was empty — nothing was sent to the office server")
+    safe_name = (filename or "stock-designs.zip").strip() or "stock-designs.zip"
+    if not safe_name.lower().endswith(".zip"):
+        safe_name = f"{safe_name}.zip"
     resp = _request(
         "POST",
         url,
         data={"product_name": (product_name or "").strip() or "product"},
-        files={"file": (filename or "stock-designs.zip", file_stream, "application/zip")},
+        files={"file": (safe_name, BytesIO(raw), "application/zip")},
         timeout=max(_TIMEOUT, 120),
     )
     result = _handle_response(resp)

@@ -155,6 +155,10 @@ def enqueue(data: dict, product_id=None, title: str = "", locked_ids=None) -> di
             pid = int(product_id)
         except (TypeError, ValueError):
             pid = None
+    # Stamp into the payload the runner uses — job.product_id alone is not enough;
+    # create_product() only updates when data["product_id"] is set.
+    if pid is not None:
+        data["product_id"] = pid
     locked = set()
     if pid is not None:
         locked.add(pid)
@@ -646,6 +650,47 @@ def verify_product(intended_data: dict, product_id) -> list:
                 "intended": want,
                 "actual": got,
                 "ok": ok,
+            })
+
+    # Top-level parent_child is never in the metafields array the client sends —
+    # create_product writes it separately. Check it when a value was intended.
+    want_pc = _intended_parent_child_value(intended_data or {})
+    clear_pc_raw = (intended_data or {}).get("clear_parent_child", False)
+    if isinstance(clear_pc_raw, str):
+        clear_pc = clear_pc_raw.lower() in ("true", "1", "yes")
+    else:
+        clear_pc = bool(clear_pc_raw)
+    if want_pc or clear_pc:
+        got_pc = ""
+        for key in ("parent_child", "parent_child2"):
+            raw = actual_mf.get(("custom", key))
+            if raw is None or str(raw).strip() == "":
+                continue
+            s = str(raw).strip()
+            if s.startswith("["):
+                try:
+                    import json
+                    arr = json.loads(s)
+                    if isinstance(arr, list) and arr:
+                        s = str(arr[0]).strip()
+                except Exception:
+                    pass
+            if s.lower().startswith("parent") or s.lower().startswith("child"):
+                got_pc = s
+                break
+        if clear_pc and not want_pc:
+            rows.append({
+                "field": "parent_child",
+                "intended": "(cleared)",
+                "actual": got_pc or "(empty)",
+                "ok": not got_pc,
+            })
+        elif want_pc:
+            rows.append({
+                "field": "parent_child",
+                "intended": want_pc,
+                "actual": got_pc or "(empty)",
+                "ok": _norm(want_pc) == _norm(got_pc),
             })
 
     return rows

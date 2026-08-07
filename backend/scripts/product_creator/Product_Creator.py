@@ -5049,6 +5049,11 @@ def create_product(product_data):
                 if not (mf.get("namespace") == "custom" and mf.get("key") in PARENT_CHILD_METAFIELD_KEYS)
             ]
             parent_child_value = (product_data.get("parent_child") or "").strip()
+            clear_parent_child_raw = product_data.get("clear_parent_child", False)
+            if isinstance(clear_parent_child_raw, str):
+                clear_parent_child = clear_parent_child_raw.lower() in ("true", "1", "yes")
+            else:
+                clear_parent_child = bool(clear_parent_child_raw)
             if parent_child_value:
                 try:
                     from .categories import get_parent_child_metafield_key
@@ -5075,7 +5080,10 @@ def create_product(product_data):
                         "value": json.dumps([parent_child_value]),
                         "type": "list.single_line_text_field",
                     })
-            elif product_id:
+            elif product_id and clear_parent_child:
+                # Only clear when the client explicitly says Parent? No and Child? No.
+                # An empty parent_child alone used to wipe the metafield whenever the
+                # UI raced the async dropdown — leaving products Unassigned by mistake.
                 for pc_key in PARENT_CHILD_METAFIELD_KEYS:
                     metafields.append({
                         "namespace": "custom",
@@ -5084,6 +5092,12 @@ def create_product(product_data):
                         "type": "list.single_line_text_field",
                     })
                 print("🗑️ Parent/Child cleared - will delete parent_child and parent_child2 metafields", flush=True)
+            elif product_id and not parent_child_value:
+                print(
+                    "ℹ️ parent_child empty on update without clear_parent_child — "
+                    "leaving existing Parent/Child allocation unchanged",
+                    flush=True,
+                )
             
             # Add category metafield if we have it
             if categories:
