@@ -1,0 +1,39 @@
+================================================================================
+MERGE INTO YOUR OFFICE FASTAPI APP (the long file you pasted)
+================================================================================
+
+1) Copy stock_designs_addon.py into the same folder as the office API .py file.
+
+2) After these existing lines:
+
+       init_db()
+       init_companies_db()
+       init_snapshots_db()
+
+   add:
+
+       from stock_designs_addon import register_stock_design_routes
+       register_stock_design_routes(
+           app,
+           db_dir=DB_DIR,
+           lock=LOCK,
+           require_key_dep=require_key,
+           max_upload_bytes=MAX_UPLOAD_BYTES,
+           max_upload_mb=MAX_UPLOAD_MB,
+       )
+
+3) Restart the office Windows service / uvicorn process.
+
+4) Confirm the folder appears after first upload:
+       {DB_DIR}\stock designs\<product_id>\<Product Name>_v1.zip
+
+================================================================================
+ENDPOINT CONTRACT (X-API-Key required on all)
+================================================================================
+
+GET    /stock-designs
+GET    /stock-designs/{product_id}
+POST   /stock-designs/{product_id}          form: file + product_name
+GET    /stock-designs/{product_id}/latest
+GET    /stock-designs/{product_id}/files/{filename}
+DELETE /stock-designs/{product_id}/files/{filename}?permanent=false

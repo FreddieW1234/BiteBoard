@@ -162,7 +162,19 @@ def upload_zip_and_set_metafield(
     default_base: str = 'artwork_templates',
 ):
     # files is list of { filename, content(bytes), content_type }
-    zip_bytes = zip_files_to_bytes(files)
+    # Stock Designs expects a single pre-made ZIP from the user's computer —
+    # upload that file as-is so we don't nest ZIP-inside-ZIP.
+    use_existing_zip = (
+        (metafield_key or '') == 'stockdesigns'
+        and len(files or []) == 1
+        and str((files[0] or {}).get('filename') or '').lower().endswith('.zip')
+    )
+    if use_existing_zip:
+        zip_bytes = files[0].get('content') or b''
+        if not zip_bytes:
+            raise RuntimeError('ZIP file was empty')
+    else:
+        zip_bytes = zip_files_to_bytes(files)
     # sanitize base name server-side as well (without extension)
     base = (filename or '').strip().replace('\n',' ').replace('\r',' ')
     for ch in '<>:"/\\|?*':

@@ -1332,3 +1332,67 @@ def bulk_put_snapshot_items(kind: str, items: dict, updated_by: str | None = Non
         except OfficeApiError as exc:
             logger.warning("Snapshot bulk PUT failed for %s/%s: %s", kind, item_id, exc)
     return written
+
+
+# --------------------------------------------------------------------------- #
+# Stock Designs  (office disk: data/stock designs/<product_id>/<Name>_vN.zip)
+# --------------------------------------------------------------------------- #
+def _stock_designs_base(product_id: str | int) -> str:
+    return f"{OFFICE_API_URL.rstrip('/')}/stock-designs/{quote(str(product_id).strip(), safe='')}"
+
+
+def list_stock_designs(product_id: str | int) -> dict:
+    """List versioned stock-design ZIPs for a Shopify product id."""
+    url = _stock_designs_base(product_id)
+    resp = _request("GET", url)
+    result = _handle_response(resp, allow_404=True)
+    if result is None:
+        return {"product_id": str(product_id), "files": [], "latest": None, "count": 0}
+    return result if isinstance(result, dict) else {"files": [], "latest": None, "count": 0}
+
+
+def upload_stock_design(product_id: str | int, file_stream, filename: str, product_name: str) -> dict:
+    """Upload one ZIP; office server versions it as {Product Name}_vN.zip."""
+    url = _stock_designs_base(product_id)
+    resp = _request(
+        "POST",
+        url,
+        data={"product_name": (product_name or "").strip() or "product"},
+        files={"file": (filename or "stock-designs.zip", file_stream, "application/zip")},
+        timeout=max(_TIMEOUT, 120),
+    )
+    result = _handle_response(resp)
+    if not isinstance(result, dict):
+        raise OfficeApiError("Unexpected response from stock designs upload")
+    return result
+
+
+def fetch_stock_design_file(product_id: str | int, filename: str) -> requests.Response:
+    url = f"{_stock_designs_base(product_id)}/files/{quote(filename, safe='')}"
+    resp = _request("GET", url, stream=True, timeout=max(_TIMEOUT, 120))
+    if resp.status_code == 401:
+        raise OfficeApiError("Order tracking authentication failed")
+    if not resp.ok:
+        raise OfficeApiError(f"Could not download stock design ({resp.status_code})")
+    return resp
+
+
+def fetch_latest_stock_design(product_id: str | int) -> requests.Response:
+    url = f"{_stock_designs_base(product_id)}/latest"
+    resp = _request("GET", url, stream=True, timeout=max(_TIMEOUT, 120))
+    if resp.status_code == 401:
+        raise OfficeApiError("Order tracking authentication failed")
+    if resp.status_code == 404:
+        raise OfficeApiError("No stock designs for this product")
+    if not resp.ok:
+        raise OfficeApiError(f"Could not download stock design ({resp.status_code})")
+    return resp
+
+
+def delete_stock_design_file(product_id: str | int, filename: str, *, permanent: bool = False) -> dict:
+    url = f"{_stock_designs_base(product_id)}/files/{quote(filename, safe='')}"
+    if permanent:
+        url += "?permanent=true"
+    resp = _request("DELETE", url)
+    result = _handle_response(resp)
+    return result if isinstance(result, dict) else {"ok": True}

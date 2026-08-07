@@ -743,6 +743,49 @@
             font-size: 1rem;
         }
 
+        .metafield-help-tip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            margin-left: 6px;
+            color: #64748b;
+            cursor: help;
+            vertical-align: middle;
+        }
+        .metafield-help-tip > i {
+            font-size: 0.9rem;
+        }
+        .metafield-help-tip .metafield-help-bubble {
+            display: none;
+            position: absolute;
+            left: 0;
+            top: calc(100% + 8px);
+            z-index: 40;
+            width: min(420px, 70vw);
+            padding: 10px 12px;
+            border-radius: 8px;
+            background: #1e293b;
+            color: #f8fafc;
+            font-size: 0.78rem;
+            font-weight: 400;
+            line-height: 1.45;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+            white-space: normal;
+        }
+        .metafield-help-tip .metafield-help-bubble::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: -6px;
+            border: 6px solid transparent;
+            border-top: none;
+            border-bottom-color: #1e293b;
+        }
+        .metafield-help-tip:hover .metafield-help-bubble,
+        .metafield-help-tip:focus-within .metafield-help-bubble {
+            display: block;
+        }
+
         .card-quickfill-btn {
             font-size: 0.75rem;
             padding: 4px 10px;
@@ -2912,20 +2955,23 @@
                                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                                             <label class="form-label" style="margin-bottom:0;">Stock Designs</label>
                                             <span id="stock-designs-status" style="display:none;font-size:0.85rem;color:#666;">
-                                                Stock designs attached
-                                                <button type="button" onclick="clearAllStockDesigns()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Remove all stock designs"><i class="fas fa-times"></i> Remove</button>
+                                                <span id="stock-designs-status-text">Stock designs on office server</span>
+                                                <button type="button" onclick="clearAllStockDesigns()" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:0.85rem;margin-left:4px;" title="Clear staged ZIP"><i class="fas fa-times"></i> Clear staged</button>
                                             </span>
                                         </div>
                                         <div class="media-upload-container">
                                             <div class="media-upload-area" id="stockDesignsUploadArea">
                                                 <div class="upload-icon">
-                                                    <i class="fas fa-cloud-upload-alt"></i>
+                                                    <i class="fas fa-file-archive"></i>
                                                 </div>
                                                 <div class="upload-text">
-                                                    <p>Drag & drop files here or click to browse</p>
-                                                    <p class="upload-limit">• Multiple files allowed •</p>
+                                                    <p>Upload a single ZIP file of your stock designs</p>
+                                                    <p class="upload-limit" style="margin-top:8px;line-height:1.45;">
+                                                        Zip the files together on your computer first, then upload that one ZIP here (not several separate files).<br>
+                                                        To create the ZIP: highlight all the designs → right-click → <strong>Compress to</strong> → <strong>ZIP file</strong>.
+                                                    </p>
                                                 </div>
-                                                <input type="file" id="stockDesignsInput" multiple style="display:none;">
+                                                <input type="file" id="stockDesignsInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;">
                                             </div>
                                         </div>
                                         <div id="stockDesignsList" style="margin-top:10px;"></div>
@@ -3426,8 +3472,7 @@
         let pcStagedRemoteEntries = [];
         let pcCurrentTemplatesFileGlobalId = '';
         let stagedStockDesignFiles = [];
-        let pcStagedStockDesignRemoteEntries = [];
-        let pcCurrentStockDesignsFileGlobalId = '';
+        let pcStockDesignRemoteFiles = []; // office-server versions for current product
 
         // Lazy + singleflight: do not block page open / health threads on a full
         // Shopify Files scan until artwork guidelines are actually needed.
@@ -3871,34 +3916,52 @@
 
         function updateStockDesignsStatus() {
             const statusEl = document.getElementById('stock-designs-status');
-            if (statusEl) {
-                statusEl.style.display = pcCurrentStockDesignsFileGlobalId ? 'inline' : 'none';
+            const textEl = document.getElementById('stock-designs-status-text');
+            if (!statusEl) return;
+            const hasRemote = (pcStockDesignRemoteFiles || []).length > 0;
+            const hasStaged = (stagedStockDesignFiles || []).length > 0;
+            statusEl.style.display = (hasRemote || hasStaged) ? 'inline' : 'none';
+            if (textEl) {
+                if (hasStaged) textEl.textContent = 'ZIP staged — uploads on save';
+                else if (hasRemote) {
+                    const latest = pcStockDesignRemoteFiles[0];
+                    textEl.textContent = latest && latest.version != null
+                        ? `Latest on office: v${latest.version}`
+                        : 'Stock designs on office server';
+                }
             }
         }
 
         function clearAllStockDesigns() {
-            pcCurrentStockDesignsFileGlobalId = '';
-            pcStagedStockDesignRemoteEntries = [];
             stagedStockDesignFiles = [];
+            // Remote files stay on the office server until explicitly deleted per version.
             stageStockDesigns([]);
             updateStockDesignsStatus();
-            console.log('🎨 Stock designs cleared');
+            console.log('🎨 Staged stock designs cleared');
         }
 
         function stageStockDesigns(files) {
             const list = document.getElementById('stockDesignsList');
             if (!list) return;
-            (files || []).forEach(f => stagedStockDesignFiles.push(f));
-            const remoteItems = (pcStagedStockDesignRemoteEntries || []).map(e => ({
+            const incoming = Array.from(files || []);
+            if (incoming.length) {
+                const zipFile = incoming.find(f => /\.zip$/i.test(f.name || '') || (f.type || '').includes('zip'));
+                if (!zipFile) {
+                    alert('Please zip your stock designs on your computer first, then upload the single ZIP file.\n\nHighlight all the designs → right-click → Compress to → ZIP file.');
+                    return;
+                }
+                stagedStockDesignFiles = [zipFile];
+            }
+            const pid = selectedProduct && selectedProduct.id ? String(selectedProduct.id) : '';
+            const remoteItems = (pcStockDesignRemoteFiles || []).map(e => ({
                 name: e.name,
-                size: e.size || 0,
-                is_image: !!e.is_image,
+                size: e.size_bytes || e.size || 0,
+                version: e.version,
                 _type: 'remote'
             }));
             const localItems = (stagedStockDesignFiles || []).map((f, i) => ({
                 name: f.name,
                 size: f.size || 0,
-                is_image: f.type && f.type.startsWith('image/'),
                 preview: URL.createObjectURL(f),
                 _type: 'local',
                 _index: i
@@ -3908,67 +3971,92 @@
                 list.innerHTML = '<div class="muted"></div>';
                 return;
             }
-            list.innerHTML = '<div style="font-weight:600;margin-bottom:8px;">Current contents</div>' + items.map(it => {
-                const viewUrl = it._type === 'remote'
-                    ? `/api/templates-uploader/zip-file?file_global_id=${encodeURIComponent(pcCurrentStockDesignsFileGlobalId)}&name=${encodeURIComponent(it.name)}`
-                    : it.preview;
+            const heading = stagedStockDesignFiles.length
+                ? 'ZIP ready to upload to office server'
+                : 'Versions on office server';
+            list.innerHTML = `<div style="font-weight:600;margin-bottom:8px;">${heading}</div>` + items.map(it => {
+                const viewUrl = it._type === 'remote' && pid
+                    ? `/api/stock-designs/${encodeURIComponent(pid)}/files/${encodeURIComponent(it.name)}`
+                    : (it.preview || '#');
+                const verLabel = it._type === 'remote' && it.version != null ? ` <span style="color:#64748b;">(v${it.version})</span>` : '';
                 const removeBtn = it._type === 'remote'
-                    ? `<button type="button" title="Remove" onclick="removePcStockDesign('${it.name.replace(/'/g, "\\'")}', 'remote')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`
+                    ? `<button type="button" title="Archive on office server" onclick="removePcStockDesign('${String(it.name).replace(/'/g, "\\'")}', 'remote')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`
                     : `<button type="button" title="Remove" onclick="removePcStockDesign(${it._index}, 'local')" style="border:none;background:none;color:#e53935;cursor:pointer;"><i class="fas fa-times"></i></button>`;
+                const icon = it._type === 'local' || /\.zip$/i.test(it.name || '') ? 'fa-file-archive' : 'fa-file';
                 return `<div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
-                    <div style="width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;"><i class="fas fa-file"></i></div>
-                    <div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.name}</div>
-                    <a href="${viewUrl}" target="_blank" rel="noopener" title="Open" style="color:#4f46e5;"><i class="fas fa-eye"></i></a>
+                    <div style="width:40px;height:40px;border:1px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#999;"><i class="fas ${icon}"></i></div>
+                    <div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.name}${verLabel}</div>
+                    <a href="${viewUrl}" target="_blank" rel="noopener" title="Download" style="color:#4f46e5;"><i class="fas fa-download"></i></a>
                     ${removeBtn}
                 </div>`;
             }).join('');
+            updateStockDesignsStatus();
         }
 
-        function removePcStockDesign(arg, type) {
+        async function removePcStockDesign(arg, type) {
             if (type === 'local') {
                 const idx = Number(arg);
                 if (!Number.isNaN(idx)) {
                     stagedStockDesignFiles.splice(idx, 1);
                 }
-            } else if (type === 'remote') {
-                pcStagedStockDesignRemoteEntries = pcStagedStockDesignRemoteEntries.filter(e => e.name !== arg);
+                stageStockDesigns([]);
+                return;
             }
-            if (pcStagedStockDesignRemoteEntries.length === 0 && stagedStockDesignFiles.length === 0) {
-                pcCurrentStockDesignsFileGlobalId = '';
+            if (type === 'remote') {
+                const pid = selectedProduct && selectedProduct.id ? String(selectedProduct.id) : '';
+                if (!pid) return;
+                if (!confirm(`Archive stock design "${arg}" on the office server?`)) return;
+                try {
+                    const resp = await fetch(
+                        `/api/stock-designs/${encodeURIComponent(pid)}/files/${encodeURIComponent(arg)}`,
+                        { method: 'DELETE' }
+                    );
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || data.success === false) {
+                        throw new Error((data && data.error) || 'Delete failed');
+                    }
+                    await loadStockDesignsFromOffice(pid);
+                } catch (e) {
+                    alert('Could not archive stock design: ' + e);
+                }
+            }
+        }
+
+        async function loadStockDesignsFromOffice(productId) {
+            pcStockDesignRemoteFiles = [];
+            stagedStockDesignFiles = [];
+            if (!productId) {
+                stageStockDesigns([]);
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/stock-designs/${encodeURIComponent(productId)}`);
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data && data.success !== false) {
+                    pcStockDesignRemoteFiles = Array.isArray(data.files) ? data.files : [];
+                }
+            } catch (e) {
+                console.log('Stock designs office list failed', e);
             }
             stageStockDesigns([]);
-            updateStockDesignsStatus();
         }
 
         async function uploadStockDesignsAfterCreate(productId, productTitle) {
-            let sku = '';
-            try {
-                const pr = await fetch(`/api/product/${productId}/prices`);
-                const pdata = await pr.json();
-                const mfs = pdata.metafields || [];
-                const mfSku = (mfs.find(m => (m.namespace === 'custom' && m.key === 'sku')) || {}).value;
-                if (mfSku) sku = mfSku;
-                if (!sku && pdata.variants && pdata.variants.length) {
-                    sku = pdata.variants[0].sku || '';
-                }
-            } catch {}
-            if (!sku) sku = 'NOSKU';
-
-            const baseName = `${sanitizeBase(sku)}_${sanitizeBase(productTitle)}_stock_designs`;
+            if (!stagedStockDesignFiles || !stagedStockDesignFiles.length) return true;
+            const zipFile = stagedStockDesignFiles[0];
             const fd = new FormData();
-            fd.append('product_id', String(productId));
-            fd.append('zip_name', baseName);
-            fd.append('metafield_key', 'stockdesigns');
-            stagedStockDesignFiles.forEach(f => fd.append('files', f, f.name));
-
-            const resp = await fetch('/api/templates-uploader/upload-zip', { method: 'POST', body: fd });
-            const data = await resp.json();
-            if (!data || !data.success) {
-                throw (data && data.error) || 'Upload failed';
+            fd.append('file', zipFile, zipFile.name || 'stock-designs.zip');
+            fd.append('product_name', productTitle || 'product');
+            const resp = await fetch(`/api/stock-designs/${encodeURIComponent(productId)}`, {
+                method: 'POST',
+                body: fd,
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data || data.success === false) {
+                throw (data && data.error) || 'Stock designs upload failed';
             }
-            if (data.file_gid) {
-                pcCurrentStockDesignsFileGlobalId = data.file_gid;
-            }
+            stagedStockDesignFiles = [];
+            await loadStockDesignsFromOffice(productId);
             return true;
         }
 
@@ -4106,9 +4194,28 @@
             alert('Move Panes functionality would be implemented here');
         }
 
+        // Metafields hidden on Create-from-Parent / child edits — backend copies these
+        // from the live parent. Do not send form defaults (e.g. leadtime 5/10).
+        const CHILD_INHERITED_METAFIELD_KEYS = new Set([
+            'ingredients', 'nutritional_info', 'print_info', 'recycle_info', 'whats_inside',
+            'product_size', 'moq', 'origination', 'shelf_life', 'unit_weight',
+            'case_quantity', 'case_weight', 'leadtime3', 'leadtime1', 'leadtime2',
+            'commodity_code', 'alternative_spellings',
+            'vegan', 'vegetarian', 'halal', 'coeliac', 'kosher',
+            'peanuts', 'nuts', 'sesame', 'egg', 'cereals', 'soya', 'milk',
+            'celery', 'crustaceans', 'fish', 'lupin', 'molluscs', 'mustard', 'sulphurdioxide',
+            'pricejsontr', 'pricejsoner', 'artworkguidelines', 'artworktemplates', 'stockdesigns',
+            'product_colours', 'packaging_colours', 'foil_colours', 'bag_colours',
+            'print', 'foil', 'mailer', 'mailerpacking', 'calendar',
+            'customoption1name', 'customoption1options',
+            'customoption2name', 'customoption2options',
+            'customoption3name', 'customoption3options',
+        ]);
+
         // Collect all metafield data from the form
         function collectMetafieldsData() {
             const metafieldsData = [];
+            const skipInherited = typeof isChildProduct === 'function' && isChildProduct();
             // Product Code / per-colour SKUs → custom.sku (single string; plain or JSON array)
             const skuValue = collectCustomSkuValue();
             if (skuValue) {
@@ -4119,6 +4226,7 @@
             metafieldItems.forEach(item => {
                 const key = item.getAttribute('data-metafield-key') || '';
                 if (key === 'packingfee') return;
+                if (skipInherited && CHILD_INHERITED_METAFIELD_KEYS.has(key)) return;
                 // Special handling for product_size field with 3 separate inputs
                 const productSizeFields = item.querySelectorAll('.product-size-field');
                 if (productSizeFields.length > 0) {
@@ -5891,14 +5999,22 @@
                 
                 const isPrintInfo = metafield.key === 'print_info';
                 const isIngredients = metafield.key === 'ingredients';
+                const isNutritionalInfo = metafield.key === 'nutritional_info';
                 let headerExtra = '';
                 if (isPrintInfo) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Print Info and Recycle Info for card">Card</button>`;
                 else if (isIngredients) headerExtra = `<button type="button" class="card-quickfill-btn" title="Fill Ingredients and Nutritional Info for milk chocolate">Chocolate</button>`;
+                let nameExtra = '';
+                if (isNutritionalInfo) {
+                    const tipText = 'Please try conform to this template for the nutritionals in order for the table to show up correctly on the product page: Nutritional Information (per 100g) Energy 2308kJ/556kcal Fat 34.4g Of which saturates 21.1g Carbohydrates 53.1g Of which sugars 52.4g Protein 6.7g Salt 0.206g';
+                    nameExtra = `<span class="metafield-help-tip" tabindex="0" aria-label="Nutritional info template help"><i class="fas fa-info-circle" aria-hidden="true"></i><span class="metafield-help-bubble">${tipText}</span></span>`;
+                } else if (isIngredients) {
+                    nameExtra = `<span class="metafield-help-tip" tabindex="0" aria-label="Ingredients help"><i class="fas fa-info-circle" aria-hidden="true"></i><span class="metafield-help-bubble">Please put allergens in CAPITALS</span></span>`;
+                }
                 const fullWidthKeys = ['categorysub', 'custom_category', 'subcategory', 'filters', 'description', 'print_info', 'recycle_info', 'ingredients', 'nutritional_info', 'whats_inside', 'product_size', 'alternative_spellings'];
                 if (fullWidthKeys.includes(metafield.key)) metafieldDiv.classList.add('metafield-item-full-width');
                 metafieldDiv.innerHTML = `
                     <div class="metafield-header">
-                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}</span>${headerExtra}
+                        <span class="metafield-name" data-key="${metafield.key || ''}">${displayName}${nameExtra}</span>${headerExtra}
                     </div>
                     <div class="metafield-input-row">
                         ${inputElement}
@@ -6528,8 +6644,7 @@
             // Artwork: always send guideline (empty when deselected so backend can remove it)
             const guidelineVal = (selectedGuideline && selectedGuideline.id) ? selectedGuideline.id : '';
             const templateVal = pcCurrentTemplatesFileGlobalId || '';
-            const stockDesignsVal = pcCurrentStockDesignsFileGlobalId || '';
-            console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}", stockdesigns="${stockDesignsVal}"`);
+            console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}"`);
             productData.metafields.push({
                 namespace: 'custom',
                 key: 'artworkguidelines',
@@ -6542,12 +6657,7 @@
                 type: 'file_reference',
                 value: templateVal
             });
-            productData.metafields.push({
-                namespace: 'custom',
-                key: 'stockdesigns',
-                type: 'file_reference',
-                value: stockDesignsVal
-            });
+            // Stock designs are stored on the office server (data/stock designs/), not Shopify.
             
             // Add product ID for updates
             if (isEditingProduct && selectedProduct) {
@@ -6662,6 +6772,19 @@
                         try { window.ProductQueue.lockedIds.add(String(result.product_id)); } catch (e) {}
                         try { window.ProductQueue.refresh(); } catch (e) {}
                     }
+                    // Stock designs upload to the office server immediately (does not wait for the queue).
+                    try {
+                        const pid = result.product_id || (selectedProduct && selectedProduct.id);
+                        const title = (document.getElementById('title') || {}).value
+                            || (selectedProduct && selectedProduct.title)
+                            || 'product';
+                        if (pid && stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
+                            await uploadStockDesignsAfterCreate(pid, title);
+                            resultDiv.innerHTML += '<p style="margin-top:8px;">Stock designs ZIP uploaded to the office server.</p>';
+                        }
+                    } catch (e) {
+                        resultDiv.innerHTML += `<p style="color:#c0392b;">Stock designs upload failed: ${e}</p>`;
+                    }
                     return;
                 }
                 
@@ -6731,16 +6854,13 @@
                         resultDiv.innerHTML += `<p style="color:#c0392b;">Artwork templates upload failed: ${e}</p>`;
                     }
 
-                    // After creation: if stock designs are staged, zip and save to custom.stockdesigns
+                    // After save: upload staged stock designs ZIP to the office server
                     try {
                         if (stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
                             const pid = result.product.id;
                             const title = result.product.title || 'Product';
                             await uploadStockDesignsAfterCreate(pid, title);
-                            stagedStockDesignFiles = [];
-                            const sdList = document.getElementById('stockDesignsList');
-                            if (sdList) sdList.innerHTML = '<div class="muted">No files staged</div>';
-                            updateStockDesignsStatus();
+                            resultDiv.innerHTML += '<p style="margin-top:8px;">Stock designs ZIP uploaded to the office server.</p>';
                         }
                     } catch (e) {
                         resultDiv.innerHTML += `<p style="color:#c0392b;">Stock designs upload failed: ${e}</p>`;
@@ -7385,7 +7505,7 @@
             return data;
         }
 
-        function loadArtworkTemplatesDeferred(mfs, data, title) {
+        function loadArtworkTemplatesDeferred(mfs, data, title, opts) {
             void (async function () {
                 try {
                     const atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
@@ -7412,35 +7532,16 @@
                     updateTemplateStatus();
                 } catch (e) { console.log('Templates prefill failed', e); }
             })();
-            loadStockDesignsDeferred(mfs);
-        }
-
-        function loadStockDesignsDeferred(mfs) {
-            void (async function () {
-                try {
-                    const sdMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'stockdesigns') || {}).value || '';
-                    pcCurrentStockDesignsFileGlobalId = sdMf || '';
-                    pcStagedStockDesignRemoteEntries = [];
-                    stagedStockDesignFiles = [];
-                    if (sdMf) {
-                        const respZip = await fetch('/api/templates-uploader/zip-contents', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ file_global_id: sdMf })
-                        });
-                        const zipData = await respZip.json();
-                        if (zipData && zipData.success) {
-                            pcStagedStockDesignRemoteEntries = (zipData.entries || []).map(it => ({
-                                name: it.name,
-                                size: it.size,
-                                is_image: it.is_image
-                            }));
-                        }
-                    }
-                    stageStockDesigns([]);
-                    updateStockDesignsStatus();
-                } catch (e) { console.log('Stock designs prefill failed', e); }
-            })();
+            // Stock designs are per product id on the office server. Skip when
+            // duplicating / create-from-parent so we don't show or delete the source product's files.
+            const loadStock = !(opts && opts.skipStockDesigns);
+            if (loadStock && data && data.id) {
+                void loadStockDesignsFromOffice(data.id);
+            } else {
+                pcStockDesignRemoteFiles = [];
+                stagedStockDesignFiles = [];
+                stageStockDesigns([]);
+            }
         }
 
         // Wire a picker/autocomplete row's click handler, greying it out and
@@ -7876,7 +7977,7 @@
                     updateGuidelineStatus();
                 } catch (e) { console.log('Guideline reflect failed', e); }
 
-                loadArtworkTemplatesDeferred(mfs, data, title);
+                loadArtworkTemplatesDeferred(mfs, data, title, { skipStockDesigns: !!isDuplicate });
 
                 if (isDuplicate) {
                     isEditingProduct = false;

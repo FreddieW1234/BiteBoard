@@ -511,6 +511,59 @@ def _norm(value):
         return s
 
 
+def _intended_parent_child_value(intended_data: dict) -> str:
+    """Best-effort parent_child value from the save payload."""
+    raw = (intended_data or {}).get("parent_child")
+    if raw is not None and str(raw).strip():
+        return str(raw).strip()
+    for mf in (intended_data or {}).get("metafields") or []:
+        if not isinstance(mf, dict):
+            continue
+        if (mf.get("namespace") or "custom") != "custom":
+            continue
+        if mf.get("key") in ("parent_child", "parent_child2"):
+            val = mf.get("value")
+            if val is None:
+                continue
+            s = str(val).strip()
+            if s.startswith("["):
+                try:
+                    import json
+                    arr = json.loads(s)
+                    if isinstance(arr, list) and arr:
+                        s = str(arr[0]).strip()
+                except Exception:
+                    pass
+            if s:
+                return s
+    return ""
+
+
+def _child_inherited_keys_to_skip(intended_data: dict) -> set:
+    """
+    Child saves overwrite these from the live parent in create_product.
+    Comparing them to form values (often new-product defaults like leadtime 5/10)
+    causes false verification mismatches.
+    """
+    pc = _intended_parent_child_value(intended_data)
+    if not pc.lower().startswith("child"):
+        return set()
+    try:
+        from product_creator.Product_Creator import PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS  # type: ignore
+        return set(PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS)
+    except Exception:
+        try:
+            from scripts.product_creator.Product_Creator import PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS  # type: ignore
+            return set(PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS)
+        except Exception:
+            # Fallback includes the lead-time keys that were mismatching.
+            return {
+                "leadtime1", "leadtime2", "leadtime3",
+                "moq", "origination", "shelf_life", "unit_weight",
+                "case_quantity", "case_weight", "product_size",
+            }
+
+
 def verify_product(intended_data: dict, product_id) -> list:
     """Re-read the product from Shopify and diff it against what was intended.
 
@@ -537,6 +590,7 @@ def verify_product(intended_data: dict, product_id) -> list:
         }]
 
     rows = []
+    skip_inherited = _child_inherited_keys_to_skip(intended_data or {})
 
     # Title
     want_title = (intended_data.get("title") or "").strip()
@@ -562,6 +616,10 @@ def verify_product(intended_data: dict, product_id) -> list:
             continue
         key = mf.get("key")
         if not key:
+            continue
+        # Child products inherit these from the parent after save — form values
+        # (e.g. default lead times 5/10) are not the source of truth.
+        if key in skip_inherited:
             continue
         ns = (mf.get("namespace") or "custom")
         want = mf.get("value")

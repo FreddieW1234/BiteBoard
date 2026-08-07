@@ -1454,10 +1454,9 @@ def api_templates_uploader_upload_zip():
         zip_name = request.form.get('zip_name', 'artwork_templates')
         explicit_version = request.form.get('explicit_version')
         metafield_key = (request.form.get('metafield_key') or 'artworktemplates').strip() or 'artworktemplates'
-        # Only allow known artwork file_reference keys from this endpoint.
-        if metafield_key not in ('artworktemplates', 'stockdesigns'):
+        # Stock designs now live on the office server — use /api/stock-designs instead.
+        if metafield_key != 'artworktemplates':
             return jsonify({'success': False, 'error': f'Unsupported metafield_key: {metafield_key}'}), 400
-        default_base = 'stock_designs' if metafield_key == 'stockdesigns' else 'artwork_templates'
         if not product_id:
             return jsonify({'success': False, 'error': 'Missing product_id'}), 400
         files = request.files.getlist('files')
@@ -1491,12 +1490,108 @@ def api_templates_uploader_upload_zip():
             filename=zip_name,
             files=prepared,
             explicit_version=ver_int,
-            metafield_key=metafield_key,
-            default_base=default_base,
+            metafield_key='artworktemplates',
+            default_base='artwork_templates',
         )
         return jsonify({'success': True, **result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --------------------------------------------------------------------------- #
+# Stock Designs — stored on the office server under data/stock designs/
+# (NOT Shopify metafields). Portal proxies so the browser never sees the API key.
+# --------------------------------------------------------------------------- #
+@app.route('/api/stock-designs/<product_id>', methods=['GET'])
+def api_stock_designs_list(product_id):
+    if not is_staff_authenticated():
+        return jsonify({'success': False, 'error': 'Staff login required'}), 403
+    try:
+        from scripts.office_api import list_stock_designs, OfficeApiError  # type: ignore
+        data = list_stock_designs(product_id)
+        return jsonify({'success': True, **data})
+    except OfficeApiError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 502
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stock-designs/<product_id>', methods=['POST'])
+def api_stock_designs_upload(product_id):
+    if not is_staff_authenticated():
+        return jsonify({'success': False, 'error': 'Staff login required'}), 403
+    f = request.files.get('file') or (request.files.getlist('files') or [None])[0]
+    if not f or not f.filename:
+        return jsonify({'success': False, 'error': 'No ZIP file provided'}), 400
+    product_name = (request.form.get('product_name') or '').strip() or 'product'
+    try:
+        from scripts.office_api import upload_stock_design, OfficeApiError  # type: ignore
+        result = upload_stock_design(product_id, f.stream, f.filename, product_name)
+        return jsonify({'success': True, **result})
+    except OfficeApiError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 502
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stock-designs/<product_id>/latest', methods=['GET'])
+def api_stock_designs_latest(product_id):
+    """Staff + storefront-friendly download of the newest ZIP for a product."""
+    try:
+        from scripts.office_api import fetch_latest_stock_design, OfficeApiError  # type: ignore
+        resp = fetch_latest_stock_design(product_id)
+        filename = 'stock-designs.zip'
+        cd = resp.headers.get('Content-Disposition') or ''
+        if 'filename=' in cd:
+            filename = cd.split('filename=')[-1].strip().strip('"')
+        return Response(
+            resp.iter_content(chunk_size=1024 * 256),
+            content_type=resp.headers.get('Content-Type') or 'application/zip',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Cache-Control': 'private, max-age=60',
+            },
+        )
+    except OfficeApiError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 404 if 'No stock designs' in str(exc) else 502
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stock-designs/<product_id>/files/<path:filename>', methods=['GET'])
+def api_stock_designs_download(product_id, filename):
+    if not is_staff_authenticated():
+        return jsonify({'success': False, 'error': 'Staff login required'}), 403
+    try:
+        from scripts.office_api import fetch_stock_design_file, OfficeApiError  # type: ignore
+        resp = fetch_stock_design_file(product_id, filename)
+        return Response(
+            resp.iter_content(chunk_size=1024 * 256),
+            content_type=resp.headers.get('Content-Type') or 'application/zip',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+            },
+        )
+    except OfficeApiError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 502
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/stock-designs/<product_id>/files/<path:filename>', methods=['DELETE'])
+def api_stock_designs_delete(product_id, filename):
+    if not is_staff_authenticated():
+        return jsonify({'success': False, 'error': 'Staff login required'}), 403
+    permanent = (request.args.get('permanent') or '').lower() in ('1', 'true', 'yes')
+    try:
+        from scripts.office_api import delete_stock_design_file, OfficeApiError  # type: ignore
+        result = delete_stock_design_file(product_id, filename, permanent=permanent)
+        return jsonify({'success': True, **(result or {})})
+    except OfficeApiError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 502
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/templates-uploader/zip-contents', methods=['POST'])
 def api_templates_uploader_zip_contents():
