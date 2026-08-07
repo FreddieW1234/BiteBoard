@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
@@ -251,6 +252,99 @@ def _build_meta_line(variant_title: str) -> str:
     return (variant_title or "").strip()
 
 
+def _parse_sku_choice_entries(sku: str) -> list[dict]:
+    """
+    Parse custom.sku / line-item SKU values that are JSON arrays of
+    Name:Code:ProductCode[:OptionType] (or Name:ProductCode).
+    Returns [] when sku is a plain product code.
+    """
+    raw = (sku or "").strip()
+    if not raw.startswith("["):
+        return []
+    try:
+        arr = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(arr, list):
+        return []
+    out: list[dict] = []
+    for item in arr:
+        s = str(item or "").strip()
+        if not s:
+            continue
+        parts = [p.strip() for p in s.split(":")]
+        if len(parts) >= 3:
+            out.append({
+                "name": parts[0],
+                "code": parts[1],
+                "product_code": parts[2],
+                "option_type": parts[3] if len(parts) >= 4 else "",
+                "raw": s,
+            })
+        elif len(parts) == 2:
+            out.append({
+                "name": parts[0],
+                "code": "",
+                "product_code": parts[1],
+                "option_type": "",
+                "raw": s,
+            })
+        else:
+            out.append({
+                "name": parts[0],
+                "code": "",
+                "product_code": parts[0],
+                "option_type": "",
+                "raw": s,
+            })
+    return out
+
+
+def _selected_option_names(properties: list[dict]) -> list[str]:
+    """Flatten selected storefront option values for SKU matching."""
+    names: list[str] = []
+    for prop in properties or []:
+        val = str(prop.get("value") or "").strip()
+        if not val:
+            continue
+        names.append(val)
+        # Folded colour display "Red:R" → also match on "Red"
+        if ":" in val:
+            names.append(val.split(":", 1)[0].strip())
+    # Prefer longer / more specific names first
+    names.sort(key=lambda s: len(s), reverse=True)
+    return names
+
+
+def resolve_line_item_display_sku(sku: str, properties: list[dict] | None = None) -> str:
+    """
+    If the line SKU is a JSON list of option→code mappings, return the product
+    code for the selected option (e.g. M12645 for Flavour = Cranberry & Raspberry).
+    Otherwise return the SKU unchanged.
+    """
+    raw = (sku or "").strip()
+    entries = _parse_sku_choice_entries(raw)
+    if not entries:
+        return raw
+
+    selected = _selected_option_names(properties or [])
+    for sel in selected:
+        sel_l = sel.lower()
+        for entry in entries:
+            name_l = (entry.get("name") or "").lower()
+            if not name_l:
+                continue
+            if name_l == sel_l or sel_l.startswith(name_l + ":") or name_l.startswith(sel_l + ":"):
+                code = (entry.get("product_code") or "").strip()
+                return code or entry.get("raw") or raw
+
+    if len(entries) == 1:
+        code = (entries[0].get("product_code") or "").strip()
+        return code or entries[0].get("raw") or raw
+
+    return raw
+
+
 def _clean_fee_title(title: str) -> str:
     """Remove trailing variant marker e.g. 'Origination Fee (50)' → 'Origination Fee'."""
     return re.sub(r"\s*\(\d+\)\s*$", "", (title or "").strip()).strip()
@@ -348,10 +442,14 @@ def format_line_item(li: dict) -> dict:
     unit_money = (li.get("originalUnitPriceSet") or {}).get("shopMoney") or {}
     title = li.get("title") or ""
     currency = li_money.get("currencyCode") or unit_money.get("currencyCode") or "GBP"
-    sku = (li.get("sku") or "").strip()
+    raw_sku = (li.get("sku") or "").strip()
     variant_title = (li.get("variantTitle") or "").strip()
     properties = _parse_attributes(li.get("customAttributes"))
     storefront_props, remaining = _order_storefront_line_properties(properties)
+    display_properties = storefront_props + remaining
+    # When custom.sku is a JSON list of option codes, show the code for the
+    # selected option (e.g. Flavour = Cranberry & Raspberry → M12645).
+    sku = resolve_line_item_display_sku(raw_sku, display_properties)
     is_fee = is_fee_item(title)
     unit_price = unit_money.get("amount") or "0.00"
     total = li_money.get("amount") or "0.00"
@@ -377,6 +475,7 @@ def format_line_item(li: dict) -> dict:
         "title": title,
         "quantity": quantity,
         "sku": sku,
+        "sku_raw": raw_sku,
         "variant_title": variant_title,
         "weight_kg": weight_kg,
         "meta_line": _build_meta_line(variant_title),
@@ -386,7 +485,7 @@ def format_line_item(li: dict) -> dict:
         "total_display": format_gbp(total),
         "price_display": format_line_price(unit_price, quantity, total),
         "currency": currency,
-        "properties": storefront_props + remaining,
+        "properties": display_properties,
         "is_fee": is_fee,
         "case_quantity": case_quantity,
         "origination": origination,
