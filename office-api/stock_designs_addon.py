@@ -7,13 +7,14 @@ helpers/routes from there.
 
 Disk layout (under DB_DIR, same place as orders.db / companies.db):
 
-    data/stock designs/<product_id>/<Product Name>_v1.zip
-    data/stock designs/<product_id>/<Product Name>_v2.zip
+    data/stock designs/<product_id>/<Product Name>_<product_id>_v1.zip
+    data/stock designs/<product_id>/<Product Name>_<product_id>_v2.zip
     ...
 
-- <product_id> is the Shopify product id (stable, even if the title changes)
-- Filename is "{Product Name}_v{N}.zip" where N is 1, 2, 3, ...
+- <product_id> is the Shopify product id — required before upload (product must exist)
+- Filename includes Product Name + product id + version so renames never orphan files
 - Product Name is sanitised for Windows filenames (invalid chars stripped)
+- Version N is 1, 2, 3, ... per product_id folder
 
 Endpoints (all require X-API-Key):
 
@@ -132,7 +133,8 @@ def save_stock_design_upload(
 
     with lock:
         version = next_stock_design_version(folder)
-        filename = f"{safe_name}_v{version}{ext}"
+        # Name + Shopify id + version — id keeps the file findable after title renames
+        filename = f"{safe_name}_{product_id}_v{version}{ext}"
         final = folder / filename
         # Exclusive create so two concurrent uploads never share a name
         final.open("xb").close()

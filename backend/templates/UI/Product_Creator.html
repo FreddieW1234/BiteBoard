@@ -2968,7 +2968,8 @@
                                                     <p>Upload a single ZIP file of your stock designs</p>
                                                     <p class="upload-limit" style="margin-top:8px;line-height:1.45;">
                                                         Zip the files together on your computer first, then upload that one ZIP here (not several separate files).<br>
-                                                        To create the ZIP: highlight all the designs → right-click → <strong>Compress to</strong> → <strong>ZIP file</strong>.
+                                                        To create the ZIP: highlight all the designs → right-click → <strong>Compress to</strong> → <strong>ZIP file</strong>.<br>
+                                                        The ZIP is saved to the office server <strong>after</strong> the product exists in Shopify, named <code>{Product Name}_{Product ID}_v1.zip</code>.
                                                     </p>
                                                 </div>
                                                 <input type="file" id="stockDesignsInput" accept=".zip,application/zip,application/x-zip-compressed" style="display:none;">
@@ -4043,11 +4044,16 @@
 
         async function uploadStockDesignsAfterCreate(productId, productTitle) {
             if (!stagedStockDesignFiles || !stagedStockDesignFiles.length) return true;
+            // Office path/filename includes the Shopify product id — product must exist first.
+            const pid = String(productId || '').trim();
+            if (!pid || !/^\d+$/.test(pid)) {
+                throw 'Stock designs need a Shopify product id — save/create the product first, then the ZIP uploads.';
+            }
             const zipFile = stagedStockDesignFiles[0];
             const fd = new FormData();
             fd.append('file', zipFile, zipFile.name || 'stock-designs.zip');
             fd.append('product_name', productTitle || 'product');
-            const resp = await fetch(`/api/stock-designs/${encodeURIComponent(productId)}`, {
+            const resp = await fetch(`/api/stock-designs/${encodeURIComponent(pid)}`, {
                 method: 'POST',
                 body: fd,
             });
@@ -4056,7 +4062,12 @@
                 throw (data && data.error) || 'Stock designs upload failed';
             }
             stagedStockDesignFiles = [];
-            await loadStockDesignsFromOffice(productId);
+            if (typeof selectedProduct === 'object' && selectedProduct) {
+                selectedProduct.id = pid;
+            } else {
+                selectedProduct = { id: pid, title: productTitle || 'product' };
+            }
+            await loadStockDesignsFromOffice(pid);
             return true;
         }
 
@@ -6772,15 +6783,21 @@
                         try { window.ProductQueue.lockedIds.add(String(result.product_id)); } catch (e) {}
                         try { window.ProductQueue.refresh(); } catch (e) {}
                     }
-                    // Stock designs upload to the office server immediately (does not wait for the queue).
+                    // Stock designs need a Shopify product id in the filename — only upload
+                    // once we have one (existing product edits). Brand-new creates run sync
+                    // and upload after result.product.id is returned.
                     try {
                         const pid = result.product_id || (selectedProduct && selectedProduct.id);
                         const title = (document.getElementById('title') || {}).value
                             || (selectedProduct && selectedProduct.title)
                             || 'product';
-                        if (pid && stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
-                            await uploadStockDesignsAfterCreate(pid, title);
-                            resultDiv.innerHTML += '<p style="margin-top:8px;">Stock designs ZIP uploaded to the office server.</p>';
+                        if (stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
+                            if (pid) {
+                                await uploadStockDesignsAfterCreate(pid, title);
+                                resultDiv.innerHTML += '<p style="margin-top:8px;">Stock designs ZIP uploaded to the office server.</p>';
+                            } else {
+                                resultDiv.innerHTML += '<p style="color:#b45309;margin-top:8px;">Stock designs ZIP is still staged — it will upload once the product exists in Shopify. Re-save after the queue finishes if needed.</p>';
+                            }
                         }
                     } catch (e) {
                         resultDiv.innerHTML += `<p style="color:#c0392b;">Stock designs upload failed: ${e}</p>`;

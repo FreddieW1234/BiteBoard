@@ -1520,13 +1520,19 @@ def api_stock_designs_list(product_id):
 def api_stock_designs_upload(product_id):
     if not is_staff_authenticated():
         return jsonify({'success': False, 'error': 'Staff login required'}), 403
+    pid = str(product_id or '').strip()
+    if not pid.isdigit():
+        return jsonify({
+            'success': False,
+            'error': 'A Shopify product id is required — create/save the product before uploading stock designs.',
+        }), 400
     f = request.files.get('file') or (request.files.getlist('files') or [None])[0]
     if not f or not f.filename:
         return jsonify({'success': False, 'error': 'No ZIP file provided'}), 400
     product_name = (request.form.get('product_name') or '').strip() or 'product'
     try:
         from scripts.office_api import upload_stock_design, OfficeApiError  # type: ignore
-        result = upload_stock_design(product_id, f.stream, f.filename, product_name)
+        result = upload_stock_design(pid, f.stream, f.filename, product_name)
         return jsonify({'success': True, **result})
     except OfficeApiError as exc:
         return jsonify({'success': False, 'error': str(exc)}), 502

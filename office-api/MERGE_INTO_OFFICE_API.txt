@@ -25,7 +25,9 @@ MERGE INTO YOUR OFFICE FASTAPI APP (the long file you pasted)
 3) Restart the office Windows service / uvicorn process.
 
 4) Confirm the folder appears after first upload:
-       {DB_DIR}\stock designs\<product_id>\<Product Name>_v1.zip
+       {DB_DIR}\stock designs\<product_id>\<Product Name>_<product_id>_v1.zip
+
+   The Shopify product must be created first so the product id is known.
 
 ================================================================================
 ENDPOINT CONTRACT (X-API-Key required on all)

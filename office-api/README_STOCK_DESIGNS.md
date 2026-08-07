@@ -23,18 +23,18 @@ register_stock_design_routes(
 ## Disk layout
 
 ```
-{DB_DIR}/stock designs/{shopify_product_id}/{Product Name}_v1.zip
-{DB_DIR}/stock designs/{shopify_product_id}/{Product Name}_v2.zip
+{DB_DIR}/stock designs/{shopify_product_id}/{Product Name}_{product_id}_v1.zip
+{DB_DIR}/stock designs/{shopify_product_id}/{Product Name}_{product_id}_v2.zip
 ...
 ```
 
 Example:
 
 ```
-./data/stock designs/16170516480378/Moustache Chocolate - Lollipop - Movember_v1.zip
+./data/stock designs/16170516480378/Moustache Chocolate - Lollipop - Movember_16170516480378_v1.zip
 ```
 
-Soft-deleted files go to:
+The Shopify product must exist before upload (so the id is known). Soft-deleted files go to:
 
 ```
 {DB_DIR}/stock designs/_Archive/{product_id}/...
