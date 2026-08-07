@@ -7023,6 +7023,9 @@
                     resultDiv.innerHTML = `
                         <h4><i class="fas fa-clock"></i> Queued — saving in the background</h4>
                         <p>Your changes are being applied to Shopify and verified. Track progress with the <strong>Queue</strong> button.</p>`;
+                    // Drop stale prefetch so the next open reloads images from Shopify
+                    // (avoids a keep-list wipe of images added since the last prefetch).
+                    invalidateProductDetailCachesFromSaveResult(result);
                     // Keep the form in edit mode when we already know the Shopify id,
                     // so a second Save updates instead of creating another product.
                     if (result.product_id != null) {
@@ -7072,6 +7075,7 @@
                     if (!result.product || !result.product.id) {
                         throw new Error('Product creation reported success but no product data was returned');
                     }
+                    invalidateProductDetailCachesFromSaveResult(result);
                     if (typeof selectedProduct === 'object' && selectedProduct) {
                         selectedProduct.id = result.product.id;
                     } else {
@@ -7747,6 +7751,27 @@
             try {
                 sessionStorage.setItem(PC_PRODUCT_PREFETCH_PREFIX + key, JSON.stringify({ at: Date.now(), data: data }));
             } catch (_) { /* ignore quota */ }
+        }
+
+        function invalidateProductDetailCache(productId) {
+            if (productId == null || productId === '') return;
+            const key = String(productId);
+            try { delete pcProductDetailMemoryCache[key]; } catch (_) {}
+            try { sessionStorage.removeItem(PC_PRODUCT_PREFETCH_PREFIX + key); } catch (_) {}
+        }
+
+        function invalidateProductDetailCachesFromSaveResult(result) {
+            const ids = new Set();
+            if (result && result.product_id != null) ids.add(result.product_id);
+            if (result && result.product && result.product.id != null) ids.add(result.product.id);
+            if (selectedProduct && selectedProduct.id != null) ids.add(selectedProduct.id);
+            (result && result.propagated_list || []).forEach(item => {
+                if (item && item.id != null) ids.add(item.id);
+            });
+            (result && result.cross_check_ids || []).forEach(id => {
+                if (id != null) ids.add(id);
+            });
+            ids.forEach(invalidateProductDetailCache);
         }
 
         function getCachedProductDetail(productId) {

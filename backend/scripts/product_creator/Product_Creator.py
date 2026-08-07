@@ -3390,22 +3390,24 @@ def _normalize_image_stem(stem):
 def _is_same_image_stem(child_stem, parent_stem):
     """True when a child image looks like a copy of the parent's image.
 
-    Shopify appends _1, _2 ... when a filename is already taken on the product,
-    so a copy of "front.jpg" can land as "front_1.jpg". We only treat those
-    numeric copy suffixes (via normalize) as the same image.
+    Used only to *find* an existing copy to reuse (not to delete). Matching is
+    intentionally strict:
 
-    Do NOT use a broad startswith match: child-only assets like
-    ``product_lifestyle.jpg`` / ``product_detail.jpg`` must not be treated as
-    copies of ``product.jpg``, or "main image to children" will delete them as
-    false-positive duplicates on the next parent save.
+    - exact stem equality, or
+    - equality after stripping Shopify size tokens only (``_large``, ``_200x200``)
+
+    We deliberately do NOT strip trailing ``_1`` / ``_2`` here. This app names
+    uploads ``{sku}_{title}_{position}``, so ``widget_1`` (parent main) and
+    ``widget_2`` (child-only gallery shot) must stay distinct. Deleting
+    duplicates relies on the ``bb-parent-main:`` alt marker instead.
     """
     if not child_stem or not parent_stem:
         return False
     if child_stem == parent_stem:
         return True
-    cn = _normalize_image_stem(child_stem)
-    pn = _normalize_image_stem(parent_stem)
-    return bool(cn and pn and cn == pn)
+    c = _SHOPIFY_SIZE_SUFFIX.sub("", (child_stem or "").strip().lower())
+    p = _SHOPIFY_SIZE_SUFFIX.sub("", (parent_stem or "").strip().lower())
+    return bool(c and p and c == p)
 
 
 def _parent_main_alt_marker(parent_image_id):
@@ -3525,23 +3527,17 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
             copies = _find_parent_main_copies_on_child(child_images, parent_stem, parent_image_id)
             existing = copies[0] if copies else None
 
-            # Earlier saves could pile up duplicates when rename broke stem matching.
-            # Keep one copy and delete the rest — but only when we are sure they are
-            # parent-main copies (alt marker, or exact/normalized stem). Never delete
-            # a vaguely similar child-only filename.
+            # Earlier saves could pile up tagged parent-main copies. Only delete
+            # extras that carry our alt marker — never delete on filename/stem
+            # alone (child-only gallery images often share the sku/title prefix).
             for dup in copies[1:]:
                 dup_id = dup.get("id")
                 if not dup_id:
                     continue
-                dup_stem = _image_name_stem(dup.get("src"))
-                confident = (
-                    _image_has_parent_main_marker(dup, parent_image_id)
-                    or _normalize_image_stem(dup_stem) == _normalize_image_stem(parent_stem)
-                )
-                if not confident:
+                if not _image_has_parent_main_marker(dup, parent_image_id):
                     print(
                         f"ℹ️ Skipping delete of child {cid} image {dup_id} "
-                        f"({dup_stem!r}) — not a confident parent-main duplicate",
+                        f"({_image_name_stem(dup.get('src'))!r}) — untagged, may be child-only",
                         flush=True,
                     )
                     continue
