@@ -891,13 +891,30 @@ def _parse_product_id(product_id):
         return None
 
 
-@app.route('/api/product/<product_id>')
+@app.route('/api/product/<product_id>', methods=['GET', 'DELETE'])
 def api_product_detail(product_id):
     try:
         pid = _parse_product_id(product_id)
         if pid is None:
             return jsonify({"error": "Invalid product ID"}), 400
         product_id = pid
+
+        if request.method == 'DELETE':
+            try:
+                from scripts import product_save_queue as queue
+                if pid in set(queue.locked_product_ids()):
+                    return jsonify({
+                        "success": False,
+                        "error": "This product is being saved and is temporarily locked.",
+                        "locked": True,
+                    }), 423
+            except Exception:
+                pass
+            from scripts.product_creator.Product_Creator import delete_product
+            result = delete_product(pid)
+            status = 200 if result.get("success") else 400
+            return jsonify(result), status
+
         import sys
         import os
         sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))

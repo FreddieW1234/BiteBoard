@@ -7,7 +7,7 @@
     var PREFETCH_TTL_MS = 5 * 60 * 1000;
     // Bump v= when Product_Creator.html changes so the warm manager iframe
     // does not keep serving a stale editor after deploy.
-    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=lt1500';
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=addparent1';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
@@ -203,11 +203,14 @@
     function backFromEditor(options) {
         options = options || {};
         var ret = getReturnView();
+        var deletedId = options.deletedProductId != null ? String(options.deletedProductId).trim() : '';
         if (ret === 'all') {
             var refreshId = options.refreshProductId != null ? String(options.refreshProductId).trim() : '';
             setView('all');
             resetManagerFrame();
-            if (refreshId && typeof window.refreshAllProductsRow === 'function') {
+            if (deletedId && typeof window.removeAllProductsRow === 'function') {
+                try { window.removeAllProductsRow(deletedId); } catch (_) { /* ignore */ }
+            } else if (refreshId && typeof window.refreshAllProductsRow === 'function') {
                 try {
                     window.refreshAllProductsRow(refreshId);
                 } catch (_) { /* ignore */ }
@@ -216,6 +219,9 @@
         }
         setView('manager', { skipUrl: true });
         resetManagerFrameInPlace();
+        if (deletedId && typeof window.removeAllProductsRow === 'function') {
+            try { window.removeAllProductsRow(deletedId); } catch (_) { /* ignore */ }
+        }
     }
 
     function initToggle() {

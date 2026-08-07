@@ -1276,6 +1276,20 @@
             background: #38a169;
         }
 
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .loading {
             display: none;
             text-align: center;
@@ -2366,6 +2380,40 @@
                     </div>
                 </div>
 
+                <!-- Add Parent/Child type instructions modal -->
+                <div id="addParentTypeModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 10000; align-items: center; justify-content: center;" class="add-parent-type-modal-overlay" onclick="if (event.target === this) closeAddParentTypeModal()">
+                    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 560px; width: 92%; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
+                        <h3 style="margin: 0 0 8px 0; font-size: 1.25rem;">Add a new Parent/Child type</h3>
+                        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 0.9rem;">Follow these steps in Shopify Admin, then refresh the list here.</p>
+                        <ol style="margin: 0 0 18px 0; padding-left: 22px; color: #1f2937; font-size: 0.95rem; line-height: 1.55;">
+                            <li style="margin-bottom: 10px;">
+                                Go to the
+                                <a href="https://admin.shopify.com/store/mn7ui0-ur" target="_blank" rel="noopener noreferrer">Shopify admin page</a>
+                                (<span style="color: #64748b;"> (https://admin.shopify.com/store/mn7ui0-ur)</span>
+                            </li>
+                            <li style="margin-bottom: 10px;">Go to <strong>Settings</strong> in the bottom left</li>
+                            <li style="margin-bottom: 10px;">Go to <strong>Metafields and metaobjects</strong></li>
+                            <li style="margin-bottom: 10px;">Go to <strong>Products</strong> under the Metafields tab</li>
+                            <li style="margin-bottom: 10px;">Search for <strong>Parent/Child</strong></li>
+                            <li style="margin-bottom: 10px;">Open the most recent one (at the moment this is number <strong>2</strong>)</li>
+                            <li style="margin-bottom: 10px;">
+                                Add both a <strong>Parent</strong> and a <strong>Child</strong> in the same format as the previous options
+                                <div style="margin-top: 6px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.82rem; color: #334155;">
+                                    Parent - Example Product Name<br>
+                                    Child - Example Product Name
+                                </div>
+                            </li>
+                            <li style="margin-bottom: 0;">Click <strong>Save</strong>. It may take a few minutes to show up in this app.</li>
+                        </ol>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary" onclick="closeAddParentTypeModal()">Close</button>
+                            <button type="button" class="btn btn-primary" id="refresh-parent-types-btn" onclick="refreshParentTypesFromShopify()">
+                                <i class="fas fa-sync-alt" style="margin-right: 6px;"></i>Refresh list
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Notice when editing a child product (same restricted view as Create from Parent) -->
                 <div id="child-product-edit-notice" style="display: none; margin-bottom: 16px; padding: 14px 18px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e;">
                     <strong><i class="fas fa-info-circle"></i> Child product</strong>
@@ -2495,9 +2543,14 @@
                                     </div>
                                     <div id="parent-dropdown-wrap" style="display: none; margin-top: 8px;">
                                         <label class="form-label" style="margin-bottom: 4px;">Parent type</label>
-                                        <select id="parent-child-select" class="form-select" style="min-width: 160px;">
-                                            <option value="">— Select —</option>
-                                        </select>
+                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                            <select id="parent-child-select" class="form-select" style="min-width: 160px;">
+                                                <option value="">— Select —</option>
+                                            </select>
+                                            <button type="button" id="add-parent-type-btn" class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px; white-space: nowrap;" onclick="openAddParentTypeModal()">
+                                                <i class="fas fa-plus" style="margin-right: 4px;"></i>Add New
+                                            </button>
+                                        </div>
                                         <input type="hidden" id="parent-child-create-from-parent-value" value="">
                                     </div>
                                 </div>
@@ -2837,6 +2890,10 @@
                         <i class="fas fa-plus-circle"></i>
                         Create Product
                     </button>
+                    <button type="button" id="delete-product-btn" class="btn btn-danger" style="display: none;" onclick="confirmDeleteProduct()">
+                        <i class="fas fa-trash-alt"></i>
+                        Delete Product
+                    </button>
                 </div>
             </form>
 
@@ -2949,10 +3006,69 @@
 
             const submitBtn = document.querySelector('#productForm button[type="submit"]');
             if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
+            syncDeleteProductButtonVisibility();
 
             await loadMetafields();
             applyNewProductFieldDefaults();
             await applyNewProductPricingAndGuidelines();
+        }
+
+        function syncDeleteProductButtonVisibility() {
+            const btn = document.getElementById('delete-product-btn');
+            if (!btn) return;
+            const show = !!(isEditingProduct && selectedProduct && selectedProduct.id);
+            btn.style.display = show ? 'inline-flex' : 'none';
+            btn.disabled = false;
+        }
+
+        async function confirmDeleteProduct() {
+            if (!isEditingProduct || !selectedProduct || !selectedProduct.id) return;
+            const title = (document.getElementById('title')?.value || selectedProduct.title || 'this product').trim();
+            const ok = window.confirm(
+                `Delete "${title}"?\n\nThis permanently deletes the product from Shopify and cannot be undone.`
+            );
+            if (!ok) return;
+            await deleteCurrentProduct();
+        }
+
+        async function deleteCurrentProduct() {
+            const productId = selectedProduct && selectedProduct.id;
+            if (!productId) return;
+            const btn = document.getElementById('delete-product-btn');
+            const loadingEl = document.getElementById('loading');
+            const loadingText = loadingEl ? loadingEl.querySelector('p') : null;
+            try {
+                if (btn) btn.disabled = true;
+                if (loadingEl) {
+                    loadingEl.style.display = 'block';
+                    if (loadingText) loadingText.textContent = 'Deleting product…';
+                }
+                const resp = await fetch(`/api/product/${encodeURIComponent(productId)}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || data.success === false) {
+                    throw new Error(data.error || data.detail || `Delete failed (${resp.status})`);
+                }
+                const deletedId = productId;
+                selectedProduct = null;
+                isEditingProduct = false;
+                if (window.__PRODUCTS_EMBED__ && window.parent && window.parent.ProductsShell) {
+                    window.parent.ProductsShell.backFromEditor({ deletedProductId: deletedId });
+                    return;
+                }
+                alert('Product deleted.');
+                resetProductCreatorHomeUI();
+            } catch (err) {
+                alert(err.message || 'Failed to delete product.');
+                if (btn) btn.disabled = false;
+            } finally {
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                    if (loadingText) loadingText.textContent = 'Creating product...';
+                }
+            }
         }
 
         async function applyDefaultArtworkGuideline() {
@@ -3062,19 +3178,23 @@
 
         window.resetProductCreatorHomeUI = resetProductCreatorHomeUI;
 
-        async function refreshParentChildDropdown(currentParentValue) {
+        async function refreshParentChildDropdown(currentParentValue, opts) {
             const selectEl = document.getElementById('parent-child-select');
             if (!selectEl) return;
+            const forceRefresh = !!(opts && opts.forceRefresh);
+            const choicesUrl = '/api/metafield-choices/custom.parent_child?all=1' + (forceRefresh ? '&refresh=1' : '');
             const [choicesResp, takenResp] = await Promise.all([
-                fetch('/api/metafield-choices/custom.parent_child?all=1'),
-                fetch('/api/products-parent-child')
+                fetch(choicesUrl),
+                fetch('/api/products-parent-child' + (forceRefresh ? '?refresh=1' : ''))
             ]);
             const choicesData = await choicesResp.json();
             const takenData = await takenResp.json();
             const choices = (choicesData.choices || []).map(c => String(c || '').trim()).filter(c => c.startsWith('Parent - '));
             const takenParents = takenData.takenParents || {};
             const editingId = (isEditingProduct && selectedProduct) ? selectedProduct.id : null;
-            const prevVal = selectEl.value;
+            const prevVal = (currentParentValue != null && currentParentValue !== '')
+                ? currentParentValue
+                : selectEl.value;
             selectEl.innerHTML = '<option value="">— Select —</option>';
             choices.forEach(opt => {
                 const o = document.createElement('option');
@@ -3093,17 +3213,59 @@
             if (prevVal && prevVal.startsWith('Parent - ') && choices.includes(prevVal)) selectEl.value = prevVal;
         }
 
-        async function refreshChildDropdown(currentChildValue) {
+        function openAddParentTypeModal() {
+            const modal = document.getElementById('addParentTypeModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+        }
+
+        function closeAddParentTypeModal() {
+            const modal = document.getElementById('addParentTypeModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+        }
+
+        async function refreshParentTypesFromShopify() {
+            const btn = document.getElementById('refresh-parent-types-btn');
+            const selectEl = document.getElementById('parent-child-select');
+            const prev = selectEl ? selectEl.value : '';
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i>Refreshing…';
+                }
+                await refreshParentChildDropdown(prev, { forceRefresh: true });
+                if (typeof refreshChildDropdown === 'function') {
+                    const childSelect = document.getElementById('parent-child-child-select');
+                    await refreshChildDropdown(childSelect ? childSelect.value : '', { forceRefresh: true });
+                }
+                alert('Parent type list refreshed from Shopify.');
+            } catch (e) {
+                alert('Could not refresh parent types. Try again in a minute.');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt" style="margin-right: 6px;"></i>Refresh list';
+                }
+            }
+        }
+
+        async function refreshChildDropdown(currentChildValue, opts) {
             const selectEl = document.getElementById('parent-child-child-select');
             if (!selectEl) return;
-            const choicesResp = await fetch('/api/metafield-choices/custom.parent_child?all=1');
+            const forceRefresh = !!(opts && opts.forceRefresh);
+            const choicesResp = await fetch(
+                '/api/metafield-choices/custom.parent_child?all=1' + (forceRefresh ? '&refresh=1' : '')
+            );
             const choicesData = await choicesResp.json();
             const allChoices = (choicesData.choices || []).map(c => String(c || '').trim());
             let choices = allChoices.filter(c => c.startsWith('Child - '));
             if (choices.length === 0 && allChoices.length > 0) {
                 choices = allChoices.filter(c => c.startsWith('Parent - ')).map(p => 'Child - ' + p.slice(9));
             }
-            const prevVal = selectEl.value;
+            const prevVal = (currentChildValue != null && currentChildValue !== '')
+                ? currentChildValue
+                : selectEl.value;
             selectEl.innerHTML = '<option value="">— Select —</option>';
             choices.forEach(opt => {
                 const o = document.createElement('option');
@@ -3111,7 +3273,7 @@
                 o.textContent = opt;
                 selectEl.appendChild(o);
             });
-            if (currentChildValue && currentChildValue.startsWith('Child - ') && choices.includes(currentChildValue)) selectEl.value = currentChildValue;
+            if (prevVal && prevVal.startsWith('Child - ') && choices.includes(prevVal)) selectEl.value = prevVal;
         }
 
         function setupParentRadioListeners() {
@@ -6323,6 +6485,9 @@
                         selectedProduct = { id: result.product.id, title: result.product.title };
                     }
                     isEditingProduct = true;
+                    const submitBtnAfterSave = document.querySelector('#productForm button[type="submit"]');
+                    if (submitBtnAfterSave) submitBtnAfterSave.innerHTML = '<i class="fas fa-save"></i> Save Product';
+                    syncDeleteProductButtonVisibility();
                     resultDiv.className = 'result-message result-success';
                     // Detach from the ?edit=<id> deep-link after a successful save so that
                     // a refresh (or Reset) starts a blank form instead of reloading this product.
@@ -7073,6 +7238,7 @@
                 const submitBtn = document.querySelector('#productForm button[type="submit"]');
                 if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Product';
                 showCreateForm();
+                syncDeleteProductButtonVisibility();
                 pcCreateFromParentMode = false;
                 const formEl = document.getElementById('productForm');
                 if (formEl) formEl.classList.remove('pc-create-from-parent');
@@ -7480,6 +7646,7 @@
                     selectedProduct = null;
                     const submitBtn = document.querySelector('#productForm button[type="submit"]');
                     if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Product';
+                    syncDeleteProductButtonVisibility();
                     closeDuplicateModal();
                     closeCreateFromParentModal();
                     // If version name was not already provided (e.g. from Create from Parent prompt), prompt now for Duplicate flow

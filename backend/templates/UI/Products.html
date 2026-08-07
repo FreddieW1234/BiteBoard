@@ -280,7 +280,7 @@
         <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
     </div>
 
-    <script src="/static/products_shell.js?v=9"></script>
+    <script src="/static/products_shell.js?v=11"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
 
@@ -1378,6 +1378,14 @@
             }
         }
         window.refreshAllProductsRow = refreshAllProductsRow;
+
+        function removeAllProductsRow(productId) {
+            if (!AP_DATA) return;
+            removeProductFromOverview(AP_DATA, productId);
+            render(AP_DATA);
+            applySearch();
+        }
+        window.removeAllProductsRow = removeAllProductsRow;
 
         async function loadProducts(forceRefresh) {
             const content = document.getElementById('ap-content');

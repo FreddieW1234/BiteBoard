@@ -2576,6 +2576,68 @@ def invalidate_product_detail_cache(product_id):
             logger.warning("Product detail: snapshot invalidate failed for %s (%s)", pid, exc)
 
 
+def delete_product(product_id, shopify_domain=None):
+    """Permanently delete a product from Shopify and drop local/office caches."""
+    try:
+        pid = int(product_id)
+    except (TypeError, ValueError):
+        return {"success": False, "error": "Invalid product ID"}
+
+    domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
+    if not domain:
+        return {"success": False, "error": "Store domain not configured"}
+
+    headers = {"X-Shopify-Access-Token": ACCESS_TOKEN}
+    url = f"https://{domain}/admin/api/{API_VERSION}/products/{pid}.json"
+    try:
+        resp = None
+        for attempt in range(4):
+            try:
+                resp = requests.delete(url, headers=headers, timeout=30)
+            except requests.RequestException as exc:
+                if attempt < 3:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                return {"success": False, "error": f"Connection failed: {exc}"}
+            if resp.status_code == 429 and attempt < 3:
+                time.sleep(2.0 * (attempt + 1))
+                continue
+            break
+        if resp is None:
+            return {"success": False, "error": "No response from Shopify"}
+        if resp.status_code not in (200, 204):
+            detail = (resp.text or "")[:500]
+            return {
+                "success": False,
+                "error": f"Shopify delete failed ({resp.status_code})",
+                "detail": detail,
+            }
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+    # Drop caches so All Products / editor / families don't keep a ghost row.
+    try:
+        invalidate_product_detail_cache(pid)
+    except Exception as exc:
+        logger.warning("Delete product: detail cache clear failed for %s (%s)", pid, exc)
+    if _office_snapshots_available():
+        try:
+            office_api.delete_snapshot_item(_SNAPSHOT_KIND, str(pid))
+        except Exception as exc:
+            logger.warning("Delete product: overview snapshot clear failed for %s (%s)", pid, exc)
+    try:
+        invalidate_products_overview_cache()
+    except Exception as exc:
+        logger.warning("Delete product: overview mem cache clear failed for %s (%s)", pid, exc)
+    try:
+        refresh_family_snapshots(force=True)
+    except Exception as exc:
+        logger.warning("Delete product: family snapshot refresh failed for %s (%s)", pid, exc)
+
+    print(f"🗑️ Deleted Shopify product {pid}", flush=True)
+    return {"success": True, "product_id": pid}
+
+
 def get_product_detail(product_id, shopify_domain=None, refresh=False):
     """Full editor payload with stale-while-revalidate caching:
 
