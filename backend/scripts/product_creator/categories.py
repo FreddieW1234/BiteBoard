@@ -4,14 +4,21 @@ Category and Subcategory definitions for product metafields
 This file contains the preset choices for the custom metafields:
 - custom.custom_category
 - custom.subcategory
-- custom.parent_child (Parent/Child product types; only one product per Parent - X)
+- custom.parent_child / custom.parent_child2 — Parent/Child options are read live from
+  Shopify metafield definition choice lists (PARENT_CHILD_CHOICES below is fallback only)
 - custom.parent_child2 (overflow when parent_child hits Shopify's choice-list limit)
 
-You can easily update these lists by editing this file.
+Category/subcategory/filter lists below are still maintained in this file.
 """
 
-# Parent/Child choices for custom.parent_child metafield (single line text with preset list).
-# Only one product can have each "Parent - X" value. "Child - X" can be used by many.
+import json
+import time
+
+import requests
+
+# Fallback Parent/Child choices if Shopify metafield definitions cannot be read.
+# Live source of truth: Shopify Admin → metafield definitions for
+# custom.parent_child and custom.parent_child2 (choices validation).
 PARENT_CHILD_CHOICES = [
     "Parent - Chocolate Bar Mini",
     "Child - Chocolate Bar Mini",
@@ -145,10 +152,9 @@ PARENT_CHILD_CHOICES = [
 # Shopify limits choice lists to 128 options (~64 families); parent_child2 continues the same list.
 PARENT_CHILD2_FIRST_ITEM = "Parent - Jelly Bears Mini A Box"
 
-# Create from Parent: list of products that have a Parent type set.
-# Use "id" (Shopify product ID from admin URL) when possible so lookup is by ID not name.
-# Title is used for display and as fallback when id is missing. Restart the app after editing.
-# Add "id": <number> from each product's Shopify admin URL (e.g. .../products/15740667199866). Use None until you have the ID.
+# Legacy optional ID map for resolving a Parent type → product ID when the live
+# store scan cannot find one. Parent/Child dropdown options and Create-from-Parent
+# lists now come from Shopify metafield definition choices + live product scan.
 PARENT_PRODUCTS = [
     {"title": "Chocolate Bar Mini", "parent_child_value": "Parent - Chocolate Bar Mini", "id": None},
     {"title": "Chocolate Bar Midi", "parent_child_value": "Parent - Chocolate Bar Midi", "id": None},
@@ -520,44 +526,200 @@ def get_filter_groups():
         for g in FILTER_GROUPS
     ]
 
-def _parent_child_2_start_index():
-    """Index in PARENT_CHILD_CHOICES where parent_child2 starts."""
-    if not PARENT_CHILD2_FIRST_ITEM:
-        return len(PARENT_CHILD_CHOICES)
+_PARENT_CHILD_SHOPIFY_CACHE = {
+    "at": 0.0,
+    "parent_child": None,
+    "parent_child2": None,
+    "merged": None,
+    "source": None,  # "shopify" | "fallback"
+}
+_PARENT_CHILD_SHOPIFY_TTL_SEC = 300
+
+
+def _shopify_admin_creds():
+    """Return (domain, token, api_version) or (None, None, None)."""
     try:
-        return PARENT_CHILD_CHOICES.index(PARENT_CHILD2_FIRST_ITEM)
+        from config import STORE_DOMAIN, ACCESS_TOKEN, API_VERSION  # type: ignore
+        return STORE_DOMAIN, ACCESS_TOKEN, API_VERSION
+    except Exception:
+        try:
+            import os
+            import sys
+            backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if backend_dir not in sys.path:
+                sys.path.append(backend_dir)
+            from config import STORE_DOMAIN, ACCESS_TOKEN, API_VERSION  # type: ignore
+            return STORE_DOMAIN, ACCESS_TOKEN, API_VERSION
+        except Exception:
+            return None, None, None
+
+
+def fetch_shopify_metafield_definition_choices(namespace, key):
+    """
+    Read the predefined choice list from a Shopify product metafield definition.
+    Returns a list of strings, or [] if missing / unavailable.
+    """
+    domain, token, api_version = _shopify_admin_creds()
+    if not domain or not token:
+        return []
+    domain = str(domain).replace("https://", "").replace("http://", "").rstrip("/").strip()
+    url = f"https://{domain}/admin/api/{api_version or '2024-10'}/graphql.json"
+    query = """
+    query getMetafieldDefinitionChoices($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!) {
+      metafieldDefinitions(first: 1, namespace: $namespace, key: $key, ownerType: $ownerType) {
+        edges {
+          node {
+            key
+            validations {
+              name
+              value
+            }
+          }
+        }
+      }
+    }
+    """
+    try:
+        resp = requests.post(
+            url,
+            headers={
+                "X-Shopify-Access-Token": token,
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": query,
+                "variables": {
+                    "namespace": namespace,
+                    "key": key,
+                    "ownerType": "PRODUCT",
+                },
+            },
+            timeout=20,
+        )
+        if resp.status_code != 200:
+            print(f"⚠️ Shopify metafield choices HTTP {resp.status_code} for {namespace}.{key}", flush=True)
+            return []
+        payload = resp.json() or {}
+        if payload.get("errors"):
+            print(f"⚠️ Shopify metafield choices GraphQL errors for {namespace}.{key}: {payload.get('errors')}", flush=True)
+            return []
+        edges = (
+            ((payload.get("data") or {}).get("metafieldDefinitions") or {}).get("edges")
+            or []
+        )
+        if not edges:
+            return []
+        validations = (edges[0].get("node") or {}).get("validations") or []
+        for validation in validations:
+            if (validation.get("name") or "").strip().lower() != "choices":
+                continue
+            raw = validation.get("value")
+            if raw is None:
+                return []
+            if isinstance(raw, list):
+                return [str(x).strip() for x in raw if str(x).strip()]
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else raw
+            except Exception:
+                return []
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+            return []
+        return []
+    except Exception as exc:
+        print(f"⚠️ Failed reading Shopify choices for {namespace}.{key}: {exc}", flush=True)
+        return []
+
+
+def _fallback_parent_child_chunks():
+    """Hardcoded split used only when Shopify definitions are unavailable."""
+    if not PARENT_CHILD2_FIRST_ITEM:
+        return list(PARENT_CHILD_CHOICES), []
+    try:
+        boundary = PARENT_CHILD_CHOICES.index(PARENT_CHILD2_FIRST_ITEM)
     except ValueError:
-        return len(PARENT_CHILD_CHOICES)
+        return list(PARENT_CHILD_CHOICES), []
+    return list(PARENT_CHILD_CHOICES[:boundary]), list(PARENT_CHILD_CHOICES[boundary:])
 
 
-def get_parent_child_choices():
-    """Full merged Parent/Child choice list (parent_child + parent_child2)."""
-    return list(PARENT_CHILD_CHOICES)
+def _load_parent_child_choice_cache(force=False):
+    """Load/cached parent_child + parent_child2 choice lists from Shopify (or fallback)."""
+    now = time.time()
+    cached = _PARENT_CHILD_SHOPIFY_CACHE
+    if (
+        not force
+        and cached.get("merged") is not None
+        and (now - float(cached.get("at") or 0)) < _PARENT_CHILD_SHOPIFY_TTL_SEC
+    ):
+        return cached
+
+    pc = fetch_shopify_metafield_definition_choices("custom", "parent_child")
+    pc2 = fetch_shopify_metafield_definition_choices("custom", "parent_child2")
+    source = "shopify"
+    if not pc and not pc2:
+        pc, pc2 = _fallback_parent_child_chunks()
+        source = "fallback"
+        print("⚠️ Using hardcoded PARENT_CHILD_CHOICES fallback (Shopify definition choices empty)", flush=True)
+    else:
+        # Keep definition order; append overflow without duplicating.
+        pc_set = {c.lower() for c in pc}
+        pc2 = [c for c in pc2 if c.lower() not in pc_set]
+
+    merged = list(pc) + list(pc2)
+    cached["at"] = now
+    cached["parent_child"] = list(pc)
+    cached["parent_child2"] = list(pc2)
+    cached["merged"] = merged
+    cached["source"] = source
+    print(
+        f"✅ Parent/Child choices loaded from {source}: "
+        f"parent_child={len(pc)}, parent_child2={len(pc2)}, merged={len(merged)}",
+        flush=True,
+    )
+    return cached
+
+
+def refresh_parent_child_choices_cache():
+    """Force-refresh the Shopify-backed Parent/Child choice cache."""
+    return _load_parent_child_choice_cache(force=True)
+
+
+def get_parent_child_choices(force_refresh=False):
+    """Full merged Parent/Child choice list (parent_child + parent_child2) from Shopify."""
+    cache = _load_parent_child_choice_cache(force=force_refresh)
+    return list(cache.get("merged") or [])
 
 
 def get_parent_child_metafield_key(parent_child_value):
     """
     Route a Parent/Child value to parent_child or parent_child2 (overflow metafield).
-    Both keys are treated as one logical field in the app.
+    Uses membership in each Shopify definition's choice list.
     """
     val = str(parent_child_value or "").strip()
     if not val:
         return "parent_child"
-    boundary = _parent_child_2_start_index()
-    try:
-        index = PARENT_CHILD_CHOICES.index(val)
-    except ValueError:
-        val_lower = val.lower()
-        index = None
-        for i, choice in enumerate(PARENT_CHILD_CHOICES):
-            if str(choice).strip().lower() == val_lower:
-                index = i
-                break
-        if index is None:
-            return "parent_child2" if boundary < len(PARENT_CHILD_CHOICES) else "parent_child"
-    if index < boundary:
+    cache = _load_parent_child_choice_cache()
+    pc = cache.get("parent_child") or []
+    pc2 = cache.get("parent_child2") or []
+
+    def _index_in(choices):
+        try:
+            return choices.index(val)
+        except ValueError:
+            val_lower = val.lower()
+            for i, choice in enumerate(choices):
+                if str(choice).strip().lower() == val_lower:
+                    return i
+            return None
+
+    if _index_in(pc) is not None:
         return "parent_child"
-    return "parent_child2"
+    if _index_in(pc2) is not None:
+        return "parent_child2"
+    # Unknown value: prefer overflow if the primary list looks full.
+    if pc2 or len(pc) >= 120:
+        return "parent_child2"
+    return "parent_child"
 
 
 def _subcategory_2_start_index():
@@ -601,11 +763,11 @@ def get_metafield_choices(metafield_key):
         except (ValueError, IndexError):
             return []
     elif metafield_key == "parent_child":
-        boundary = _parent_child_2_start_index()
-        return PARENT_CHILD_CHOICES[:boundary]
+        cache = _load_parent_child_choice_cache()
+        return list(cache.get("parent_child") or [])
     elif metafield_key == "parent_child2":
-        boundary = _parent_child_2_start_index()
-        return PARENT_CHILD_CHOICES[boundary:]
+        cache = _load_parent_child_choice_cache()
+        return list(cache.get("parent_child2") or [])
     else:
         # Filter group metafields (custom.packaging, custom.size, custom.brand, custom.eco)
         for group in FILTER_GROUPS:

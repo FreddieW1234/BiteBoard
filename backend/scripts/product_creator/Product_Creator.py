@@ -5470,8 +5470,8 @@ def get_existing_metafield_values(namespace, key):
 def _build_products_parent_child():
     """
     Return the list of parent products for "Create from Parent". Scan-first: finds
-    all products with a Parent metafield, supplements with PARENT_PRODUCTS for types
-    not yet assigned.
+    all products with a Parent metafield, then supplements with every "Parent - X"
+    choice from the Shopify metafield definition lists (so unused parent types still appear).
     Returns: {
         "parentProducts": [ { "id", "title", "parent_child_value" } ],
         "takenParentValues": [ ... ],
@@ -5479,7 +5479,7 @@ def _build_products_parent_child():
     }
     """
     try:
-        from .categories import PARENT_PRODUCTS
+        from .categories import get_parent_child_choices
         _unused, parent_family_to_product = get_all_children_by_family()
         parent_products = []
         taken_list = set()
@@ -5488,7 +5488,7 @@ def _build_products_parent_child():
 
         for family_key, scanned in parent_family_to_product.items():
             val = "Parent - " + family_key
-            seen_families.add(family_key)
+            seen_families.add(family_key.lower())
             taken_list.add(val)
             taken_map[val] = scanned["id"]
             parent_products.append({
@@ -5498,22 +5498,17 @@ def _build_products_parent_child():
                 "parent_child_value": val,
             })
 
-        for p in PARENT_PRODUCTS or []:
-            val = (p.get("parent_child_value") or "").strip()
+        for choice in get_parent_child_choices() or []:
+            val = str(choice or "").strip()
             if not val.startswith("Parent - "):
                 continue
             family_key = val[9:].strip()
-            if family_key in seen_families:
+            if not family_key or family_key.lower() in seen_families:
                 continue
-            pid = p.get("id")
-            try:
-                pid = int(pid) if pid is not None else None
-            except (TypeError, ValueError):
-                pid = None
-            taken_list.add(val)
+            seen_families.add(family_key.lower())
             parent_products.append({
-                "id": pid or 0,
-                "title": (p.get("title") or "").strip() or "Untitled",
+                "id": 0,
+                "title": family_key,
                 "sku": "",
                 "parent_child_value": val,
             })

@@ -2431,7 +2431,8 @@ def api_metafield_choices(namespace_key):
             choices = get_subcategory_choices()
         elif namespace_key == 'custom.parent_child' and request.args.get('all') == '1':
             from scripts.product_creator.categories import get_parent_child_choices
-            choices = get_parent_child_choices()
+            refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
+            choices = get_parent_child_choices(force_refresh=refresh)
         else:
             from scripts.product_creator.Product_Creator import get_metafield_choices
             choices = get_metafield_choices(namespace_key)
