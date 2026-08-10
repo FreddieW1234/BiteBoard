@@ -501,6 +501,11 @@
                     formWrap.hidden = true;
                     successPanel.hidden = false;
                     notifyEmbedHeight();
+                    if (window.parent && window.parent !== window) {
+                        const payload = { source: 'bite-portal', type: 'registered' };
+                        if (data.customer_id != null) payload.customerId = data.customer_id;
+                        window.parent.postMessage(payload, 'https://bitepromotions.co.uk');
+                    }
                 } catch (err) {
                     registerMsg.textContent = err.message || 'Could not register. Please try again.';
                     registerMsg.className = 'co-save-msg err';
