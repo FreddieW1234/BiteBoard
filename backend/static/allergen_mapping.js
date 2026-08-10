@@ -92,6 +92,16 @@
         kosher: 'Suitable for Kosher',
     };
 
+    // Appended to the tick/cross when saving suitable-for metafields
+    // (e.g. "✔️ Vegan", "❌ Vegetarian Veggie").
+    const SUITABLE_SAVE_SUFFIX = {
+        vegan: 'Vegan',
+        vegetarian: 'Vegetarian Veggie',
+        kosher: 'Kosher',
+        halal: 'Halal',
+        coeliac: 'Coeliac',
+    };
+
     const BODY_ALLERGEN_LABELS = {
         celery: 'Celery',
         cereals: 'Cereals containing gluten',
@@ -245,6 +255,22 @@
         return ALLERGEN_KEYS.includes(key);
     }
 
+    function suitableEmojiFromStored(value) {
+        const v = String(value || '').trim();
+        if (!v) return '';
+        if (v === '✔️' || v.startsWith('✔️') || v === '✅' || v.startsWith('✅')) return '✔️';
+        if (v === '❌' || v.startsWith('❌')) return '❌';
+        return '';
+    }
+
+    function formatSuitableForSave(key, emojiOrValue) {
+        const emoji = suitableEmojiFromStored(emojiOrValue) || String(emojiOrValue || '').trim();
+        if (emoji !== '✔️' && emoji !== '❌') return String(emojiOrValue || '').trim();
+        const word = SUITABLE_SAVE_SUFFIX[key];
+        if (!word) return emoji;
+        return emoji + ' ' + word;
+    }
+
     function ensureDietaryMetafields(metafields) {
         const list = (metafields || []).slice();
         const byKey = new Map();
@@ -297,10 +323,11 @@
 
     function buildSuitableEmojiFieldHtml(metafield) {
         const currentValue = metafield.value || '';
-        return `<div class="emoji-field-container" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}" data-selected-value="${escapeAttr(currentValue === '✔️' || currentValue === '❌' ? currentValue : '')}">
+        const selectedEmoji = suitableEmojiFromStored(currentValue);
+        return `<div class="emoji-field-container" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}" data-selected-value="${escapeAttr(selectedEmoji)}">
             <div class="emoji-buttons">
-                <button type="button" class="emoji-btn tick ${currentValue === '✔️' ? 'selected' : ''}" data-emoji="✔️"><span>✔️</span></button>
-                <button type="button" class="emoji-btn cross ${currentValue === '❌' ? 'selected' : ''}" data-emoji="❌"><span>❌</span></button>
+                <button type="button" class="emoji-btn tick ${selectedEmoji === '✔️' ? 'selected' : ''}" data-emoji="✔️"><span>✔️</span></button>
+                <button type="button" class="emoji-btn cross ${selectedEmoji === '❌' ? 'selected' : ''}" data-emoji="❌"><span>❌</span></button>
             </div>
         </div>`;
     }
@@ -353,7 +380,10 @@
         const lines = [];
         SUITABLE_FOR_KEYS.forEach(function (key) {
             const val = String((mfMap && mfMap[key]) || '').trim();
-            if (val) lines.push(BODY_SUITABLE_LABELS[key] + ' ' + val);
+            if (!val) return;
+            // Metafield may be "✔️ Vegan"; description line already has the label.
+            const emoji = suitableEmojiFromStored(val) || val;
+            lines.push(BODY_SUITABLE_LABELS[key] + ' ' + emoji);
         });
         ALLERGEN_KEYS.forEach(function (key) {
             const val = String((mfMap && mfMap[key]) || '').trim();
@@ -394,7 +424,7 @@
         scope.querySelectorAll('.emoji-field-container').forEach(function (el) {
             const key = el.dataset.key;
             if (!key || !isSuitableForKey(key)) return;
-            const val = (el.dataset.selectedValue || '').trim();
+            const val = formatSuitableForSave(key, el.dataset.selectedValue || '');
             if (val) map[key] = val;
         });
         scope.querySelectorAll('select.allergen-dropdown').forEach(function (el) {
@@ -442,6 +472,9 @@
         inferAllergenLevel,
         isSuitableForKey,
         isAllergenKey,
+        suitableEmojiFromStored,
+        formatSuitableForSave,
+        SUITABLE_SAVE_SUFFIX,
         ensureDietaryMetafields,
         buildAllergenDropdownHtml,
         buildSuitableEmojiFieldHtml,

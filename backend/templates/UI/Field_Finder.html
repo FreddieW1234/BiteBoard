@@ -679,7 +679,7 @@
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=4"></script>
+    <script src="/static/allergen_mapping.js?v=7"></script>
     <script>
         const productInput = document.getElementById('product-input');
         const autocompleteDropdown = document.getElementById('autocomplete-dropdown');
@@ -1504,13 +1504,19 @@
         function getMetafieldSaveContext(item) {
             const emojiContainer = item.querySelector('.emoji-field-container');
             if (emojiContainer) {
+                const key = emojiContainer.dataset.key;
+                let value = (emojiContainer.dataset.selectedValue || '').trim();
+                if (value && window.AllergenMapping && AllergenMapping.formatSuitableForSave
+                    && AllergenMapping.isSuitableForKey && AllergenMapping.isSuitableForKey(key)) {
+                    value = AllergenMapping.formatSuitableForSave(key, value);
+                }
                 return {
                     el: emojiContainer,
                     id: emojiContainer.dataset.id,
                     namespace: emojiContainer.dataset.namespace,
-                    key: emojiContainer.dataset.key,
+                    key: key,
                     type: emojiContainer.dataset.type,
-                    value: (emojiContainer.dataset.selectedValue || '').trim(),
+                    value: value,
                 };
             }
             const allergenSelect = item.querySelector('select.allergen-dropdown');

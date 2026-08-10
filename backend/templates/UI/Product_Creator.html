@@ -3017,7 +3017,7 @@
         </div>
     </div>
 
-    <script src="/static/allergen_mapping.js?v=6"></script>
+    <script src="/static/allergen_mapping.js?v=7"></script>
     <script>
         let isHtmlMode = false;
 
@@ -4498,7 +4498,11 @@
                         const namespace = emojiContainer.dataset.namespace;
                         const key = emojiContainer.dataset.key;
                         const metafieldType = emojiContainer.dataset.type;
-                        const value = emojiContainer.dataset.selectedValue || '';
+                        let value = emojiContainer.dataset.selectedValue || '';
+                        if (value && window.AllergenMapping && AllergenMapping.formatSuitableForSave
+                            && AllergenMapping.isSuitableForKey && AllergenMapping.isSuitableForKey(key)) {
+                            value = AllergenMapping.formatSuitableForSave(key, value);
+                        }
                         if (value) {
                             metafieldsData.push({
                                 namespace: namespace,
@@ -8711,15 +8715,22 @@
                             AllergenMapping.applyAllergenDropdownStyle(input);
                         }
                     } else if (input.classList.contains('emoji-field-container')) {
-                        // For emoji field containers, set the selected button
+                        // For emoji field containers, set the selected button.
+                        // Stored values may be "✔️ Vegan" / "❌ Halal" — match on emoji only.
                         const allButtons = input.querySelectorAll('.emoji-btn');
                         allButtons.forEach(btn => btn.classList.remove('selected'));
-                        
-                        const selectedButton = input.querySelector(`[data-emoji="${value}"]`);
+                        const emoji = (window.AllergenMapping && AllergenMapping.suitableEmojiFromStored)
+                            ? AllergenMapping.suitableEmojiFromStored(value)
+                            : ((String(value || '').startsWith('✔️') || String(value || '').startsWith('✅'))
+                                ? '✔️'
+                                : (String(value || '').startsWith('❌') ? '❌' : ''));
+                        const selectedButton = emoji
+                            ? input.querySelector(`[data-emoji="${emoji}"]`)
+                            : input.querySelector(`[data-emoji="${value}"]`);
                         if (selectedButton) {
                             selectedButton.classList.add('selected');
-                            input.dataset.selectedValue = value;
-                            console.log(`✅ Set ${key} emoji field to: ${value}`);
+                            input.dataset.selectedValue = emoji || value;
+                            console.log(`✅ Set ${key} emoji field to: ${emoji || value}`);
                         }
                     } else if (input.classList.contains('custom-dropdown')) {
                         // For custom dropdowns, set checkbox selections

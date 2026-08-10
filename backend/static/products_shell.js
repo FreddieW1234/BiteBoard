@@ -7,7 +7,7 @@
     var PREFETCH_TTL_MS = 5 * 60 * 1000;
     // Bump v= when Product_Creator.html changes so the warm manager iframe
     // does not keep serving a stale editor after deploy.
-    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=img-keep1';
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=diet-suffix1';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
