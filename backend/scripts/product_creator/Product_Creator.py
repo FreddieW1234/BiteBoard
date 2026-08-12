@@ -2498,7 +2498,7 @@ def _build_product_detail_from_shopify(product_id, shopify_domain=None):
             except requests.RequestException:
                 if attempt < 2:
                     time.sleep(1)
-            continue
+                    continue
                 return None
             if r.status_code == 429 and attempt < 2:
                 time.sleep(2)
@@ -5257,8 +5257,8 @@ def create_product(product_data):
                 ]
                 if is_parent_product:
                     prefer_main = bool(product_data.get("main_image_to_children"))
-                        metafields.append({
-                            "namespace": "custom",
+                    metafields.append({
+                        "namespace": "custom",
                         "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
                         "value": "true" if prefer_main else "",
                         "type": "single_line_text_field",
@@ -5274,8 +5274,8 @@ def create_product(product_data):
                         "namespace": "custom",
                         "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
                         "value": "",
-                            "type": "single_line_text_field",
-                        })
+                        "type": "single_line_text_field",
+                    })
 
                 resolved_storefront_options = resolve_storefront_options(
                     product_data.get("storefront_options"),

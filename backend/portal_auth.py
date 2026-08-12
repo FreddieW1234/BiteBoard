@@ -16,7 +16,9 @@ STAFF_DEV_ONLY_PATH_PREFIXES = (
     "/app/Artwork_Updater",
     "/app/Files",
     "/app/Dev",
+    "/app/Collections",
     "/api/dev/",
+    "/api/collections",
 )
 
 
@@ -49,6 +51,15 @@ def staff_can_access_dev_tools() -> bool:
     """Files / Dev / Artwork Updater — only the dedicated dev account."""
     u = get_staff_username()
     return bool(u and u in STAFF_DEV_TOOL_USERNAMES)
+
+
+def staff_user_type_label() -> str | None:
+    """Display label for the signed-in staff account: Dev or Staff."""
+    if not is_staff_authenticated():
+        return None
+    if staff_can_access_dev_tools():
+        return "Dev"
+    return "Staff"
 
 
 def is_staff_dev_only_path(path: str) -> bool:

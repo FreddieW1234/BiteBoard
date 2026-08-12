@@ -22,7 +22,91 @@ html[data-theme="dark"] {
     --bb-shadow: rgba(0, 0, 0, 0.35);
 }
 
-/* ── Sidebar deploy commit (above theme toggle) ── */
+/* ── Sidebar meta (user type, commit, theme) — visible when sidebar is open ── */
+.sidebar-user-type,
+.sidebar-commit-info,
+.sidebar-theme-toggle {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+/* Fully open sidebars (dashboard) always show these */
+.sidebar:not(.collapsed) .sidebar-user-type,
+.sidebar:not(.collapsed) .sidebar-commit-info,
+.sidebar:not(.collapsed) .sidebar-theme-toggle {
+    opacity: 1;
+    visibility: visible;
+}
+.sidebar:not(.collapsed) .sidebar-theme-toggle {
+    pointer-events: auto;
+}
+/* Collapsed app sidebars reveal them when hovered/expanded */
+.sidebar.collapsed:hover .sidebar-user-type,
+.sidebar.collapsed:hover .sidebar-commit-info,
+.sidebar.collapsed:hover .sidebar-theme-toggle {
+    opacity: 1;
+    visibility: visible;
+}
+.sidebar.collapsed:hover .sidebar-theme-toggle {
+    pointer-events: auto;
+}
+
+.sidebar-user-type {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.sidebar-user-type i {
+    width: 18px;
+    text-align: center;
+    color: #6b7280;
+}
+.sidebar-user-type.is-dev {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #047857;
+}
+.sidebar-user-type.is-dev i { color: #059669; }
+.sidebar-user-type.is-staff {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+    color: #4338ca;
+}
+.sidebar-user-type.is-staff i { color: #4f46e5; }
+html[data-theme="dark"] .sidebar-user-type {
+    background: var(--bb-surface-2);
+    border-color: var(--bb-border);
+    color: var(--bb-text-secondary);
+}
+html[data-theme="dark"] .sidebar-user-type i { color: var(--bb-muted); }
+html[data-theme="dark"] .sidebar-user-type.is-dev {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+html[data-theme="dark"] .sidebar-user-type.is-dev i { color: #34d399; }
+html[data-theme="dark"] .sidebar-user-type.is-staff {
+    background: var(--bb-accent-soft);
+    border-color: rgba(129, 140, 248, 0.35);
+    color: var(--bb-accent);
+}
+html[data-theme="dark"] .sidebar-user-type.is-staff i { color: var(--bb-accent); }
+.sidebar.collapsed .sidebar-user-type-label { display: none; }
+.sidebar.collapsed:hover .sidebar-user-type-label { display: inline; }
+.sidebar.collapsed .sidebar-user-type { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.collapsed:hover .sidebar-user-type { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+
 .sidebar-commit-info {
     width: 100%;
     margin-bottom: 8px;
@@ -31,14 +115,6 @@ html[data-theme="dark"] {
     line-height: 1.35;
     color: #6b7280;
     text-align: center;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
-}
-.sidebar:hover .sidebar-commit-info {
-    opacity: 1;
-    visibility: visible;
 }
 .sidebar-commit-info .sidebar-commit-sha {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -53,7 +129,6 @@ html[data-theme="dark"] .sidebar-commit-info .sidebar-commit-sha {
 .sidebar.collapsed .sidebar-commit-prefix { display: none; }
 .sidebar.collapsed:hover .sidebar-commit-prefix { display: inline; }
 
-/* ── Sidebar theme toggle (visible on sidebar hover only) ── */
 .sidebar-theme-toggle {
     display: flex;
     align-items: center;
@@ -70,15 +145,7 @@ html[data-theme="dark"] .sidebar-commit-info .sidebar-commit-sha {
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
     transition: opacity 0.15s ease, background 0.15s, border-color 0.15s, color 0.15s;
-}
-.sidebar:hover .sidebar-theme-toggle {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
 }
 .sidebar-theme-toggle:hover {
     background: #f3f4f6;

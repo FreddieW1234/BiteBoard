@@ -23,6 +23,7 @@ from portal_auth import (  # type: ignore
     is_staff_public_path,
     is_staff_dev_only_path,
     staff_can_access_dev_tools,
+    staff_user_type_label,
     get_staff_username,
     can_access_order,
 )
@@ -145,6 +146,7 @@ def inject_staff_ui_flags():
     return {
         "staff_username": get_staff_username(),
         "staff_show_dev_tabs": staff_can_access_dev_tools(),
+        "staff_user_type": staff_user_type_label(),
     }
 
 
@@ -483,21 +485,206 @@ def api_products():
         return jsonify([])
 
 
+_LIVE_PRODUCTS_COUNT_CACHE = None  # {"at": float, "count": int}
+_LIVE_PRODUCTS_COUNT_TTL = 60.0
+
+
 @app.route('/api/live-products-count')
 def api_live_products_count():
-    """Return the number of active (live) products on the store."""
+    """Return active product count without paginating the whole catalog.
+
+    The dashboard hits this on every load. Fetching every product via REST used to
+    occupy a gunicorn thread long enough that Render's 5s /healthz probe timed out
+    under concurrent Product Creator / queue polls.
+    """
+    global _LIVE_PRODUCTS_COUNT_CACHE
     try:
-        import sys
-        sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
-        from Price_Bandit import get_all_products  # type: ignore
-        products = get_all_products()
-        return jsonify({'success': True, 'count': len(products)})
+        now = time.time()
+        cached = _LIVE_PRODUCTS_COUNT_CACHE
+        if cached and (now - float(cached.get("at") or 0)) < _LIVE_PRODUCTS_COUNT_TTL:
+            return jsonify({'success': True, 'count': int(cached.get('count') or 0)})
+
+        if not STORE_DOMAIN or not ACCESS_TOKEN:
+            return jsonify({'success': False, 'count': 0, 'error': 'Shopify not configured'}), 500
+
+        graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
+        headers = {
+            'X-Shopify-Access-Token': ACCESS_TOKEN,
+            'Content-Type': 'application/json',
+        }
+        # Prefer the Count type; fall back to legacy Int if the schema rejects it.
+        queries = (
+            '{ productsCount { count } }',
+            '{ productsCount }',
+        )
+        count = None
+        last_err = None
+        for query in queries:
+            resp = requests.post(
+                graphql_url,
+                headers=headers,
+                json={'query': query},
+                timeout=12,
+            )
+            if resp.status_code != 200:
+                last_err = f'HTTP {resp.status_code}'
+                continue
+            payload = resp.json() if resp.content else {}
+            if payload.get('errors'):
+                last_err = payload.get('errors')
+                continue
+            raw = ((payload.get('data') or {}).get('productsCount'))
+            if isinstance(raw, dict):
+                count = raw.get('count')
+            else:
+                count = raw
+            break
+
+        if count is None:
+            return jsonify({'success': False, 'count': 0, 'error': last_err or 'count unavailable'}), 502
+
+        count_i = int(count)
+        _LIVE_PRODUCTS_COUNT_CACHE = {'at': now, 'count': count_i}
+        return jsonify({'success': True, 'count': count_i})
     except Exception as e:
         try:
-            print(f"💥 Live products count error: {str(e)}")
+            print(f"💥 Live products count error: {str(e)}", flush=True)
         except (OSError, ValueError):
             pass
         return jsonify({'success': False, 'count': 0})
+
+
+@app.route('/api/collections')
+def api_collections():
+    """List all Shopify collections (custom + smart) with product counts. Dev staff only."""
+    try:
+        if not STORE_DOMAIN or not ACCESS_TOKEN:
+            return jsonify({'success': False, 'error': 'Shopify not configured'}), 500
+
+        graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
+        headers = {
+            'X-Shopify-Access-Token': ACCESS_TOKEN,
+            'Content-Type': 'application/json',
+        }
+        query = """
+        query getCollections($cursor: String) {
+          collections(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            edges {
+              node {
+                id
+                title
+                handle
+                description
+                descriptionHtml
+                updatedAt
+                sortOrder
+                templateSuffix
+                productsCount { count }
+                image { url altText }
+                ruleSet {
+                  appliedDisjunctively
+                  rules { column relation condition }
+                }
+              }
+            }
+          }
+        }
+        """
+        collections = []
+        cursor = None
+        while True:
+            variables = {'cursor': cursor} if cursor else {}
+            resp = requests.post(
+                graphql_url,
+                headers=headers,
+                json={'query': query, 'variables': variables},
+                timeout=60,
+            )
+            if resp.status_code != 200:
+                return jsonify({
+                    'success': False,
+                    'error': f'Shopify HTTP {resp.status_code}',
+                    'detail': (resp.text or '')[:400],
+                }), 502
+            payload = resp.json()
+            if payload.get('errors'):
+                # Older schemas used productsCount as Int — retry once with that shape.
+                err_text = json.dumps(payload.get('errors'))
+                if 'productsCount' in err_text and 'count' in err_text and not collections:
+                    query = query.replace(
+                        'productsCount { count }',
+                        'productsCount',
+                    )
+                    continue
+                return jsonify({
+                    'success': False,
+                    'error': 'GraphQL error',
+                    'detail': payload.get('errors'),
+                }), 502
+            data = (payload.get('data') or {}).get('collections') or {}
+            for edge in (data.get('edges') or []):
+                node = edge.get('node') or {}
+                pc = node.get('productsCount')
+                if isinstance(pc, dict):
+                    product_count = pc.get('count')
+                else:
+                    product_count = pc
+                try:
+                    product_count = int(product_count) if product_count is not None else 0
+                except (TypeError, ValueError):
+                    product_count = 0
+                rule_set = node.get('ruleSet')
+                rules = []
+                if isinstance(rule_set, dict):
+                    for rule in (rule_set.get('rules') or []):
+                        if not isinstance(rule, dict):
+                            continue
+                        rules.append({
+                            'column': rule.get('column'),
+                            'relation': rule.get('relation'),
+                            'condition': rule.get('condition'),
+                        })
+                gid = node.get('id') or ''
+                numeric_id = gid.rsplit('/', 1)[-1] if gid else ''
+                collections.append({
+                    'id': gid,
+                    'legacy_resource_id': numeric_id,
+                    'title': node.get('title') or '',
+                    'handle': node.get('handle') or '',
+                    'description': node.get('description') or '',
+                    'description_html': node.get('descriptionHtml') or '',
+                    'updated_at': node.get('updatedAt') or '',
+                    'sort_order': node.get('sortOrder') or '',
+                    'template_suffix': node.get('templateSuffix') or '',
+                    'product_count': product_count,
+                    'image_url': ((node.get('image') or {}) or {}).get('url') or '',
+                    'image_alt': ((node.get('image') or {}) or {}).get('altText') or '',
+                    'collection_type': 'smart' if rule_set else 'custom',
+                    'rules_disjunctive': bool((rule_set or {}).get('appliedDisjunctively')) if rule_set else None,
+                    'rules': rules,
+                    'admin_url': (
+                        f"https://{STORE_DOMAIN}/admin/collections/{numeric_id}"
+                        if numeric_id.isdigit() else ''
+                    ),
+                })
+            page_info = data.get('pageInfo') or {}
+            if not page_info.get('hasNextPage'):
+                break
+            cursor = page_info.get('endCursor')
+            if not cursor:
+                break
+
+        collections.sort(key=lambda c: (c.get('title') or '').lower())
+        return jsonify({
+            'success': True,
+            'count': len(collections),
+            'collections': collections,
+        })
+    except Exception as e:
+        print(f"💥 Collections list error: {e}", flush=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # Full Shopify Content > Files list is expensive (paginated GraphQL). Cache in
 # this process so concurrent Product Creator tabs don't each hold a request
@@ -570,20 +757,13 @@ def api_shopify_files():
                 claim = True
 
         if not claim:
-            # Wait briefly for the in-flight cold build; do not hold a thread for
-            # the full Shopify pagination (that is what starved /healthz before).
-            for _ in range(40):
-                time.sleep(0.25)
-                with _SHOPIFY_FILES_LOCK:
-                    cached = _SHOPIFY_FILES_CACHE.get("files")
-                    if cached is not None:
-                        return jsonify(cached)
-                    if not _SHOPIFY_FILES_BUILDING:
-                        break
+            # Another thread is building — return empty immediately so this
+            # request (and /healthz) are not held for the full Shopify scan.
             return jsonify([])
 
-        files = _build_shopify_files_cache()
-        return jsonify(files)
+        # Cold miss: build in the background; clients can refresh/poll.
+        threading.Thread(target=_build_shopify_files_cache, daemon=True).start()
+        return jsonify([])
     except Exception as e:
         with _SHOPIFY_FILES_LOCK:
             _SHOPIFY_FILES_BUILDING = False
@@ -3488,7 +3668,10 @@ def api_build_info():
     """Git commit for the running deploy (Render env or local .git)."""
     try:
         from scripts.build_info import get_build_info  # type: ignore
-        return jsonify({"success": True, **get_build_info()})
+        payload = {"success": True, **get_build_info()}
+        payload["username"] = get_staff_username() or ""
+        payload["user_type"] = staff_user_type_label() or ""
+        return jsonify(payload)
     except Exception as e:
         return jsonify({"success": False, "error": str(e), "label": "unknown"}), 500
 

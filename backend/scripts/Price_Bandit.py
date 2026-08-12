@@ -33,9 +33,6 @@ except Exception:
     pass
 
 
-print("=" * 60 + " \n[X] = Task failed/skipped/error occurred\n[+] = Task completed successfully\n" + "=" * 60, flush=True)
-
-
 def safe_request(method, url, **kwargs):
     """Wrapper around requests with rate-limit handling (HTTP 429).
 

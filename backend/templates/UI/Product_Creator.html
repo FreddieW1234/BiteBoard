@@ -8,8 +8,8 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/theme.css?v=5" rel="stylesheet">
-    <script src="/static/theme.js?v=2"></script>
+    <link href="/static/theme.css?v=6" rel="stylesheet">
+    <script src="/static/theme.js?v=3"></script>
     <script>
         (function () {
             if (new URLSearchParams(window.location.search).get('embed') === '1') {
@@ -2291,6 +2291,7 @@
                         <i class="fas fa-folder-open"></i>
                         <span>Files</span>
                     </a>
+                    <a href="/app/Collections" class="app-tab"><i class="fas fa-layer-group"></i><span>Collections</span></a>
                     {% endif %}
                     <a href="/app/Templates_Uploader" class="app-tab templates-uploader-nav" style="display: none;">
                         <i class="fas fa-file-archive"></i>
@@ -3737,8 +3738,15 @@
             if (artworkGuidelinesFilesPromise) return artworkGuidelinesFilesPromise;
             artworkGuidelinesFilesPromise = (async () => {
                 try {
-                    const resp = await fetch('/api/shopify/files', { credentials: 'same-origin' });
-                    artworkGuidelinesFilesCache = (await resp.json()) || [];
+                    // Cold cache returns [] while a background scan runs — retry briefly.
+                    let files = [];
+                    for (let attempt = 0; attempt < 8; attempt++) {
+                        const resp = await fetch('/api/shopify/files', { credentials: 'same-origin' });
+                        files = (await resp.json()) || [];
+                        if (files.length) break;
+                        await new Promise(r => setTimeout(r, 750));
+                    }
+                    artworkGuidelinesFilesCache = files;
                     renderGuidelinesColumns(artworkGuidelinesFilesCache);
                     return artworkGuidelinesFilesCache;
                 } catch (e) {
