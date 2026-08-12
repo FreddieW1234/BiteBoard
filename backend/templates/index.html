@@ -395,6 +395,7 @@
 
         // Static tools that don't require Python scripts
         const staticTools = ['Products', 'Orders', 'Diary', 'Category_Editor', 'Customers', 'Files'];
+        const staffShowDevTabs = {{ 'true' if staff_show_dev_tabs else 'false' }};
 
         // Load live products count for header tile
         async function loadLiveProductsCount() {
@@ -421,7 +422,10 @@
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
                 const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Category_Editor' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
-                const tabOrder = ['Products', 'Orders', 'Diary', 'Customers', 'Artwork_Updater', 'Files'];
+                let tabOrder = ['Products', 'Orders', 'Diary', 'Customers', 'Artwork_Updater', 'Files'];
+                if (!staffShowDevTabs) {
+                    tabOrder = tabOrder.filter(t => t !== 'Artwork_Updater' && t !== 'Files');
+                }
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 
                 appTabsEl.innerHTML = '';

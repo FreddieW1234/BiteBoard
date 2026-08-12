@@ -10,7 +10,7 @@ import json
 
 from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, PORTAL_PAGE_URL  # type: ignore
 from portal_auth import (  # type: ignore
-    check_staff_credentials,
+    authenticate_staff,
     is_staff_authenticated,
     login_staff,
     logout_staff,
@@ -21,6 +21,9 @@ from portal_auth import (  # type: ignore
     clear_client_session,
     is_client_path,
     is_staff_public_path,
+    is_staff_dev_only_path,
+    staff_can_access_dev_tools,
+    get_staff_username,
     can_access_order,
 )
 from maintenance import init_maintenance  # type: ignore
@@ -125,11 +128,24 @@ def portal_auth_gate():
         return None
     if is_staff_public_path(path) or is_client_path(path):
         return None
-    if is_staff_authenticated():
-        return None
-    if path.startswith("/api/"):
-        return jsonify({"success": False, "error": "Staff login required"}), 401
-    return redirect(url_for("staff_login", next=path))
+    if not is_staff_authenticated():
+        if path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Staff login required"}), 401
+        return redirect(url_for("staff_login", next=path))
+    # Files / Dev / Artwork Updater — only the dedicated "dev" staff account.
+    if is_staff_dev_only_path(path) and not staff_can_access_dev_tools():
+        if path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Not authorised"}), 403
+        return redirect(url_for("index"))
+    return None
+
+
+@app.context_processor
+def inject_staff_ui_flags():
+    return {
+        "staff_username": get_staff_username(),
+        "staff_show_dev_tabs": staff_can_access_dev_tools(),
+    }
 
 
 @app.route("/staff/login", methods=["GET", "POST"])
@@ -141,10 +157,14 @@ def staff_login():
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if check_staff_credentials(username, password):
-            login_staff()
+        matched = authenticate_staff(username, password)
+        if matched:
+            login_staff(matched)
             dest = request.form.get("next") or request.args.get("next") or url_for("index")
             if not dest.startswith("/") or dest.startswith("//"):
+                dest = url_for("index")
+            # Non-dev staff must not land on a restricted next= URL after login.
+            if is_staff_dev_only_path(dest) and not staff_can_access_dev_tools():
                 dest = url_for("index")
             return redirect(dest)
         return render_template(
