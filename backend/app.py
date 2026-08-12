@@ -1493,6 +1493,11 @@ def api_templates_uploader_upload_zip():
             metafield_key='artworktemplates',
             default_base='artwork_templates',
         )
+        try:
+            from scripts.product_creator.Product_Creator import invalidate_product_detail_cache
+            invalidate_product_detail_cache(product_id)
+        except Exception as _inv_err:
+            print(f"[API] artworktemplates upload: detail cache invalidate skipped: {_inv_err}", flush=True)
         return jsonify({'success': True, **result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1906,7 +1911,31 @@ def api_templates_uploader_use_version():
         ms = j.get('data', {}).get('metafieldsSet', {})
         if ms.get('userErrors'):
             return jsonify({'success': False, 'error': ms['userErrors']}), 400
+        try:
+            from scripts.product_creator.Product_Creator import invalidate_product_detail_cache
+            invalidate_product_detail_cache(product_id)
+        except Exception as _inv_err:
+            print(f"[API] use-version: detail cache invalidate skipped: {_inv_err}", flush=True)
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/templates-uploader/current/<product_id>', methods=['GET'])
+def api_templates_uploader_current(product_id):
+    """Live Shopify read of custom.artworktemplates (bypasses product-detail snapshot)."""
+    try:
+        pid = str(product_id or '').strip()
+        if not pid.isdigit():
+            return jsonify({'success': False, 'error': 'Invalid product_id'}), 400
+        import sys, os
+        sys.path.append(os.path.join(os.path.dirname(__file__), 'scripts'))
+        from Templates_Uploader import fetch_metafield_artworktemplates  # type: ignore
+        mf = fetch_metafield_artworktemplates(pid)
+        value = ''
+        if isinstance(mf, dict):
+            value = (mf.get('value') or '').strip()
+        return jsonify({'success': True, 'file_global_id': value})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

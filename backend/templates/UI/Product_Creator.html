@@ -3613,6 +3613,7 @@
         let artworkGuidelinesFilesPromise = null;
         let stagedArtworkTemplateFiles = [];
         let pcStagedRemoteEntries = [];
+        let pcTemplatesLoadGen = 0;
         let pcCurrentTemplatesFileGlobalId = '';
         let stagedStockDesignFiles = [];
         let pcStockDesignRemoteFiles = []; // office-server versions for current product
@@ -4418,6 +4419,9 @@
                 pcCurrentTemplatesFileGlobalId = data.file_gid;
                 updateTemplateStatus();
             }
+            try {
+                if (productId != null) invalidateProductDetailCache(productId);
+            } catch (_) { /* ignore */ }
             return data;
         }
 
@@ -7856,9 +7860,32 @@
         }
 
         function loadArtworkTemplatesDeferred(mfs, data, title, opts) {
+            const loadGen = ++pcTemplatesLoadGen;
+            const productId = data && data.id != null ? data.id : null;
+            // Clear previous product's templates immediately so a warm iframe
+            // never keeps showing the last product's ZIP while this load runs.
+            pcCurrentTemplatesFileGlobalId = '';
+            pcStagedRemoteEntries = [];
+            stagedArtworkTemplateFiles = [];
+            stageArtworkTemplates([]);
+            updateTemplateStatus();
+
             void (async function () {
                 try {
-                    const atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
+                    let atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
+                    // Detail snapshot can lag behind a templates upload; fetch live if missing.
+                    if (!atMf && productId) {
+                        try {
+                            const liveResp = await fetch(`/api/templates-uploader/current/${encodeURIComponent(productId)}`);
+                            const liveData = await liveResp.json().catch(function () { return {}; });
+                            if (liveData && liveData.success && liveData.file_global_id) {
+                                atMf = String(liveData.file_global_id).trim();
+                            }
+                        } catch (liveErr) {
+                            console.log('Live artworktemplates fetch failed', liveErr);
+                        }
+                    }
+                    if (loadGen !== pcTemplatesLoadGen) return;
                     pcCurrentTemplatesFileGlobalId = atMf || '';
                     pcStagedRemoteEntries = [];
                     if (atMf) {
@@ -7867,6 +7894,7 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ file_global_id: atMf })
                         });
+                        if (loadGen !== pcTemplatesLoadGen) return;
                         const zipData = await respZip.json();
                         if (zipData && zipData.success) {
                             pcStagedRemoteEntries = (zipData.entries || []).map(it => ({ name: it.name, size: it.size, is_image: it.is_image }));
@@ -7878,6 +7906,7 @@
                             await pcLoadVersionsDirect(atMf, skuGuess, sanitizeBase(data.title || title || 'product'));
                         } catch (e) { console.log('Version list load failed', e); }
                     }
+                    if (loadGen !== pcTemplatesLoadGen) return;
                     stageArtworkTemplates([]);
                     updateTemplateStatus();
                 } catch (e) { console.log('Templates prefill failed', e); }
