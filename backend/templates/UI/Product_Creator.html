@@ -3646,6 +3646,7 @@
         let isEditingProduct = false;
         let pcCreateFromParentMode = false;
         let pcCreateFromParentItems = [];
+        let pcSaveInFlight = false;
 
         document.addEventListener('DOMContentLoaded', async function () {
             // Templates upload box wiring
@@ -4413,7 +4414,11 @@
             if (!data || !data.success) {
                 throw (data && data.error) || 'Upload failed';
             }
-            return true;
+            if (data.file_gid) {
+                pcCurrentTemplatesFileGlobalId = data.file_gid;
+                updateTemplateStatus();
+            }
+            return data;
         }
 
         function getVatTag() {
@@ -6673,7 +6678,12 @@
         document.getElementById('productForm').addEventListener('submit', async function(e) {
             console.log('🚨 Form submission triggered!', e);
             e.preventDefault();
-            
+            if (pcSaveInFlight) return;
+            pcSaveInFlight = true;
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
             // Validate required fields
             const title = document.getElementById('title').value.trim();
             if (!title) {
@@ -6900,9 +6910,33 @@
                 }
             }
             
-            // Artwork: always send guideline (empty when deselected so backend can remove it)
+            // Artwork: always send guideline (empty when deselected so backend can remove it).
+            // Staged template files only live in the browser until uploaded. Background queue
+            // saves never ran the post-save upload, so an empty artworktemplates wiped / skipped
+            // the metafield. Upload first when we already have a product id, then send the GID.
             const guidelineVal = (selectedGuideline && selectedGuideline.id) ? selectedGuideline.id : '';
-            const templateVal = pcCurrentTemplatesFileGlobalId || '';
+            let templateVal = pcCurrentTemplatesFileGlobalId || '';
+            const saveProductId = (isEditingProduct && selectedProduct && selectedProduct.id)
+                ? selectedProduct.id
+                : null;
+            if (saveProductId && stagedArtworkTemplateFiles && stagedArtworkTemplateFiles.length > 0) {
+                try {
+                    const titleForZip = (document.getElementById('title') || {}).value
+                        || (selectedProduct && selectedProduct.title)
+                        || 'product';
+                    const uploadResult = await uploadArtworkTemplatesAfterCreate(saveProductId, titleForZip);
+                    if (uploadResult && uploadResult.file_gid) {
+                        templateVal = uploadResult.file_gid;
+                    } else {
+                        templateVal = pcCurrentTemplatesFileGlobalId || templateVal;
+                    }
+                    stagedArtworkTemplateFiles = [];
+                    stageArtworkTemplates([]);
+                } catch (uploadErr) {
+                    alert('Artwork templates upload failed: ' + (uploadErr.message || uploadErr));
+                    return;
+                }
+            }
             console.log(`🎨 Artwork values at save: guideline="${guidelineVal}" (selectedGuideline=${JSON.stringify(selectedGuideline)}), template="${templateVal}"`);
             productData.metafields.push({
                 namespace: 'custom',
@@ -7058,6 +7092,16 @@
                         const title = (document.getElementById('title') || {}).value
                             || (selectedProduct && selectedProduct.title)
                             || 'product';
+                        if (stagedArtworkTemplateFiles && stagedArtworkTemplateFiles.length > 0) {
+                            if (pid) {
+                                await uploadArtworkTemplatesAfterCreate(pid, title);
+                                stagedArtworkTemplateFiles = [];
+                                stageArtworkTemplates([]);
+                                resultDiv.innerHTML += '<p style="margin-top:8px;">Artwork templates ZIP uploaded.</p>';
+                            } else {
+                                resultDiv.innerHTML += '<p style="color:#b45309;margin-top:8px;">Artwork templates are still staged — re-save after the product exists in Shopify.</p>';
+                            }
+                        }
                         if (stagedStockDesignFiles && stagedStockDesignFiles.length > 0) {
                             if (pid) {
                                 await uploadStockDesignsAfterCreate(pid, title);
@@ -7067,7 +7111,7 @@
                             }
                         }
                     } catch (e) {
-                        resultDiv.innerHTML += `<p style="color:#c0392b;">Stock designs upload failed: ${e}</p>`;
+                        resultDiv.innerHTML += `<p style="color:#c0392b;">Post-queue upload failed: ${e}</p>`;
                     }
                     return;
                 }
@@ -7121,19 +7165,15 @@
                         ${propagatedHtml}
                     `;
 
-                    // After creation: if artwork templates are staged, zip and save to metafield
+                    // After creation: if artwork templates are still staged (new product had no id yet)
                     try {
                         if (stagedArtworkTemplateFiles && stagedArtworkTemplateFiles.length > 0) {
                             const pid = result.product.id;
                             const title = result.product.title || 'Product';
                             await uploadArtworkTemplatesAfterCreate(pid, title);
-                            // Clear staged list visuals
-                            
                             stagedArtworkTemplateFiles = [];
-                            const list = document.getElementById('artworkTemplatesList');
-                            if (list) list.innerHTML = '<div class="muted">No files staged</div>';
-                            // Append note
-                            resultDiv.innerHTML += '<p></p>';
+                            stageArtworkTemplates([]);
+                            resultDiv.innerHTML += '<p style="margin-top:8px;">Artwork templates ZIP uploaded.</p>';
                         }
                     } catch (e) {
                         resultDiv.innerHTML += `<p style="color:#c0392b;">Artwork templates upload failed: ${e}</p>`;
@@ -7170,6 +7210,10 @@
                     <p>Failed to create product: ${errorMessage}</p>
                     ${error.stack ? `<details><summary>Error Details</summary><pre style="font-size: 11px; max-height: 200px; overflow: auto;">${error.stack}</pre></details>` : ''}
                 `;
+            }
+            } finally {
+                pcSaveInFlight = false;
+                if (submitBtn) submitBtn.disabled = false;
             }
         });
 
@@ -7935,22 +7979,22 @@
                     statusEl.value = ['active','draft','archived'].includes(s) ? s : 'active';
                 }
 
-                // Description
-                if (typeof data.body_html === 'string') {
-                    const descEl = document.getElementById('description');
-                    if (descEl) {
-                        // Check if the HTML contains h3 headings (either format)
+                // Description — always replace so a product with no body doesn't keep the previous one
+                const descEl = document.getElementById('description');
+                if (descEl) {
+                    if (typeof data.body_html === 'string' && data.body_html) {
                         if (data.body_html.includes('<h3>')) {
-                            // Preserve the HTML structure for h3 headings
                             descEl.value = data.body_html;
                             isHtmlMode = true;
                         } else {
-                            // Convert HTML back to text for other HTML
-                        descEl.value = htmlToText(data.body_html);
+                            descEl.value = htmlToText(data.body_html);
                             isHtmlMode = true;
                         }
-                        updateConverterButton();
+                    } else {
+                        descEl.value = '';
+                        isHtmlMode = false;
                     }
+                    updateConverterButton();
                 }
 
                 // Category/Subcategory from metafields
@@ -8151,6 +8195,7 @@
                 
                 // Handle color loading separately since we skipped displayMetafields
                 try {
+                    if (typeof resetColourOptions === 'function') resetColourOptions();
                     loadColoursFromMetafields(mfs);
                 } catch (e) { console.log('Color loading failed', e); }
 
@@ -8571,8 +8616,62 @@
         function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
         
         // Populate metafield values without recreating the UI
+        function clearMetafieldInputsBeforePopulate() {
+            const productCodeEl = document.getElementById('product-code');
+            if (productCodeEl) productCodeEl.value = '';
+
+            document.querySelectorAll('.metafield-value').forEach(function (el) {
+                if (el.classList.contains('allergen-dropdown') || el.tagName === 'SELECT') {
+                    el.value = '';
+                    if (window.AllergenMapping && AllergenMapping.applyAllergenDropdownStyle) {
+                        AllergenMapping.applyAllergenDropdownStyle(el);
+                    }
+                } else if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                    el.value = '';
+                }
+            });
+
+            document.querySelectorAll('.product-size-field').forEach(function (el) {
+                el.value = '';
+            });
+
+            document.querySelectorAll('.emoji-field-container').forEach(function (el) {
+                el.querySelectorAll('.emoji-btn').forEach(function (btn) {
+                    btn.classList.remove('selected');
+                });
+                el.dataset.selectedValue = '';
+            });
+
+            document.querySelectorAll('.string-list-editor').forEach(function (editor) {
+                const rowsEl = editor.querySelector('.string-list-rows');
+                if (!rowsEl) return;
+                rowsEl.innerHTML = typeof buildStringListRowHtml === 'function'
+                    ? buildStringListRowHtml('')
+                    : '';
+                editor.dataset.wired = '';
+                if (typeof wireStringListEditor === 'function') wireStringListEditor(editor);
+            });
+
+            document.querySelectorAll('.custom-dropdown').forEach(function (dd) {
+                const key = dd.dataset.key || '';
+                // Category/subcategory restored by setCategorySubFromMetafieldsAsync / clearCategorySubDropdown
+                if (key === 'categorysub' || key === 'custom_category' || key === 'subcategory'
+                    || (key && key.startsWith('subcategory_'))) {
+                    return;
+                }
+                dd.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+                    cb.checked = false;
+                });
+                if (typeof updateDropdownText === 'function') updateDropdownText(dd);
+            });
+        }
+
         async function populateMetafieldValues(metafields, opts) {
             console.log('🔍 populateMetafieldValues called with:', metafields.length, 'metafields');
+
+            // Warm iframe reuses the form when switching products. Clear first so
+            // empty/missing metafields on the new product don't keep the previous product's values.
+            clearMetafieldInputsBeforePopulate();
 
             // Restore the combined Category & Subcategory dropdown once options are loaded
             if (opts && opts.skipCategorySub) {
@@ -8707,8 +8806,8 @@
                 } else if (input) {
                     if (input.classList.contains('allergen-dropdown') || (input.tagName === 'SELECT' && window.AllergenMapping && AllergenMapping.isAllergenKey(key))) {
                         const level = AllergenMapping.inferAllergenLevel(key, value);
+                        input.value = level || '';
                         if (level) {
-                            input.value = level;
                             console.log(`✅ Set ${key} allergen dropdown to: ${level}`);
                         }
                         if (window.AllergenMapping && AllergenMapping.applyAllergenDropdownStyle) {
@@ -8719,6 +8818,7 @@
                         // Stored values may be "✔️ Vegan" / "❌ Halal" — match on emoji only.
                         const allButtons = input.querySelectorAll('.emoji-btn');
                         allButtons.forEach(btn => btn.classList.remove('selected'));
+                        input.dataset.selectedValue = '';
                         const emoji = (window.AllergenMapping && AllergenMapping.suitableEmojiFromStored)
                             ? AllergenMapping.suitableEmojiFromStored(value)
                             : ((String(value || '').startsWith('✔️') || String(value || '').startsWith('✅'))
@@ -8726,11 +8826,11 @@
                                 : (String(value || '').startsWith('❌') ? '❌' : ''));
                         const selectedButton = emoji
                             ? input.querySelector(`[data-emoji="${emoji}"]`)
-                            : input.querySelector(`[data-emoji="${value}"]`);
+                            : null;
                         if (selectedButton) {
                             selectedButton.classList.add('selected');
-                            input.dataset.selectedValue = emoji || value;
-                            console.log(`✅ Set ${key} emoji field to: ${emoji || value}`);
+                            input.dataset.selectedValue = emoji;
+                            console.log(`✅ Set ${key} emoji field to: ${emoji}`);
                         }
                     } else if (input.classList.contains('custom-dropdown')) {
                         // For custom dropdowns, set checkbox selections
