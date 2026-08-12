@@ -2336,7 +2336,7 @@ def sync_products_after_save(product_ids, shopify_domain=None):
     ordered = []
     for raw in product_ids or []:
         if raw in (None, "", "null"):
-            continue
+                continue
         key = str(raw)
         if key in seen:
             continue
@@ -2498,7 +2498,7 @@ def _build_product_detail_from_shopify(product_id, shopify_domain=None):
             except requests.RequestException:
                 if attempt < 2:
                     time.sleep(1)
-                    continue
+            continue
                 return None
             if r.status_code == 429 and attempt < 2:
                 time.sleep(2)
@@ -4201,13 +4201,33 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     if namespace == "custom" and key in PARENT_CHILD_METAFIELD_KEYS:
                         try:
                             from .categories import get_metafield_choices
-                            allowed = set(get_metafield_choices(key) or [])
+                            allowed = list(get_metafield_choices(key) or [])
                             if allowed:
+                                allowed_set = set(allowed)
                                 parsed = json.loads(formatted_value) if isinstance(formatted_value, str) else formatted_value
                                 if isinstance(parsed, list):
-                                    filtered = [v for v in parsed if str(v).strip() in allowed]
+                                    def _coerce_pc_choice(v):
+                                        s = str(v).strip()
+                                        if not s:
+                                            return None
+                                        if s in allowed_set:
+                                            return s
+                                        s_lower = s.lower()
+                                        for a in allowed:
+                                            a_str = str(a)
+                                            if a_str.strip() == s or a_str.strip().lower() == s_lower:
+                                                return a_str  # Shopify's exact choice (may keep trailing space)
+                                        return None
+                                    filtered = []
+                                    for v in parsed:
+                                        c = _coerce_pc_choice(v)
+                                        if c is not None:
+                                            filtered.append(c)
                                     if filtered != parsed:
-                                        print(f"⚠️ Filtered parent/child values for {key}: kept {filtered}, removed {set(parsed) - set(filtered)}", flush=True)
+                                        print(
+                                            f"⚠️ Coerced parent/child values for {key}: {parsed} -> {filtered}",
+                                            flush=True,
+                                        )
                                     if not filtered:
                                         continue
                                     formatted_value = json.dumps(filtered)
@@ -4269,9 +4289,11 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     success_count += 1
                     action = "Updated" if existing_id else "Created"
                     print(f"✅ {action} metafield: {namespace}.{key}", flush=True)
-                elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (key == "subcategory" or key.startswith("subcategory_")):
+                elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (
+                    key == "subcategory" or (key and key.startswith("subcategory_")) or key in PARENT_CHILD_METAFIELD_KEYS
+                ):
                     # 422 "does not exist in provided choices" - extract Shopify's actual choices and retry with filtered value
-                    # Applies to subcategory, subcategory_2, subcategory_3, etc.
+                    # Applies to subcategory overflow keys and parent_child / parent_child2.
                     import re
                     try:
                         err_data = response.json()
@@ -5064,6 +5086,20 @@ def create_product(product_data):
                 if not (mf.get("namespace") == "custom" and mf.get("key") in PARENT_CHILD_METAFIELD_KEYS)
             ]
             parent_child_value = (product_data.get("parent_child") or "").strip()
+            if parent_child_value:
+                try:
+                    from .categories import resolve_parent_child_choice_value
+                    resolved_pc = resolve_parent_child_choice_value(parent_child_value)
+                    if resolved_pc != parent_child_value:
+                        print(
+                            f"📂 Normalized parent/child '{parent_child_value}' -> '{resolved_pc}' "
+                            f"(matched Shopify choice, trailing-space safe)",
+                            flush=True,
+                        )
+                    parent_child_value = resolved_pc
+                    product_data["parent_child"] = parent_child_value
+                except Exception as e:
+                    print(f"⚠️ parent/child choice resolve skipped: {e}", flush=True)
             clear_parent_child_raw = product_data.get("clear_parent_child", False)
             if isinstance(clear_parent_child_raw, str):
                 clear_parent_child = clear_parent_child_raw.lower() in ("true", "1", "yes")
@@ -5221,8 +5257,8 @@ def create_product(product_data):
                 ]
                 if is_parent_product:
                     prefer_main = bool(product_data.get("main_image_to_children"))
-                    metafields.append({
-                        "namespace": "custom",
+                        metafields.append({
+                            "namespace": "custom",
                         "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
                         "value": "true" if prefer_main else "",
                         "type": "single_line_text_field",
@@ -5238,8 +5274,8 @@ def create_product(product_data):
                         "namespace": "custom",
                         "key": MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY,
                         "value": "",
-                        "type": "single_line_text_field",
-                    })
+                            "type": "single_line_text_field",
+                        })
 
                 resolved_storefront_options = resolve_storefront_options(
                     product_data.get("storefront_options"),
@@ -5416,7 +5452,7 @@ def create_product(product_data):
                     )
                 except Exception as e:
                     print(f"⚠️ Family image removal failed: {e}", flush=True)
-
+            
             # When saving a parent product, propagate inherited fields to all corresponding child products
             propagated_list = []
             if _is_parent_child_type(parent_child_value, "parent"):

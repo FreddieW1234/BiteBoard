@@ -693,7 +693,7 @@ def get_parent_child_choices(force_refresh=False):
 def get_parent_child_metafield_key(parent_child_value):
     """
     Route a Parent/Child value to parent_child or parent_child2 (overflow metafield).
-    Uses membership in each Shopify definition's choice list.
+    Uses membership in each Shopify definition's choice list (trim-insensitive).
     """
     val = str(parent_child_value or "").strip()
     if not val:
@@ -720,6 +720,30 @@ def get_parent_child_metafield_key(parent_child_value):
     if pc2 or len(pc) >= 120:
         return "parent_child2"
     return "parent_child"
+
+
+def resolve_parent_child_choice_value(parent_child_value):
+    """
+    Map a Parent/Child value to the exact string in Shopify's choice list.
+
+    Choice definitions sometimes include trailing spaces; Shopify requires an
+    exact match. Prefer the definition's string when trim/case matches.
+    Falls back to a trimmed value when the choice is not yet in either list.
+    """
+    val = str(parent_child_value or "").strip()
+    if not val:
+        return ""
+    cache = _load_parent_child_choice_cache()
+    val_lower = val.lower()
+    for key in ("parent_child", "parent_child2"):
+        for choice in (cache.get(key) or []):
+            c = str(choice)
+            if c == val:
+                return c
+            stripped = c.strip()
+            if stripped == val or stripped.lower() == val_lower:
+                return c
+    return val
 
 
 def _subcategory_2_start_index():

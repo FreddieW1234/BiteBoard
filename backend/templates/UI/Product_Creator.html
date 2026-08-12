@@ -2611,10 +2611,15 @@
                                     </div>
                                     <div id="parent-dropdown-wrap" style="display: none; margin-top: 8px;">
                                         <label class="form-label" style="margin-bottom: 4px;">Parent type</label>
-                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                            <select id="parent-child-select" class="form-select" style="min-width: 160px;">
-                                                <option value="">— Select —</option>
-                                            </select>
+                                        <div style="display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
+                                            <div class="parent-type-combobox" style="position: relative; min-width: 385px; max-width: 735px; flex: 1 1 280px;">
+                                                <input type="text" id="parent-child-parent-search" class="form-select" placeholder="Search parent types…" autocomplete="off" style="width: 100%; box-sizing: border-box;">
+                                                <div id="parent-child-parent-results" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 280px; overflow-y: auto; z-index: 10020; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 8px 24px rgba(15,23,42,0.12);"></div>
+                                                <!-- Kept in sync for existing save/load code -->
+                                                <select id="parent-child-select" class="form-select" style="display: none;" aria-hidden="true" tabindex="-1">
+                                                    <option value="">— Select —</option>
+                                                </select>
+                                            </div>
                                             <button type="button" id="add-parent-type-btn" class="btn btn-secondary" style="padding: 8px 12px; font-size: 12px; white-space: nowrap;" onclick="openAddParentTypeModal()">
                                                 <i class="fas fa-plus" style="margin-right: 4px;"></i>Add New
                                             </button>
@@ -3088,6 +3093,11 @@
             if (childWrap) childWrap.style.display = 'none';
             const selectEl = document.getElementById('parent-child-select');
             if (selectEl) selectEl.value = '';
+            if (typeof setParentTypeValue === 'function') setParentTypeValue('');
+            else {
+                const parentSearchEl = document.getElementById('parent-child-parent-search');
+                if (parentSearchEl) parentSearchEl.value = '';
+            }
             if (typeof setChildTypeValue === 'function') setChildTypeValue('');
             else {
                 const childSelectEl = document.getElementById('parent-child-child-select');
@@ -3295,6 +3305,7 @@
         async function refreshParentChildDropdown(currentParentValue, opts) {
             const selectEl = document.getElementById('parent-child-select');
             if (!selectEl) return;
+            setupParentTypeSearch();
             const forceRefresh = !!(opts && opts.forceRefresh);
             const choicesUrl = '/api/metafield-choices/custom.parent_child?all=1' + (forceRefresh ? '&refresh=1' : '');
             const [choicesResp, takenResp] = await Promise.all([
@@ -3310,11 +3321,11 @@
                 ? currentParentValue
                 : selectEl.value;
             selectEl.innerHTML = '<option value="">— Select —</option>';
-            choices.forEach(opt => {
+            pcParentTypeChoices = choices.map(opt => {
+                const ownerId = takenParents[opt];
+                const isTaken = !!(ownerId && ownerId !== editingId);
                 const o = document.createElement('option');
                 o.value = opt;
-                const ownerId = takenParents[opt];
-                const isTaken = ownerId && ownerId !== editingId;
                 if (isTaken) {
                     o.disabled = true;
                     o.textContent = opt + ' (in use)';
@@ -3323,16 +3334,12 @@
                     o.textContent = opt;
                 }
                 selectEl.appendChild(o);
+                return { value: opt, taken: isTaken, label: isTaken ? (opt + ' (in use)') : opt };
             });
             if (prevVal && prevVal.startsWith('Parent - ')) {
-                if (!choices.includes(prevVal)) {
-                    const o = document.createElement('option');
-                    o.value = prevVal;
-                    o.textContent = prevVal;
-                    selectEl.appendChild(o);
-                }
-                selectEl.value = prevVal;
-                if (typeof setParentChildHiddenValue === 'function') setParentChildHiddenValue(prevVal);
+                setParentTypeValue(prevVal);
+            } else {
+                setParentTypeValue('');
             }
         }
 
@@ -3373,7 +3380,106 @@
             }
         }
 
+        let pcParentTypeChoices = [];
         let pcChildTypeChoices = [];
+
+        function setParentTypeValue(value) {
+            const selectEl = document.getElementById('parent-child-select');
+            const searchEl = document.getElementById('parent-child-parent-search');
+            const v = (value || '').trim();
+            if (selectEl) {
+                if (v && ![...selectEl.options].some(o => o.value === v)) {
+                    const o = document.createElement('option');
+                    o.value = v;
+                    o.textContent = v;
+                    selectEl.appendChild(o);
+                    if (!pcParentTypeChoices.some(c => c.value === v)) {
+                        pcParentTypeChoices.push({ value: v, taken: false, label: v });
+                    }
+                }
+                selectEl.value = v;
+            }
+            if (searchEl) searchEl.value = v;
+            if (v.startsWith('Parent - ')) setParentChildHiddenValue(v);
+            else if (!v) {
+                // Only clear durable value when we are in parent mode / clearing parent selection.
+                const parentYes = document.getElementById('parentYes');
+                if (parentYes && parentYes.checked) setParentChildHiddenValue('');
+            }
+        }
+
+        function renderParentTypeResults(filterText) {
+            const resultsEl = document.getElementById('parent-child-parent-results');
+            if (!resultsEl) return;
+            const q = (filterText || '').trim().toLowerCase();
+            const matches = !q
+                ? pcParentTypeChoices.slice()
+                : pcParentTypeChoices.filter(c => c.value.toLowerCase().includes(q) || (c.label || '').toLowerCase().includes(q));
+            if (!matches.length) {
+                resultsEl.innerHTML = '<div class="autocomplete-item" style="color:#64748b;cursor:default;">No matches</div>';
+                resultsEl.style.display = 'block';
+                return;
+            }
+            const selected = (document.getElementById('parent-child-select') || {}).value || '';
+            const esc = (s) => String(s || '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            resultsEl.innerHTML = matches.map(item => {
+                const opt = item.value;
+                const active = opt === selected ? 'background:#eef2ff;' : '';
+                const takenStyle = item.taken ? 'color:#94a3b8;cursor:not-allowed;' : '';
+                const short = opt.startsWith('Parent - ') ? opt.slice(9) : opt;
+                const takenNote = item.taken ? '<div style="font-size:0.75rem;color:#b45309;">In use</div>' : '';
+                return `<div class="autocomplete-item" data-value="${esc(opt)}" data-taken="${item.taken ? '1' : '0'}" style="${active}${takenStyle}"><strong>${esc(short)}</strong><div style="font-size:0.75rem;color:#94a3b8;">${esc(opt)}</div>${takenNote}</div>`;
+            }).join('');
+            resultsEl.style.display = 'block';
+            resultsEl.querySelectorAll('.autocomplete-item[data-value]').forEach(el => {
+                el.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    if (el.getAttribute('data-taken') === '1') return;
+                    setParentTypeValue(el.getAttribute('data-value') || '');
+                    resultsEl.style.display = 'none';
+                });
+            });
+        }
+
+        function setupParentTypeSearch() {
+            const searchEl = document.getElementById('parent-child-parent-search');
+            const resultsEl = document.getElementById('parent-child-parent-results');
+            if (!searchEl || !resultsEl || searchEl.dataset.wired === '1') return;
+            searchEl.dataset.wired = '1';
+            searchEl.addEventListener('focus', function() {
+                renderParentTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('click', function() {
+                renderParentTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('input', function() {
+                renderParentTypeResults(searchEl.value);
+            });
+            searchEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    resultsEl.style.display = 'none';
+                    const selectEl = document.getElementById('parent-child-select');
+                    searchEl.value = selectEl ? selectEl.value : '';
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const first = resultsEl.querySelector('.autocomplete-item[data-value][data-taken="0"]');
+                    if (first) {
+                        setParentTypeValue(first.getAttribute('data-value') || '');
+                        resultsEl.style.display = 'none';
+                    }
+                }
+            });
+            document.addEventListener('mousedown', function(e) {
+                if (!e.target.closest('.parent-type-combobox')) {
+                    resultsEl.style.display = 'none';
+                    const selectEl = document.getElementById('parent-child-select');
+                    if (selectEl && searchEl.value !== selectEl.value) {
+                        searchEl.value = selectEl.value || '';
+                    }
+                }
+            });
+        }
 
         function setChildTypeValue(value) {
             const selectEl = document.getElementById('parent-child-child-select');
@@ -3551,7 +3657,8 @@
                     applyChildModeVisibility();
                 } else {
                     wrap.style.display = 'none';
-                    if (selectEl) selectEl.value = '';
+                    if (typeof setParentTypeValue === 'function') setParentTypeValue('');
+                    else if (selectEl) selectEl.value = '';
                     // Only clear durable value when Child isn't about to take over.
                     if (!(childYes && childYes.checked)) setParentChildHiddenValue('');
                     if (childOptionWrap) childOptionWrap.style.display = '';
@@ -3567,7 +3674,8 @@
                     refreshChildDropdown(keepChild);
                     if (parentYes) { parentYes.checked = false; parentNo.checked = true; }
                     if (wrap) wrap.style.display = 'none';
-                    if (selectEl) selectEl.value = '';
+                    if (typeof setParentTypeValue === 'function') setParentTypeValue('');
+                    else if (selectEl) selectEl.value = '';
                     // Keep / restore the durable Child - value; never blank it just
                     // because the radio was toggled (async dropdown can still be empty).
                     if (keepChild && keepChild.startsWith('Child - ')) {
@@ -3595,6 +3703,8 @@
                     const v = (selectEl.value || '').trim();
                     if (v.startsWith('Parent - ')) setParentChildHiddenValue(v);
                     else if (!v && parentYes && parentYes.checked) setParentChildHiddenValue('');
+                    const parentSearchEl = document.getElementById('parent-child-parent-search');
+                    if (parentSearchEl) parentSearchEl.value = v;
                 });
             }
             if (childSelectEl) {
@@ -7873,13 +7983,15 @@
             void (async function () {
                 try {
                     let atMf = (mfs.find(m => m.namespace === 'custom' && m.key === 'artworktemplates') || {}).value || '';
-                    // Detail snapshot can lag behind a templates upload; fetch live if missing.
-                    if (!atMf && productId) {
+                    // Always prefer a live Shopify read when editing an existing product.
+                    // The detail snapshot lags behind both upload and remove, so trusting
+                    // the cached metafields alone re-shows templates that were cleared.
+                    if (productId) {
                         try {
                             const liveResp = await fetch(`/api/templates-uploader/current/${encodeURIComponent(productId)}`);
                             const liveData = await liveResp.json().catch(function () { return {}; });
-                            if (liveData && liveData.success && liveData.file_global_id) {
-                                atMf = String(liveData.file_global_id).trim();
+                            if (liveData && liveData.success) {
+                                atMf = String(liveData.file_global_id || '').trim();
                             }
                         } catch (liveErr) {
                             console.log('Live artworktemplates fetch failed', liveErr);
@@ -7905,6 +8017,12 @@
                             const skuGuess = sanitizeBase(variantSku || skuFromMf || 'NOSKU');
                             await pcLoadVersionsDirect(atMf, skuGuess, sanitizeBase(data.title || title || 'product'));
                         } catch (e) { console.log('Version list load failed', e); }
+                    } else {
+                        // Cleared on Shopify — wipe any version list UI from the previous open.
+                        try {
+                            const versionsEl = document.getElementById('pc-versions-list');
+                            if (versionsEl) versionsEl.innerHTML = '';
+                        } catch (_) { /* ignore */ }
                     }
                     if (loadGen !== pcTemplatesLoadGen) return;
                     stageArtworkTemplates([]);
@@ -8146,7 +8264,8 @@
                 if (parentNoEl) parentNoEl.checked = true;
                 if (parentYesEl) parentYesEl.checked = false;
                 if (parentWrap) parentWrap.style.display = 'none';
-                if (parentSelect) parentSelect.value = '';
+                if (typeof setParentTypeValue === 'function') setParentTypeValue('');
+                else if (parentSelect) parentSelect.value = '';
                 if (childNoEl) childNoEl.checked = true;
                 if (childYesEl) childYesEl.checked = false;
                 if (childWrap) childWrap.style.display = 'none';
@@ -8182,8 +8301,7 @@
                         if (parentOptionWrap) parentOptionWrap.style.display = '';
                         if (childOptionWrap) childOptionWrap.style.display = 'none';
                         refreshParentChildDropdown(parentChildVal).then(() => {
-                            if (parentSelect && parentChildVal) parentSelect.value = parentChildVal;
-                            setParentChildHiddenValue(parentChildVal);
+                            setParentTypeValue(parentChildVal);
                         });
                     }
                 }
