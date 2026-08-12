@@ -47,6 +47,8 @@
             footer.querySelector('.sidebar-commit-info') ||
             footer.querySelector('.sidebar-theme-toggle') ||
             footer.querySelector('.dashboard-tab') ||
+            footer.querySelector('.sidebar-sign-out') ||
+            footer.querySelector('a[href="/staff/logout"]') ||
             footer.firstChild;
         footerInsertBefore(footer, el, before);
     }
@@ -64,6 +66,8 @@
         var before =
             footer.querySelector('.sidebar-theme-toggle') ||
             footer.querySelector('.dashboard-tab') ||
+            footer.querySelector('.sidebar-sign-out') ||
+            footer.querySelector('a[href="/staff/logout"]') ||
             footer.firstChild;
         footerInsertBefore(footer, el, before);
 
@@ -91,6 +95,31 @@
             });
     }
 
+    function injectSignOut(footer) {
+        var existing = footer.querySelector('a[href="/staff/logout"]');
+        if (existing) {
+            existing.classList.add('sidebar-sign-out');
+            if (!existing.querySelector('.sidebar-sign-out-label') && !existing.querySelector('span')) {
+                existing.innerHTML =
+                    '<i class="fas fa-right-from-bracket" aria-hidden="true"></i>' +
+                    '<span class="sidebar-sign-out-label">Sign out</span>';
+            } else if (!existing.classList.contains('sidebar-sign-out')) {
+                existing.classList.add('sidebar-sign-out');
+            }
+            // Keep sign-out at the very bottom of the footer.
+            footer.appendChild(existing);
+            return;
+        }
+
+        var a = document.createElement('a');
+        a.href = '/staff/logout';
+        a.className = 'sidebar-sign-out';
+        a.innerHTML =
+            '<i class="fas fa-right-from-bracket" aria-hidden="true"></i>' +
+            '<span class="sidebar-sign-out-label">Sign out</span>';
+        footer.appendChild(a);
+    }
+
     function injectThemeToggle() {
         var footer = document.querySelector('.sidebar .sidebar-footer');
         if (!footer) return;
@@ -107,20 +136,27 @@
                 applyTheme(isDark() ? 'light' : 'dark');
             });
 
-            var dash = footer.querySelector('.dashboard-tab');
-            if (dash) footer.insertBefore(btn, dash);
-            else footer.insertBefore(btn, footer.firstChild);
+            var before =
+                footer.querySelector('.dashboard-tab') ||
+                footer.querySelector('.sidebar-sign-out') ||
+                footer.querySelector('a[href="/staff/logout"]') ||
+                footer.querySelector('.header-stat') ||
+                footer.firstChild;
+            footerInsertBefore(footer, btn, before);
         }
+
+        injectSignOut(footer);
 
         fetch('/api/build-info', { credentials: 'same-origin' })
             .then(function (res) { return res.json(); })
             .then(function (data) {
-                injectCommitInfo(footer, data);
-                injectUserType(footer, data);
+                // Only decorate staff sidebars (client portal has no user_type).
+                if (data && data.user_type) {
+                    injectCommitInfo(footer, data);
+                    injectUserType(footer, data);
+                }
             })
-            .catch(function () {
-                injectCommitInfo(footer, null);
-            });
+            .catch(function () { /* ignore */ });
 
         syncToggleButtons();
     }

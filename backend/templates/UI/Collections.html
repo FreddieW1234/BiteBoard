@@ -6,8 +6,8 @@
     <title>Collections - BiteBoard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/theme.css?v=6" rel="stylesheet">
-    <script src="/static/theme.js?v=3"></script>
+    <link href="/static/theme.css?v=7" rel="stylesheet">
+    <script src="/static/theme.js?v=4"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
@@ -45,6 +45,7 @@
         .cl-stats { font-size: 0.825rem; color: #6b7280; }
         .cl-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.825rem; font-weight: 500; color: #374151; cursor: pointer; }
         .cl-btn:hover { background: #f3f4f6; }
+        .cl-btn:disabled { opacity: 0.55; cursor: not-allowed; }
         .cl-filters { display: flex; gap: 6px; flex-wrap: wrap; }
         .cl-chip { border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 999px; padding: 5px 10px; font-size: 0.75rem; font-weight: 500; cursor: pointer; }
         .cl-chip.active { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
@@ -54,20 +55,83 @@
         table.cl-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         .cl-table th { position: sticky; top: 0; background: #f8fafc; text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; color: #64748b; font-weight: 600; white-space: nowrap; z-index: 1; }
         .cl-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-        .cl-table tr:hover td { background: #f8fafc; }
+        .cl-table tr.cl-row { cursor: pointer; }
+        .cl-table tr.cl-row:hover td { background: #f8fafc; }
+        .cl-table tr.cl-row.active td { background: #eef2ff; }
         .cl-title { font-weight: 600; color: #111827; }
         .cl-handle { font-size: 0.75rem; color: #94a3b8; margin-top: 2px; }
         .cl-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
         .cl-badge.smart { background: #ecfdf5; color: #047857; }
         .cl-badge.custom { background: #eff6ff; color: #1d4ed8; }
         .cl-count { font-weight: 600; font-variant-numeric: tabular-nums; }
-        .cl-desc { color: #64748b; max-width: 320px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .cl-rules { font-size: 0.75rem; color: #64748b; max-width: 280px; }
+        .cl-desc { color: #64748b; max-width: 280px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .cl-seo { color: #334155; max-width: 260px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .cl-seo-muted { color: #94a3b8; font-size: 0.75rem; }
+        .cl-rules { font-size: 0.75rem; color: #64748b; max-width: 240px; }
         .cl-rules code { font-size: 0.7rem; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; }
         .cl-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid #e5e7eb; background: #f8fafc; }
         .cl-thumb-empty { width: 40px; height: 40px; border-radius: 6px; background: #f1f5f9; color: #cbd5e1; display: flex; align-items: center; justify-content: center; }
         .cl-link { color: #4f46e5; text-decoration: none; font-size: 0.8rem; }
         .cl-link:hover { text-decoration: underline; }
+
+        .cl-drawer-backdrop {
+            display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.35); z-index: 40;
+        }
+        .cl-drawer-backdrop.open { display: block; }
+        .cl-drawer {
+            position: fixed; top: 0; right: 0; width: min(440px, 100vw); height: 100vh;
+            background: #f6f8fa; border-left: 1px solid #e5e7eb; z-index: 50;
+            transform: translateX(100%); transition: transform 0.2s ease;
+            display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+        }
+        .cl-drawer.open { transform: translateX(0); }
+        .cl-drawer-head {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 16px 18px; background: #fff; border-bottom: 1px solid #e5e7eb; flex-shrink: 0;
+        }
+        .cl-drawer-head h2 { font-size: 1rem; font-weight: 600; margin: 0; color: #111827; }
+        .cl-drawer-close {
+            border: none; background: #f3f4f6; color: #374151; width: 32px; height: 32px;
+            border-radius: 6px; cursor: pointer;
+        }
+        .cl-drawer-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+        .cl-card {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 18px;
+        }
+        .cl-card-title {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            font-size: 0.95rem; font-weight: 600; color: #111827; margin-bottom: 12px;
+        }
+        .cl-card-title i { color: #6b7280; }
+        .cl-field { margin-bottom: 14px; }
+        .cl-field:last-child { margin-bottom: 0; }
+        .cl-field label { display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .cl-field .cl-readonly, .cl-field textarea.cl-readonly {
+            width: 100%; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb;
+            padding: 10px 12px; font: inherit; font-size: 0.875rem; color: #111827;
+            resize: none; min-height: 42px;
+        }
+        .cl-field textarea.cl-readonly { min-height: 88px; line-height: 1.45; }
+        .cl-field .hint { margin-top: 6px; font-size: 0.75rem; color: #6b7280; }
+        .cl-handle-box {
+            display: flex; align-items: stretch; border: 1px solid #d1d5db; border-radius: 8px;
+            overflow: hidden; background: #f9fafb;
+        }
+        .cl-handle-prefix {
+            display: flex; align-items: center; padding: 0 10px; background: #f3f4f6;
+            color: #6b7280; font-size: 0.8rem; border-right: 1px solid #d1d5db; white-space: nowrap;
+        }
+        .cl-handle-box .cl-readonly {
+            border: none; border-radius: 0; background: transparent;
+        }
+        .seo-preview {
+            border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; background: #fff; margin-bottom: 14px;
+        }
+        .seo-preview-brand { font-size: 0.75rem; color: #202124; margin-bottom: 2px; }
+        .seo-preview-crumb { font-size: 0.75rem; color: #4d5156; margin-bottom: 4px; word-break: break-all; }
+        .seo-preview-title { font-size: 1.1rem; color: #1a0dab; line-height: 1.3; margin-bottom: 4px; }
+        .seo-preview-desc { font-size: 0.85rem; color: #4d5156; line-height: 1.45; }
+
         @media (max-width: 900px) {
             .app-layout { flex-direction: column; }
             .sidebar, .sidebar.collapsed { width: 100% !important; }
@@ -98,11 +162,11 @@
 
         <div class="main-wrap">
             <h1 class="page-title"><i class="fas fa-layer-group"></i> Collections</h1>
-            <p class="page-desc">All Shopify collections (manual and automated) with product counts and rules.</p>
+            <p class="page-desc">All Shopify collections with product counts, rules, and search engine listing details. Click a row for SEO.</p>
             <div class="cl-toolbar">
                 <div class="cl-search">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="cl-search" placeholder="Search title, handle, description…" autocomplete="off">
+                    <input type="text" id="cl-search" placeholder="Search title, handle, SEO, description…" autocomplete="off">
                 </div>
                 <div class="cl-filters">
                     <button type="button" class="cl-chip active" data-type="all">All</button>
@@ -110,6 +174,7 @@
                     <button type="button" class="cl-chip" data-type="custom">Manual</button>
                 </div>
                 <span class="cl-stats" id="cl-stats"></span>
+                <button type="button" class="cl-btn" id="cl-export" disabled><i class="fas fa-file-csv"></i> Export CSV</button>
                 <button type="button" class="cl-btn" id="cl-refresh"><i class="fas fa-rotate"></i> Refresh</button>
             </div>
             <div class="cl-panel" id="cl-panel">
@@ -117,17 +182,47 @@
             </div>
         </div>
     </div>
+
+    <div class="cl-drawer-backdrop" id="cl-drawer-backdrop"></div>
+    <aside class="cl-drawer" id="cl-drawer" aria-hidden="true">
+        <div class="cl-drawer-head">
+            <h2 id="cl-drawer-title">Collection</h2>
+            <button type="button" class="cl-drawer-close" id="cl-drawer-close" aria-label="Close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="cl-drawer-body" id="cl-drawer-body"></div>
+    </aside>
+
     <script>
 (function () {
     let allCollections = [];
+    let storefrontBase = '';
     let typeFilter = 'all';
+    let selectedId = '';
     const panel = document.getElementById('cl-panel');
     const stats = document.getElementById('cl-stats');
     const searchEl = document.getElementById('cl-search');
+    const exportBtn = document.getElementById('cl-export');
+    const drawer = document.getElementById('cl-drawer');
+    const drawerBody = document.getElementById('cl-drawer-body');
+    const drawerTitle = document.getElementById('cl-drawer-title');
+    const backdrop = document.getElementById('cl-drawer-backdrop');
 
     function esc(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function hostLabel(url) {
+        try {
+            return new URL(url || storefrontBase || 'https://example.com').hostname.replace(/^www\./, '');
+        } catch (_) {
+            return 'store';
+        }
+    }
+
+    function crumbPath(c) {
+        const base = (c.storefront_url || (storefrontBase + (c.storefront_path || '')) || '').replace(/^https?:\/\//, '');
+        return base.replace(/\//g, ' > ');
     }
 
     function formatRules(c) {
@@ -138,16 +233,122 @@
         }).join(join);
     }
 
+    function rulesPlain(c) {
+        if (c.collection_type !== 'smart' || !c.rules || !c.rules.length) return '';
+        const join = c.rules_disjunctive ? ' OR ' : ' AND ';
+        return c.rules.map(function (r) {
+            return [r.column, r.relation, r.condition].join(' ');
+        }).join(join);
+    }
+
     function filtered() {
         const q = (searchEl.value || '').trim().toLowerCase();
         return allCollections.filter(function (c) {
             if (typeFilter !== 'all' && c.collection_type !== typeFilter) return false;
             if (!q) return true;
-            const hay = [c.title, c.handle, c.description, c.sort_order, c.template_suffix]
+            const hay = [
+                c.title, c.handle, c.description, c.sort_order, c.template_suffix,
+                c.theme_template, c.seo_title, c.seo_description, c.storefront_url
+            ]
                 .concat((c.rules || []).map(function (r) { return [r.column, r.relation, r.condition].join(' '); }))
                 .join(' ').toLowerCase();
             return hay.indexOf(q) !== -1;
         });
+    }
+
+    function csvEscape(val) {
+        const s = String(val == null ? '' : val);
+        if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+
+    function exportCsv() {
+        const rows = filtered();
+        if (!rows.length) return;
+        const headers = [
+            'Title', 'Handle', 'Type', 'Products', 'Description', 'SEO page title',
+            'SEO meta description', 'Storefront URL', 'Theme template', 'Sort order',
+            'Rules', 'Updated at', 'Admin URL', 'Shopify ID'
+        ];
+        const lines = [headers.join(',')];
+        rows.forEach(function (c) {
+            lines.push([
+                c.title,
+                c.handle,
+                c.collection_type === 'smart' ? 'smart' : 'manual',
+                c.product_count,
+                c.description,
+                c.seo_title,
+                c.seo_description,
+                c.storefront_url,
+                c.theme_template || 'collection',
+                c.sort_order,
+                rulesPlain(c),
+                c.updated_at,
+                c.admin_url,
+                c.legacy_resource_id || c.id
+            ].map(csvEscape).join(','));
+        });
+        const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        a.href = url;
+        a.download = 'collections-' + stamp + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function openDrawer(c) {
+        selectedId = c.id || '';
+        drawerTitle.textContent = c.title || 'Collection';
+        const seoTitle = c.seo_title || c.title || '';
+        const seoDesc = c.seo_description || c.description || '';
+        const handle = c.handle || '';
+        const fullUrl = c.storefront_url || (storefrontBase + '/collections/' + handle);
+        const themeLabel = c.template_suffix
+            ? ('collection.' + c.template_suffix)
+            : 'Default collection';
+        drawerBody.innerHTML =
+            '<div class="cl-card">'
+            + '<div class="cl-card-title"><span>Theme template</span><i class="fas fa-eye" aria-hidden="true"></i></div>'
+            + '<div class="cl-field"><div class="cl-readonly">' + esc(themeLabel) + '</div></div>'
+            + '</div>'
+            + '<div class="cl-card">'
+            + '<div class="cl-card-title"><span>Search engine listing</span>'
+            + (c.admin_url ? '<a class="cl-link" href="' + esc(c.admin_url) + '" target="_blank" rel="noopener">Edit in Shopify</a>' : '')
+            + '</div>'
+            + '<div class="seo-preview">'
+            + '<div class="seo-preview-brand">Bite Promotions</div>'
+            + '<div class="seo-preview-crumb">' + esc(crumbPath(c) || fullUrl) + '</div>'
+            + '<div class="seo-preview-title">' + esc(seoTitle) + '</div>'
+            + '<div class="seo-preview-desc">' + esc(seoDesc || '—') + '</div>'
+            + '</div>'
+            + '<div class="cl-field"><label>Page title</label>'
+            + '<div class="cl-readonly">' + esc(seoTitle) + '</div>'
+            + '<div class="hint">' + esc(String(seoTitle.length)) + ' of 70 characters used</div></div>'
+            + '<div class="cl-field"><label>Meta description</label>'
+            + '<textarea class="cl-readonly" readonly>' + esc(seoDesc) + '</textarea>'
+            + '<div class="hint">' + esc(String(seoDesc.length)) + ' of 160 characters used</div></div>'
+            + '<div class="cl-field"><label>URL handle</label>'
+            + '<div class="cl-handle-box"><span class="cl-handle-prefix">collections/</span>'
+            + '<div class="cl-readonly">' + esc(handle) + '</div></div>'
+            + '<div class="hint">' + esc(fullUrl) + '</div></div>'
+            + '</div>';
+        drawer.classList.add('open');
+        drawer.setAttribute('aria-hidden', 'false');
+        backdrop.classList.add('open');
+        render();
+    }
+
+    function closeDrawer() {
+        selectedId = '';
+        drawer.classList.remove('open');
+        drawer.setAttribute('aria-hidden', 'true');
+        backdrop.classList.remove('open');
+        render();
     }
 
     function render() {
@@ -157,6 +358,8 @@
         stats.textContent = allCollections.length
             ? (rows.length + ' shown · ' + allCollections.length + ' total · ' + smartN + ' smart · ' + customN + ' manual')
             : '';
+        exportBtn.disabled = !rows.length;
+
         if (!allCollections.length) {
             panel.innerHTML = '<div class="cl-state">No collections found.</div>';
             return;
@@ -173,29 +376,34 @@
                 ? '<span class="cl-badge smart">Smart</span>'
                 : '<span class="cl-badge custom">Manual</span>';
             const admin = c.admin_url
-                ? '<a class="cl-link" href="' + esc(c.admin_url) + '" target="_blank" rel="noopener">Admin</a>'
+                ? '<a class="cl-link" href="' + esc(c.admin_url) + '" target="_blank" rel="noopener" data-stop="1">Admin</a>'
                 : '';
             const updated = c.updated_at ? new Date(c.updated_at).toLocaleString() : '—';
-            return '<tr>'
+            const active = c.id === selectedId ? ' active' : '';
+            return '<tr class="cl-row' + active + '" data-id="' + esc(c.id) + '">'
                 + '<td>' + thumb + '</td>'
                 + '<td><div class="cl-title">' + esc(c.title) + '</div><div class="cl-handle">/' + esc(c.handle) + '</div>' + admin + '</td>'
                 + '<td>' + badge + '</td>'
                 + '<td class="cl-count">' + esc(c.product_count) + '</td>'
-                + '<td class="cl-desc">' + esc(c.description || '—') + '</td>'
-                + '<td>' + esc(c.sort_order || '—') + '</td>'
+                + '<td class="cl-seo">' + esc(c.seo_title || '—')
+                + '<div class="cl-seo-muted">' + esc((c.seo_description || '').slice(0, 80))
+                + ((c.seo_description || '').length > 80 ? '…' : '') + '</div></td>'
+                + '<td class="cl-desc">' + esc(c.storefront_url || ('/collections/' + (c.handle || ''))) + '</td>'
+                + '<td>' + esc(c.theme_template || 'collection') + '</td>'
                 + '<td class="cl-rules">' + formatRules(c) + '</td>'
                 + '<td>' + esc(updated) + '</td>'
                 + '</tr>';
         }).join('');
         panel.innerHTML = '<div class="cl-table-wrap"><table class="cl-table">'
             + '<thead><tr>'
-            + '<th></th><th>Collection</th><th>Type</th><th>Products</th><th>Description</th><th>Sort</th><th>Rules</th><th>Updated</th>'
+            + '<th></th><th>Collection</th><th>Type</th><th>Products</th><th>Search engine listing</th><th>URL</th><th>Theme</th><th>Rules</th><th>Updated</th>'
             + '</tr></thead><tbody>' + body + '</tbody></table></div>';
     }
 
     async function load() {
         panel.innerHTML = '<div class="cl-state"><i class="fas fa-spinner fa-spin"></i> Loading collections…</div>';
         stats.textContent = '';
+        exportBtn.disabled = true;
         try {
             const resp = await fetch('/api/collections', { credentials: 'same-origin' });
             const data = await resp.json();
@@ -203,12 +411,27 @@
                 throw new Error((data && data.error) || ('HTTP ' + resp.status));
             }
             allCollections = data.collections || [];
+            storefrontBase = data.storefront_url || '';
             render();
         } catch (err) {
             panel.innerHTML = '<div class="cl-state" style="color:#b91c1c;">Failed to load collections: '
                 + esc(err.message || err) + '</div>';
         }
     }
+
+    panel.addEventListener('click', function (e) {
+        if (e.target.closest('[data-stop]')) return;
+        const row = e.target.closest('tr.cl-row');
+        if (!row) return;
+        const id = row.getAttribute('data-id');
+        const c = allCollections.find(function (x) { return x.id === id; });
+        if (c) openDrawer(c);
+    });
+    backdrop.addEventListener('click', closeDrawer);
+    document.getElementById('cl-drawer-close').addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeDrawer();
+    });
 
     searchEl.addEventListener('input', render);
     document.querySelectorAll('.cl-chip').forEach(function (chip) {
@@ -220,6 +443,7 @@
         });
     });
     document.getElementById('cl-refresh').addEventListener('click', load);
+    exportBtn.addEventListener('click', exportCsv);
     load();
 })();
     </script>

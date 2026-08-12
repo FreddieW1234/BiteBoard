@@ -556,7 +556,7 @@ def api_live_products_count():
 
 @app.route('/api/collections')
 def api_collections():
-    """List all Shopify collections (custom + smart) with product counts. Dev staff only."""
+    """List all Shopify collections (custom + smart) with product counts + SEO. Dev staff only."""
     try:
         if not STORE_DOMAIN or not ACCESS_TOKEN:
             return jsonify({'success': False, 'error': 'Shopify not configured'}), 500
@@ -582,6 +582,7 @@ def api_collections():
                 templateSuffix
                 productsCount { count }
                 image { url altText }
+                seo { title description }
                 ruleSet {
                   appliedDisjunctively
                   rules { column relation condition }
@@ -647,22 +648,44 @@ def api_collections():
                         })
                 gid = node.get('id') or ''
                 numeric_id = gid.rsplit('/', 1)[-1] if gid else ''
+                handle = node.get('handle') or ''
+                seo = node.get('seo') or {}
+                if not isinstance(seo, dict):
+                    seo = {}
+                seo_title = (seo.get('title') or '').strip()
+                seo_description = (seo.get('description') or '').strip()
+                # Shopify omits seo.* when it matches the resource defaults.
+                if not seo_title:
+                    seo_title = node.get('title') or ''
+                if not seo_description:
+                    seo_description = node.get('description') or ''
+                storefront_path = f"/collections/{handle}" if handle else ''
+                storefront_url = f"{STOREFRONT_URL}{storefront_path}" if storefront_path else ''
                 collections.append({
                     'id': gid,
                     'legacy_resource_id': numeric_id,
                     'title': node.get('title') or '',
-                    'handle': node.get('handle') or '',
+                    'handle': handle,
                     'description': node.get('description') or '',
                     'description_html': node.get('descriptionHtml') or '',
                     'updated_at': node.get('updatedAt') or '',
                     'sort_order': node.get('sortOrder') or '',
                     'template_suffix': node.get('templateSuffix') or '',
+                    'theme_template': (
+                        f"collection.{node.get('templateSuffix')}"
+                        if node.get('templateSuffix')
+                        else 'collection'
+                    ),
                     'product_count': product_count,
                     'image_url': ((node.get('image') or {}) or {}).get('url') or '',
                     'image_alt': ((node.get('image') or {}) or {}).get('altText') or '',
                     'collection_type': 'smart' if rule_set else 'custom',
                     'rules_disjunctive': bool((rule_set or {}).get('appliedDisjunctively')) if rule_set else None,
                     'rules': rules,
+                    'seo_title': seo_title,
+                    'seo_description': seo_description,
+                    'storefront_path': storefront_path,
+                    'storefront_url': storefront_url,
                     'admin_url': (
                         f"https://{STORE_DOMAIN}/admin/collections/{numeric_id}"
                         if numeric_id.isdigit() else ''
@@ -679,6 +702,7 @@ def api_collections():
         return jsonify({
             'success': True,
             'count': len(collections),
+            'storefront_url': STOREFRONT_URL,
             'collections': collections,
         })
     except Exception as e:

@@ -22,10 +22,11 @@ html[data-theme="dark"] {
     --bb-shadow: rgba(0, 0, 0, 0.35);
 }
 
-/* ── Sidebar meta (user type, commit, theme) — visible when sidebar is open ── */
+/* ── Sidebar meta (user type, commit, theme, sign out) — visible when open ── */
 .sidebar-user-type,
 .sidebar-commit-info,
-.sidebar-theme-toggle {
+.sidebar-theme-toggle,
+.sidebar-sign-out {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -34,21 +35,25 @@ html[data-theme="dark"] {
 /* Fully open sidebars (dashboard) always show these */
 .sidebar:not(.collapsed) .sidebar-user-type,
 .sidebar:not(.collapsed) .sidebar-commit-info,
-.sidebar:not(.collapsed) .sidebar-theme-toggle {
+.sidebar:not(.collapsed) .sidebar-theme-toggle,
+.sidebar:not(.collapsed) .sidebar-sign-out {
     opacity: 1;
     visibility: visible;
 }
-.sidebar:not(.collapsed) .sidebar-theme-toggle {
+.sidebar:not(.collapsed) .sidebar-theme-toggle,
+.sidebar:not(.collapsed) .sidebar-sign-out {
     pointer-events: auto;
 }
 /* Collapsed app sidebars reveal them when hovered/expanded */
 .sidebar.collapsed:hover .sidebar-user-type,
 .sidebar.collapsed:hover .sidebar-commit-info,
-.sidebar.collapsed:hover .sidebar-theme-toggle {
+.sidebar.collapsed:hover .sidebar-theme-toggle,
+.sidebar.collapsed:hover .sidebar-sign-out {
     opacity: 1;
     visibility: visible;
 }
-.sidebar.collapsed:hover .sidebar-theme-toggle {
+.sidebar.collapsed:hover .sidebar-theme-toggle,
+.sidebar.collapsed:hover .sidebar-sign-out {
     pointer-events: auto;
 }
 
@@ -173,6 +178,46 @@ html[data-theme="dark"] .sidebar-theme-toggle:hover {
 .sidebar.collapsed:hover .sidebar-theme-toggle .theme-toggle-label { display: inline; }
 .sidebar.collapsed .sidebar-theme-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
 .sidebar.collapsed:hover .sidebar-theme-toggle { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+
+.sidebar-sign-out {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: #6b7280;
+    text-decoration: none;
+    font-size: 0.825rem;
+    font-weight: 500;
+    box-sizing: border-box;
+}
+.sidebar-sign-out:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+.sidebar-sign-out i {
+    width: 20px;
+    text-align: center;
+}
+html[data-theme="dark"] .sidebar-sign-out {
+    color: var(--bb-muted);
+}
+html[data-theme="dark"] .sidebar-sign-out:hover {
+    background: var(--bb-surface-2);
+    color: var(--bb-text);
+}
+.sidebar.collapsed .sidebar-sign-out-label { display: none; }
+.sidebar.collapsed:hover .sidebar-sign-out-label { display: inline; }
+.sidebar.collapsed .sidebar-sign-out { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.collapsed:hover .sidebar-sign-out { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+
+.sidebar-footer {
+    overflow-y: auto;
+    max-height: min(48vh, 420px);
+}
 
 /* ── Global base ── */
 html[data-theme="dark"] body {
