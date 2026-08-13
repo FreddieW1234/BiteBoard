@@ -446,17 +446,28 @@
             resize: vertical;
         }
 
-        .form-textarea[readonly] {
+        .form-textarea[readonly],
+        .form-input[readonly] {
             background-color: #f7fafc;
             color: #4a5568;
             cursor: not-allowed;
             border-color: #e2e8f0;
         }
 
-        .form-textarea[readonly]:focus {
+        .form-textarea[readonly]:focus,
+        .form-input[readonly]:focus {
             border-color: #e2e8f0;
             box-shadow: none;
         }
+
+        .inherited-from-parent-hint {
+            display: none;
+            margin-left: 6px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            color: #92400e;
+        }
+        .pc-create-from-parent .inherited-from-parent-hint { display: inline; }
 
         .description-header {
             display: flex;
@@ -2415,7 +2426,7 @@
                 <div id="createFromParentModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 10000; align-items: center; justify-content: center;" class="create-from-parent-modal-overlay">
                     <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 520px; width: 90%; max-height: 80vh; display: flex; flex-direction: column;">
                         <h3 style="margin: 0 0 16px 0; font-size: 1.25rem;">Select parent product to create from</h3>
-                        <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9rem;">Products with a Parent type (e.g. Parent - Maxi) are listed below. Selecting one will duplicate that product.</p>
+                        <p style="margin: 0 0 12px 0; color: #666; font-size: 0.9rem;">Products with a Parent type (e.g. Parent - Maxi) are listed below. The new child will inherit the parent's title, product code, and other inherited fields.</p>
                         <input type="text" id="create-from-parent-search" placeholder="Search by name or SKU…" autocomplete="off" style="width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem; font-family: inherit;">
                         <div id="create-from-parent-list" style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; min-height: 200px;">
                             <span class="muted">Loading parent products…</span>
@@ -2488,7 +2499,7 @@
                 <!-- Notice when editing a child product (same restricted view as Create from Parent) -->
                 <div id="child-product-edit-notice" style="display: none; margin-bottom: 16px; padding: 14px 18px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; color: #92400e;">
                     <strong><i class="fas fa-info-circle"></i> Child product</strong>
-                    <p style="margin: 8px 0 0 0; font-size: 0.95rem;">This product is a child. You can edit the fields shown below. To change pricing, VAT, ingredients, artwork, colour options, or other inherited details, edit the parent product instead.</p>
+                    <p style="margin: 8px 0 0 0; font-size: 0.95rem;">This product is a child. Title and product code are inherited from the parent and cannot be edited here. To change pricing, VAT, ingredients, artwork, colour options, or other inherited details, edit the parent product instead.</p>
                 </div>
 
                 <!-- Asked when the image removed is the one shared across the product family -->
@@ -2510,11 +2521,11 @@
                     <div class="form-grid">
                         <div class="form-row-product-code-title">
                             <div class="form-group" id="product-code-group">
-                                <label class="form-label">Product Code *</label>
+                                <label class="form-label">Product Code * <span class="inherited-from-parent-hint">from parent</span></label>
                                 <input type="text" id="product-code" name="product-code" class="form-input" placeholder="Enter product code">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Product Title *</label>
+                                <label class="form-label">Product Title * <span class="inherited-from-parent-hint">from parent</span></label>
                                 <input type="text" id="title" name="title" class="form-input" placeholder="Enter product title" required>
                             </div>
                         </div>
@@ -3065,6 +3076,7 @@
 
             const formEl = document.getElementById('productForm');
             if (formEl) formEl.classList.remove('pc-create-from-parent');
+            if (typeof syncChildInheritedIdentityLock === 'function') syncChildInheritedIdentityLock();
 
             const titleEl = document.getElementById('title');
             if (titleEl) titleEl.value = '';
@@ -3635,6 +3647,7 @@
                     else formEl.classList.remove('pc-create-from-parent');
                 }
                 if (childNotice) childNotice.style.display = isChildMode ? 'block' : 'none';
+                if (typeof syncChildInheritedIdentityLock === 'function') syncChildInheritedIdentityLock();
             }
 
             function updateParentUI() {
@@ -4566,6 +4579,7 @@
         // Metafields hidden on Create-from-Parent / child edits — backend copies these
         // from the live parent. Do not send form defaults (e.g. leadtime 5/10).
         const CHILD_INHERITED_METAFIELD_KEYS = new Set([
+            'sku',
             'ingredients', 'nutritional_info', 'print_info', 'recycle_info', 'whats_inside',
             'product_size', 'moq', 'origination', 'shelf_life', 'unit_weight',
             'case_quantity', 'case_weight', 'leadtime3', 'leadtime1', 'leadtime2',
@@ -4585,8 +4599,9 @@
         function collectMetafieldsData() {
             const metafieldsData = [];
             const skipInherited = typeof isChildProduct === 'function' && isChildProduct();
-            // Product Code / per-colour SKUs → custom.sku (single string; plain or JSON array)
-            const skuValue = collectCustomSkuValue();
+            // Product Code / per-colour SKUs → custom.sku (single string; plain or JSON array).
+            // Children inherit SKU from the parent — do not send the form value.
+            const skuValue = skipInherited ? '' : collectCustomSkuValue();
             if (skuValue) {
                 metafieldsData.push({ namespace: 'custom', key: 'sku', type: 'single_line_text_field', value: skuValue });
             }
@@ -6916,14 +6931,17 @@
                 console.log('🔍 Colour images mapping:', colourImages);
             }
             
-            // Require Product Code (top) or per-colour SKUs when Different Product Codes? is on
-            try {
-                const skuCheck = validateProductCodesBeforeSave();
-                if (!skuCheck.ok) {
-                    alert(skuCheck.message);
-                    return;
-                }
-            } catch (e) {}
+            // Require Product Code (top) or per-colour SKUs when Different Product Codes? is on.
+            // Children inherit product code from the parent.
+            if (!isChildProduct()) {
+                try {
+                    const skuCheck = validateProductCodesBeforeSave();
+                    if (!skuCheck.ok) {
+                        alert(skuCheck.message);
+                        return;
+                    }
+                } catch (e) {}
+            }
             
             // Pricing fields - using default values since fields were removed
             productData.price = '0.00';
@@ -8071,10 +8089,10 @@
                 alert('This product is being saved in the background and is locked until the save finishes. Check the Queue for progress.');
                 return;
             }
-            // "Create from Parent" passes a versionName and intentionally creates a restricted
-            // child product. A plain "Duplicate" (no versionName) should behave like creating a
-            // brand-new product with the full set of editable fields.
-            const isCreateFromParent = isDuplicate && opts && opts.versionName !== undefined;
+            // "Create from Parent" creates a restricted child product that inherits
+            // title and product code from the parent. A plain "Duplicate" should
+            // behave like creating a brand-new product with the full set of editable fields.
+            const isCreateFromParent = isDuplicate && !!(opts && (opts.createFromParent || opts.versionName !== undefined));
             const loadingEl = document.getElementById('product-loading-overlay');
 
             if (!isDuplicate) {
@@ -8089,6 +8107,7 @@
                 if (formEl) formEl.classList.remove('pc-create-from-parent');
                 const childNotice = document.getElementById('child-product-edit-notice');
                 if (childNotice) childNotice.style.display = 'none';
+                if (typeof syncChildInheritedIdentityLock === 'function') syncChildInheritedIdentityLock();
             }
             if (loadingEl) loadingEl.classList.add('visible');
             try {
@@ -8118,12 +8137,12 @@
                 if (_loadingTextEl) _loadingTextEl.textContent = 'Loading product…';
                 if (!data || !data.id) throw new Error('Failed to load product');
 
-                // Title: when create-from-parent with versionName use "Base - Version"; else when duplicating use "Base (Copy)"
+                // Title: create-from-parent inherits the parent's title; a plain duplicate uses "Base (Copy)"
                 const titleEl = document.getElementById('title');
                 let baseTitle = data.title || title || '';
                 if (titleEl) {
-                    if (isDuplicate && opts && opts.versionName !== undefined) {
-                        titleEl.value = baseTitle + (opts.versionName ? ' - ' + opts.versionName : '');
+                    if (isCreateFromParent) {
+                        titleEl.value = baseTitle;
                     } else {
                         titleEl.value = isDuplicate ? (baseTitle + ' (Copy)') : baseTitle;
                     }
@@ -8301,6 +8320,7 @@
                             if (formEl) formEl.classList.add('pc-create-from-parent');
                             const childNotice = document.getElementById('child-product-edit-notice');
                             if (childNotice) childNotice.style.display = 'block';
+                            if (typeof syncChildInheritedIdentityLock === 'function') syncChildInheritedIdentityLock();
                         }
                     } else {
                         if (parentYesEl) parentYesEl.checked = true;
@@ -8499,13 +8519,16 @@
                     syncDeleteProductButtonVisibility();
                     closeDuplicateModal();
                     closeCreateFromParentModal();
-                    // If version name was not already provided (e.g. from Create from Parent prompt), prompt now for Duplicate flow
-                    const versionNameFromPrompt = (opts && opts.versionName !== undefined) ? null : prompt('What do you want to call this version?', '');
-                    if (titleEl && versionNameFromPrompt !== undefined && versionNameFromPrompt !== null) {
-                        const current = titleEl.value || '';
-                        if (current.includes('(Copy)')) {
-                            const replacement = versionNameFromPrompt.trim() ? ' - ' + versionNameFromPrompt.trim() : '';
-                            titleEl.value = current.replace(/\s*\(Copy\)\s*$/, replacement).trim() || current.replace(/\s*\(Copy\)\s*$/, '').trim();
+                    // Plain Duplicate can optionally rename the "(Copy)" title. Create from Parent
+                    // inherits the parent's title, so it must not prompt for a version name.
+                    if (!isCreateFromParent) {
+                        const versionNameFromPrompt = prompt('What do you want to call this version?', '');
+                        if (titleEl && versionNameFromPrompt !== undefined && versionNameFromPrompt !== null) {
+                            const current = titleEl.value || '';
+                            if (current.includes('(Copy)')) {
+                                const replacement = versionNameFromPrompt.trim() ? ' - ' + versionNameFromPrompt.trim() : '';
+                                titleEl.value = current.replace(/\s*\(Copy\)\s*$/, replacement).trim() || current.replace(/\s*\(Copy\)\s*$/, '').trim();
+                            }
                         }
                     }
                     // Only "Create from Parent" enters the restricted child mode (hides VAT,
@@ -8521,6 +8544,7 @@
                         const childNotice = document.getElementById('child-product-edit-notice');
                         if (childNotice) childNotice.style.display = 'none';
                     }
+                    if (typeof syncChildInheritedIdentityLock === 'function') syncChildInheritedIdentityLock();
                     // Show form only after filtering so user never sees the raw duplication
                     showCreateForm();
                 }
@@ -8605,8 +8629,6 @@
         async function selectCreateFromParentProduct(p) {
             const productId = p.id != null ? Number(p.id) : 0;
             const title = (p.title || 'Untitled').trim();
-            const versionName = prompt('What do you want to call this version?', '');
-            if (versionName === null) return;
             let idToLoad = productId;
             let titleToLoad = title;
             if (!idToLoad) {
@@ -8627,7 +8649,7 @@
                 }
             }
             closeCreateFromParentModal();
-            pcPopulateFromProduct(idToLoad, titleToLoad, { duplicate: true, versionName: (versionName || '').trim() });
+            pcPopulateFromProduct(idToLoad, titleToLoad, { duplicate: true, createFromParent: true });
         }
 
         function renderCreateFromParentList() {
@@ -8864,10 +8886,25 @@
                 // Product Code (sku) is in Basic Info, not in metafields UI
                 if (key === 'sku' && namespace === 'custom') {
                     // Plain SKUs go in the top Product Code box. JSON list SKUs are applied
-                    // later by loadSkuFromMetafields (needs colour rows first).
+                    // later by loadSkuFromMetafields (needs colour rows first). Children
+                    // inherit SKU and keep the colour section hidden, so show a summary.
                     const parsedSku = parseCustomSkuEntries(value);
-                    if (parsedSku.mode === 'list') return;
                     const productCodeEl = document.getElementById('product-code');
+                    if (parsedSku.mode === 'list') {
+                        if (typeof isChildProduct === 'function' && isChildProduct() && productCodeEl) {
+                            const codes = [];
+                            const seen = new Set();
+                            (parsedSku.entries || []).forEach(entry => {
+                                const code = (entry && entry.sku) ? String(entry.sku).trim() : '';
+                                if (code && !seen.has(code)) {
+                                    seen.add(code);
+                                    codes.push(code);
+                                }
+                            });
+                            productCodeEl.value = codes.join(', ');
+                        }
+                        return;
+                    }
                     if (productCodeEl) {
                         productCodeEl.value = parsedSku.value || '';
                     }
@@ -9968,6 +10005,23 @@
             const childSelect = document.getElementById('parent-child-child-select');
             if (childYes && childYes.checked && childSelect && childSelect.value.trim().startsWith('Child - ')) return true;
             return false;
+        }
+
+        function syncChildInheritedIdentityLock() {
+            const locked = isChildProduct();
+            ['title', 'product-code'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (locked) {
+                    el.setAttribute('readonly', 'readonly');
+                    el.setAttribute('aria-readonly', 'true');
+                    el.title = 'Inherited from parent — edit on the parent product';
+                } else {
+                    el.removeAttribute('readonly');
+                    el.removeAttribute('aria-readonly');
+                    el.removeAttribute('title');
+                }
+            });
         }
 
         function metafieldValueToArray(m) {

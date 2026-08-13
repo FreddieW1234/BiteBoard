@@ -596,9 +596,10 @@ def verify_product(intended_data: dict, product_id) -> list:
     rows = []
     skip_inherited = _child_inherited_keys_to_skip(intended_data or {})
 
-    # Title
+    # Title — children inherit this from the parent after save, so the form
+    # value is not the source of truth (same as inherited metafields).
     want_title = (intended_data.get("title") or "").strip()
-    if want_title:
+    if want_title and not skip_inherited:
         got_title = (detail.get("title") or "").strip()
         rows.append({
             "field": "title",

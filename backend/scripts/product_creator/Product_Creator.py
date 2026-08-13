@@ -3070,7 +3070,9 @@ MANAGED_STOREFRONT_KEYS = (
 )
 
 # Metafield keys that are "inherited" from parent to children (same as hidden on child form).
+# Title is a Shopify product field (not a metafield) and is copied separately.
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
+    "sku",
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside", "productinfo",
     "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
     "case_weight", "leadtime3", "leadtime1", "leadtime2", "commodity_code", "alternative_spellings",
@@ -3238,10 +3240,11 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
 def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
     """
     For a child product (parent_child e.g. "Child - Chocolate Bar Maxi"), fetch the parent
-    product's tags, taxable (charge_vat), and metafields for PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS.
+    product's title, tags, taxable (charge_vat), and metafields for
+    PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS (including custom.sku).
     Used when saving a child so inherited fields are overwritten by the parent's values.
     Returns None if parent product ID is not found or fetch fails; otherwise
-    {"tags": str, "charge_vat": bool, "metafields": [{"namespace","key","value","type"}, ...]}.
+    {"title": str, "tags": str, "charge_vat": bool, "metafields": [{"namespace","key","value","type"}, ...]}.
     """
     parent_id = _get_parent_product_id_for_child(child_parent_child_value, shopify_domain)
     if not parent_id:
@@ -3257,6 +3260,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
         if r.status_code != 200:
             return None
         prod = r.json().get("product", {})
+        title = (prod.get("title") or "").strip()
         tags = prod.get("tags") or ""
         if isinstance(tags, list):
             tags = ", ".join(str(t) for t in tags)
@@ -3281,6 +3285,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
                     })
         metafields = _inherit_metafields_with_clears(metafields)
         return {
+            "title": title,
             "tags": tags,
             "charge_vat": taxable,
             "metafields": metafields,
@@ -3339,6 +3344,7 @@ def _inherit_metafields_with_clears(metafields):
         ("stockdesigns", "file_reference"),
         ("pricejsontr", "single_line_text_field"),
         ("pricejsoner", "single_line_text_field"),
+        ("sku", "single_line_text_field"),
     ]
     for key, mf_type in clearable_inherited_types:
         if key not in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS:
@@ -3970,15 +3976,17 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
         try:
             if mfs_to_propagate:
                 create_metafields(cid, mfs_to_propagate, shopify_domain=shopify_domain)
-            # Update child product tags, clear native body_html, and taxable to match parent
+            # Update child title, tags, clear native body_html, and taxable to match parent
             prod_url = f"{base_url}/products/{cid}.json"
             get_resp = requests.get(prod_url, headers=headers, timeout=15)
             if get_resp.status_code == 200:
                 prod = get_resp.json().get("product", {})
-                child_title = (prod.get("title") or "").strip() or f"Product {cid}"
+                parent_title = (product_data.get("title") or "").strip()
+                child_title = parent_title or (prod.get("title") or "").strip() or f"Product {cid}"
                 payload = {
                     "product": {
                         "id": cid,
+                        "title": child_title,
                         "tags": tags,
                         "body_html": "",
                         "variants": [{"id": v.get("id"), "taxable": taxable} for v in prod.get("variants", [])],
@@ -3986,7 +3994,7 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                 }
                 put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
                 if put_resp.status_code == 200:
-                    print(f"✅ Updated tags and taxable for child product {cid}", flush=True)
+                    print(f"✅ Updated title, tags and taxable for child product {cid}", flush=True)
                     if should_run_price_bandit:
                         try:
                             from Price_Bandit import process_product
@@ -3998,7 +4006,7 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                         _zero_all_variant_prices(cid, shopify_domain)
                     saved_list.append({"id": cid, "title": child_title, "is_parent": False})
                 else:
-                    print(f"⚠️ Failed to update tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
+                    print(f"⚠️ Failed to update title/tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
             else:
                 print(f"⚠️ Could not fetch child product {cid} for tags update", flush=True)
                 tab_sync = sync_product_tab_body_from_metafields(cid, shopify_domain=domain)
@@ -4054,6 +4062,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
+            "sku",
         ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or []) | set(CUSTOM_OPTION_METAFIELD_KEYS)
 
         def _is_clearable(ns, k):
@@ -4419,18 +4428,21 @@ def create_product(product_data):
             "Cache-Control": "no-cache"
         }
         
-        # When saving a child product, overwrite tags and charge_vat (and later metafields) from parent
+        # When saving a child product, overwrite title, tags, charge_vat (and later metafields) from parent
         did_parent_fetch = False
         try:
             parent_child_value = (product_data.get("parent_child") or "").strip()
             if _is_parent_child_type(parent_child_value, "child"):
                 parent_inherited = get_parent_inherited_data(parent_child_value, shopify_domain=None)
                 if parent_inherited:
+                    parent_title = (parent_inherited.get("title") or "").strip()
+                    if parent_title:
+                        product_data["title"] = parent_title
                     product_data["tags"] = parent_inherited.get("tags") or product_data.get("tags", "")
                     product_data["charge_vat"] = parent_inherited.get("charge_vat", True)
                     product_data["_parent_metafields"] = parent_inherited.get("metafields") or []
                     did_parent_fetch = True  # we did 2 API calls (product + metafields)
-                    print(f"📋 Child product: using parent's tags, VAT, and inherited metafields", flush=True)
+                    print(f"📋 Child product: using parent's title, tags, VAT, SKU, and inherited metafields", flush=True)
         except Exception as e:
             print(f"⚠️ Skipping parent inherited data (non-fatal): {e}", flush=True)
         
