@@ -38,63 +38,76 @@
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
 
-        .editor-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
-        @media (max-width: 1100px) { .editor-grid { grid-template-columns: 1fr; } }
-
-        .category-section, .meta-panel {
+        .category-section {
             background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
-            padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); width: 100%;
         }
-        .category-section h2, .meta-panel h2 {
+        .category-section h2 {
             font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: #333;
             display: flex; align-items: center; gap: 8px;
         }
-        .item-list { max-height: 70vh; overflow-y: auto; margin-bottom: 16px; }
+        .item-list { max-height: 70vh; overflow-y: auto; margin-bottom: 16px; width: 100%; }
 
-        .category-group { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+        .category-group { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; width: 100%; }
         .category-group.dragging { opacity: 0.45; }
         .category-header {
-            display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+            display: flex; align-items: center; gap: 8px; padding: 12px 14px; width: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-weight: 600;
         }
         .category-header.collapsed + .subcategories-container { display: none; }
         .category-header.collapsed .fa-chevron-down { transform: rotate(-90deg); }
-        .subcategories-container { padding: 12px; background: #f8f9fa; }
+        .subcategories-container { padding: 12px; background: #f8f9fa; width: 100%; }
         .subcategory-row, .child-row {
-            display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px;
-            background: #fff; border-radius: 6px; border-left: 3px solid #667eea;
+            display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 6px;
+            background: #fff; border-radius: 6px; border-left: 3px solid #667eea; width: 100%;
         }
-        .child-row { margin-left: 28px; border-left-color: #94a3b8; background: #fafafa; }
+        .child-row { padding-left: 36px; border-left-color: #94a3b8; background: #fafafa; }
         .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
-        .sub-block { margin-bottom: 8px; }
-        .children-container { padding-left: 4px; }
+        .sub-block { margin-bottom: 8px; width: 100%; }
+        .children-container { width: 100%; }
 
         .menu-name-input {
-            flex: 1; min-width: 120px; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.35);
+            flex: 1; min-width: 0; width: 100%; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.35);
             border-radius: 6px; background: rgba(255,255,255,0.15); color: #fff; font-weight: 600;
         }
         .subcategory-row .menu-name-input, .child-row .menu-name-input {
             border: 1px solid #e5e7eb; background: #fff; color: #111827; font-weight: 500;
         }
-        .drag-handle { cursor: grab; opacity: 0.7; }
+        .drag-handle { cursor: grab; opacity: 0.7; flex-shrink: 0; }
         .btn-icon {
             border: none; background: transparent; cursor: pointer; padding: 4px 6px;
-            color: inherit; border-radius: 4px;
+            color: inherit; border-radius: 4px; flex-shrink: 0;
         }
         .btn-icon:hover { background: rgba(0,0,0,0.08); }
         .category-header .btn-icon { color: #fff; }
 
         .add-item-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
-        .add-item-input, .meta-panel input, .meta-panel textarea, .meta-panel select {
+        .add-item-input {
             padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem;
+            flex: 1; min-width: 140px;
         }
-        .add-item-input { flex: 1; min-width: 140px; }
-        .meta-panel label { display: block; font-size: 0.75rem; color: #6b7280; margin: 10px 0 4px; }
-        .meta-panel input, .meta-panel textarea, .meta-panel select { width: 100%; }
-        .meta-panel textarea { min-height: 72px; resize: vertical; }
         .meta-hint { font-size: 0.75rem; color: #9ca3af; margin-top: 4px; }
-        .meta-empty { color: #9ca3af; font-size: 0.875rem; padding: 12px 0; }
         .row-selected { outline: 2px solid #4f46e5; outline-offset: 1px; }
+
+        .meta-modal-backdrop {
+            display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+            z-index: 1000; align-items: center; justify-content: center; padding: 16px;
+        }
+        .meta-modal-backdrop.open { display: flex; }
+        .meta-modal {
+            background: #fff; border-radius: 10px; width: min(480px, 100%);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.18); padding: 20px 22px; max-height: 90vh; overflow-y: auto;
+        }
+        .meta-modal-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+        }
+        .meta-modal-header h2 { font-size: 1.1rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+        .meta-modal label { display: block; font-size: 0.75rem; color: #6b7280; margin: 12px 0 4px; }
+        .meta-modal input, .meta-modal textarea {
+            width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem;
+        }
+        .meta-modal textarea { min-height: 88px; resize: vertical; }
+        .meta-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
         .btn {
             display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
@@ -104,15 +117,14 @@
         .btn-primary:hover { background: #4338ca; }
         .btn-secondary { background: #e5e7eb; color: #111827; }
         .btn-success { background: #059669; color: #fff; }
+        .btn-danger { background: #dc2626; color: #fff; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; background: #fca5a5; color: #7f1d1d; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .save-section { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
         .alert { display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem; }
         .alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
         .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-        .preview-box {
-            margin-top: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a;
-            border-radius: 6px; font-size: 0.8rem; max-height: 220px; overflow: auto;
-        }
         .muted { color: #6b7280; font-size: 0.75rem; }
 
         body.embed-mode { background: #f6f8fa; }
@@ -149,88 +161,74 @@
             <div class="alert alert-success" id="successAlert"></div>
             <div class="alert alert-error" id="errorAlert"></div>
 
-            <div class="editor-grid">
-                <div class="category-section">
-                    <h2><i class="fas fa-sitemap"></i> Categories</h2>
-                    <div class="item-list" id="categoriesList">
-                        <div class="empty-state muted">Loading…</div>
-                    </div>
-
-                    <div class="add-item-form" id="addCategoryForm">
-                        <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
-                        <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
-                    </div>
-                    <div class="add-item-form">
-                        <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
-                        <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
-                        <label class="muted" style="display:flex;align-items:center;gap:4px;">
-                            <input type="checkbox" id="indexableInput" checked> In menu
-                        </label>
-                        <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
-                    </div>
-                    <div class="add-item-form">
-                        <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
-                        <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
-                        <label class="muted" style="display:flex;align-items:center;gap:4px;">
-                            <input type="checkbox" id="childIndexableInput" checked> In menu
-                        </label>
-                        <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
-                    </div>
-
-                    <div class="save-section">
-                        <button class="btn btn-success" id="saveBtn" onclick="saveTaxonomy()">
-                            <i class="fas fa-save"></i> Save order / menu names
-                        </button>
-                    </div>
-                    <p class="meta-hint">Menu names are cosmetic (<code>display_label</code>). Choice values and handles change only via the metadata panel.</p>
+            <div class="category-section">
+                <h2><i class="fas fa-sitemap"></i> Categories</h2>
+                <div class="item-list" id="categoriesList">
+                    <div class="empty-state muted">Loading…</div>
                 </div>
 
-                <aside class="meta-panel" id="metaPanel">
-                    <h2><i class="fas fa-sliders"></i> Metadata</h2>
-                    <div id="metaEmpty" class="meta-empty">Select a node to edit menu name, choice value, handle, or collection SEO.</div>
-                    <div id="metaBody" style="display:none;">
-                        <div class="muted" id="metaKind"></div>
-                        <label>Menu name (display_label)</label>
-                        <input type="text" id="metaDisplayLabel" placeholder="Shown in menus; optional">
-                        <label>Choice value</label>
-                        <div style="display:flex; gap:6px;">
-                            <input type="text" id="metaChoice" style="flex:1;">
-                            <button class="btn btn-secondary" type="button" onclick="previewChoiceRename()">Preview</button>
-                        </div>
-                        <div id="choicePreview" class="preview-box" style="display:none;"></div>
-                        <button class="btn btn-primary" id="applyChoiceBtn" style="display:none; margin-top:8px;" type="button" onclick="applyChoiceRename()">Apply choice rename</button>
+                <div class="add-item-form" id="addCategoryForm">
+                    <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
+                    <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
+                </div>
+                <div class="add-item-form">
+                    <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
+                    <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
+                    <label class="muted" style="display:flex;align-items:center;gap:4px;">
+                        <input type="checkbox" id="indexableInput" checked> In menu
+                    </label>
+                    <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
+                </div>
+                <div class="add-item-form">
+                    <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
+                    <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
+                    <label class="muted" style="display:flex;align-items:center;gap:4px;">
+                        <input type="checkbox" id="childIndexableInput" checked> In menu
+                    </label>
+                    <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
+                </div>
 
-                        <label>Handle</label>
-                        <div style="display:flex; gap:6px;">
-                            <input type="text" id="metaHandle" style="flex:1;" disabled>
-                            <button class="btn btn-secondary" type="button" id="unlockHandleBtn" onclick="toggleHandleUnlock()">Unlock</button>
-                        </div>
-                        <div id="handleRenameRow" style="display:none; margin-top:8px;">
-                            <input type="text" id="metaNewHandle" placeholder="new-handle">
-                            <button class="btn btn-primary" style="margin-top:6px;" type="button" onclick="renameHandle()">Rename + redirect</button>
-                            <p class="meta-hint">Creates /collections/old → /collections/new, then re-locks.</p>
-                        </div>
-
-                        <label id="indexableLabel" style="display:none;">
-                            <input type="checkbox" id="metaIndexable"> In menu (indexable)
-                        </label>
-
-                        <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;">
-                        <p class="muted">Collection SEO (Shopify collection only)</p>
-                        <label>Collection title</label>
-                        <input type="text" id="metaColTitle">
-                        <label>SEO title</label>
-                        <input type="text" id="metaSeoTitle">
-                        <label>SEO description</label>
-                        <textarea id="metaSeoDesc"></textarea>
-                        <label>Description HTML</label>
-                        <textarea id="metaDescHtml"></textarea>
-                        <button class="btn btn-success" style="margin-top:12px;" type="button" onclick="saveMetadata()">
-                            <i class="fas fa-check"></i> Save metadata
-                        </button>
-                    </div>
-                </aside>
+                <div class="save-section">
+                    <button class="btn btn-success" id="saveBtn" onclick="saveTaxonomy()">
+                        <i class="fas fa-save"></i> Save order / menu names
+                    </button>
+                </div>
+                <p class="meta-hint">Inline names are cosmetic menu labels. Use the sliders icon for SEO title, description, and handle.</p>
             </div>
+        </div>
+    </div>
+
+    <div class="meta-modal-backdrop" id="metaModal" onclick="if(event.target===this)closeMetaModal()">
+        <div class="meta-modal" role="dialog" aria-modal="true" aria-labelledby="metaModalTitle">
+            <div class="meta-modal-header">
+                <h2 id="metaModalTitle"><i class="fas fa-sliders"></i> Collection settings</h2>
+                <button type="button" class="btn btn-secondary" onclick="closeMetaModal()">Close</button>
+            </div>
+            <div class="muted" id="metaKind"></div>
+            <label>SEO title</label>
+            <input type="text" id="metaSeoTitle">
+            <label>SEO description</label>
+            <textarea id="metaSeoDesc"></textarea>
+            <label>Handle</label>
+            <div style="display:flex; gap:6px;">
+                <input type="text" id="metaHandle" style="flex:1;" disabled>
+                <button class="btn btn-secondary" type="button" id="unlockHandleBtn" onclick="toggleHandleUnlock()">Unlock</button>
+            </div>
+            <div id="handleRenameRow" style="display:none; margin-top:8px;">
+                <input type="text" id="metaNewHandle" placeholder="new-handle">
+                <button class="btn btn-primary" style="margin-top:6px;" type="button" onclick="renameHandle()">Rename + redirect</button>
+                <p class="meta-hint">Creates /collections/old → /collections/new, then re-locks.</p>
+            </div>
+            <div class="meta-modal-actions">
+                <button class="btn btn-danger" type="button" id="metaDeleteBtn" onclick="deleteNode()" style="margin-right:auto;">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+                <button class="btn btn-secondary" type="button" onclick="closeMetaModal()">Cancel</button>
+                <button class="btn btn-success" type="button" onclick="saveMetadata()">
+                    <i class="fas fa-check"></i> Save
+                </button>
+            </div>
+            <p class="meta-hint" id="metaDeleteHint" style="margin-top:8px;"></p>
         </div>
     </div>
 
@@ -239,8 +237,9 @@
         let taxonomyUpdatedAt = null;
         let dataSource = 'fallback';
         let selectedHandle = null;
-        let pendingChoicePreview = null;
         let handleUnlocked = false;
+        let canDeleteSelected = false;
+        let selectedKind = null;
 
         function escapeHtml(s) {
             return String(s == null ? '' : s)
@@ -287,7 +286,6 @@
                 }
                 renderTree();
                 updateSelects();
-                if (selectedHandle) selectNode(selectedHandle, false);
             } catch (err) {
                 showError(err.message || String(err));
             }
@@ -309,9 +307,8 @@
                         <i class="fas fa-chevron-down toggle-icon" onclick="toggleGroup(this.closest('.category-header'))"></i>
                         <i class="fas fa-grip-vertical drag-handle" data-drag="category"></i>
                         <input class="menu-name-input" value="${escapeHtml(menu)}" data-field="display_label"
-                               onclick="event.stopPropagation(); selectNode('${escapeHtml(catHandle)}')"
                                onchange="setDisplayLabel('${escapeHtml(catHandle)}', this.value)">
-                        <button class="btn-icon" title="Metadata" onclick="event.stopPropagation(); selectNode('${escapeHtml(catHandle)}')">
+                        <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(catHandle)}')">
                             <i class="fas fa-sliders"></i>
                         </button>
                     </div>
@@ -324,9 +321,8 @@
                         <div class="subcategory-row" data-kind="subcategory" data-handle="${escapeHtml(sh)}">
                             <i class="fas fa-grip-vertical drag-handle" data-drag="sub"></i>
                             <input class="menu-name-input" value="${escapeHtml(smenu)}"
-                                   onclick="event.stopPropagation(); selectNode('${escapeHtml(sh)}')"
                                    onchange="setDisplayLabel('${escapeHtml(sh)}', this.value)">
-                            <button class="btn-icon" onclick="event.stopPropagation(); selectNode('${escapeHtml(sh)}')"><i class="fas fa-sliders"></i></button>
+                            <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(sh)}')"><i class="fas fa-sliders"></i></button>
                         </div>
                         <div class="children-container" data-drop="child" data-parent-sub="${escapeHtml(sh)}">`;
                     children.forEach((ch) => {
@@ -335,9 +331,8 @@
                         html += `<div class="child-row" data-kind="sub_subcategory" data-handle="${escapeHtml(hh)}" data-parent-sub="${escapeHtml(sh)}">
                             <i class="fas fa-grip-vertical drag-handle" data-drag="child"></i>
                             <input class="menu-name-input" value="${escapeHtml(cmenu)}"
-                                   onclick="event.stopPropagation(); selectNode('${escapeHtml(hh)}')"
                                    onchange="setDisplayLabel('${escapeHtml(hh)}', this.value)">
-                            <button class="btn-icon" onclick="event.stopPropagation(); selectNode('${escapeHtml(hh)}')"><i class="fas fa-sliders"></i></button>
+                            <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(hh)}')"><i class="fas fa-sliders"></i></button>
                         </div>`;
                     });
                     html += `</div></div>`;
@@ -622,13 +617,19 @@
             finally { btn.disabled = false; btn.innerHTML = prev; }
         }
 
-        /* ---------- Metadata panel ---------- */
-        async function selectNode(handle, fetchRemote = true) {
+        /* ---------- Metadata modal ---------- */
+        function closeMetaModal() {
+            document.getElementById('metaModal').classList.remove('open');
+            handleUnlocked = false;
+            document.getElementById('handleRenameRow').style.display = 'none';
+            document.getElementById('unlockHandleBtn').textContent = 'Unlock';
+        }
+
+        async function openMetaModal(handle) {
             selectedHandle = handle;
             handleUnlocked = false;
-            pendingChoicePreview = null;
-            document.getElementById('choicePreview').style.display = 'none';
-            document.getElementById('applyChoiceBtn').style.display = 'none';
+            canDeleteSelected = false;
+            selectedKind = null;
             document.getElementById('handleRenameRow').style.display = 'none';
             document.getElementById('metaHandle').disabled = true;
             document.getElementById('unlockHandleBtn').textContent = 'Unlock';
@@ -636,55 +637,42 @@
             const hit = document.querySelector(`[data-handle="${CSS.escape(handle)}"]`);
             if (hit) hit.classList.add('row-selected');
 
-            document.getElementById('metaEmpty').style.display = 'none';
-            document.getElementById('metaBody').style.display = 'block';
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle));
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Load failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
 
-            let payload = null;
-            if (fetchRemote) {
-                try {
-                    const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle));
-                    const data = await res.json();
-                    if (!res.ok || !data.success) throw new Error(data.error || 'Load failed');
-                    payload = data;
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                } catch (err) {
-                    showError(err.message || String(err));
-                    return;
+                const kind = data.kind || '';
+                selectedKind = kind;
+                document.getElementById('metaKind').textContent = `${kind} · /${handle}`;
+                document.getElementById('metaHandle').value = handle;
+                document.getElementById('metaNewHandle').value = handle;
+
+                const col = data.collection || {};
+                const seo = col.seo || {};
+                document.getElementById('metaSeoTitle').value = seo.title || '';
+                document.getElementById('metaSeoDesc').value = seo.description || '';
+
+                canDeleteSelected = !!data.can_delete;
+                const delBtn = document.getElementById('metaDeleteBtn');
+                const delHint = document.getElementById('metaDeleteHint');
+                delBtn.disabled = !canDeleteSelected;
+                if (canDeleteSelected) {
+                    delHint.textContent = 'Deletes this node, its Shopify collection, and the metafield choice.';
+                } else {
+                    delHint.textContent = data.delete_blocked_reason
+                        || 'Cannot delete while child nodes exist beneath this one.';
                 }
-            } else {
-                const found = findNodeDeep(handle);
-                if (!found) return;
-                payload = { kind: found.kind, node: found.node, collection: null, handle };
+
+                document.getElementById('metaModal').classList.add('open');
+            } catch (err) {
+                showError(err.message || String(err));
             }
-
-            const node = payload.node || {};
-            const kind = payload.kind || '';
-            const identity = kind === 'category' ? (node.category || '') : (node.label || '');
-            document.getElementById('metaKind').textContent = `${kind} · /${handle}`;
-            document.getElementById('metaDisplayLabel').value = node.display_label || '';
-            document.getElementById('metaChoice').value = identity;
-            document.getElementById('metaHandle').value = handle;
-            document.getElementById('metaNewHandle').value = handle;
-
-            const idxLabel = document.getElementById('indexableLabel');
-            if (kind === 'subcategory' || kind === 'sub_subcategory') {
-                idxLabel.style.display = 'block';
-                document.getElementById('metaIndexable').checked = node.indexable !== false;
-            } else {
-                idxLabel.style.display = 'none';
-            }
-
-            const col = payload.collection || {};
-            const seo = col.seo || {};
-            document.getElementById('metaColTitle').value = col.title || '';
-            document.getElementById('metaSeoTitle').value = seo.title || '';
-            document.getElementById('metaSeoDesc').value = seo.description || '';
-            document.getElementById('metaDescHtml').value = col.descriptionHtml || '';
         }
 
         function toggleHandleUnlock() {
             handleUnlocked = !handleUnlocked;
-            document.getElementById('metaHandle').disabled = true;
             document.getElementById('handleRenameRow').style.display = handleUnlocked ? 'block' : 'none';
             document.getElementById('unlockHandleBtn').textContent = handleUnlocked ? 'Lock' : 'Unlock';
         }
@@ -706,79 +694,17 @@
                 selectedHandle = newHandle;
                 showSuccess(data.redirect || 'Handle renamed.');
                 await loadCategories();
-                await selectNode(newHandle);
-            } catch (err) { showError(err.message || String(err)); }
-        }
-
-        async function previewChoiceRename() {
-            if (!selectedHandle) return;
-            const newValue = document.getElementById('metaChoice').value.trim();
-            if (!newValue) return;
-            try {
-                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/rename-choice/preview', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ new_value: newValue }),
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Preview failed');
-                pendingChoicePreview = data;
-                const box = document.getElementById('choicePreview');
-                const products = (data.products || []).map(p => `• ${p.title}`).join('\n') || '(none)';
-                const cascade = (data.cascading_collections || []).map(c => `• /${c.handle} (${c.label || ''})`).join('\n') || '(none)';
-                box.style.display = 'block';
-                box.innerHTML = `<strong>${escapeHtml(data.old_value)} → ${escapeHtml(data.new_value)}</strong><br>
-                    Products: ${data.product_total}${data.products_truncated ? '+' : ''}<br>
-                    <pre style="white-space:pre-wrap;margin:6px 0 0;">${escapeHtml(products)}</pre>
-                    <div style="margin-top:8px;"><strong>Cascading collections</strong></div>
-                    <pre style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(cascade)}</pre>`;
-                document.getElementById('applyChoiceBtn').style.display = 'inline-flex';
-            } catch (err) { showError(err.message || String(err)); }
-        }
-
-        async function applyChoiceRename() {
-            if (!selectedHandle || !pendingChoicePreview) return;
-            const newValue = pendingChoicePreview.new_value;
-            const n = pendingChoicePreview.product_total || 0;
-            const msg = n > 0
-                ? `Migrate ${n} product(s) and cascade child collection rules?\n${pendingChoicePreview.old_value} → ${newValue}`
-                : `Rename choice ${pendingChoicePreview.old_value} → ${newValue}?`;
-            if (!confirm(msg)) return;
-            try {
-                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/rename-choice/apply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        new_value: newValue,
-                        confirm: n > 0,
-                        expected_updated_at: taxonomyUpdatedAt,
-                    }),
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || 'Apply failed');
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                pendingChoicePreview = null;
-                showSuccess(`Choice renamed (${data.products_migrated || 0} products migrated).`);
-                await loadCategories();
-                await selectNode(selectedHandle);
+                await openMetaModal(newHandle);
             } catch (err) { showError(err.message || String(err)); }
         }
 
         async function saveMetadata() {
             if (!selectedHandle) return;
             const body = {
-                display_label: document.getElementById('metaDisplayLabel').value,
-                collection_title: document.getElementById('metaColTitle').value,
                 seo_title: document.getElementById('metaSeoTitle').value,
                 seo_description: document.getElementById('metaSeoDesc').value,
-                description_html: document.getElementById('metaDescHtml').value,
                 expected_updated_at: taxonomyUpdatedAt,
             };
-            const idxLabel = document.getElementById('indexableLabel');
-            if (idxLabel.style.display !== 'none') {
-                body.indexable = document.getElementById('metaIndexable').checked;
-            }
-            if (!(body.display_label || '').trim()) body.clear_display_label = true;
             try {
                 const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/metadata', {
                     method: 'PUT',
@@ -789,11 +715,47 @@
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
                 if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
                 if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('Metadata saved.');
+                showSuccess('SEO saved.');
+                closeMetaModal();
                 await loadCategories();
-                await selectNode(selectedHandle);
             } catch (err) { showError(err.message || String(err)); }
         }
+
+        async function deleteNode() {
+            if (!selectedHandle || !canDeleteSelected) return;
+            const label = selectedKind || 'node';
+            if (!confirm(`Delete this ${label}, its collection, and metafield choice?\n/${selectedHandle}\n\nThis cannot be undone.`)) {
+                return;
+            }
+            const delBtn = document.getElementById('metaDeleteBtn');
+            delBtn.disabled = true;
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle), {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
+                });
+                const data = await res.json();
+                if (res.status === 409) {
+                    showError(data.error || 'Conflict');
+                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                    return;
+                }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                selectedHandle = null;
+                showSuccess(`Deleted ${label} /${data.handle || ''}`);
+                closeMetaModal();
+                await loadCategories();
+            } catch (err) {
+                showError(err.message || String(err));
+                delBtn.disabled = !canDeleteSelected;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMetaModal();
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
             loadCategories();

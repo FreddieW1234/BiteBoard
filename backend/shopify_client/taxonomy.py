@@ -1467,6 +1467,7 @@ def get_node_metadata(handle: str) -> dict:
         raise ShopifyError(f"unknown handle {handle!r}")
     col = shop.collection_by_handle(handle)
     detail = shop.collection_detail(col["id"]) if col else None
+    can_delete, blocked_reason, child_count = _delete_hierarchy_gate(kind, node)
     return {
         "success": True,
         "handle": handle,
@@ -1475,8 +1476,154 @@ def get_node_metadata(handle: str) -> dict:
         "parent_category": (cat or {}).get("category") if cat else None,
         "parent_subcategory": (sub or {}).get("label") if sub and kind == "sub_subcategory" else None,
         "collection": detail,
+        "can_delete": can_delete,
+        "delete_blocked_reason": blocked_reason,
+        "child_count": child_count,
         "taxonomy_updated_at": meta.get("updated_at"),
     }
+
+
+def _delete_hierarchy_gate(kind: str, node: dict) -> tuple[bool, str | None, int]:
+    """
+    Only allow delete when nothing sits beneath the node.
+    category → no subcategories; subcategory → no children; sub_sub → always ok.
+    """
+    if kind == "category":
+        n = len(node.get("subcategories") or [])
+        if n:
+            return False, f"Remove {n} subcategor{'y' if n == 1 else 'ies'} first", n
+        return True, None, 0
+    if kind == "subcategory":
+        n = len(node.get("children") or [])
+        if n:
+            return False, f"Remove {n} sub-subcategor{'y' if n == 1 else 'ies'} first", n
+        return True, None, 0
+    if kind == "sub_subcategory":
+        return True, None, 0
+    return False, "unknown node kind", 0
+
+
+def _remove_choice_value(shop: Shopify, mf_key: str, value: str) -> dict:
+    definition = shop.metafield_definition("custom", mf_key)
+    if definition is None:
+        return {"removed": False, "reason": "missing_definition"}
+    value = str(value).strip()
+    before = [str(c) for c in (definition.get("choices") or [])]
+    after = [c for c in before if c != value]
+    if after == before:
+        return {"removed": False, "reason": "not_in_choices", "count": len(after)}
+    shop.set_definition_choices("custom", mf_key, after)
+    return {"removed": True, "count": len(after), "metafield_key": mf_key}
+
+
+def _delete_collection_by_id(shop: Shopify, collection_id: str) -> None:
+    result = shop.gql(
+        """
+      mutation($id: ID!) {
+        collectionDelete(input: {id: $id}) {
+          deletedCollectionId
+          userErrors { field message }
+        }
+      }
+    """,
+        {"id": collection_id},
+    )["collectionDelete"]
+    shop._check(result, "collectionDelete")
+
+
+def delete_node(
+    handle: str,
+    *,
+    expected_updated_at: str | None = None,
+) -> dict:
+    """
+    Delete a leaf taxonomy node + its Shopify collection + metafield choice.
+    Refuses when hierarchy has children beneath the node.
+    """
+    shop = _shop()
+    handle = (handle or "").strip()
+    if not handle:
+        raise ShopifyError("handle is required")
+
+    log: list[dict] = []
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        kind, cat, sub, node = find_node_by_handle_deep(tax, handle)
+        if node is None or kind is None:
+            raise ShopifyError(f"unknown handle {handle!r}")
+
+        can_delete, blocked, child_count = _delete_hierarchy_gate(kind, node)
+        if not can_delete:
+            raise ShopifyError(blocked or "cannot delete: hierarchy not empty")
+
+        identity = _node_identity(kind, node)
+        mf_key = _node_mf_key(kind, node)
+
+        col = shop.collection_by_handle(handle)
+        if col:
+            _delete_collection_by_id(shop, col["id"])
+            log.append({"action": "collection_deleted", "id": col["id"], "handle": handle})
+        else:
+            log.append({"action": "collection_missing", "handle": handle})
+
+        if identity:
+            choice_result = _remove_choice_value(shop, mf_key, identity)
+            log.append({"action": "choice_remove", **choice_result, "value": identity})
+
+        # Re-read taxonomy for RMW after Shopify mutations
+        mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf2, exp)
+        raw = (mf2 or {}).get("value") or ""
+        tax = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(tax, list):
+            raise ShopifyError("taxonomy metafield corrupt during delete")
+
+        kind2, cat2, sub2, node2 = find_node_by_handle_deep(tax, handle)
+        if node2 is None:
+            raise ShopifyError("node disappeared during delete")
+
+        if kind2 == "category":
+            tax = [c for c in tax if (c.get("handle") or "") != handle]
+        elif kind2 == "subcategory" and cat2 is not None:
+            cat2["subcategories"] = [
+                s
+                for s in (cat2.get("subcategories") or [])
+                if (s.get("handle") or "") != handle
+            ]
+        elif kind2 == "sub_subcategory" and sub2 is not None:
+            sub2["children"] = [
+                c
+                for c in (sub2.get("children") or [])
+                if (c.get("handle") or "") != handle
+            ]
+        else:
+            raise ShopifyError("failed to locate parent for taxonomy removal")
+
+        stored, updated_at = _persist_tax(shop, tax)
+        log.append({"action": "taxonomy_removed", "handle": handle, "kind": kind2})
+
+        try:
+            from scripts.product_creator.categories import refresh_category_choice_cache
+
+            refresh_category_choice_cache()
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "handle": handle,
+            "kind": kind2,
+            "identity": identity,
+            "child_count": child_count,
+            "log": log,
+            "taxonomy_updated_at": updated_at,
+            "count": _count_nodes(stored),
+        }
 
 
 def publish_now(handle: str, *, expected_updated_at: str | None = None) -> dict:

@@ -4357,6 +4357,21 @@ def api_get_node_metadata(handle):
         return _taxonomy_error_response(e)
 
 
+@app.route('/api/category-editor/node/<path:handle>', methods=['DELETE'])
+def api_delete_node(handle):
+    """Delete leaf category / sub / sub-sub + Shopify collection (hierarchy must be empty)."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json(silent=True) or {}
+        result = taxmod.delete_node(
+            handle,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
 @app.route('/api/category-editor/node/<path:handle>/metadata', methods=['PUT'])
 def api_update_node_metadata(handle):
     try:
