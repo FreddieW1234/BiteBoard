@@ -638,32 +638,43 @@ def get_subcategory_choices():
 
 def get_category_subcategory_groups():
     """
-    Categories with subcategories for the combined Category & Subcategory dropdown.
+    Categories with subcategories (and optional children) for the combined
+    Category & Subcategory dropdown.
 
     Prefers shop.custom.taxonomy; falls back to CATEGORY_MAPPING when unset.
+    Each subcategory is {label, children: [labels...]} for L3 nesting.
     """
     try:
         from shopify_client import taxonomy as taxmod
 
         tax = taxmod.load_taxonomy(require=False)
         if tax:
-            return [
-                {
-                    "category": c.get("category"),
-                    "subcategories": [
-                        s.get("label")
-                        for s in (c.get("subcategories") or [])
-                        if s.get("label")
-                    ],
-                }
-                for c in tax
-                if c.get("category")
-            ]
+            groups = []
+            for c in tax:
+                cat_name = c.get("category")
+                if not cat_name:
+                    continue
+                subs_out = []
+                for s in c.get("subcategories") or []:
+                    label = s.get("label")
+                    if not label:
+                        continue
+                    children = [
+                        ch.get("label")
+                        for ch in (s.get("children") or [])
+                        if ch.get("label")
+                    ]
+                    subs_out.append({"label": label, "children": children})
+                groups.append({"category": cat_name, "subcategories": subs_out})
+            return groups
     except Exception as exc:
         print(f"[error] taxonomy groups unavailable, using CATEGORY_MAPPING: {exc}", flush=True)
 
     return [
-        {"category": cat, "subcategories": list(subs)}
+        {
+            "category": cat,
+            "subcategories": [{"label": s, "children": []} for s in (subs or [])],
+        }
         for cat, subs in CATEGORY_MAPPING.items()
     ]
 
@@ -1019,3 +1030,32 @@ def get_subcategory_metafield_key(subcategory):
     if index < boundary:
         return "subcategory"
     return "subcategory_2"
+
+
+def get_sub_subcategory_metafield_key(label):
+    """
+    Route a sub-subcategory value to custom.sub_subcategory or custom.sub_subcategory_2.
+    Prefers live Shopify choice membership.
+    """
+    s = str(label).strip()
+    if not s:
+        return "sub_subcategory"
+
+    ss = fetch_shopify_metafield_definition_choices("custom", "sub_subcategory")
+    ss2 = fetch_shopify_metafield_definition_choices("custom", "sub_subcategory_2")
+    s_lower = s.lower()
+
+    def _in(choices):
+        for choice in choices or []:
+            c = str(choice)
+            if c == s or c.strip() == s or c.strip().lower() == s_lower:
+                return True
+        return False
+
+    if _in(ss):
+        return "sub_subcategory"
+    if _in(ss2):
+        return "sub_subcategory_2"
+    if ss2 or len(ss or []) >= 120:
+        return "sub_subcategory_2"
+    return "sub_subcategory"

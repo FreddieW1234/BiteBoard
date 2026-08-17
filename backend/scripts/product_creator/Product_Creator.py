@@ -4059,6 +4059,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             FILTER_GROUP_KEYS = []
         clearable_keys = set([
             "artworkguidelines", "artworktemplates", "stockdesigns", "custom_category", "subcategory",
+            "sub_subcategory",
             "parent_child", "parent_child2",
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
@@ -4072,6 +4073,8 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 return True
             # subcategory overflow keys (subcategory_2, subcategory_3, ...)
             if (k or "").startswith("subcategory_"):
+                return True
+            if (k or "").startswith("sub_subcategory"):
                 return True
             return False
         
@@ -4192,10 +4195,12 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     # (Don't skip overflow keys like subcategory_2 - let them through; 422 retry will fix if needed)
                     namespace = metafield_data.get("namespace", "custom")
                     key = metafield_data.get("key", "")
-                    if namespace == "custom" and key and (key == "subcategory" or key.startswith("subcategory_")):
+                    if namespace == "custom" and key and (key == "subcategory" or key.startswith("subcategory_") or key == "sub_subcategory" or key.startswith("sub_subcategory")):
                         try:
-                            from .categories import get_metafield_choices
+                            from .categories import get_metafield_choices, fetch_shopify_metafield_definition_choices
                             allowed = set(get_metafield_choices(key) or [])
+                            if not allowed and key.startswith("sub_sub"):
+                                allowed = set(fetch_shopify_metafield_definition_choices("custom", key) or [])
                             if allowed:
                                 parsed = json.loads(formatted_value) if isinstance(formatted_value, str) else formatted_value
                                 if isinstance(parsed, list):
@@ -4299,10 +4304,12 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                     action = "Updated" if existing_id else "Created"
                     print(f"[ok] {action} metafield: {namespace}.{key}", flush=True)
                 elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (
-                    key == "subcategory" or (key and key.startswith("subcategory_")) or key in PARENT_CHILD_METAFIELD_KEYS
+                    key == "subcategory" or (key and key.startswith("subcategory_"))
+                    or key == "sub_subcategory" or (key and key.startswith("sub_subcategory"))
+                    or key in PARENT_CHILD_METAFIELD_KEYS
                 ):
                     # 422 "does not exist in provided choices" - extract Shopify's actual choices and retry with filtered value
-                    # Applies to subcategory overflow keys and parent_child / parent_child2.
+                    # Applies to subcategory / sub_sub overflow keys and parent_child / parent_child2.
                     import re
                     try:
                         err_data = response.json()
@@ -5033,10 +5040,26 @@ def create_product(product_data):
                     subcategories = [str(sc).strip()]
             elif product_data.get("subcategory"):
                 subcategories = [str(product_data["subcategory"]).strip()]
+
+            sub_subcategories = None
+            if product_data.get("sub_subcategories"):
+                ssc = product_data["sub_subcategories"]
+                if isinstance(ssc, (list, tuple)):
+                    sub_subcategories = list(ssc)
+                elif isinstance(ssc, str) and ssc.strip().startswith("["):
+                    try:
+                        sub_subcategories = json.loads(ssc)
+                    except json.JSONDecodeError:
+                        sub_subcategories = [str(ssc).strip()]
+                else:
+                    sub_subcategories = [str(ssc).strip()]
+            elif product_data.get("sub_subcategory"):
+                sub_subcategories = [str(product_data["sub_subcategory"]).strip()]
             
             # Extract from metafields if not from top-level (merge from ALL matching metafields)
             cats_from_mf = []
             subcats_from_mf = []
+            subsubs_from_mf = []
             for mf in metafields:
                 if mf.get("namespace") != "custom":
                     continue
@@ -5060,17 +5083,23 @@ def create_product(product_data):
                     arr = [str(val).strip()] if val else []
                 if not arr:
                     continue
-                if mf.get("key") == "custom_category":
+                key = mf.get("key") or ""
+                if key == "custom_category":
                     cats_from_mf.extend(arr)
-                elif (mf.get("key") or "").startswith("subcategory"):
+                elif key == "sub_subcategory" or key.startswith("sub_subcategory"):
+                    subsubs_from_mf.extend(arr)
+                elif key == "subcategory" or key.startswith("subcategory_"):
                     subcats_from_mf.extend(arr)
             if not categories and cats_from_mf:
                 categories = list(dict.fromkeys(cats_from_mf))
             if not subcategories and subcats_from_mf:
                 subcategories = list(dict.fromkeys(subcats_from_mf))
-            # Merge metafield subcategories into top-level so overflow routing always has full list
             if subcats_from_mf and subcategories is not None:
                 subcategories = list(dict.fromkeys(list(subcategories) + list(subcats_from_mf)))
+            if not sub_subcategories and subsubs_from_mf:
+                sub_subcategories = list(dict.fromkeys(subsubs_from_mf))
+            if subsubs_from_mf and sub_subcategories is not None:
+                sub_subcategories = list(dict.fromkeys(list(sub_subcategories) + list(subsubs_from_mf)))
             
             # Detect whether the request explicitly included category/subcategory metafields.
             # If it did but they're now empty, the user cleared them => delete the metafields.
@@ -5081,6 +5110,13 @@ def create_product(product_data):
             had_subcategory_mf = any(
                 mf.get("namespace") == "custom" and (
                     mf.get("key") == "subcategory" or (mf.get("key") or "").startswith("subcategory_")
+                )
+                for mf in metafields
+            )
+            had_sub_subcategory_mf = any(
+                mf.get("namespace") == "custom" and (
+                    mf.get("key") == "sub_subcategory"
+                    or (mf.get("key") or "").startswith("sub_subcategory")
                 )
                 for mf in metafields
             )
@@ -5216,6 +5252,57 @@ def create_product(product_data):
                     "type": "list.single_line_text_field"
                 })
                 print("[delete] Subcategory cleared - will delete subcategory metafield", flush=True)
+
+            # Route sub-subcategory values to sub_subcategory / sub_subcategory_2
+            if sub_subcategories:
+                try:
+                    from .categories import get_sub_subcategory_metafield_key
+                    by_key = {}
+                    for sc in sub_subcategories:
+                        s = str(sc).strip()
+                        if s:
+                            key = get_sub_subcategory_metafield_key(s)
+                            by_key.setdefault(key, []).append(s)
+                            print(f"[folder] Routed sub_subcategory '{s}' -> {key}", flush=True)
+                    metafields = [
+                        mf for mf in metafields
+                        if not (
+                            mf.get("namespace") == "custom"
+                            and (
+                                (mf.get("key") or "") == "sub_subcategory"
+                                or (mf.get("key") or "").startswith("sub_subcategory")
+                            )
+                        )
+                    ]
+                    for mf_key, vals in by_key.items():
+                        if vals:
+                            metafields.append({
+                                "namespace": "custom",
+                                "key": mf_key,
+                                "value": json.dumps(vals),
+                                "type": "list.single_line_text_field"
+                            })
+                            print(f"[folder] Sub-subcategory metafield {mf_key}: {vals}", flush=True)
+                except Exception as e:
+                    print(f"[warn] Failed to route sub_subcategories: {e}", flush=True)
+            elif had_sub_subcategory_mf:
+                metafields = [
+                    mf for mf in metafields
+                    if not (
+                        mf.get("namespace") == "custom"
+                        and (
+                            (mf.get("key") or "") == "sub_subcategory"
+                            or (mf.get("key") or "").startswith("sub_subcategory")
+                        )
+                    )
+                ]
+                metafields.append({
+                    "namespace": "custom",
+                    "key": "sub_subcategory",
+                    "value": "",
+                    "type": "list.single_line_text_field"
+                })
+                print("[delete] Sub-subcategory cleared - will delete sub_subcategory metafield", flush=True)
             
             # Debug: log subcategory metafields being sent
             subcat_mfs = [mf for mf in metafields if mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")]

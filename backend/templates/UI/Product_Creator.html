@@ -1076,6 +1076,24 @@
         .dropdown-group-heading:first-child {
             border-top: none;
         }
+        .dropdown-sub-heading {
+            padding: 6px 12px 2px 20px;
+            font-weight: 600;
+            font-size: 0.78rem;
+            color: #4b5563;
+            background-color: #f8fafc;
+            cursor: default;
+            user-select: none;
+            pointer-events: none;
+        }
+        .custom-dropdown[data-key="categorysub"] .dropdown-option {
+            padding-left: 20px;
+        }
+        .custom-dropdown[data-key="categorysub"] .dropdown-option.dropdown-option-child {
+            padding-left: 36px;
+            font-size: 0.92em;
+            color: #374151;
+        }
         /* Indent the options so they sit visually under their bold heading (filters dropdown only) */
         .custom-dropdown[data-key="filters"] .dropdown-option {
             padding-left: 24px;
@@ -4694,29 +4712,39 @@
                         const key = inputElement.dataset.key;
                         const metafieldType = inputElement.dataset.type;
 
-                        // Combined Category & Subcategory dropdown: derive both metafields from the ticked subcategories.
+                        // Combined Category & Subcategory dropdown: derive cat / sub / sub-sub from ticks.
                         if (key === 'categorysub') {
                             const checkedBoxes = inputElement.querySelectorAll('input[type="checkbox"][data-category]:checked');
                             const subs = [];
                             const cats = [];
+                            const children = [];
                             checkedBoxes.forEach(cb => {
-                                const sub = (cb.value || '').trim();
+                                const val = (cb.value || '').trim();
                                 const cat = (cb.getAttribute('data-category') || '').trim();
-                                if (sub) subs.push(sub);
+                                const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
                                 if (cat) cats.push(cat);
+                                if (parentSub) {
+                                    // Leaf (sub-sub) tick
+                                    if (val) children.push(val);
+                                    if (parentSub) subs.push(parentSub);
+                                } else if (val) {
+                                    subs.push(val);
+                                }
                             });
                             let uSubs = [...new Set(subs)];
                             let uCats = [...new Set(cats)];
-                            if (uSubs.length === 0 && uCats.length === 0) {
+                            let uChildren = [...new Set(children)];
+                            if (uSubs.length === 0 && uCats.length === 0 && uChildren.length === 0) {
                                 if (!categorySubUserEdited && loadedCategorySubSnapshot) {
                                     uCats = (loadedCategorySubSnapshot.categories || []).slice();
                                     uSubs = (loadedCategorySubSnapshot.subcategories || []).slice();
+                                    uChildren = (loadedCategorySubSnapshot.sub_subcategories || []).slice();
                                 } else if (!categorySubUserEdited) {
                                     // Options may not be ticked in the DOM yet — don't clear existing Shopify values
                                     return;
                                 }
                             }
-                            // Always emit both metafields (empty string when user cleared all selections)
+                            // Always emit metafields (empty string when user cleared all selections)
                             metafieldsData.push({
                                 namespace: 'custom',
                                 key: 'custom_category',
@@ -4729,7 +4757,13 @@
                                 type: 'list.single_line_text_field',
                                 value: uSubs.length > 0 ? JSON.stringify(uSubs) : ''
                             });
-                            console.log(`✅ Combined category/subcategory -> categories:`, uCats, 'subcategories:', uSubs);
+                            metafieldsData.push({
+                                namespace: 'custom',
+                                key: 'sub_subcategory',
+                                type: 'list.single_line_text_field',
+                                value: uChildren.length > 0 ? JSON.stringify(uChildren) : ''
+                            });
+                            console.log(`✅ Combined category/sub/sub-sub ->`, uCats, uSubs, uChildren);
                             return; // done with the combined item
                         }
 
@@ -6951,10 +6985,11 @@
             
             // Metafields already collected above for tab body rebuild
             
-            // Explicitly set category and subcategory as top-level for backend (required for metafield creation + overflow routing)
+            // Explicitly set category / subcategory / sub-sub as top-level for backend routing
             const mfData = productData.metafields || [];
             const allCategories = [];
             let allSubcategories = [];
+            let allSubSubs = [];
             mfData.forEach(m => {
                 if (m.namespace !== 'custom') return;
                 let arr = [];
@@ -6970,6 +7005,8 @@
                 const trimmed = arr.map(v => String(v).trim()).filter(v => v);
                 if (m.key === 'custom_category') {
                     allCategories.push(...trimmed);
+                } else if (m.key === 'sub_subcategory' || (m.key && m.key.startsWith('sub_subcategory'))) {
+                    allSubSubs.push(...trimmed);
                 } else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) {
                     allSubcategories.push(...trimmed);
                 }
@@ -6980,14 +7017,24 @@
                 const checked = catSubDropdown.querySelectorAll('input[type="checkbox"][data-category]:checked');
                 const fromDomSubs = [];
                 const fromDomCats = [];
+                const fromDomChildren = [];
                 checked.forEach(cb => {
-                    const sub = (cb.value || '').trim();
+                    const val = (cb.value || '').trim();
                     const cat = (cb.getAttribute('data-category') || '').trim();
-                    if (sub) fromDomSubs.push(sub);
+                    const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
                     if (cat) fromDomCats.push(cat);
+                    if (parentSub) {
+                        if (val) fromDomChildren.push(val);
+                        fromDomSubs.push(parentSub);
+                    } else if (val) {
+                        fromDomSubs.push(val);
+                    }
                 });
                 if (fromDomSubs.length > 0) {
                     allSubcategories = [...new Set([...allSubcategories, ...fromDomSubs])];
+                }
+                if (fromDomChildren.length > 0) {
+                    allSubSubs = [...new Set([...allSubSubs, ...fromDomChildren])];
                 }
                 if (fromDomCats.length > 0) {
                     allCategories.push(...fromDomCats);
@@ -6998,6 +7045,9 @@
             }
             if (!allSubcategories.length && !categorySubUserEdited && loadedCategorySubSnapshot) {
                 allSubcategories.push(...(loadedCategorySubSnapshot.subcategories || []));
+            }
+            if (!allSubSubs.length && !categorySubUserEdited && loadedCategorySubSnapshot) {
+                allSubSubs.push(...(loadedCategorySubSnapshot.sub_subcategories || []));
             }
             // Legacy fallback: separate subcategory dropdown (if present)
             const subcatDropdown = document.querySelector('.custom-dropdown[data-key="subcategory"]');
@@ -7015,6 +7065,10 @@
             if (allSubcategories.length > 0) {
                 productData.subcategories = [...new Set(allSubcategories)];
                 console.log('Set productData.subcategories:', productData.subcategories);
+            }
+            if (allSubSubs.length > 0) {
+                productData.sub_subcategories = [...new Set(allSubSubs)];
+                console.log('Set productData.sub_subcategories:', productData.sub_subcategories);
             }
             
             // Colour + storefront option metafields are written server-side from top-level fields
@@ -7432,7 +7486,13 @@
             const children = Array.from(optionsList.children);
             let currentHeading = null;
             let headingHasVisible = false;
+            let currentSubHeading = null;
+            let subHeadingHasVisible = false;
+            const finalizeSubHeading = () => {
+                if (currentSubHeading) currentSubHeading.style.display = subHeadingHasVisible ? '' : 'none';
+            };
             const finalizeHeading = () => {
+                finalizeSubHeading();
                 if (currentHeading) currentHeading.style.display = headingHasVisible ? '' : 'none';
             };
             children.forEach(child => {
@@ -7440,6 +7500,14 @@
                     finalizeHeading();
                     currentHeading = child;
                     headingHasVisible = false;
+                    currentSubHeading = null;
+                    subHeadingHasVisible = false;
+                    return;
+                }
+                if (child.classList.contains('dropdown-sub-heading')) {
+                    finalizeSubHeading();
+                    currentSubHeading = child;
+                    subHeadingHasVisible = false;
                     return;
                 }
                 if (child.classList.contains('dropdown-option')) {
@@ -7447,7 +7515,10 @@
                     const text = (label && label.textContent) ? label.textContent : '';
                     const show = !q || text.toLowerCase().includes(q);
                     child.style.display = show ? '' : 'none';
-                    if (show) headingHasVisible = true;
+                    if (show) {
+                        headingHasVisible = true;
+                        subHeadingHasVisible = true;
+                    }
                 }
             });
             finalizeHeading();
@@ -7580,6 +7651,7 @@
         // How many categories each subcategory appears under (built when category groups load).
         // Used to disambiguate shared subcategories (e.g. "Lollipops") when restoring selections.
         let CATEGORYSUB_SUB_COUNT = {};
+        let CATEGORYSUB_CHILD_COUNT = {};
         let categorySubOptionsPromise = null;
         let categorySubUserEdited = false;
         let loadedCategorySubSnapshot = null;
@@ -7588,6 +7660,17 @@
             categorySubOptionsPromise = null;
             categorySubUserEdited = false;
             loadedCategorySubSnapshot = null;
+        }
+
+        function normalizeSubEntry(entry) {
+            if (entry == null) return null;
+            if (typeof entry === 'string') return { label: entry, children: [] };
+            const label = (entry.label || entry.name || '').trim();
+            if (!label) return null;
+            const children = Array.isArray(entry.children)
+                ? entry.children.map(c => (typeof c === 'string' ? c : (c && c.label) || '')).map(s => String(s).trim()).filter(Boolean)
+                : [];
+            return { label, children };
         }
 
         function parseCategorySubFromMetafields(metafields) {
@@ -7604,14 +7687,21 @@
             };
             let cats = [];
             let subs = [];
+            let children = [];
             (metafields || []).forEach(m => {
                 if (!m || m.namespace !== 'custom') return;
                 if (m.key === 'custom_category') cats = cats.concat(toArray(m));
-                else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) subs = subs.concat(toArray(m));
+                else if (m.key === 'sub_subcategory' || (m.key && m.key.startsWith('sub_subcategory'))) {
+                    children = children.concat(toArray(m));
+                }
+                else if (m.key === 'subcategory' || (m.key && m.key.startsWith('subcategory_'))) {
+                    subs = subs.concat(toArray(m));
+                }
             });
             return {
                 categories: [...new Set(cats.map(s => String(s).trim()).filter(Boolean))],
                 subcategories: [...new Set(subs.map(s => String(s).trim()).filter(Boolean))],
+                sub_subcategories: [...new Set(children.map(s => String(s).trim()).filter(Boolean))],
             };
         }
 
@@ -7644,13 +7734,19 @@
 
         async function loadCategorySubDropdownOptions(dropdown) {
             try {
-                console.log('🔍 Loading category groups from API...');
+                console.log('Loading category groups from API...');
                 const response = await (fetch)('/api/category-groups', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success && Array.isArray(data.groups)) {
                     CATEGORYSUB_SUB_COUNT = {};
-                    data.groups.forEach(g => (g.subcategories || []).forEach(s => {
-                        CATEGORYSUB_SUB_COUNT[s] = (CATEGORYSUB_SUB_COUNT[s] || 0) + 1;
+                    CATEGORYSUB_CHILD_COUNT = {};
+                    data.groups.forEach(g => (g.subcategories || []).forEach(raw => {
+                        const sub = normalizeSubEntry(raw);
+                        if (!sub) return;
+                        CATEGORYSUB_SUB_COUNT[sub.label] = (CATEGORYSUB_SUB_COUNT[sub.label] || 0) + 1;
+                        (sub.children || []).forEach(ch => {
+                            CATEGORYSUB_CHILD_COUNT[ch] = (CATEGORYSUB_CHILD_COUNT[ch] || 0) + 1;
+                        });
                     }));
                     const content = dropdown.querySelector('.dropdown-content');
                     content.innerHTML = '';
@@ -7659,8 +7755,8 @@
                     const searchInput = document.createElement('input');
                     searchInput.type = 'text';
                     searchInput.className = 'dropdown-search';
-                    searchInput.placeholder = 'Search subcategories...';
-                    searchInput.setAttribute('aria-label', 'Search subcategories');
+                    searchInput.placeholder = 'Search categories and subcategories...';
+                    searchInput.setAttribute('aria-label', 'Search categories and subcategories');
                     searchWrap.appendChild(searchInput);
                     const optionsList = document.createElement('div');
                     optionsList.className = 'dropdown-options-list';
@@ -7670,33 +7766,86 @@
                     let totalOptions = 0;
                     data.groups.forEach((group, gIndex) => {
                         const category = group.category;
-                        // Bold, non-selectable category heading
                         const headingDiv = document.createElement('div');
                         headingDiv.className = 'dropdown-group-heading';
                         headingDiv.setAttribute('data-group-heading', category);
                         headingDiv.textContent = category;
                         optionsList.appendChild(headingDiv);
 
-                        (group.subcategories || []).forEach((subVal, sIndex) => {
-                            const optionDiv = document.createElement('div');
-                            optionDiv.className = 'dropdown-option';
-                            const safeId = `catsub_${gIndex}_${sIndex}_${String(subVal).replace(/[^a-zA-Z0-9]/g, '_')}`;
-                            const checkbox = document.createElement('input');
-                            checkbox.type = 'checkbox';
-                            checkbox.id = safeId;
-                            checkbox.value = subVal;
-                            checkbox.setAttribute('data-category', category);
-                            const label = document.createElement('label');
-                            label.htmlFor = safeId;
-                            label.textContent = subVal;
-                            optionDiv.appendChild(checkbox);
-                            optionDiv.appendChild(label);
-                            optionsList.appendChild(optionDiv);
-                            checkbox.addEventListener('change', function() {
-                                categorySubUserEdited = true;
-                                updateDropdownText(dropdown);
-                            });
-                            totalOptions++;
+                        (group.subcategories || []).forEach((raw, sIndex) => {
+                            const sub = normalizeSubEntry(raw);
+                            if (!sub) return;
+                            const children = sub.children || [];
+
+                            if (children.length > 0) {
+                                const subHead = document.createElement('div');
+                                subHead.className = 'dropdown-sub-heading';
+                                subHead.textContent = sub.label;
+                                optionsList.appendChild(subHead);
+
+                                const subOption = document.createElement('div');
+                                subOption.className = 'dropdown-option';
+                                const subId = `catsub_${gIndex}_${sIndex}_self_${String(sub.label).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                                const subCb = document.createElement('input');
+                                subCb.type = 'checkbox';
+                                subCb.id = subId;
+                                subCb.value = sub.label;
+                                subCb.setAttribute('data-category', category);
+                                const subLabel = document.createElement('label');
+                                subLabel.htmlFor = subId;
+                                subLabel.textContent = `All ${sub.label}`;
+                                subOption.appendChild(subCb);
+                                subOption.appendChild(subLabel);
+                                optionsList.appendChild(subOption);
+                                subCb.addEventListener('change', function() {
+                                    categorySubUserEdited = true;
+                                    updateDropdownText(dropdown);
+                                });
+                                totalOptions++;
+
+                                children.forEach((childVal, cIndex) => {
+                                    const optionDiv = document.createElement('div');
+                                    optionDiv.className = 'dropdown-option dropdown-option-child';
+                                    const safeId = `catsub_${gIndex}_${sIndex}_${cIndex}_${String(childVal).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                                    const checkbox = document.createElement('input');
+                                    checkbox.type = 'checkbox';
+                                    checkbox.id = safeId;
+                                    checkbox.value = childVal;
+                                    checkbox.setAttribute('data-category', category);
+                                    checkbox.setAttribute('data-subcategory', sub.label);
+                                    const label = document.createElement('label');
+                                    label.htmlFor = safeId;
+                                    label.textContent = childVal;
+                                    optionDiv.appendChild(checkbox);
+                                    optionDiv.appendChild(label);
+                                    optionsList.appendChild(optionDiv);
+                                    checkbox.addEventListener('change', function() {
+                                        categorySubUserEdited = true;
+                                        updateDropdownText(dropdown);
+                                    });
+                                    totalOptions++;
+                                });
+                            } else {
+                                const optionDiv = document.createElement('div');
+                                optionDiv.className = 'dropdown-option';
+                                const safeId = `catsub_${gIndex}_${sIndex}_${String(sub.label).replace(/[^a-zA-Z0-9]/g, '_')}`;
+                                const checkbox = document.createElement('input');
+                                checkbox.type = 'checkbox';
+                                checkbox.id = safeId;
+                                checkbox.value = sub.label;
+                                checkbox.setAttribute('data-category', category);
+                                const label = document.createElement('label');
+                                label.htmlFor = safeId;
+                                label.textContent = sub.label;
+                                optionDiv.appendChild(checkbox);
+                                optionDiv.appendChild(label);
+                                optionsList.appendChild(optionDiv);
+                                checkbox.addEventListener('change', function() {
+                                    categorySubUserEdited = true;
+                                    updateDropdownText(dropdown);
+                                });
+                                totalOptions++;
+                            }
                         });
                     });
 
@@ -7704,16 +7853,15 @@
                         filterDropdownOptions(optionsList, this.value);
                     });
                     searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
-                    console.log(`✅ Successfully loaded ${data.groups.length} categories (${totalOptions} subcategories)`);
+                    console.log(`Loaded ${data.groups.length} categories (${totalOptions} options)`);
                 } else {
-                    console.log('❌ Category groups API returned no data or failed');
+                    console.log('Category groups API returned no data or failed');
                 }
             } catch (error) {
-                console.error('❌ Error loading category groups:', error);
+                console.error('Error loading category groups:', error);
             }
         }
 
-        // Tick the combined Category & Subcategory dropdown from a product's custom_category + subcategory metafields
         function clearCategorySubDropdown() {
             const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
             if (!dd) return;
@@ -7724,20 +7872,32 @@
         function setCategorySubFromMetafields(metafields) {
             const dd = document.querySelector('.custom-dropdown[data-key="categorysub"]');
             if (!dd) return;
-            const { categories: cats, subcategories: subs } = parseCategorySubFromMetafields(metafields);
+            const { categories: cats, subcategories: subs, sub_subcategories: children } =
+                parseCategorySubFromMetafields(metafields);
             const boxes = dd.querySelectorAll('input[type="checkbox"][data-category]');
             boxes.forEach(cb => {
-                const sub = (cb.value || '').trim();
+                const val = (cb.value || '').trim();
                 const cat = (cb.getAttribute('data-category') || '').trim();
-                let check = subs.includes(sub);
-                // For subcategories shared by multiple categories, only tick the box whose category was saved
-                if (check && (CATEGORYSUB_SUB_COUNT[sub] || 1) > 1 && cats.length > 0) {
-                    check = cats.includes(cat);
+                const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
+                let check = false;
+                if (parentSub) {
+                    check = children.includes(val);
+                    if (check && (CATEGORYSUB_CHILD_COUNT[val] || 1) > 1 && cats.length > 0) {
+                        check = cats.includes(cat);
+                    }
+                    if (check && (CATEGORYSUB_SUB_COUNT[parentSub] || 1) > 1 && cats.length > 0) {
+                        check = cats.includes(cat);
+                    }
+                } else {
+                    check = subs.includes(val);
+                    if (check && (CATEGORYSUB_SUB_COUNT[val] || 1) > 1 && cats.length > 0) {
+                        check = cats.includes(cat);
+                    }
                 }
                 cb.checked = check;
             });
             updateDropdownText(dd);
-            console.log('✅ Restored category/subcategory selections — cats:', cats, 'subs:', subs);
+            console.log('Restored category/sub/sub-sub — cats:', cats, 'subs:', subs, 'children:', children);
         }
 
         async function loadFiltersDropdownOptions(dropdown) {
