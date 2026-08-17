@@ -9,21 +9,11 @@
     <link href="/static/theme.css?v=7" rel="stylesheet">
     <script src="/static/theme.js?v=4"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f6f8fa;
-            min-height: 100vh;
-            color: #1f2937;
-            margin: 0;
-            padding: 0;
+            background: #f6f8fa; min-height: 100vh; color: #1f2937;
         }
-
         .app-layout { display: flex; min-height: 100vh; }
         .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
         .sidebar.collapsed { width: 64px; }
@@ -37,417 +27,93 @@
         .sidebar-brand a i { color: #4f46e5; }
         .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
         .app-tabs { display: flex; flex-direction: column; gap: 4px; }
-        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; width: 100%; text-align: left; }
         .app-tab:hover { background: #f3f4f6; color: #111827; }
         .app-tab.active { background: #4f46e5; color: #fff; }
         .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
-        .app-tab:hover i { color: #4f46e5; }
         .app-tab.active i { color: #fff; }
-        .app-tab span { white-space: nowrap; }
         .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
-        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
-        .dashboard-tab:hover { background: #4338ca; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; width: 100%; justify-content: center; }
         .main-wrap { flex: 1; min-width: 0; padding: 24px; }
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
 
-        .main-content {
-            display: block;
-        }
+        .editor-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: start; }
+        @media (max-width: 1100px) { .editor-grid { grid-template-columns: 1fr; } }
 
-        .category-section {
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            margin-bottom: 20px;
+        .category-section, .meta-panel {
+            background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+            padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
-
-        .category-section h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .category-section h2, .meta-panel h2 {
+            font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: #333;
+            display: flex; align-items: center; gap: 8px;
         }
+        .item-list { max-height: 70vh; overflow-y: auto; margin-bottom: 16px; }
 
-        .category-section h2 i {
-            color: #667eea;
-        }
-
-        .item-list {
-            max-height: 600px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding-right: 10px;
-        }
-
-        .item-list::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .item-list::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-
-        .item-list::-webkit-scrollbar-thumb {
-            background: #667eea;
-            border-radius: 10px;
-        }
-
-        .item-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px;
-            margin-bottom: 8px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .item-row:hover {
-            background: #e9ecef;
-            transform: translateX(5px);
-        }
-
-        .category-group {
-            margin-bottom: 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            overflow: hidden;
-            background: white;
-            transition: opacity 0.2s ease;
-        }
-
-        .category-group.dragging {
-            opacity: 0.5;
-        }
-
+        .category-group { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+        .category-group.dragging { opacity: 0.45; }
         .category-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            font-weight: 600;
-            user-select: none;
+            display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; font-weight: 600;
         }
-
-        .category-header .toggle-icon {
-            cursor: pointer;
-            padding: 5px;
+        .category-header.collapsed + .subcategories-container { display: none; }
+        .category-header.collapsed .fa-chevron-down { transform: rotate(-90deg); }
+        .subcategories-container { padding: 12px; background: #f8f9fa; }
+        .subcategory-row, .child-row {
+            display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 6px;
+            background: #fff; border-radius: 6px; border-left: 3px solid #667eea;
         }
+        .child-row { margin-left: 28px; border-left-color: #94a3b8; background: #fafafa; }
+        .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
+        .sub-block { margin-bottom: 8px; }
+        .children-container { padding-left: 4px; }
 
-        .category-header .toggle-icon:hover {
-            opacity: 0.8;
+        .menu-name-input {
+            flex: 1; min-width: 120px; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 6px; background: rgba(255,255,255,0.15); color: #fff; font-weight: 600;
         }
-
-        .category-header:hover {
-            opacity: 0.95;
+        .subcategory-row .menu-name-input, .child-row .menu-name-input {
+            border: 1px solid #e5e7eb; background: #fff; color: #111827; font-weight: 500;
         }
-
-        .category-header.collapsed + .subcategories-container {
-            display: none;
-        }
-
-        .category-header i {
-            transition: transform 0.2s ease;
-        }
-
-        .category-header.collapsed i.fa-chevron-down {
-            transform: rotate(-90deg);
-        }
-
-        .subcategories-container {
-            padding: 15px;
-            background: #f8f9fa;
-        }
-
-        .subcategory-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            margin-bottom: 6px;
-            background: white;
-            border-radius: 6px;
-            margin-left: 20px;
-            border-left: 3px solid #667eea;
-            transition: all 0.2s ease;
-        }
-
-        .subcategory-row:hover {
-            background: #e9ecef;
-            transform: translateX(3px);
-        }
-
-        .subcategory-row.dragging {
-            opacity: 0.5;
-        }
-
-        .category-input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
-            font-family: inherit;
-            background: rgba(255, 255, 255, 0.3);
-            color: white;
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-
-        .category-input::placeholder {
-            color: rgba(255, 255, 255, 0.7);
-        }
-
-        .category-input:focus {
-            outline: none;
-            border-color: white;
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-        .subcategory-input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            font-size: 0.95rem;
-            font-family: inherit;
-            transition: border-color 0.2s ease;
-        }
-
-        .subcategory-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .category-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .btn-icon.white {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .btn-icon.white:hover {
-            color: white;
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .item-row.dragging {
-            opacity: 0.5;
-        }
-
-        .drag-handle {
-            cursor: move;
-            color: #999;
-            font-size: 1.2rem;
-        }
-
-        .drag-handle:hover {
-            color: #667eea;
-        }
-
-        .item-input {
-            flex: 1;
-            padding: 8px 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-family: inherit;
-            transition: border-color 0.2s ease;
-        }
-
-        .item-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .item-actions {
-            display: flex;
-            gap: 5px;
-        }
-
+        .drag-handle { cursor: grab; opacity: 0.7; }
         .btn-icon {
-            background: none;
-            border: none;
-            padding: 6px 10px;
-            cursor: pointer;
-            border-radius: 6px;
-            color: #666;
-            font-size: 1rem;
-            transition: all 0.2s ease;
+            border: none; background: transparent; cursor: pointer; padding: 4px 6px;
+            color: inherit; border-radius: 4px;
         }
+        .btn-icon:hover { background: rgba(0,0,0,0.08); }
+        .category-header .btn-icon { color: #fff; }
 
-        .btn-icon:hover {
-            background: #e9ecef;
-            color: #667eea;
+        .add-item-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+        .add-item-input, .meta-panel input, .meta-panel textarea, .meta-panel select {
+            padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem;
         }
-
-        .btn-icon.delete:hover {
-            color: #dc3545;
-            background: #f8d7da;
-        }
-
-        .add-item-form {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .add-item-input {
-            flex: 1;
-            padding: 10px 15px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        .add-item-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+        .add-item-input { flex: 1; min-width: 140px; }
+        .meta-panel label { display: block; font-size: 0.75rem; color: #6b7280; margin: 10px 0 4px; }
+        .meta-panel input, .meta-panel textarea, .meta-panel select { width: 100%; }
+        .meta-panel textarea { min-height: 72px; resize: vertical; }
+        .meta-hint { font-size: 0.75rem; color: #9ca3af; margin-top: 4px; }
+        .meta-empty { color: #9ca3af; font-size: 0.875rem; padding: 12px 0; }
+        .row-selected { outline: 2px solid #4f46e5; outline-offset: 1px; }
 
         .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+            display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
+            border: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer;
         }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
+        .btn-primary { background: #4f46e5; color: #fff; }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-secondary { background: #e5e7eb; color: #111827; }
+        .btn-success { background: #059669; color: #fff; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .save-section { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+        .alert { display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem; }
+        .alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .preview-box {
+            margin-top: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fde68a;
+            border-radius: 6px; font-size: 0.8rem; max-height: 220px; overflow: auto;
         }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #218838;
-            transform: translateY(-2px);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .save-section {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            margin-top: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .counters {
-            display: flex;
-            gap: 30px;
-            align-items: center;
-        }
-
-        .counter-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .counter-label {
-            font-size: 0.85rem;
-            color: #666;
-            font-weight: 500;
-        }
-
-        .counter-value {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #667eea;
-        }
-
-        .alert {
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .alert.show {
-            display: block;
-        }
-
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #999;
-        }
-
-        .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 15px;
-            opacity: 0.5;
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-
-            .header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-        }
+        .muted { color: #6b7280; font-size: 0.75rem; }
 
         body.embed-mode { background: #f6f8fa; }
         body.embed-mode .sidebar { display: none !important; }
@@ -469,1215 +135,674 @@
                     {% if staff_show_dev_tabs %}
                     <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
                     <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
-                                        <a href="/app/Menu" class="app-tab active"><i class="fas fa-sitemap"></i><span>Menu</span></a>
-{% endif %}
-                    <a href="/app/Templates_Uploader" class="app-tab" style="display: none;"><i class="fas fa-file-archive"></i><span>Templates Uploader</span></a>
+                    <a href="/app/Menu" class="app-tab active"><i class="fas fa-sitemap"></i><span>Menu</span></a>
+                    {% endif %}
                 </div>
             </nav>
             <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
         </aside>
         <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
         <div class="main-wrap">
             <h1 class="page-title"><i class="fas fa-tags"></i> Category Editor</h1>
-            <div id="sourceBanner" style="display:none; margin-bottom:16px; padding:12px 16px; border-radius:8px; font-size:0.875rem; line-height:1.4;"></div>
+            <div id="sourceBanner" style="display:none; margin-bottom:16px; padding:12px 16px; border-radius:8px; font-size:0.875rem;"></div>
             <div class="alert alert-success" id="successAlert"></div>
             <div class="alert alert-error" id="errorAlert"></div>
-            <div class="main-content">
-            <div class="category-section">
-                <h2><i class="fas fa-sitemap"></i> Categories & Subcategories</h2>
-                <div class="item-list" id="categoriesList">
-                    <div class="empty-state">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>Loading categories...</p>
-                    </div>
-                </div>
-                <div class="add-item-form">
-                    <select class="add-item-input" id="categorySelect" style="flex: 0 0 200px; margin-right: 10px;">
-                        <option value="">Select category...</option>
-                    </select>
-                    <input type="text" class="add-item-input" id="subcategoryInput" placeholder="Enter new subcategory">
-                    <input type="text" class="add-item-input" id="handleInput" placeholder="Handle (optional)" style="flex: 0 0 180px;" title="Leave blank to auto-generate from category + label">
-                    <label style="display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:0.85rem;">
-                        <input type="checkbox" id="indexableInput" checked> In menu
-                    </label>
-                    <button class="btn btn-primary" onclick="addSubcategory()" id="addSubBtn">
-                        <i class="fas fa-plus"></i> Add Subcategory
-                    </button>
-                </div>
-                <div class="add-item-form" style="margin-top: 10px;" id="addCategoryForm">
-                    <input type="text" class="add-item-input" id="categoryInput" placeholder="Enter new category">
-                    <button class="btn btn-primary" onclick="addCategory()">
-                        <i class="fas fa-plus"></i> Add Category
-                    </button>
-                </div>
-            </div>
-        </div>
 
-        <div class="save-section">
-            <div class="counters">
-                <div class="counter-item">
-                    <span class="counter-label">Categories:</span>
-                    <span class="counter-value" id="categoryCounter">0 / 128</span>
+            <div class="editor-grid">
+                <div class="category-section">
+                    <h2><i class="fas fa-sitemap"></i> Categories</h2>
+                    <div class="item-list" id="categoriesList">
+                        <div class="empty-state muted">Loading…</div>
+                    </div>
+
+                    <div class="add-item-form" id="addCategoryForm">
+                        <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
+                        <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
+                    </div>
+                    <div class="add-item-form">
+                        <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
+                        <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
+                        <label class="muted" style="display:flex;align-items:center;gap:4px;">
+                            <input type="checkbox" id="indexableInput" checked> In menu
+                        </label>
+                        <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
+                    </div>
+                    <div class="add-item-form">
+                        <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
+                        <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
+                        <label class="muted" style="display:flex;align-items:center;gap:4px;">
+                            <input type="checkbox" id="childIndexableInput" checked> In menu
+                        </label>
+                        <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
+                    </div>
+
+                    <div class="save-section">
+                        <button class="btn btn-success" id="saveBtn" onclick="saveTaxonomy()">
+                            <i class="fas fa-save"></i> Save order / menu names
+                        </button>
+                    </div>
+                    <p class="meta-hint">Menu names are cosmetic (<code>display_label</code>). Choice values and handles change only via the metadata panel.</p>
                 </div>
-                <div class="counter-item">
-                    <span class="counter-label">Subcategories:</span>
-                    <span class="counter-value" id="subcategoryCounter">0 / 128</span>
-                </div>
-            </div>
-            <button class="btn btn-success" onclick="saveCategories()" id="saveBtn">
-                <i class="fas fa-save"></i> Save Changes
-            </button>
-        </div>
+
+                <aside class="meta-panel" id="metaPanel">
+                    <h2><i class="fas fa-sliders"></i> Metadata</h2>
+                    <div id="metaEmpty" class="meta-empty">Select a node to edit menu name, choice value, handle, or collection SEO.</div>
+                    <div id="metaBody" style="display:none;">
+                        <div class="muted" id="metaKind"></div>
+                        <label>Menu name (display_label)</label>
+                        <input type="text" id="metaDisplayLabel" placeholder="Shown in menus; optional">
+                        <label>Choice value</label>
+                        <div style="display:flex; gap:6px;">
+                            <input type="text" id="metaChoice" style="flex:1;">
+                            <button class="btn btn-secondary" type="button" onclick="previewChoiceRename()">Preview</button>
+                        </div>
+                        <div id="choicePreview" class="preview-box" style="display:none;"></div>
+                        <button class="btn btn-primary" id="applyChoiceBtn" style="display:none; margin-top:8px;" type="button" onclick="applyChoiceRename()">Apply choice rename</button>
+
+                        <label>Handle</label>
+                        <div style="display:flex; gap:6px;">
+                            <input type="text" id="metaHandle" style="flex:1;" disabled>
+                            <button class="btn btn-secondary" type="button" id="unlockHandleBtn" onclick="toggleHandleUnlock()">Unlock</button>
+                        </div>
+                        <div id="handleRenameRow" style="display:none; margin-top:8px;">
+                            <input type="text" id="metaNewHandle" placeholder="new-handle">
+                            <button class="btn btn-primary" style="margin-top:6px;" type="button" onclick="renameHandle()">Rename + redirect</button>
+                            <p class="meta-hint">Creates /collections/old → /collections/new, then re-locks.</p>
+                        </div>
+
+                        <label id="indexableLabel" style="display:none;">
+                            <input type="checkbox" id="metaIndexable"> In menu (indexable)
+                        </label>
+
+                        <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;">
+                        <p class="muted">Collection SEO (Shopify collection only)</p>
+                        <label>Collection title</label>
+                        <input type="text" id="metaColTitle">
+                        <label>SEO title</label>
+                        <input type="text" id="metaSeoTitle">
+                        <label>SEO description</label>
+                        <textarea id="metaSeoDesc"></textarea>
+                        <label>Description HTML</label>
+                        <textarea id="metaDescHtml"></textarea>
+                        <button class="btn btn-success" style="margin-top:12px;" type="button" onclick="saveMetadata()">
+                            <i class="fas fa-check"></i> Save metadata
+                        </button>
+                    </div>
+                </aside>
             </div>
         </div>
     </div>
 
     <script>
-        let categories = [];
-        let subcategories = [];
-        let categorySubcategoryMap = {};
         let taxonomyData = [];
-        let dataSource = 'fallback'; // 'live' | 'cached' | 'fallback' | legacy 'taxonomy'
         let taxonomyUpdatedAt = null;
-        let pendingLocalDraft = null; // preserved on 409
+        let dataSource = 'fallback';
+        let selectedHandle = null;
+        let pendingChoicePreview = null;
+        let handleUnlocked = false;
 
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function displayName(node, identityKey) {
+            const dl = (node && node.display_label || '').trim();
+            if (dl) return dl;
+            return String((node && (node[identityKey] || node.category || node.label)) || '');
+        }
+        function showSuccess(msg) {
+            const el = document.getElementById('successAlert');
+            el.textContent = msg; el.style.display = 'block';
+            document.getElementById('errorAlert').style.display = 'none';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+        function showError(msg) {
+            const el = document.getElementById('errorAlert');
+            el.textContent = msg; el.style.display = 'block';
+            document.getElementById('successAlert').style.display = 'none';
+        }
         function isTaxonomyMode() {
             return dataSource === 'live' || dataSource === 'cached' || dataSource === 'taxonomy';
         }
 
-        function setSourceBanner(data) {
-            const banner = document.getElementById('sourceBanner');
-            const addCatForm = document.getElementById('addCategoryForm');
-            if (!banner) return;
-            const src = data.source || data.taxonomy_source || 'fallback';
-            // Hide status chatter for live/cached; only warn on fallback.
-            if (src === 'live' || src === 'taxonomy' || src === 'cached') {
-                banner.style.display = 'none';
-                banner.textContent = '';
-                if (addCatForm) addCatForm.style.display = 'none';
-                return;
-            }
-            banner.style.display = 'block';
-            banner.style.background = '#fef2f2';
-            banner.style.border = '1px solid #fecaca';
-            banner.style.color = '#991b1b';
-            banner.textContent = data.warning
-                || 'FALLBACK - do not edit. Seed shop.custom.taxonomy first.';
-            if (addCatForm) addCatForm.style.display = '';
-        }
-
-        function findSubNode(categoryName, label) {
-            const cat = (taxonomyData || []).find(c => c.category === categoryName);
-            if (!cat) return null;
-            return (cat.subcategories || []).find(s => s.label === label) || null;
-        }
-
-        function findCatNode(categoryName) {
-            return (taxonomyData || []).find(c => c.category === categoryName) || null;
-        }
-
-        function isHandleLocked(node) {
-            if (!node) return true;
-            if (!('handle_locked' in node)) return true;
-            return !!node.handle_locked;
-        }
-
-        // Update counters
-        function updateCounters() {
-            const categoryCount = categories.length;
-            const subcategoryCount = subcategories.length;
-            const maxLimit = 128;
-            
-            document.getElementById('categoryCounter').textContent = `${categoryCount} / ${maxLimit}`;
-            document.getElementById('subcategoryCounter').textContent = `${subcategoryCount} / ${maxLimit}`;
-            
-            // Add warning color if approaching limit
-            const categoryCounterEl = document.getElementById('categoryCounter');
-            const subcategoryCounterEl = document.getElementById('subcategoryCounter');
-            
-            if (categoryCount >= maxLimit * 0.9) {
-                categoryCounterEl.style.color = '#dc3545';
-            } else if (categoryCount >= maxLimit * 0.75) {
-                categoryCounterEl.style.color = '#ffc107';
-            } else {
-                categoryCounterEl.style.color = '#667eea';
-            }
-            
-            if (subcategoryCount >= maxLimit * 0.9) {
-                subcategoryCounterEl.style.color = '#dc3545';
-            } else if (subcategoryCount >= maxLimit * 0.75) {
-                subcategoryCounterEl.style.color = '#ffc107';
-            } else {
-                subcategoryCounterEl.style.color = '#667eea';
-            }
-        }
-
-        // Load categories and subcategories
         async function loadCategories() {
             try {
                 const response = await fetch('/api/category-editor/categories');
                 const data = await response.json();
-                
-                if (data.success) {
-                    dataSource = data.source || 'fallback';
-                    taxonomyData = Array.isArray(data.taxonomy) ? data.taxonomy : [];
-                    taxonomyUpdatedAt = data.taxonomy_updated_at || null;
-                    categories = data.categories || [];
-                    subcategories = data.subcategories || [];
-                    setSourceBanner(data);
-                    
-                    // Use stored mapping if available, otherwise use pattern matching
-                    if (data.category_mapping && Object.keys(data.category_mapping).length > 0) {
-                        // Use the stored mapping from categories.py
-                        categorySubcategoryMap = data.category_mapping;
-                        
-                        // Reorder subcategories to match the mapping order (preserve hierarchical order)
-                        const orderedSubcategories = [];
-                        categories.forEach(cat => {
-                            if (categorySubcategoryMap[cat] && Array.isArray(categorySubcategoryMap[cat])) {
-                                categorySubcategoryMap[cat].forEach(subcat => {
-                                    if (subcategories.includes(subcat) && !orderedSubcategories.includes(subcat)) {
-                                        orderedSubcategories.push(subcat);
-                                    }
-                                });
-                            }
-                            // Ensure all categories are in the map
-                            if (!categorySubcategoryMap[cat]) {
-                                categorySubcategoryMap[cat] = [];
-                            }
-                        });
-                        
-                        // Add any subcategories not in the mapping (shouldn't happen, but safety check)
-                        subcategories.forEach(subcat => {
-                            if (!orderedSubcategories.includes(subcat)) {
-                                orderedSubcategories.push(subcat);
-                            }
-                        });
-                        
-                        // Update subcategories to match mapping order
-                        subcategories = orderedSubcategories;
-                    } else {
-                        // Fall back to pattern matching if no stored mapping
-                        initializeMapping();
-                    }
-                    
-                    renderHierarchical();
-                    updateCategorySelect();
-                    updateCounters();
+                if (!data.success) throw new Error(data.error || 'Load failed');
+                dataSource = data.source || data.taxonomy_source || 'fallback';
+                taxonomyData = Array.isArray(data.taxonomy) ? data.taxonomy : [];
+                taxonomyUpdatedAt = data.taxonomy_updated_at || null;
+                const banner = document.getElementById('sourceBanner');
+                if (!isTaxonomyMode()) {
+                    banner.style.display = 'block';
+                    banner.style.background = '#fef2f2';
+                    banner.style.border = '1px solid #fecaca';
+                    banner.style.color = '#991b1b';
+                    banner.textContent = data.warning || 'FALLBACK — seed shop.custom.taxonomy before editing.';
                 } else {
-                    showError(data.error || 'Failed to load categories');
+                    banner.style.display = 'none';
                 }
-            } catch (error) {
-                showError('Error loading categories: ' + error.message);
-            }
-        }
-
-        // Initialize category-subcategory mapping
-        // This preserves the order subcategories appear in the saved list
-        function initializeMapping() {
-            categorySubcategoryMap = {};
-            
-            // Initialize all categories with empty arrays
-            categories.forEach(cat => {
-                categorySubcategoryMap[cat] = [];
-            });
-            
-            // Map subcategories to categories based on naming patterns
-            // Process subcategories in order they appear (preserving saved hierarchical order)
-            subcategories.forEach(subcat => {
-                // Try to match subcategory to a category
-                let matched = false;
-                
-                // Check for direct name matches or patterns
-                for (const cat of categories) {
-                    // Exact match patterns (e.g., "Biscuits - Single" belongs to "Biscuits, Cakes & Pies")
-                    if (cat.includes("Biscuits") && (subcat.includes("Biscuits") || subcat.includes("Cake") || subcat.includes("Cupcakes") || subcat.includes("Pies"))) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Cereal") && (subcat.includes("Cereal") || subcat.includes("Porridge"))) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Chewing Gum") && subcat === "Mint") {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Chocolate" && (subcat === "Balls" || subcat === "Bars" || subcat === "Coins" || subcat === "Hearts" || subcat === "Neapolitans" || subcat === "Single Shapes" || subcat === "Truffles")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Crips") && (subcat === "BBQ" || subcat === "Beef" || subcat === "Cheese & Onion" || subcat === "Plain/Original" || subcat === "Salt & Vinegar" || subcat === "Sour Cream")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Dried Fruits") && (subcat === "Apricots" || subcat === "Bananas" || subcat === "Dates")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Drinks" && (subcat === "Coffee" || subcat === "Fizzy" || subcat === "Hot Chocolate" || subcat === "Still" || subcat === "Tea" || subcat === "Water")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Jams") && (subcat.includes("Marmalade") || subcat.includes("Marmite") || subcat.includes("Nutella") || subcat.includes("Jam"))) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Lollipops" && (subcat === "Chocolate" || subcat === "Sugar")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Popcorn - Popped") && (subcat === "Sweet" || subcat === "Sweet & Salty" || subcat === "Salted" || subcat === "Toffee")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Popcorn - Microwave") && (subcat === "Butter" || subcat === "Salted" || subcat === "Sweet")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Pretzels" && (subcat === "Original" || subcat === "Sour Cream & Onion")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Protein" && (subcat === "Bars" || subcat === "Nuts")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat.includes("Savoury Snacks") && (subcat === "Bars" || subcat === "Bags" || subcat === "Packs")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Soup" && (subcat === "Chicken" || subcat === "Leek & Potato" || subcat === "Minestrone" || subcat === "Tomato")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Sprinkles" && (subcat === "Shapes" || subcat === "Vermicelli")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Sweets" && (subcat === "Boiled/Compressed" || subcat === "Jellies")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Mints" && (subcat === "Boiled Sweets" || subcat === "Compressed Mints" || subcat === "Chewing Gum")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Vegan" && (subcat === "Sweets" || subcat === "Treats")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    if (cat === "Packaging" && (subcat === "Bags" || subcat === "Bottle" || subcat === "Card" || subcat.includes("Card Box") || subcat === "Eco" || subcat === "Header Card" || subcat === "Jar" || subcat === "Label" || subcat === "Nets" || subcat === "Organza Bag" || subcat === "Popcorn Box" || subcat === "Plastic Box" || subcat === "Tin" || subcat === "Tub" || subcat === "Wrap")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    // Seasonal events
-                    if (cat === "Seasonal" && (subcat === "Valentines Day" || subcat === "Ramadan" || subcat === "Eid" || subcat === "Easter" || subcat === "Summer" || subcat === "Halloween" || subcat === "Black Friday" || subcat === "Christmas" || subcat === "New Year")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    // Themes
-                    if (cat === "Themes" && (subcat === "Achievement" || subcat === "Anniversary" || subcat === "Appreciation" || subcat === "Awards" || subcat === "Back To School" || subcat === "British" || subcat === "Carnival" || subcat === "Celebrations" || subcat === "Community" || subcat === "Countdown to Launch" || subcat === "Customers" || subcat === "Diversity & Inclusion" || subcat === "Empowerment" || subcat === "Football" || subcat === "Ideas" || subcat === "Heroes" || subcat === "Loyalty" || subcat === "Mental Health" || subcat === "Meet The Team" || subcat === "Milestones" || subcat === "Product Launch" || subcat === "Referral Rewards" || subcat === "Sale" || subcat === "Saver Offers" || subcat === "Success" || subcat === "Staff" || subcat === "Support" || subcat === "Sustainability" || subcat === "Thank You" || subcat === "University" || subcat === "Volunteer" || subcat === "Wellbeing" || subcat === "We Miss You")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    // Events & Charities
-                    if (cat === "Events & Charities" && (subcat === "Cancer Research" || subcat === "Careers Week" || subcat === "Mental Health Awareness" || subcat === "Movember" || subcat === "Pride" || subcat === "Wimbledon" || subcat === "World Bee Day" || subcat === "Volunteers Week" || subcat === "World Blood Donor Day" || subcat === "World Cup - Football" || subcat === "World Cup - Rugby")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                    // Brands
-                    if (cat === "Brands" && (subcat === "Cadbury" || subcat === "Haribo" || subcat === "Heinz" || subcat === "Jordans" || subcat === "Kellom" || subcat === "Mars" || subcat === "McVities" || subcat === "Nature Valley" || subcat === "Nestle" || subcat === "Swizzels" || subcat === "Walkers")) {
-                        if (!categorySubcategoryMap[cat].includes(subcat)) {
-                            categorySubcategoryMap[cat].push(subcat);
-                            matched = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // If no match found, add to "Uncategorized" or first category
-                if (!matched) {
-                    if (!categorySubcategoryMap["Uncategorized"]) {
-                        categorySubcategoryMap["Uncategorized"] = [];
-                    }
-                    categorySubcategoryMap["Uncategorized"].push(subcat);
-                }
-            });
-        }
-
-        // Render hierarchical structure
-        function renderHierarchical() {
-            const list = document.getElementById('categoriesList');
-            
-            if (categories.length === 0) {
-                list.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>No categories yet</p></div>';
-                return;
-            }
-            
-            let html = '';
-            const taxMode = isTaxonomyMode();
-            
-            categories.forEach((cat, catIndex) => {
-                const subcats = categorySubcategoryMap[cat] || [];
-                const hasNoSubcats = subcats.length === 0;
-                const catNode = taxMode ? findCatNode(cat) : null;
-                const catHandle = catNode ? (catNode.handle || '') : '';
-                html += `
-                    <div class="category-group" data-category-index="${catIndex}" data-handle="${escapeHtml(catHandle)}">
-                        <div class="category-header${hasNoSubcats ? ' collapsed' : ''}">
-                            <i class="fas fa-chevron-down toggle-icon" onclick="toggleCategoryGroup(this.closest('.category-header'))"></i>
-                            <i class="fas fa-grip-vertical drag-handle"></i>
-                            <input type="text" class="category-input" value="${escapeHtml(cat)}" 
-                                   onchange="updateCategory(${catIndex}, this.value)" 
-                                   onclick="event.stopPropagation();"
-                                   data-category-index="${catIndex}"
-                                   placeholder="Category name">
-                            ${taxMode && catHandle ? `<span style="font-size:0.75rem;opacity:0.85;font-weight:400;">/${escapeHtml(catHandle)}</span>` : ''}
-                            <div class="category-actions" onclick="event.stopPropagation();">
-                                ${taxMode ? '' : `
-                                <button class="btn-icon white delete" onclick="event.stopPropagation(); deleteCategory(${catIndex})" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>`}
-                            </div>
-                        </div>
-                        <div class="subcategories-container">
-                            ${subcats.map((subcat, subIndex) => {
-                                const subIndexInAll = subcategories.indexOf(subcat);
-                                const subNode = taxMode ? findSubNode(cat, subcat) : null;
-                                const subHandle = subNode ? (subNode.handle || '') : '';
-                                const locked = isHandleLocked(subNode);
-                                const indexable = subNode ? (subNode.indexable !== false) : true;
-                                const visible = subNode ? !!subNode.visible : false;
-                                const catEsc = escapeHtml(cat).replace(/'/g, "\\'");
-                                return `
-                                    <div class="subcategory-row" data-subcategory-index="${subIndexInAll}" data-parent-category="${escapeHtml(cat)}" data-handle="${escapeHtml(subHandle)}">
-                                        <i class="fas fa-grip-vertical drag-handle"></i>
-                                        <input type="text" class="subcategory-input" value="${escapeHtml(subcat)}" 
-                                               onchange="updateSubcategory(${subIndexInAll}, this.value, '${catEsc}')" 
-                                               data-subcategory-index="${subIndexInAll}">
-                                        ${taxMode ? `
-                                        <input type="text" class="handle-input" value="${escapeHtml(subHandle)}" 
-                                               ${locked ? 'disabled title="Handle locked"' : ''}
-                                               style="flex:0 0 160px; font-size:0.8rem; padding:6px 8px; border:1px solid #e5e7eb; border-radius:4px; background:${locked ? '#f3f4f6' : '#fff'};"
-                                               data-handle-locked="${locked ? '1' : '0'}">
-                                        <label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;white-space:nowrap;" title="In menu (default on). Uncheck only to deliberately hide from the mega-menu.">
-                                            <input type="checkbox" class="indexable-check" ${indexable ? 'checked' : ''}> Menu
-                                        </label>
-                                        <span style="font-size:0.7rem;color:${visible ? '#059669' : '#9ca3af'};white-space:nowrap;">${visible ? 'visible' : 'hidden'}</span>
-                                        ${!visible && subHandle ? `
-                                        <button class="btn btn-secondary" style="padding:4px 8px;font-size:0.75rem;" onclick="publishNow('${escapeHtml(subHandle).replace(/'/g, "\\'")}')" title="Publish now (requires products)">
-                                            Publish
-                                        </button>` : ''}
-                                        ` : `
-                                        <div class="item-actions">
-                                            <button class="btn-icon delete" onclick="deleteSubcategory(${subIndexInAll}, '${catEsc}')" title="Delete">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>`}
-                                    </div>
-                                `;
-                            }).join('')}
-                            ${subcats.length === 0 ? '<div style="padding: 10px; color: #999; font-style: italic; margin-left: 20px;">No subcategories</div>' : ''}
-                        </div>
-                    </div>
-                `;
-            });
-            
-            list.innerHTML = html;
-            
-            // Setup drag and drop for categories
-            setupCategoryDragAndDrop();
-            // Setup drag and drop for subcategories within their groups
-            setupSubcategoryDragAndDrop();
-        }
-
-        // Toggle category group expansion
-        function toggleCategoryGroup(header) {
-            header.classList.toggle('collapsed');
-        }
-
-        // Update category select dropdown
-        function updateCategorySelect() {
-            const select = document.getElementById('categorySelect');
-            select.innerHTML = '<option value="">Select category...</option>' + 
-                categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
-        }
-
-        // Setup drag and drop for categories
-        function setupCategoryDragAndDrop() {
-            const list = document.getElementById('categoriesList');
-            const groups = list.querySelectorAll('.category-group');
-            
-            groups.forEach((group, index) => {
-                const header = group.querySelector('.category-header');
-                const dragHandle = header.querySelector('.drag-handle');
-                
-                // Make header draggable via drag handle
-                dragHandle.addEventListener('mousedown', (e) => {
-                    header.draggable = true;
-                });
-                
-                header.addEventListener('dragstart', (e) => {
-                    // Only allow drag from drag handle
-                    if (!e.target.classList.contains('drag-handle') && !e.target.closest('.drag-handle')) {
-                        e.preventDefault();
-                        header.draggable = false;
-                        return;
-                    }
-                    group.classList.add('dragging');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', index.toString());
-                });
-                
-                header.addEventListener('dragend', () => {
-                    header.draggable = false;
-                    group.classList.remove('dragging');
-                    updateCategoriesFromDOM();
-                    setTimeout(() => {
-                        initializeMapping();
-                        renderHierarchical();
-                        updateCategorySelect();
-                    }, 100);
-                });
-            });
-            
-            // Set up dragover/drop listeners on the list (only once)
-            list.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                const draggingGroup = list.querySelector('.category-group.dragging');
-                if (!draggingGroup) return;
-                
-                e.dataTransfer.dropEffect = 'move';
-                
-                const afterElement = getDragAfterCategory(list, e.clientY, draggingGroup);
-                if (afterElement == null) {
-                    list.appendChild(draggingGroup);
-                } else {
-                    list.insertBefore(draggingGroup, afterElement);
-                }
-            });
-            
-            list.addEventListener('drop', (e) => {
-                e.preventDefault();
-            });
-        }
-
-        // Setup drag and drop for subcategories within their groups
-        function setupSubcategoryDragAndDrop() {
-            const groups = document.querySelectorAll('.category-group');
-            
-            groups.forEach(group => {
-                const subcats = group.querySelectorAll('.subcategory-row');
-                const container = group.querySelector('.subcategories-container');
-                
-                subcats.forEach(subcat => {
-                    subcat.draggable = true;
-                    
-                    subcat.addEventListener('dragstart', (e) => {
-                        subcat.classList.add('dragging');
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/plain', subcat.dataset.subcategoryIndex);
-                    });
-                    
-                    subcat.addEventListener('dragend', () => {
-                        subcat.classList.remove('dragging');
-                        updateSubcategoriesFromDOM();
-                        setTimeout(() => {
-                            initializeMapping();
-                            renderHierarchical();
-                        }, 100);
-                    });
-                    
-                    subcat.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        
-                        const afterElement = getDragAfterSubcategory(container, e.clientY, subcat);
-                        if (afterElement == null) {
-                            container.appendChild(subcat);
-                        } else {
-                            container.insertBefore(subcat, afterElement);
-                        }
-                    });
-                    
-                    subcat.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                    });
-                });
-            });
-        }
-
-        function getDragAfterCategory(container, y, currentElement) {
-            const draggableElements = [...container.querySelectorAll('.category-group:not(.dragging)')];
-            
-            return draggableElements.reduce((closest, child) => {
-                if (child === currentElement) return closest;
-                
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-        }
-
-        function getDragAfterSubcategory(container, y, currentElement) {
-            const draggableElements = [...container.querySelectorAll('.subcategory-row:not(.dragging)')];
-            
-            return draggableElements.reduce((closest, child) => {
-                if (child === currentElement) return closest;
-                
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-        }
-
-        // Add category
-        function addCategory() {
-            if (isTaxonomyMode()) {
-                alert('Adding top-level categories via taxonomy is not supported in this editor yet. Seed them in Phase 1 / taxonomy JSON.');
-                return;
-            }
-            const input = document.getElementById('categoryInput');
-            const value = input.value.trim();
-            if (value && !categories.includes(value)) {
-                categories.push(value);
-                categorySubcategoryMap[value] = [];
-                input.value = '';
-                initializeMapping();
-                renderHierarchical();
-                updateCategorySelect();
-                updateCounters();
-            } else if (categories.includes(value)) {
-                alert('Category already exists!');
-            }
-        }
-
-        // Add subcategory
-        async function addSubcategory() {
-            const input = document.getElementById('subcategoryInput');
-            const select = document.getElementById('categorySelect');
-            const handleInput = document.getElementById('handleInput');
-            const indexableInput = document.getElementById('indexableInput');
-            const value = input.value.trim();
-            const category = select.value;
-            const handle = handleInput ? handleInput.value.trim() : '';
-            const indexable = indexableInput ? indexableInput.checked : true;
-            
-            if (!value) {
-                alert('Please enter a subcategory name');
-                return;
-            }
-            
-            if (!category) {
-                alert('Please select a category for this subcategory');
-                return;
-            }
-
-            if (isTaxonomyMode()) {
-                const btn = document.getElementById('addSubBtn');
-                const prev = btn ? btn.innerHTML : '';
-                if (btn) {
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-                }
-                try {
-                    const response = await fetch('/api/category-editor/subcategory', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            category,
-                            label: value,
-                            handle: handle || null,
-                            indexable,
-                            expected_updated_at: taxonomyUpdatedAt,
-                        }),
-                    });
-                    const data = await response.json();
-                    if (response.status === 409) {
-                        showError((data.error || 'Conflict') + ' — keeping your form values; reload remote when ready.');
-                        if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                        return;
-                    }
-                    if (!response.ok || !data.success) {
-                        throw new Error(data.error || 'Create failed');
-                    }
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                    input.value = '';
-                    select.value = '';
-                    if (handleInput) handleInput.value = '';
-                    if (indexableInput) indexableInput.checked = true;
-                    showSuccess(
-                        'Subcategory created (unpublished).'
-                        + (data.cache_note ? ' ' + data.cache_note : '')
-                    );
-                    await loadCategories();
-                } catch (err) {
-                    showError(err.message || String(err));
-                } finally {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = prev || '<i class="fas fa-plus"></i> Add Subcategory';
-                    }
-                }
-                return;
-            }
-            
-            if (subcategories.includes(value)) {
-                alert('Subcategory already exists!');
-                return;
-            }
-            
-            subcategories.push(value);
-            if (!categorySubcategoryMap[category]) {
-                categorySubcategoryMap[category] = [];
-            }
-            categorySubcategoryMap[category].push(value);
-            
-            input.value = '';
-            select.value = '';
-            renderHierarchical();
-            updateCounters();
-        }
-
-        async function publishNow(handle) {
-            if (!handle) return;
-            try {
-                const response = await fetch('/api/category-editor/publish', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        handle,
-                        expected_updated_at: taxonomyUpdatedAt,
-                    }),
-                });
-                const data = await response.json();
-                if (response.status === 409) {
-                    showError((data.error || 'Conflict') + ' — local edits kept; reload when ready.');
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                    return;
-                }
-                if (!response.ok || !data.success) {
-                    throw new Error(data.error || 'Publish failed');
-                }
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess(`Published /${handle} (${data.products} products).`);
-                await loadCategories();
+                renderTree();
+                updateSelects();
+                if (selectedHandle) selectNode(selectedHandle, false);
             } catch (err) {
                 showError(err.message || String(err));
             }
         }
 
-        function buildTaxonomyPayloadFromDOM() {
-            const catList = document.getElementById('categoriesList');
-            const byHandle = {};
-            (taxonomyData || []).forEach(c => {
-                if (c.handle) byHandle[c.handle] = c;
+        function renderTree() {
+            const list = document.getElementById('categoriesList');
+            if (!taxonomyData.length) {
+                list.innerHTML = '<div class="muted">No taxonomy nodes</div>';
+                return;
+            }
+            let html = '';
+            taxonomyData.forEach((cat, ci) => {
+                const catHandle = cat.handle || '';
+                const menu = displayName(cat, 'category');
+                const subs = cat.subcategories || [];
+                html += `<div class="category-group" data-kind="category" data-handle="${escapeHtml(catHandle)}" data-cat-index="${ci}">
+                    <div class="category-header">
+                        <i class="fas fa-chevron-down toggle-icon" onclick="toggleGroup(this.closest('.category-header'))"></i>
+                        <i class="fas fa-grip-vertical drag-handle" data-drag="category"></i>
+                        <input class="menu-name-input" value="${escapeHtml(menu)}" data-field="display_label"
+                               onclick="event.stopPropagation(); selectNode('${escapeHtml(catHandle)}')"
+                               onchange="setDisplayLabel('${escapeHtml(catHandle)}', this.value)">
+                        <button class="btn-icon" title="Metadata" onclick="event.stopPropagation(); selectNode('${escapeHtml(catHandle)}')">
+                            <i class="fas fa-sliders"></i>
+                        </button>
+                    </div>
+                    <div class="subcategories-container" data-drop="sub">`;
+                subs.forEach((sub, si) => {
+                    const sh = sub.handle || '';
+                    const smenu = displayName(sub, 'label');
+                    const children = sub.children || [];
+                    html += `<div class="sub-block" data-kind="subcategory" data-handle="${escapeHtml(sh)}" data-parent-cat="${escapeHtml(catHandle)}">
+                        <div class="subcategory-row" data-kind="subcategory" data-handle="${escapeHtml(sh)}">
+                            <i class="fas fa-grip-vertical drag-handle" data-drag="sub"></i>
+                            <input class="menu-name-input" value="${escapeHtml(smenu)}"
+                                   onclick="event.stopPropagation(); selectNode('${escapeHtml(sh)}')"
+                                   onchange="setDisplayLabel('${escapeHtml(sh)}', this.value)">
+                            <button class="btn-icon" onclick="event.stopPropagation(); selectNode('${escapeHtml(sh)}')"><i class="fas fa-sliders"></i></button>
+                        </div>
+                        <div class="children-container" data-drop="child" data-parent-sub="${escapeHtml(sh)}">`;
+                    children.forEach((ch) => {
+                        const hh = ch.handle || '';
+                        const cmenu = displayName(ch, 'label');
+                        html += `<div class="child-row" data-kind="sub_subcategory" data-handle="${escapeHtml(hh)}" data-parent-sub="${escapeHtml(sh)}">
+                            <i class="fas fa-grip-vertical drag-handle" data-drag="child"></i>
+                            <input class="menu-name-input" value="${escapeHtml(cmenu)}"
+                                   onclick="event.stopPropagation(); selectNode('${escapeHtml(hh)}')"
+                                   onchange="setDisplayLabel('${escapeHtml(hh)}', this.value)">
+                            <button class="btn-icon" onclick="event.stopPropagation(); selectNode('${escapeHtml(hh)}')"><i class="fas fa-sliders"></i></button>
+                        </div>`;
+                    });
+                    html += `</div></div>`;
+                });
+                html += `</div></div>`;
+            });
+            list.innerHTML = html;
+            setupDnD();
+            if (selectedHandle) {
+                const el = list.querySelector(`[data-handle="${CSS.escape(selectedHandle)}"]`);
+                if (el) el.classList.add('row-selected');
+            }
+        }
+
+        function toggleGroup(header) { header.classList.toggle('collapsed'); }
+
+        function findNodeDeep(handle) {
+            for (const cat of taxonomyData) {
+                if (cat.handle === handle) return { kind: 'category', cat, sub: null, node: cat };
+                for (const sub of cat.subcategories || []) {
+                    if (sub.handle === handle) return { kind: 'subcategory', cat, sub, node: sub };
+                    for (const ch of sub.children || []) {
+                        if (ch.handle === handle) return { kind: 'sub_subcategory', cat, sub, node: ch };
+                    }
+                }
+            }
+            return null;
+        }
+
+        function setDisplayLabel(handle, value) {
+            const found = findNodeDeep(handle);
+            if (!found) return;
+            const v = (value || '').trim();
+            const identity = found.kind === 'category' ? found.node.category : found.node.label;
+            if (!v || v === identity) {
+                delete found.node.display_label;
+            } else {
+                found.node.display_label = v;
+            }
+        }
+
+        function updateSelects() {
+            const catSel = document.getElementById('categorySelect');
+            const parentSel = document.getElementById('parentSubSelect');
+            catSel.innerHTML = '<option value="">Category…</option>' +
+                taxonomyData.map(c => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)}</option>`).join('');
+            let opts = '<option value="">Parent subcategory…</option>';
+            taxonomyData.forEach(c => {
                 (c.subcategories || []).forEach(s => {
-                    if (s.handle) byHandle[s.handle] = s;
+                    opts += `<option value="${escapeHtml(c.category)}||${escapeHtml(s.label)}">${escapeHtml(c.category)} › ${escapeHtml(s.label)}</option>`;
                 });
             });
-            const result = [];
-            catList.querySelectorAll('.category-group').forEach((group, ci) => {
-                const catInput = group.querySelector('.category-input');
-                const category = catInput ? catInput.value.trim() : '';
-                const handle = group.dataset.handle || '';
-                const old = byHandle[handle] || findCatNode(category) || {};
-                const subs = [];
-                group.querySelectorAll('.subcategory-row').forEach((row, si) => {
-                    const labelInput = row.querySelector('.subcategory-input');
-                    const label = labelInput ? labelInput.value.trim() : '';
-                    const sh = row.dataset.handle || '';
-                    const oldSub = byHandle[sh] || findSubNode(old.category || category, label) || {};
-                    const idxCheck = row.querySelector('.indexable-check');
-                    const handleField = row.querySelector('.handle-input');
-                    let nextHandle = sh || oldSub.handle || '';
-                    if (handleField && handleField.dataset.handleLocked !== '1' && handleField.value.trim()) {
-                        nextHandle = handleField.value.trim();
-                    }
-                    subs.push({
-                        ...oldSub,
-                        label,
-                        handle: nextHandle,
-                        position: si + 1,
-                        indexable: idxCheck ? idxCheck.checked : (oldSub.indexable !== false),
-                        metafield_key: oldSub.metafield_key || 'subcategory',
-                        visible: oldSub.visible || false,
-                        handle_locked: ('handle_locked' in oldSub) ? oldSub.handle_locked : true,
+            parentSel.innerHTML = opts;
+        }
+
+        /* ---------- Constrained DnD ---------- */
+        function setupDnD() {
+            const list = document.getElementById('categoriesList');
+
+            list.querySelectorAll('.category-group').forEach((group) => {
+                const header = group.querySelector('.category-header');
+                const handle = header.querySelector('[data-drag="category"]');
+                handle.addEventListener('mousedown', () => { header.draggable = true; });
+                header.addEventListener('dragstart', (e) => {
+                    if (!e.target.closest('[data-drag="category"]')) { e.preventDefault(); return; }
+                    group.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', 'category');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                header.addEventListener('dragend', () => {
+                    header.draggable = false;
+                    group.classList.remove('dragging');
+                    syncOrderFromDOM();
+                    renderTree();
+                    updateSelects();
+                });
+            });
+
+            list.addEventListener('dragover', (e) => {
+                const draggingCat = list.querySelector('.category-group.dragging');
+                if (!draggingCat) return;
+                e.preventDefault();
+                const after = getAfter(list, e.clientY, '.category-group', draggingCat);
+                if (!after) list.appendChild(draggingCat);
+                else list.insertBefore(draggingCat, after);
+            });
+
+            list.querySelectorAll('.subcategory-row').forEach((row) => {
+                row.draggable = true;
+                row.addEventListener('dragstart', (e) => {
+                    row.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', 'sub');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.stopPropagation();
+                });
+                row.addEventListener('dragend', () => {
+                    row.classList.remove('dragging');
+                    // move the whole sub-block with the row
+                    syncOrderFromDOM();
+                    renderTree();
+                    updateSelects();
+                });
+            });
+
+            list.querySelectorAll('[data-drop="sub"]').forEach((container) => {
+                container.addEventListener('dragover', (e) => {
+                    const dragging = list.querySelector('.subcategory-row.dragging');
+                    if (!dragging) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const block = dragging.closest('.sub-block');
+                    const after = getAfter(container, e.clientY, '.sub-block', block);
+                    if (!after) container.appendChild(block);
+                    else container.insertBefore(block, after);
+                });
+            });
+
+            list.querySelectorAll('.child-row').forEach((row) => {
+                row.draggable = true;
+                row.addEventListener('dragstart', (e) => {
+                    row.classList.add('dragging');
+                    e.dataTransfer.setData('text/plain', 'child');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.stopPropagation();
+                });
+                row.addEventListener('dragend', () => {
+                    row.classList.remove('dragging');
+                    syncOrderFromDOM();
+                    renderTree();
+                    updateSelects();
+                });
+            });
+
+            list.querySelectorAll('[data-drop="child"]').forEach((container) => {
+                container.addEventListener('dragover', (e) => {
+                    const dragging = list.querySelector('.child-row.dragging');
+                    if (!dragging) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const after = getAfter(container, e.clientY, '.child-row', dragging);
+                    if (!after) container.appendChild(dragging);
+                    else container.insertBefore(dragging, after);
+                });
+            });
+        }
+
+        function getAfter(container, y, selector, current) {
+            const els = [...container.querySelectorAll(selector)].filter(el => el !== current);
+            return els.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) return { offset, element: child };
+                return closest;
+            }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+        }
+
+        function syncOrderFromDOM() {
+            const list = document.getElementById('categoriesList');
+            const byHandle = {};
+            taxonomyData.forEach(c => {
+                byHandle[c.handle] = c;
+                (c.subcategories || []).forEach(s => {
+                    byHandle[s.handle] = s;
+                    (s.children || []).forEach(ch => { byHandle[ch.handle] = ch; });
+                });
+            });
+            const next = [];
+            list.querySelectorAll('.category-group').forEach((group, ci) => {
+                const ch = group.dataset.handle;
+                const cat = { ...(byHandle[ch] || {}), handle: ch, position: ci + 1, subcategories: [] };
+                group.querySelectorAll(':scope > .subcategories-container > .sub-block').forEach((block, si) => {
+                    const sh = block.dataset.handle;
+                    const sub = { ...(byHandle[sh] || {}), handle: sh, position: si + 1, children: [] };
+                    block.querySelectorAll(':scope > .children-container > .child-row').forEach((row, xi) => {
+                        const hh = row.dataset.handle;
+                        const child = { ...(byHandle[hh] || {}), handle: hh, position: xi + 1 };
+                        sub.children.push(child);
                     });
+                    cat.subcategories.push(sub);
                 });
-                result.push({
-                    ...old,
-                    category,
-                    handle: handle || old.handle || '',
-                    position: ci + 1,
-                    visible: old.visible !== false,
-                    handle_locked: ('handle_locked' in old) ? old.handle_locked : true,
-                    subcategories: subs,
-                });
+                next.push(cat);
             });
-            return result;
+            taxonomyData = next;
         }
 
-        // Update category
-        function updateCategory(index, value) {
-            if (index >= 0 && index < categories.length) {
-                const oldCat = categories[index];
-                const newCat = value.trim();
-                
-                if (newCat && newCat !== oldCat && !categories.includes(newCat)) {
-                    categories[index] = newCat;
-                    // Update mapping
-                    if (categorySubcategoryMap[oldCat]) {
-                        categorySubcategoryMap[newCat] = categorySubcategoryMap[oldCat];
-                        delete categorySubcategoryMap[oldCat];
-                    }
-                    renderHierarchical();
-                    updateCategorySelect();
-                    updateCounters();
-                } else if (categories.includes(newCat)) {
-                    alert('Category already exists!');
-                    // Reset input
-                    setTimeout(() => {
-                        renderHierarchical();
-                    }, 100);
-                }
-            }
-        }
-
-        // Update subcategory
-        function updateSubcategory(index, value, parentCategory) {
-            if (index >= 0 && index < subcategories.length) {
-                const oldSubcat = subcategories[index];
-                const newSubcat = value.trim();
-                
-                if (newSubcat && newSubcat !== oldSubcat) {
-                    if (subcategories.includes(newSubcat)) {
-                        alert('Subcategory already exists!');
-                        setTimeout(() => {
-                            renderHierarchical();
-                        }, 100);
-                        return;
-                    }
-                    
-                    subcategories[index] = newSubcat;
-                    
-                    // Update mapping
-                    if (parentCategory && categorySubcategoryMap[parentCategory]) {
-                        const idx = categorySubcategoryMap[parentCategory].indexOf(oldSubcat);
-                        if (idx !== -1) {
-                            categorySubcategoryMap[parentCategory][idx] = newSubcat;
-                        }
-                    }
-                    
-                    renderHierarchical();
-                    updateCounters();
-                }
-            }
-        }
-
-        // Delete category
-        function deleteCategory(index) {
-            if (confirm('Are you sure you want to delete this category? This will not delete its subcategories, but they will be moved to "Uncategorized".')) {
-                const cat = categories[index];
-                
-                // Move subcategories to "Uncategorized" if exists, otherwise create it
-                if (categorySubcategoryMap[cat] && categorySubcategoryMap[cat].length > 0) {
-                    if (!categorySubcategoryMap["Uncategorized"]) {
-                        categorySubcategoryMap["Uncategorized"] = [];
-                        if (!categories.includes("Uncategorized")) {
-                            categories.push("Uncategorized");
-                        }
-                    }
-                    categorySubcategoryMap["Uncategorized"].push(...categorySubcategoryMap[cat]);
-                }
-                
-                delete categorySubcategoryMap[cat];
-                categories.splice(index, 1);
-                initializeMapping();
-                renderHierarchical();
-                updateCategorySelect();
-                updateCounters();
-            }
-        }
-
-        // Delete subcategory
-        function deleteSubcategory(index, parentCategory) {
-            if (confirm('Are you sure you want to delete this subcategory?')) {
-                const subcat = subcategories[index];
-                
-                // Remove from mapping
-                if (parentCategory && categorySubcategoryMap[parentCategory]) {
-                    const idx = categorySubcategoryMap[parentCategory].indexOf(subcat);
-                    if (idx !== -1) {
-                        categorySubcategoryMap[parentCategory].splice(idx, 1);
-                    }
-                }
-                
-                subcategories.splice(index, 1);
-                renderHierarchical();
-                updateCounters();
-            }
-        }
-
-        // Save categories
-        async function saveCategories() {
-            const saveBtn = document.getElementById('saveBtn');
-            const originalButtonText = saveBtn.innerHTML;
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
+        /* ---------- Creates ---------- */
+        async function addCategory() {
+            if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
+            const value = document.getElementById('categoryInput').value.trim();
+            if (!value) return;
             try {
-                // Extract categories in DOM order
-                updateCategoriesFromDOM();
+                const res = await fetch('/api/category-editor/category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: value, expected_updated_at: taxonomyUpdatedAt }),
+                });
+                const data = await res.json();
+                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
+                document.getElementById('categoryInput').value = '';
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                showSuccess('Category created (unpublished).');
+                await loadCategories();
+            } catch (err) { showError(err.message || String(err)); }
+        }
 
-                if (isTaxonomyMode()) {
-                    const taxonomy = buildTaxonomyPayloadFromDOM();
-                    pendingLocalDraft = taxonomy;
-                    const response = await fetch('/api/category-editor/taxonomy', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            taxonomy,
-                            expected_updated_at: taxonomyUpdatedAt,
-                        }),
-                    });
-                    const data = await response.json();
-                    if (response.status === 409) {
-                        showError(
-                            (data.error || 'Conflict')
-                            + ' — your unsaved edits are still on screen. Reload remote taxonomy only when you are ready to merge.'
-                        );
-                        if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                        return;
-                    }
-                    if (!response.ok || !data.success) {
-                        throw new Error(data.error || 'Taxonomy save failed');
-                    }
-                    taxonomyData = taxonomy;
-                    pendingLocalDraft = null;
+        async function addSubcategory() {
+            if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
+            const category = document.getElementById('categorySelect').value;
+            const label = document.getElementById('subcategoryInput').value.trim();
+            const indexable = document.getElementById('indexableInput').checked;
+            if (!category || !label) { showError('Pick a category and enter a label'); return; }
+            const btn = document.getElementById('addSubBtn');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/category-editor/subcategory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category, label, indexable, expected_updated_at: taxonomyUpdatedAt }),
+                });
+                const data = await res.json();
+                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
+                document.getElementById('subcategoryInput').value = '';
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                showSuccess('Subcategory created (unpublished).');
+                await loadCategories();
+            } catch (err) { showError(err.message || String(err)); }
+            finally { btn.disabled = false; }
+        }
+
+        async function addSubSubcategory() {
+            if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
+            const parent = document.getElementById('parentSubSelect').value;
+            const label = document.getElementById('childInput').value.trim();
+            const indexable = document.getElementById('childIndexableInput').checked;
+            if (!parent || !label) { showError('Pick a parent subcategory and enter a label'); return; }
+            const [category, parent_label] = parent.split('||');
+            const btn = document.getElementById('addChildBtn');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/category-editor/sub-subcategory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category, parent_label, label, indexable, expected_updated_at: taxonomyUpdatedAt }),
+                });
+                const data = await res.json();
+                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
+                document.getElementById('childInput').value = '';
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                showSuccess('Sub-subcategory created (unpublished, three rules).');
+                await loadCategories();
+            } catch (err) { showError(err.message || String(err)); }
+            finally { btn.disabled = false; }
+        }
+
+        async function saveTaxonomy() {
+            if (!isTaxonomyMode()) { showError('Cannot save in fallback mode'); return; }
+            syncOrderFromDOM();
+            const btn = document.getElementById('saveBtn');
+            const prev = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+            try {
+                const res = await fetch('/api/category-editor/taxonomy', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taxonomy: taxonomyData, expected_updated_at: taxonomyUpdatedAt }),
+                });
+                const data = await res.json();
+                if (res.status === 409) {
+                    showError((data.error || 'Conflict') + ' — local tree kept; reload when ready.');
                     if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                    showSuccess('Taxonomy saved to Shopify (reorder / labels / indexable).');
-                    await loadCategories();
                     return;
                 }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                showSuccess('Order and menu names saved.');
+                await loadCategories();
+            } catch (err) { showError(err.message || String(err)); }
+            finally { btn.disabled = false; btn.innerHTML = prev; }
+        }
 
-                showError('FALLBACK mode cannot save. Seed shop.custom.taxonomy first (legacy POST rewrite removed).');
-                return;
+        /* ---------- Metadata panel ---------- */
+        async function selectNode(handle, fetchRemote = true) {
+            selectedHandle = handle;
+            handleUnlocked = false;
+            pendingChoicePreview = null;
+            document.getElementById('choicePreview').style.display = 'none';
+            document.getElementById('applyChoiceBtn').style.display = 'none';
+            document.getElementById('handleRenameRow').style.display = 'none';
+            document.getElementById('metaHandle').disabled = true;
+            document.getElementById('unlockHandleBtn').textContent = 'Unlock';
+            document.querySelectorAll('.row-selected').forEach(el => el.classList.remove('row-selected'));
+            const hit = document.querySelector(`[data-handle="${CSS.escape(handle)}"]`);
+            if (hit) hit.classList.add('row-selected');
 
-                // Build ordered subcategories list from the current categorySubcategoryMap
-                // This preserves the exact hierarchical order based on category order
-                const orderedSubcategories = [];
-                const catList = document.getElementById('categoriesList');
-                
-                // Build mapping from DOM to ensure it matches current state
-                // Include ALL categories in the mapping (even if they have no subcategories)
-                const categoryMapping = {};
-                catList.querySelectorAll('.category-group').forEach(group => {
-                    const categoryInput = group.querySelector('.category-input');
-                    const categoryName = categoryInput ? categoryInput.value.trim() : null;
-                    if (categoryName) {
-                        categoryMapping[categoryName] = [];
-                        // Get subcategories even if category is collapsed (querySelectorAll works regardless)
-                        const subcategoryRows = group.querySelectorAll('.subcategory-row');
-                        subcategoryRows.forEach(row => {
-                            const subcatInput = row.querySelector('.subcategory-input');
-                            if (subcatInput && subcatInput.value.trim()) {
-                                const subcatName = subcatInput.value.trim();
-                                categoryMapping[categoryName].push(subcatName);
-                                // Add to ordered list in hierarchical order
-                                orderedSubcategories.push(subcatName);
-                            }
-                        });
-                    }
-                });
-                
-                // Ensure all categories from the categories array are in the mapping (even if empty)
-                categories.forEach(cat => {
-                    if (!categoryMapping[cat]) {
-                        categoryMapping[cat] = [];
-                    }
-                });
-                
-                // Update subcategories to use the ordered list
-                subcategories = orderedSubcategories;
-                
-                // Debug: log what we're about to save
-                console.log('💾 Saving category mapping:', Object.keys(categoryMapping).length, 'categories');
-                let totalSubcats = 0;
-                for (const cat in categoryMapping) {
-                    if (categoryMapping[cat].length > 0) {
-                        console.log(`  ${cat}: ${categoryMapping[cat].length} subcategories`);
-                        totalSubcats += categoryMapping[cat].length;
-                    }
-                }
-                if (totalSubcats === 0) {
-                    console.warn('⚠️ Warning: No subcategories found in mapping!');
-                }
+            document.getElementById('metaEmpty').style.display = 'none';
+            document.getElementById('metaBody').style.display = 'block';
 
-                let response;
+            let payload = null;
+            if (fetchRemote) {
                 try {
-                    response = await fetch('/api/category-editor/categories', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            categories: categories,
-                            subcategories: subcategories,
-                            category_mapping: categoryMapping
-                        })
-                    });
-                } catch (fetchError) {
-                    // Network error or fetch failed
-                    throw new Error('Network error: Unable to connect to server. Please check your connection and try again.');
+                    const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle));
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Load failed');
+                    payload = data;
+                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                } catch (err) {
+                    showError(err.message || String(err));
+                    return;
                 }
-
-                // Check if response is ok (status 200-299)
-                if (!response.ok) {
-                    let errorMessage = `Server error: ${response.status}`;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.error || errorData.message || errorMessage;
-                    } catch (parseError) {
-                        // Response is not JSON, try to get text
-                        try {
-                            const errorText = await response.text();
-                            errorMessage = errorText || errorMessage;
-                        } catch (textError) {
-                            // Can't parse response, use default message
-                        }
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                // Parse JSON response
-                let data;
-                try {
-                    data = await response.json();
-                } catch (parseError) {
-                    throw new Error('Invalid response from server. Please try again.');
-                }
-
-                if (data.success) {
-                    let message = 'Categories and subcategories saved successfully!';
-                    
-                    // Check sync result
-                    if (data.sync_result) {
-                        const sync = data.sync_result;
-                        if (sync.success) {
-                            message += ' Metafield definitions synced successfully.';
-                        } else if (sync.errors && sync.errors.length > 0) {
-                            message += ' Note: Some metafield definitions could not be synced: ' + sync.errors.join('; ');
-                            showError('Metafield sync warnings: ' + sync.errors.join('; '));
-                        }
-                    }
-                    
-                    // Check collections result
-                    if (data.collections_result) {
-                        const collections = data.collections_result;
-                        if (collections.success) {
-                            message += ' ' + collections.message;
-                        } else if (collections.errors && collections.errors.length > 0) {
-                            message += ' Note: Some collections could not be synced: ' + collections.errors.slice(0, 3).join('; ') + (collections.errors.length > 3 ? '...' : '');
-                            showError('Collection sync warnings: ' + collections.errors.slice(0, 5).join('; '));
-                        }
-                    }
-                    
-                    showSuccess(message);
-                } else {
-                    const errorMsg = data.error || data.message || 'Failed to save categories. Please try again.';
-                    showError(errorMsg);
-                }
-            } catch (error) {
-                // Show error message
-                const errorMsg = error.message || 'An unexpected error occurred while saving. Please try again.';
-                showError(errorMsg);
-                console.error('Save error:', error);
-            } finally {
-                // Always reset the button, even if there was an error
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = originalButtonText;
+            } else {
+                const found = findNodeDeep(handle);
+                if (!found) return;
+                payload = { kind: found.kind, node: found.node, collection: null, handle };
             }
+
+            const node = payload.node || {};
+            const kind = payload.kind || '';
+            const identity = kind === 'category' ? (node.category || '') : (node.label || '');
+            document.getElementById('metaKind').textContent = `${kind} · /${handle}`;
+            document.getElementById('metaDisplayLabel').value = node.display_label || '';
+            document.getElementById('metaChoice').value = identity;
+            document.getElementById('metaHandle').value = handle;
+            document.getElementById('metaNewHandle').value = handle;
+
+            const idxLabel = document.getElementById('indexableLabel');
+            if (kind === 'subcategory' || kind === 'sub_subcategory') {
+                idxLabel.style.display = 'block';
+                document.getElementById('metaIndexable').checked = node.indexable !== false;
+            } else {
+                idxLabel.style.display = 'none';
+            }
+
+            const col = payload.collection || {};
+            const seo = col.seo || {};
+            document.getElementById('metaColTitle').value = col.title || '';
+            document.getElementById('metaSeoTitle').value = seo.title || '';
+            document.getElementById('metaSeoDesc').value = seo.description || '';
+            document.getElementById('metaDescHtml').value = col.descriptionHtml || '';
         }
 
-        // Update categories order from DOM
-        function updateCategoriesFromDOM() {
-            const catList = document.getElementById('categoriesList');
-            const newCategories = [];
-            
-            catList.querySelectorAll('.category-group').forEach(group => {
-                const input = group.querySelector('.category-input');
-                if (input && input.value.trim()) {
-                    newCategories.push(input.value.trim());
-                }
-            });
-            
-            categories = newCategories;
+        function toggleHandleUnlock() {
+            handleUnlocked = !handleUnlocked;
+            document.getElementById('metaHandle').disabled = true;
+            document.getElementById('handleRenameRow').style.display = handleUnlocked ? 'block' : 'none';
+            document.getElementById('unlockHandleBtn').textContent = handleUnlocked ? 'Lock' : 'Unlock';
         }
 
-        // Update subcategories order from DOM
-        // This preserves the hierarchical order by extracting subcategories grouped under their categories
-        function updateSubcategoriesFromDOM() {
-            const catList = document.getElementById('categoriesList');
-            const newSubcategories = [];
-            
-            // Extract subcategories in hierarchical order (grouped by their parent categories)
-            catList.querySelectorAll('.category-group').forEach(group => {
-                const subcategoryRows = group.querySelectorAll('.subcategory-row');
-                subcategoryRows.forEach(row => {
-                    const input = row.querySelector('.subcategory-input');
-                    if (input && input.value.trim()) {
-                        newSubcategories.push(input.value.trim());
-                    }
+        async function renameHandle() {
+            if (!selectedHandle) return;
+            const newHandle = document.getElementById('metaNewHandle').value.trim();
+            if (!newHandle || newHandle === selectedHandle) { showError('Enter a different handle'); return; }
+            if (!confirm(`Rename handle ${selectedHandle} → ${newHandle} and create redirect?`)) return;
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/rename-handle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_handle: newHandle, expected_updated_at: taxonomyUpdatedAt }),
                 });
-            });
-            
-            // Preserve any subcategories that weren't found in DOM (shouldn't happen, but safety check)
-            subcategories.forEach(subcat => {
-                if (!newSubcategories.includes(subcat)) {
-                    newSubcategories.push(subcat);
-                }
-            });
-            
-            subcategories = newSubcategories;
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Rename failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                selectedHandle = newHandle;
+                showSuccess(data.redirect || 'Handle renamed.');
+                await loadCategories();
+                await selectNode(newHandle);
+            } catch (err) { showError(err.message || String(err)); }
         }
 
-        // Update order from DOM (called before save)
-        function updateOrderFromDOM() {
-            updateCategoriesFromDOM();
-            updateSubcategoriesFromDOM();
+        async function previewChoiceRename() {
+            if (!selectedHandle) return;
+            const newValue = document.getElementById('metaChoice').value.trim();
+            if (!newValue) return;
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/rename-choice/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_value: newValue }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Preview failed');
+                pendingChoicePreview = data;
+                const box = document.getElementById('choicePreview');
+                const products = (data.products || []).map(p => `• ${p.title}`).join('\n') || '(none)';
+                const cascade = (data.cascading_collections || []).map(c => `• /${c.handle} (${c.label || ''})`).join('\n') || '(none)';
+                box.style.display = 'block';
+                box.innerHTML = `<strong>${escapeHtml(data.old_value)} → ${escapeHtml(data.new_value)}</strong><br>
+                    Products: ${data.product_total}${data.products_truncated ? '+' : ''}<br>
+                    <pre style="white-space:pre-wrap;margin:6px 0 0;">${escapeHtml(products)}</pre>
+                    <div style="margin-top:8px;"><strong>Cascading collections</strong></div>
+                    <pre style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(cascade)}</pre>`;
+                document.getElementById('applyChoiceBtn').style.display = 'inline-flex';
+            } catch (err) { showError(err.message || String(err)); }
         }
 
-        // Allow Enter key to add items
+        async function applyChoiceRename() {
+            if (!selectedHandle || !pendingChoicePreview) return;
+            const newValue = pendingChoicePreview.new_value;
+            const n = pendingChoicePreview.product_total || 0;
+            const msg = n > 0
+                ? `Migrate ${n} product(s) and cascade child collection rules?\n${pendingChoicePreview.old_value} → ${newValue}`
+                : `Rename choice ${pendingChoicePreview.old_value} → ${newValue}?`;
+            if (!confirm(msg)) return;
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/rename-choice/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        new_value: newValue,
+                        confirm: n > 0,
+                        expected_updated_at: taxonomyUpdatedAt,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || 'Apply failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                pendingChoicePreview = null;
+                showSuccess(`Choice renamed (${data.products_migrated || 0} products migrated).`);
+                await loadCategories();
+                await selectNode(selectedHandle);
+            } catch (err) { showError(err.message || String(err)); }
+        }
+
+        async function saveMetadata() {
+            if (!selectedHandle) return;
+            const body = {
+                display_label: document.getElementById('metaDisplayLabel').value,
+                collection_title: document.getElementById('metaColTitle').value,
+                seo_title: document.getElementById('metaSeoTitle').value,
+                seo_description: document.getElementById('metaSeoDesc').value,
+                description_html: document.getElementById('metaDescHtml').value,
+                expected_updated_at: taxonomyUpdatedAt,
+            };
+            const idxLabel = document.getElementById('indexableLabel');
+            if (idxLabel.style.display !== 'none') {
+                body.indexable = document.getElementById('metaIndexable').checked;
+            }
+            if (!(body.display_label || '').trim()) body.clear_display_label = true;
+            try {
+                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/metadata', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
+                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                showSuccess('Metadata saved.');
+                await loadCategories();
+                await selectNode(selectedHandle);
+            } catch (err) { showError(err.message || String(err)); }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            const categoryInput = document.getElementById('categoryInput');
-            const subcategoryInput = document.getElementById('subcategoryInput');
-            
-            if (categoryInput) {
-                categoryInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        addCategory();
-                    }
-                });
-            }
-            
-            if (subcategoryInput) {
-                subcategoryInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        addSubcategory();
-                    }
-                });
-            }
+            loadCategories();
+            fetch('/api/category-editor/ensure-defs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ strip_blank: true }),
+            }).catch(() => {});
         });
-
-        // Utility functions
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function showSuccess(message) {
-            const alert = document.getElementById('successAlert');
-            alert.textContent = message;
-            alert.classList.add('show');
-            setTimeout(() => {
-                alert.classList.remove('show');
-            }, 3000);
-        }
-
-        function showError(message) {
-            const alert = document.getElementById('errorAlert');
-            alert.textContent = message;
-            alert.classList.add('show');
-            setTimeout(() => {
-                alert.classList.remove('show');
-            }, 5000);
-        }
-
-        // Initialize
-        loadCategories();
     </script>
 </body>
 </html>
-

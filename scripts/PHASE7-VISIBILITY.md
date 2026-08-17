@@ -88,6 +88,13 @@ failures or circuit-breaker abort.
 Tony registers the webhooks in Shopify Admin and sets `SHOPIFY_WEBHOOK_SECRET`
 (same value in Render env / `render.yaml`).
 
+**Prerequisite for auto-publish after Category Editor creates nodes:**
+`SHOPIFY_WEBHOOK_SECRET` must be set and `collections/create` +
+`collections/update` registered. The Category Editor **Publish** button was
+removed; visibility is owned by these webhooks plus the nightly
+`reconcile_visibility` cron. Ops may still call
+`POST /api/category-editor/publish` or `scripts/reconcile_visibility.py --write`.
+
 ## Nightly backstop
 
 - `POST /api/cron/reconcile-visibility`
@@ -107,3 +114,4 @@ Env: `CRON_SECRET` on web + cron; `RECONCILE_VISIBILITY_URL` on cron pointing at
 4. Invalid HMAC → 401; noop webhook → 200, no metafield write.
 5. `indexable: false` hidden in menu even if manually published (Liquid gate).
 6. Cron without secret → 401; with secret → 200 + summary (breaker intact).
+7. Confirm Publish is gone from Category Editor UI; create still starts unpublished.

@@ -1,81 +1,16 @@
 {%- comment -%}
-  snippets/bite-mega-menu.liquid  (v6 — taxonomy metafield, desktop + drawer)
+  snippets/bite-mega-menu.liquid  (v7 — taxonomy L3 + display_label)
 
-  Replaces v5's self-discovery. The menu is now read from a single shop
-  metafield rather than derived by enumerating every collection and parsing
-  its title.
+  SOURCE OF TRUTH: shop.metafields.custom.taxonomy (json)
 
-  ---------------------------------------------------------------------------
-  SOURCE OF TRUTH
+  Menu text uses display_label when set, else category/label.
+  Links always use the stored handle — never derive handles from display_label.
 
-    shop.metafields.custom.taxonomy   (type: json)
+  Visibility:
+    verify: skip when indexable=false, then require live collection products > 0
+    non-verify: render when visible=true
 
-    [
-      {
-        "category": "Chocolate",
-        "handle": "personalised-chocolate",
-        "position": 1,
-        "visible": true,
-        "subcategories": [
-          { "label": "Bars",
-            "handle": "personalised-chocolate-bars",
-            "position": 1,
-            "indexable": true,
-            "metafield_key": "subcategory",
-            "visible": true }
-        ]
-      }
-    ]
-
-  Written by the Product Manager app. Nothing in this file needs editing to
-  add, remove, rename or reorder anything in the menu.
-
-  ---------------------------------------------------------------------------
-  WHAT CHANGED FROM v5
-
-    gone   the `collections` enumeration, and with it the 50-iteration cap
-           that was silently truncating the menu
-    gone   `all_products_count` called once per collection on every page load
-    gone   title parsing on " - ", so renaming a collection can no longer
-           break a menu column
-    gone   the column_order and item_pins config blocks — ordering is the
-           `position` field, edited in the app
-
-  Cost is now one metafield read plus a loop over ~11 categories.
-
-  ---------------------------------------------------------------------------
-  VISIBILITY
-
-  Deliberate mega-menu exclusion is enforced by `indexable` in Liquid — not by
-  assuming unpublished collections are hidden. Phase 7 keeps Online Store
-  publish + taxonomy `visible` aligned with Online-Store-published product
-  counts, but if someone republishes a non-indexable collection in Admin,
-  verify mode must still skip it.
-
-  Non-verify path: render when `visible` is true (info / fast path).
-  Verify path: skip when `indexable` is false, then require a live collection
-  with products (`all_products_count` > 0). Unpublished collections report 0.
-
-  Pass verify: true to cross-check against live product counts instead of
-  trusting `visible` alone. Live theme uses verify; that costs one collection
-  lookup per entry.
-
-  ---------------------------------------------------------------------------
-  PARAMETERS
-
-    title          top-level label. Default: Products.
-    layout         'desktop' or 'drawer'. Default: desktop.
-    color_scheme   passed explicitly; `section` does not resolve two render
-                   levels deep. Desktop only.
-    verify         cross-check with indexable gate + live counts (storefront).
-    debug          print a diagnostic block.
-
-  ---------------------------------------------------------------------------
-  The drawer branch still mirrors Dawn's link / childlink / grandchildlink
-  markup class-for-class, because MenuDrawer binds to every <summary>, reads
-  summary.nextElementSibling as the sliding panel, details.closest('.has-submenu')
-  as the container to mark open, and details.querySelector('button') as the
-  focus-trap anchor. It emits <li> elements and must be rendered inside a <ul>.
+  Drawer markup mirrors Dawn link / childlink / grandchildlink for MenuDrawer.
 {%- endcomment -%}
 
 {%- liquid
@@ -98,6 +33,11 @@
 
   {%- for cat in taxonomy -%}
     {%- assign cat_handle = cat.handle | default: cat.category | handleize -%}
+    {%- if cat.display_label != blank -%}
+      {%- assign cat_label = cat.display_label -%}
+    {%- else -%}
+      {%- assign cat_label = cat.category -%}
+    {%- endif -%}
 
     {%- capture column_links -%}
       {%- for sub in cat.subcategories -%}
@@ -108,11 +48,83 @@
         {%- else -%}
           {%- unless sub.visible -%}{% continue %}{% endunless -%}
         {%- endif -%}
-        <li{% if li_class != blank %} class="{{ li_class }}"{% endif %}>
-          <a href="{{ routes.collections_url }}/{{ sub.handle }}" class="{{ a_class }}">
-            {{- sub.label | escape -}}
-          </a>
-        </li>
+
+        {%- if sub.display_label != blank -%}
+          {%- assign sub_label = sub.display_label -%}
+        {%- else -%}
+          {%- assign sub_label = sub.label -%}
+        {%- endif -%}
+
+        {%- comment -%} Build grandchild (sub-sub) list first {%- endcomment -%}
+        {%- capture grandchild_links -%}
+          {%- for child in sub.children -%}
+            {%- if verify -%}
+              {%- unless child.indexable -%}{% continue %}{% endunless -%}
+              {%- assign child_live = collections[child.handle] -%}
+              {%- if child_live.all_products_count == 0 -%}{% continue %}{% endif -%}
+            {%- else -%}
+              {%- unless child.visible -%}{% continue %}{% endunless -%}
+            {%- endif -%}
+            {%- if child.display_label != blank -%}
+              {%- assign child_label = child.display_label -%}
+            {%- else -%}
+              {%- assign child_label = child.label -%}
+            {%- endif -%}
+            <li{% if li_class != blank %} class="{{ li_class }}"{% endif %}>
+              <a href="{{ routes.collections_url }}/{{ child.handle }}" class="{{ a_class }}{% if menu_layout == 'drawer' %} list-menu__item--link{% endif %}">
+                {{- child_label | escape -}}
+              </a>
+            </li>
+          {%- endfor -%}
+        {%- endcapture -%}
+        {%- assign grandchild_check = grandchild_links | strip -%}
+
+        {%- if menu_layout == 'drawer' and grandchild_check != blank -%}
+          <li>
+            <details id="Details-menu-drawer-bite-{{ cat_handle }}-{{ sub.handle }}">
+              <summary
+                id="HeaderDrawer-bite-{{ menu_handle }}-{{ cat_handle }}-{{ sub.handle }}"
+                class="menu-drawer__menu-item link link--text list-menu__item focus-inset"
+              >
+                {{ sub_label | escape }}
+                <span class="svg-wrapper">{{- 'icon-arrow.svg' | inline_asset_content -}}</span>
+                <span class="svg-wrapper">{{- 'icon-caret.svg' | inline_asset_content -}}</span>
+              </summary>
+              <div
+                id="grandchildlink-bite-{{ cat_handle }}-{{ sub.handle }}"
+                class="menu-drawer__submenu has-submenu gradient motion-reduce"
+              >
+                <button class="menu-drawer__close-button link link--text focus-inset" aria-expanded="true">
+                  <span class="svg-wrapper">{{- 'icon-arrow.svg' | inline_asset_content -}}</span>
+                  {{ sub_label | escape }}
+                </button>
+                <ul class="menu-drawer__menu list-menu" role="list" tabindex="-1">
+                  <li>
+                    <a href="{{ routes.collections_url }}/{{ sub.handle }}" class="{{ a_class }} list-menu__item--link">
+                      {{- 'All ' | append: sub_label | escape -}}
+                    </a>
+                  </li>
+                  {{ grandchild_links }}
+                </ul>
+              </div>
+            </details>
+          </li>
+        {%- elsif menu_layout == 'desktop' and grandchild_check != blank -%}
+          <li class="bite-mega__item bite-mega__item--nested">
+            <a href="{{ routes.collections_url }}/{{ sub.handle }}" class="{{ a_class }} bite-mega__link--parent">
+              {{- sub_label | escape -}}
+            </a>
+            <ul class="bite-mega__sublist" role="list">
+              {{ grandchild_links }}
+            </ul>
+          </li>
+        {%- else -%}
+          <li{% if li_class != blank %} class="{{ li_class }}"{% endif %}>
+            <a href="{{ routes.collections_url }}/{{ sub.handle }}" class="{{ a_class }}">
+              {{- sub_label | escape -}}
+            </a>
+          </li>
+        {%- endif -%}
       {%- endfor -%}
     {%- endcapture -%}
 
@@ -132,7 +144,7 @@
             id="HeaderDrawer-bite-{{ menu_handle }}-{{ cat_handle }}"
             class="menu-drawer__menu-item link link--text list-menu__item focus-inset"
           >
-            {{ cat.category | escape }}
+            {{ cat_label | escape }}
             <span class="svg-wrapper">{{- 'icon-arrow.svg' | inline_asset_content -}}</span>
             <span class="svg-wrapper">{{- 'icon-caret.svg' | inline_asset_content -}}</span>
           </summary>
@@ -142,13 +154,13 @@
           >
             <button class="menu-drawer__close-button link link--text focus-inset" aria-expanded="true">
               <span class="svg-wrapper">{{- 'icon-arrow.svg' | inline_asset_content -}}</span>
-              {{ cat.category | escape }}
+              {{ cat_label | escape }}
             </button>
             <ul class="menu-drawer__menu list-menu" role="list" tabindex="-1">
               {%- if cat_url != blank -%}
                 <li>
                   <a href="{{ cat_url }}" class="{{ a_class }}">
-                    {{- 'All ' | append: cat.category | escape -}}
+                    {{- 'All ' | append: cat_label | escape -}}
                   </a>
                 </li>
               {%- endif -%}
@@ -163,10 +175,10 @@
       <div class="bite-mega__column">
         {%- if cat_url != blank -%}
           <p class="bite-mega__column-title">
-            <a href="{{ cat_url }}" class="bite-mega__column-link link">{{ cat.category | escape }}</a>
+            <a href="{{ cat_url }}" class="bite-mega__column-link link">{{ cat_label | escape }}</a>
           </p>
         {%- else -%}
-          <p class="bite-mega__column-title">{{ cat.category | escape }}</p>
+          <p class="bite-mega__column-title">{{ cat_label | escape }}</p>
         {%- endif -%}
         <ul class="bite-mega__list" role="list">{{ column_links }}</ul>
       </div>
@@ -179,10 +191,16 @@
 {%- if debug -%}
   {%- assign vis_subs = 0 -%}
   {%- assign all_subs = 0 -%}
+  {%- assign vis_children = 0 -%}
+  {%- assign all_children = 0 -%}
   {%- for cat in taxonomy -%}
     {%- for sub in cat.subcategories -%}
       {%- assign all_subs = all_subs | plus: 1 -%}
       {%- if sub.visible -%}{%- assign vis_subs = vis_subs | plus: 1 -%}{%- endif -%}
+      {%- for child in sub.children -%}
+        {%- assign all_children = all_children | plus: 1 -%}
+        {%- if child.visible -%}{%- assign vis_children = vis_children | plus: 1 -%}{%- endif -%}
+      {%- endfor -%}
     {%- endfor -%}
   {%- endfor -%}
   <pre style="font: 12px/1.5 monospace; padding: 1rem; background: #ffe;">
@@ -190,6 +208,7 @@ layout          : {{ menu_layout }}
 metafield found : {% if taxonomy %}yes{% else %}NO — check custom.taxonomy exists and has storefront access{% endif %}
 categories      : {{ taxonomy.size }}
 subcategories   : {{ vis_subs }} visible of {{ all_subs }}
+sub-subs        : {{ vis_children }} visible of {{ all_children }}
 verify mode     : {% if verify %}ON (live counts, slow){% else %}off (trusting visible flag){% endif %}
   </pre>
 {%- endif -%}
@@ -230,8 +249,6 @@ verify mode     : {% if verify %}ON (live counts, slow){% else %}off (trusting v
   {%- else -%}
 
     <style>
-      /* Panel positioning, z-index, colour scheme and the open animation all
-         come from the theme's component-mega-menu.css. */
       .bite-mega__inner {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
@@ -254,6 +271,11 @@ verify mode     : {% if verify %}ON (live counts, slow){% else %}off (trusting v
         text-underline-offset: 0.3rem;
       }
       .bite-mega__list { margin: 0; padding: 0; list-style: none; }
+      .bite-mega__sublist {
+        margin: 0.2rem 0 0.6rem 1.2rem;
+        padding: 0;
+        list-style: none;
+      }
       .bite-mega__link {
         display: block;
         padding: 0.5rem 0;
@@ -261,6 +283,12 @@ verify mode     : {% if verify %}ON (live counts, slow){% else %}off (trusting v
         line-height: 1.4;
         text-decoration: none;
         color: rgba(var(--color-foreground), 0.75);
+      }
+      .bite-mega__link--parent { font-weight: 600; color: rgb(var(--color-foreground)); }
+      .bite-mega__sublist .bite-mega__link {
+        font-size: 1.3rem;
+        padding: 0.35rem 0;
+        color: rgba(var(--color-foreground), 0.65);
       }
       .bite-mega__link:hover,
       .bite-mega__link:focus-visible {

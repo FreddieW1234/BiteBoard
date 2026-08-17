@@ -77,7 +77,9 @@ def _now_iso() -> str:
 def _count_nodes(tax: list) -> int:
     n = len(tax or [])
     for c in tax or []:
-        n += len(c.get("subcategories") or [])
+        for s in c.get("subcategories") or []:
+            n += 1
+            n += len(s.get("children") or [])
     return n
 
 
@@ -376,18 +378,51 @@ def find_sub_by_handle(tax: list, handle: str) -> tuple[dict | None, dict | None
     return None, None
 
 
+def find_node_by_handle_deep(
+    tax: list, handle: str
+) -> tuple[str | None, dict | None, dict | None, dict | None]:
+    """
+    Return (kind, category, subcategory_or_None, node) where kind is
+    category | subcategory | sub_subcategory.
+    """
+    h = (handle or "").strip()
+    if not h:
+        return None, None, None, None
+    for cat in tax or []:
+        if (cat.get("handle") or "") == h:
+            return "category", cat, None, cat
+        for sub in cat.get("subcategories") or []:
+            if (sub.get("handle") or "") == h:
+                return "subcategory", cat, sub, sub
+            for child in sub.get("children") or []:
+                if (child.get("handle") or "") == h:
+                    return "sub_subcategory", cat, sub, child
+    return None, None, None, None
+
+
+def display_name(node: dict, *, identity_key: str = "label") -> str:
+    """Menu text: display_label if set, else identity field."""
+    dl = (node.get("display_label") or "").strip()
+    if dl:
+        return dl
+    return str(node.get(identity_key) or node.get("category") or "").strip()
+
+
 def _pick_subcategory_key(shop: Shopify) -> str:
     primary = shop.metafield_definition("custom", "subcategory")
     if primary is None:
         raise ShopifyError("custom.subcategory definition missing")
-    if len(primary["choices"]) < 128:
+    real_primary = [
+        c for c in (primary.get("choices") or [])
+        if str(c).strip().upper() != "BLANK"
+    ]
+    if len(real_primary) < 128:
         return "subcategory"
     overflow = shop.metafield_definition("custom", "subcategory_2")
     if overflow is None:
         raise ShopifyError(
             "custom.subcategory is full (128/128) and custom.subcategory_2 does not exist"
         )
-    # BLANK is a creation placeholder, not a real choice - do not count toward full
     real = [
         c for c in (overflow.get("choices") or [])
         if str(c).strip().upper() != "BLANK"
@@ -397,11 +432,328 @@ def _pick_subcategory_key(shop: Shopify) -> str:
     return "subcategory_2"
 
 
+def ensure_sub_subcategory_definitions(shop: Shopify | None = None) -> dict:
+    """Ensure primary sub_subcategory exists with smart-collection on. No BLANK."""
+    shop = shop or _shop()
+    primary = shop.ensure_list_choice_definition(
+        "custom",
+        "sub_subcategory",
+        name="Sub-subcategory",
+        smart_collection_condition=True,
+    )
+    return {"sub_subcategory": primary}
+
+
+def _pick_sub_subcategory_key(shop: Shopify) -> str:
+    ensure_sub_subcategory_definitions(shop)
+    primary = shop.metafield_definition("custom", "sub_subcategory")
+    if primary is None:
+        raise ShopifyError("custom.sub_subcategory definition missing")
+    if len(primary.get("choices") or []) < 128:
+        return "sub_subcategory"
+    overflow = shop.metafield_definition("custom", "sub_subcategory_2")
+    if overflow is None:
+        shop.ensure_list_choice_definition(
+            "custom",
+            "sub_subcategory_2",
+            name="Sub-subcategory 2",
+            smart_collection_condition=True,
+        )
+        overflow = shop.metafield_definition("custom", "sub_subcategory_2")
+    if overflow is None:
+        raise ShopifyError("failed to create custom.sub_subcategory_2")
+    if len(overflow.get("choices") or []) >= 128:
+        raise ShopifyError("custom.sub_subcategory and sub_subcategory_2 are both full")
+    return "sub_subcategory_2"
+
+
+def strip_subcategory_2_blank() -> dict:
+    """Remove BLANK from subcategory_2; echo capability (stays false)."""
+    shop = _shop()
+    return shop.strip_blank_choices("custom", "subcategory_2")
+
+
+def _validate_taxonomy_depth(tax_payload: list) -> None:
+    """Subs only under categories; children only under subs."""
+    if not isinstance(tax_payload, list):
+        raise ShopifyError("taxonomy must be a list")
+    for cat in tax_payload:
+        if not isinstance(cat, dict):
+            raise ShopifyError("invalid category node")
+        if cat.get("children"):
+            raise ShopifyError(
+                f"category {cat.get('handle')!r} cannot have children (depth)"
+            )
+        for sub in cat.get("subcategories") or []:
+            if not isinstance(sub, dict):
+                raise ShopifyError("invalid subcategory node")
+            if sub.get("subcategories"):
+                raise ShopifyError(
+                    f"subcategory {sub.get('handle')!r} cannot nest subcategories"
+                )
+            for child in sub.get("children") or []:
+                if not isinstance(child, dict):
+                    raise ShopifyError("invalid sub_subcategory node")
+                if child.get("children") or child.get("subcategories"):
+                    raise ShopifyError(
+                        f"sub_subcategory {child.get('handle')!r} cannot nest further"
+                    )
+
+
+def _persist_tax(shop: Shopify, tax: list) -> tuple[list, str | None]:
+    shop.set_shop_metafield(NAMESPACE, TAXONOMY_KEY, tax)
+    again = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+    stored_raw = (again or {}).get("value") or ""
+    stored = json.loads(stored_raw) if isinstance(stored_raw, str) else stored_raw
+    if not isinstance(stored, list):
+        stored = tax
+    updated_at = (again or {}).get("updatedAt")
+    bust_taxonomy_cache()
+    _set_cache(stored, updated_at=updated_at, source="live")
+    write_lkg_from_tax(stored, updated_at=updated_at)
+    return stored, updated_at
+
+
+def create_category(
+    *,
+    category: str,
+    handle: str | None = None,
+    display_label: str | None = None,
+    seo_title: str | None = None,
+    seo_description: str | None = None,
+    expected_updated_at: str | None = None,
+) -> dict:
+    """Category choice + unpublished single-rule smart collection + taxonomy node."""
+    shop = _shop()
+    category = (category or "").strip()
+    if not category:
+        raise ShopifyError("category is required")
+    handle = (handle or "").strip() or handleize(category)
+    dl = (display_label or "").strip() or None
+
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        if find_category(tax, category) is not None:
+            raise ShopifyError(f"category {category!r} already exists")
+        kind, _, _, existing = find_node_by_handle_deep(tax, handle)
+        if existing is not None:
+            raise ShopifyError(f"handle {handle!r} already exists in taxonomy")
+        if not shop.handle_available(handle):
+            raise ShopifyError(f"handle {handle!r} is already taken")
+
+        cat_def = shop.metafield_definition("custom", "custom_category")
+        if cat_def is None:
+            raise ShopifyError("custom.custom_category definition missing")
+
+        created_collection_id = None
+        try:
+            shop.append_choice("custom", "custom_category", category)
+            col = shop.collection_create(
+                title=category,
+                handle=handle,
+                rules=[(cat_def["id"], category)],
+                seo_title=seo_title or category,
+                seo_description=seo_description or "",
+                disjunctive=False,
+            )
+            created_collection_id = col["id"]
+
+            mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+            _assert_expected_updated_at(mf2, exp)
+            raw = (mf2 or {}).get("value") or ""
+            tax = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(tax, list):
+                raise ShopifyError("taxonomy metafield corrupt during create")
+            next_pos = max([int(c.get("position") or 0) for c in tax] + [0]) + 1
+            node = {
+                "category": category,
+                "handle": handle,
+                "position": next_pos,
+                "visible": False,
+                "handle_locked": True,
+                "subcategories": [],
+            }
+            if dl:
+                node["display_label"] = dl
+            tax.append(node)
+            stored, updated_at = _persist_tax(shop, tax)
+            try:
+                from scripts.product_creator.categories import refresh_category_choice_cache
+
+                refresh_category_choice_cache()
+            except Exception:
+                pass
+            return {
+                "success": True,
+                "node": node,
+                "collection_id": created_collection_id,
+                "taxonomy_updated_at": updated_at,
+            }
+        except Exception:
+            if created_collection_id:
+                try:
+                    shop.gql(
+                        """
+                      mutation($id: ID!) {
+                        collectionDelete(input: {id: $id}) {
+                          deletedCollectionId
+                          userErrors { field message }
+                        }
+                      }
+                    """,
+                        {"id": created_collection_id},
+                    )
+                except Exception:
+                    pass
+            raise
+
+
+def create_sub_subcategory(
+    *,
+    category: str,
+    parent_label: str,
+    label: str,
+    handle: str | None = None,
+    display_label: str | None = None,
+    seo_title: str | None = None,
+    seo_description: str | None = None,
+    indexable: bool = True,
+    expected_updated_at: str | None = None,
+) -> dict:
+    """Third-level node: three AND rules, unpublished collection."""
+    shop = _shop()
+    category = (category or "").strip()
+    parent_label = (parent_label or "").strip()
+    label = (label or "").strip()
+    if not category or not parent_label or not label:
+        raise ShopifyError("category, parent_label, and label are required")
+    handle = (handle or "").strip() or handleize(f"{category}-{parent_label}-{label}")
+    dl = (display_label or "").strip() or None
+
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        cat = find_category(tax, category)
+        if cat is None:
+            raise ShopifyError(f"category {category!r} not in taxonomy")
+        parent = None
+        for s in cat.get("subcategories") or []:
+            if (s.get("label") or "") == parent_label:
+                parent = s
+                break
+        if parent is None:
+            raise ShopifyError(
+                f"subcategory {parent_label!r} not under category {category!r}"
+            )
+
+        if not shop.handle_available(handle):
+            raise ShopifyError(f"handle {handle!r} is already taken")
+        kind, _, _, existing = find_node_by_handle_deep(tax, handle)
+        if existing is not None:
+            raise ShopifyError(f"handle {handle!r} already exists in taxonomy")
+
+        cat_def = shop.metafield_definition("custom", "custom_category")
+        if cat_def is None:
+            raise ShopifyError("custom.custom_category definition missing")
+        parent_key = parent.get("metafield_key") or "subcategory"
+        parent_def = shop.metafield_definition("custom", parent_key)
+        if parent_def is None:
+            raise ShopifyError(f"custom.{parent_key} definition missing")
+
+        mf_key = _pick_sub_subcategory_key(shop)
+        ss_def = shop.metafield_definition("custom", mf_key)
+        if ss_def is None:
+            raise ShopifyError(f"custom.{mf_key} definition missing")
+
+        created_collection_id = None
+        try:
+            shop.append_choice("custom", mf_key, label)
+            title = f"{category} - {parent_label} - {label}"
+            col = shop.collection_create(
+                title=title,
+                handle=handle,
+                rules=[
+                    (cat_def["id"], category),
+                    (parent_def["id"], parent_label),
+                    (ss_def["id"], label),
+                ],
+                seo_title=seo_title or title,
+                seo_description=seo_description or "",
+                disjunctive=False,
+            )
+            created_collection_id = col["id"]
+
+            mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+            _assert_expected_updated_at(mf2, exp)
+            raw = (mf2 or {}).get("value") or ""
+            tax = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(tax, list):
+                raise ShopifyError("taxonomy metafield corrupt during create")
+            cat = find_category(tax, category)
+            parent = None
+            for s in cat.get("subcategories") or []:
+                if (s.get("label") or "") == parent_label:
+                    parent = s
+                    break
+            if parent is None:
+                raise ShopifyError("parent subcategory disappeared during create")
+            children = list(parent.get("children") or [])
+            next_pos = max([int(c.get("position") or 0) for c in children] + [0]) + 1
+            node = {
+                "label": label,
+                "handle": handle,
+                "position": next_pos,
+                "indexable": bool(indexable),
+                "metafield_key": mf_key,
+                "visible": False,
+                "handle_locked": True,
+            }
+            if dl:
+                node["display_label"] = dl
+            children.append(node)
+            parent["children"] = children
+            stored, updated_at = _persist_tax(shop, tax)
+            return {
+                "success": True,
+                "node": node,
+                "collection_id": created_collection_id,
+                "metafield_key": mf_key,
+                "taxonomy_updated_at": updated_at,
+            }
+        except Exception:
+            if created_collection_id:
+                try:
+                    shop.gql(
+                        """
+                      mutation($id: ID!) {
+                        collectionDelete(input: {id: $id}) {
+                          deletedCollectionId
+                          userErrors { field message }
+                        }
+                      }
+                    """,
+                        {"id": created_collection_id},
+                    )
+                except Exception:
+                    pass
+            raise
+
+
 def create_subcategory(
     *,
     category: str,
     label: str,
     handle: str | None = None,
+    display_label: str | None = None,
     seo_title: str | None = None,
     seo_description: str | None = None,
     indexable: bool = True,
@@ -418,6 +770,7 @@ def create_subcategory(
         raise ShopifyError("category and label are required")
 
     handle = (handle or "").strip() or handleize(f"{category}-{label}")
+    dl = (display_label or "").strip() or None
 
     with _WRITE_LOCK:
         meta = load_taxonomy_meta(force=True, require=True)
@@ -434,7 +787,7 @@ def create_subcategory(
 
         if not shop.handle_available(handle):
             raise ShopifyError(f"handle {handle!r} is already taken")
-        _, existing = find_sub_by_handle(tax, handle)
+        kind, _, _, existing = find_node_by_handle_deep(tax, handle)
         if existing is not None:
             raise ShopifyError(f"handle {handle!r} already exists in taxonomy")
 
@@ -487,20 +840,14 @@ def create_subcategory(
                 "metafield_key": mf_key,
                 "visible": False,
                 "handle_locked": True,
+                "children": [],
             }
+            if dl:
+                node["display_label"] = dl
             subs.append(node)
             cat["subcategories"] = subs
 
-            shop.set_shop_metafield(NAMESPACE, TAXONOMY_KEY, tax)
-            again = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
-            stored_raw = (again or {}).get("value") or ""
-            stored = json.loads(stored_raw) if isinstance(stored_raw, str) else stored_raw
-            if not isinstance(stored, list):
-                stored = tax
-            updated_at = (again or {}).get("updatedAt")
-            bust_taxonomy_cache()
-            _set_cache(stored, updated_at=updated_at, source="live")
-            write_lkg_from_tax(stored, updated_at=updated_at)
+            stored, updated_at = _persist_tax(shop, tax)
 
             try:
                 from scripts.product_creator.categories import refresh_category_choice_cache
@@ -535,6 +882,601 @@ def create_subcategory(
                 except Exception:
                     pass
             raise
+
+
+def _node_identity(kind: str, node: dict) -> str:
+    if kind == "category":
+        return str(node.get("category") or "").strip()
+    return str(node.get("label") or "").strip()
+
+
+def _node_mf_key(kind: str, node: dict) -> str:
+    if kind == "category":
+        return "custom_category"
+    if kind == "subcategory":
+        return node.get("metafield_key") or "subcategory"
+    return node.get("metafield_key") or "sub_subcategory"
+
+
+def _replace_choice_value(shop: Shopify, mf_key: str, old: str, new: str) -> dict:
+    """Expand (append new if needed) then drop old from the choices list."""
+    definition = shop.metafield_definition("custom", mf_key)
+    if definition is None:
+        raise ShopifyError(f"custom.{mf_key} definition missing")
+    choices = [str(c) for c in (definition.get("choices") or [])]
+    old_s = str(old).strip()
+    new_s = str(new).strip()
+    if new_s not in choices:
+        shop.append_choice("custom", mf_key, new_s)
+        definition = shop.metafield_definition("custom", mf_key)
+        choices = [str(c) for c in (definition.get("choices") or [])]
+    if old_s in choices and old_s != new_s:
+        choices = [c for c in choices if c != old_s]
+        shop.set_definition_choices("custom", mf_key, choices)
+    return {"choices_count": len(choices), "metafield_key": mf_key}
+
+
+def _rules_input_from_detail(detail: dict, *, replace: dict[str, str] | None = None) -> list:
+    """
+    Build CollectionRuleInput list from collection_detail.
+    replace: map of metafield key -> new condition string (e.g. subcategory label).
+    """
+    replace = replace or {}
+    rule_set = (detail or {}).get("ruleSet") or {}
+    out = []
+    for rule in rule_set.get("rules") or []:
+        cond_obj = rule.get("conditionObject") or {}
+        mf = cond_obj.get("metafieldDefinition") or {}
+        key = mf.get("key") or ""
+        def_id = mf.get("id")
+        condition = rule.get("condition") or ""
+        if key in replace:
+            condition = replace[key]
+        entry = {
+            "column": rule.get("column") or "PRODUCT_METAFIELD_DEFINITION",
+            "relation": rule.get("relation") or "EQUALS",
+            "condition": condition,
+        }
+        if def_id:
+            entry["conditionObjectId"] = def_id
+        out.append(entry)
+    return out
+
+
+def _cascade_child_middle_rules(
+    shop: Shopify,
+    children: list,
+    *,
+    parent_mf_key: str,
+    old_label: str,
+    new_label: str,
+    log: list,
+) -> None:
+    """Rewrite middle (parent subcategory) condition on every child sub-sub collection."""
+    for child in children or []:
+        ch = (child.get("handle") or "").strip()
+        if not ch:
+            continue
+        col = shop.collection_by_handle(ch)
+        if not col:
+            log.append({"action": "cascade_missing_collection", "handle": ch})
+            continue
+        detail = shop.collection_detail(col["id"])
+        if not detail:
+            log.append({"action": "cascade_no_detail", "handle": ch})
+            continue
+        rules = _rules_input_from_detail(
+            detail, replace={parent_mf_key: new_label}
+        )
+        applied = bool((detail.get("ruleSet") or {}).get("appliedDisjunctively"))
+        shop.set_collection_rules(
+            col["id"], applied_disjunctive=applied, rules_input=rules
+        )
+        # Keep derived title in sync when it embeds the old middle label.
+        title = detail.get("title") or ""
+        if old_label and old_label in title:
+            new_title = title.replace(old_label, new_label, 1)
+            shop.collection_update(col["id"], title=new_title)
+        log.append(
+            {
+                "action": "cascade_middle_rule",
+                "handle": ch,
+                "old": old_label,
+                "new": new_label,
+                "parent_mf_key": parent_mf_key,
+            }
+        )
+
+
+def preview_rename_choice(
+    handle: str,
+    new_value: str,
+    *,
+    product_cap: int = 50,
+) -> dict:
+    """
+    Preview identity rename (category/label). Does not mutate.
+    Includes cascading child sub-sub collections when renaming a subcategory.
+    """
+    shop = _shop()
+    handle = (handle or "").strip()
+    new_value = (new_value or "").strip()
+    if not handle or not new_value:
+        raise ShopifyError("handle and new_value are required")
+
+    meta = load_taxonomy_meta(force=True, require=True)
+    tax = meta["taxonomy"]
+    kind, cat, sub, node = find_node_by_handle_deep(tax, handle)
+    if node is None or kind is None:
+        raise ShopifyError(f"unknown handle {handle!r}")
+
+    old_value = _node_identity(kind, node)
+    if not old_value:
+        raise ShopifyError("node has empty identity")
+    if old_value == new_value:
+        raise ShopifyError("new_value equals current identity")
+
+    mf_key = _node_mf_key(kind, node)
+    products = shop.products_with_choice_value(
+        "custom", mf_key, old_value, limit=max(product_cap, 500)
+    )
+    total = len(products)
+    preview_products = [
+        {"id": p["id"], "title": p["title"]} for p in products[:product_cap]
+    ]
+
+    col = shop.collection_by_handle(handle)
+    collection_info = None
+    if col:
+        detail = shop.collection_detail(col["id"])
+        collection_info = {
+            "id": col["id"],
+            "handle": handle,
+            "title": (detail or {}).get("title"),
+            "rules": ((detail or {}).get("ruleSet") or {}).get("rules") or [],
+        }
+
+    cascading = []
+    if kind == "subcategory":
+        for child in node.get("children") or []:
+            cascading.append(
+                {
+                    "handle": child.get("handle"),
+                    "label": child.get("label"),
+                    "middle_rule_old": old_value,
+                    "middle_rule_new": new_value,
+                    "parent_mf_key": mf_key,
+                }
+            )
+    elif kind == "category":
+        for s in node.get("subcategories") or []:
+            cascading.append(
+                {
+                    "handle": s.get("handle"),
+                    "label": s.get("label"),
+                    "rule_key": "custom_category",
+                    "old": old_value,
+                    "new": new_value,
+                }
+            )
+            for child in s.get("children") or []:
+                cascading.append(
+                    {
+                        "handle": child.get("handle"),
+                        "label": child.get("label"),
+                        "rule_key": "custom_category",
+                        "old": old_value,
+                        "new": new_value,
+                    }
+                )
+
+    return {
+        "success": True,
+        "handle": handle,
+        "kind": kind,
+        "old_value": old_value,
+        "new_value": new_value,
+        "metafield_key": mf_key,
+        "product_total": total,
+        "product_cap": product_cap,
+        "products_truncated": total > product_cap,
+        "products": preview_products,
+        "collection": collection_info,
+        "cascading_collections": cascading,
+        "requires_explicit_apply": total > 0,
+        "taxonomy_updated_at": meta.get("updated_at"),
+    }
+
+
+def apply_rename_choice(
+    handle: str,
+    new_value: str,
+    *,
+    expected_updated_at: str | None = None,
+    confirm: bool = False,
+) -> dict:
+    """
+    Identity rename: expand choice → migrate products → update this node's rule →
+    cascade middle conditions on child sub-subs → remove old choice → taxonomy.
+    """
+    shop = _shop()
+    handle = (handle or "").strip()
+    new_value = (new_value or "").strip()
+    if not handle or not new_value:
+        raise ShopifyError("handle and new_value are required")
+
+    log: list[dict] = []
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        kind, cat, sub, node = find_node_by_handle_deep(tax, handle)
+        if node is None or kind is None:
+            raise ShopifyError(f"unknown handle {handle!r}")
+
+        old_value = _node_identity(kind, node)
+        if not old_value:
+            raise ShopifyError("node has empty identity")
+        if old_value == new_value:
+            raise ShopifyError("new_value equals current identity")
+
+        mf_key = _node_mf_key(kind, node)
+        products = shop.products_with_choice_value(
+            "custom", mf_key, old_value, limit=5000
+        )
+        if products and not confirm:
+            raise ShopifyError(
+                f"{len(products)} product(s) use {old_value!r}; "
+                "pass confirm=true after preview"
+            )
+
+        # Snapshot for best-effort rollback notes
+        col = shop.collection_by_handle(handle)
+        if not col:
+            raise ShopifyError(f"collection not found for handle {handle!r}")
+        detail_before = shop.collection_detail(col["id"])
+
+        try:
+            # 1) Expand: ensure new choice exists
+            shop.append_choice("custom", mf_key, new_value)
+            log.append({"action": "append_choice", "key": mf_key, "value": new_value})
+
+            # 2) Migrate products
+            for p in products:
+                vals = list(p.get("all_values") or [])
+                vals = [new_value if v == old_value else v for v in vals]
+                # de-dupe preserve order
+                seen = set()
+                cleaned = []
+                for v in vals:
+                    if v in seen:
+                        continue
+                    seen.add(v)
+                    cleaned.append(v)
+                shop.set_product_metafield_list(
+                    p["id"], "custom", mf_key, cleaned, p.get("mf_type")
+                )
+                log.append(
+                    {
+                        "action": "migrate_product",
+                        "product_id": p["id"],
+                        "old": old_value,
+                        "new": new_value,
+                    }
+                )
+
+            # 3) Update this node's collection rule + derived title
+            detail = shop.collection_detail(col["id"]) or detail_before
+            rules = _rules_input_from_detail(detail, replace={mf_key: new_value})
+            applied = bool((detail.get("ruleSet") or {}).get("appliedDisjunctively"))
+            shop.set_collection_rules(
+                col["id"], applied_disjunctive=applied, rules_input=rules
+            )
+            log.append(
+                {
+                    "action": "update_collection_rule",
+                    "handle": handle,
+                    "old": old_value,
+                    "new": new_value,
+                }
+            )
+            title = (detail or {}).get("title") or ""
+            if old_value and old_value in title:
+                shop.collection_update(
+                    col["id"], title=title.replace(old_value, new_value, 1)
+                )
+                log.append({"action": "update_collection_title", "handle": handle})
+
+            # 4) Cascade: subcategory → child middle rules; category → all
+            # descendant collection rules that still store the old category.
+            if kind == "subcategory":
+                _cascade_child_middle_rules(
+                    shop,
+                    node.get("children") or [],
+                    parent_mf_key=mf_key,
+                    old_label=old_value,
+                    new_label=new_value,
+                    log=log,
+                )
+            elif kind == "category":
+                descendants = []
+                for s in node.get("subcategories") or []:
+                    descendants.append(s)
+                    descendants.extend(s.get("children") or [])
+                for dnode in descendants:
+                    dh = (dnode.get("handle") or "").strip()
+                    if not dh:
+                        continue
+                    dcol = shop.collection_by_handle(dh)
+                    if not dcol:
+                        log.append(
+                            {"action": "cascade_missing_collection", "handle": dh}
+                        )
+                        continue
+                    ddetail = shop.collection_detail(dcol["id"])
+                    if not ddetail:
+                        continue
+                    drules = _rules_input_from_detail(
+                        ddetail, replace={"custom_category": new_value}
+                    )
+                    dapplied = bool(
+                        (ddetail.get("ruleSet") or {}).get("appliedDisjunctively")
+                    )
+                    shop.set_collection_rules(
+                        dcol["id"],
+                        applied_disjunctive=dapplied,
+                        rules_input=drules,
+                    )
+                    dtitle = ddetail.get("title") or ""
+                    if old_value and old_value in dtitle:
+                        shop.collection_update(
+                            dcol["id"],
+                            title=dtitle.replace(old_value, new_value, 1),
+                        )
+                    log.append(
+                        {
+                            "action": "cascade_category_rule",
+                            "handle": dh,
+                            "old": old_value,
+                            "new": new_value,
+                        }
+                    )
+
+            # 5) Remove old choice
+            definition = shop.metafield_definition("custom", mf_key)
+            choices = [
+                str(c)
+                for c in (definition.get("choices") or [])
+                if str(c) != old_value
+            ]
+            shop.set_definition_choices("custom", mf_key, choices)
+            log.append(
+                {"action": "remove_old_choice", "key": mf_key, "value": old_value}
+            )
+
+            # 6) Taxonomy identity
+            mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+            _assert_expected_updated_at(mf2, exp)
+            raw = (mf2 or {}).get("value") or ""
+            tax = json.loads(raw) if isinstance(raw, str) else raw
+            if not isinstance(tax, list):
+                raise ShopifyError("taxonomy metafield corrupt during rename")
+            kind2, _, _, node2 = find_node_by_handle_deep(tax, handle)
+            if node2 is None:
+                raise ShopifyError("node disappeared during rename")
+            if kind2 == "category":
+                node2["category"] = new_value
+            else:
+                node2["label"] = new_value
+            stored, updated_at = _persist_tax(shop, tax)
+            log.append({"action": "taxonomy_identity", "handle": handle})
+
+            try:
+                from scripts.product_creator.categories import refresh_category_choice_cache
+
+                refresh_category_choice_cache()
+            except Exception:
+                pass
+
+            return {
+                "success": True,
+                "handle": handle,
+                "kind": kind,
+                "old_value": old_value,
+                "new_value": new_value,
+                "products_migrated": len(products),
+                "log": log,
+                "taxonomy_updated_at": updated_at,
+            }
+        except Exception as exc:
+            log.append({"action": "error", "error": str(exc)})
+            # Best-effort: do not leave taxonomy half-written; collection/product
+            # mutations may already have applied — operator should inspect log.
+            raise ShopifyError(
+                f"apply_rename_choice failed: {exc}; log={json.dumps(log)[:2000]}"
+            ) from exc
+
+
+def update_node_metadata(
+    handle: str,
+    *,
+    display_label: str | None = None,
+    clear_display_label: bool = False,
+    collection_title: str | None = None,
+    description_html: str | None = None,
+    seo_title: str | None = None,
+    seo_description: str | None = None,
+    indexable: bool | None = None,
+    expected_updated_at: str | None = None,
+) -> dict:
+    """
+    Collection SEO/title/description via collection_update.
+    Taxonomy only: display_label (+ optional indexable). No SEO on taxonomy nodes.
+    """
+    shop = _shop()
+    handle = (handle or "").strip()
+    if not handle:
+        raise ShopifyError("handle is required")
+
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        kind, _, _, node = find_node_by_handle_deep(tax, handle)
+        if node is None:
+            raise ShopifyError(f"unknown handle {handle!r}")
+
+        col = shop.collection_by_handle(handle)
+        collection_out = None
+        if col and any(
+            x is not None
+            for x in (
+                collection_title,
+                description_html,
+                seo_title,
+                seo_description,
+            )
+        ):
+            collection_out = shop.collection_update(
+                col["id"],
+                title=collection_title,
+                description_html=description_html,
+                seo_title=seo_title,
+                seo_description=seo_description,
+            )
+
+        # Re-read for RMW
+        mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf2, exp)
+        raw = (mf2 or {}).get("value") or ""
+        tax = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(tax, list):
+            raise ShopifyError("taxonomy metafield corrupt")
+        kind, _, _, node = find_node_by_handle_deep(tax, handle)
+        if node is None:
+            raise ShopifyError(f"unknown handle {handle!r}")
+
+        if clear_display_label:
+            node.pop("display_label", None)
+        elif display_label is not None:
+            dl = str(display_label).strip()
+            if dl:
+                node["display_label"] = dl
+            else:
+                node.pop("display_label", None)
+        if indexable is not None and kind in ("subcategory", "sub_subcategory"):
+            node["indexable"] = bool(indexable)
+
+        stored, updated_at = _persist_tax(shop, tax)
+        detail = None
+        if col:
+            detail = shop.collection_detail(col["id"])
+        return {
+            "success": True,
+            "handle": handle,
+            "kind": kind,
+            "node": node,
+            "collection": detail or collection_out,
+            "taxonomy_updated_at": updated_at,
+        }
+
+
+def rename_handle(
+    handle: str,
+    new_handle: str,
+    *,
+    expected_updated_at: str | None = None,
+) -> dict:
+    """
+    Unlock → redirect /collections/old → /collections/new → update collection +
+    taxonomy handle → re-lock. Never derived from display_label.
+    """
+    shop = _shop()
+    handle = (handle or "").strip()
+    new_handle = (new_handle or "").strip()
+    if not handle or not new_handle:
+        raise ShopifyError("handle and new_handle are required")
+    if handle == new_handle:
+        raise ShopifyError("new_handle equals current handle")
+    if handleize(new_handle) != new_handle:
+        raise ShopifyError("new_handle must be a valid handle (lowercase, hyphens)")
+
+    with _WRITE_LOCK:
+        meta = load_taxonomy_meta(force=True, require=True)
+        tax = meta["taxonomy"]
+        exp = expected_updated_at if expected_updated_at is not None else meta["updated_at"]
+        mf = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf, exp)
+
+        kind, _, _, node = find_node_by_handle_deep(tax, handle)
+        if node is None:
+            raise ShopifyError(f"unknown handle {handle!r}")
+        conflict = find_node_by_handle_deep(tax, new_handle)[3]
+        if conflict is not None:
+            raise ShopifyError(f"handle {new_handle!r} already exists in taxonomy")
+        if not shop.handle_available(new_handle):
+            raise ShopifyError(f"handle {new_handle!r} is already taken in Shopify")
+
+        col = shop.collection_by_handle(handle)
+        if not col:
+            raise ShopifyError(f"collection not found for handle {handle!r}")
+
+        # Temporary unlock in taxonomy for the write
+        node["handle_locked"] = False
+        shop.create_redirect(f"/collections/{handle}", f"/collections/{new_handle}")
+        shop.collection_update(col["id"], handle=new_handle)
+
+        mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
+        _assert_expected_updated_at(mf2, exp)
+        raw = (mf2 or {}).get("value") or ""
+        tax = json.loads(raw) if isinstance(raw, str) else raw
+        if not isinstance(tax, list):
+            raise ShopifyError("taxonomy metafield corrupt")
+        kind, _, _, node = find_node_by_handle_deep(tax, handle)
+        if node is None:
+            raise ShopifyError("node disappeared during handle rename")
+        node["handle"] = new_handle
+        node["handle_locked"] = True
+        stored, updated_at = _persist_tax(shop, tax)
+        return {
+            "success": True,
+            "kind": kind,
+            "old_handle": handle,
+            "new_handle": new_handle,
+            "redirect": f"/collections/{handle} → /collections/{new_handle}",
+            "taxonomy_updated_at": updated_at,
+        }
+
+
+def get_node_metadata(handle: str) -> dict:
+    """Read taxonomy node + collection SEO for the metadata panel."""
+    shop = _shop()
+    handle = (handle or "").strip()
+    if not handle:
+        raise ShopifyError("handle is required")
+    meta = load_taxonomy_meta(force=False, require=True)
+    tax = meta["taxonomy"]
+    kind, cat, sub, node = find_node_by_handle_deep(tax, handle)
+    if node is None:
+        raise ShopifyError(f"unknown handle {handle!r}")
+    col = shop.collection_by_handle(handle)
+    detail = shop.collection_detail(col["id"]) if col else None
+    return {
+        "success": True,
+        "handle": handle,
+        "kind": kind,
+        "node": node,
+        "parent_category": (cat or {}).get("category") if cat else None,
+        "parent_subcategory": (sub or {}).get("label") if sub and kind == "sub_subcategory" else None,
+        "collection": detail,
+        "taxonomy_updated_at": meta.get("updated_at"),
+    }
 
 
 def publish_now(handle: str, *, expected_updated_at: str | None = None) -> dict:
@@ -572,7 +1514,8 @@ def reorder_and_patch(
     *,
     expected_updated_at: str | None = None,
 ) -> dict:
-    """Replace taxonomy with editor payload. Handles stay locked."""
+    """Replace taxonomy with editor payload. Handles stay locked. Depth validated."""
+    _validate_taxonomy_depth(tax_payload)
     with _WRITE_LOCK:
         meta = load_taxonomy_meta(force=True, require=True)
         current = meta["taxonomy"]
@@ -586,6 +1529,8 @@ def reorder_and_patch(
             by_handle[cat.get("handle")] = cat
             for sub in cat.get("subcategories") or []:
                 by_handle[sub.get("handle")] = sub
+                for child in sub.get("children") or []:
+                    by_handle[child.get("handle")] = child
 
         for cat in tax_payload:
             ch = cat.get("handle")
@@ -601,23 +1546,35 @@ def reorder_and_patch(
                     sub.setdefault("metafield_key", osub.get("metafield_key") or "subcategory")
                     sub.setdefault("handle_locked", osub.get("handle_locked", True))
                     sub.setdefault("visible", osub.get("visible", False))
+                    if "display_label" not in sub and osub.get("display_label"):
+                        sub["display_label"] = osub.get("display_label")
+                children = []
+                for child in sub.get("children") or []:
+                    chh = child.get("handle")
+                    och = by_handle.get(chh)
+                    if och and is_handle_locked(och) and och.get("handle") != chh:
+                        raise ShopifyError(f"handle locked: {och.get('handle')}")
+                    if och:
+                        child.setdefault(
+                            "metafield_key",
+                            och.get("metafield_key") or "sub_subcategory",
+                        )
+                        child.setdefault("handle_locked", och.get("handle_locked", True))
+                        child.setdefault("visible", och.get("visible", False))
+                        if "display_label" not in child and och.get("display_label"):
+                            child["display_label"] = och.get("display_label")
+                    children.append(child)
+                sub["children"] = children
             if old:
                 cat.setdefault("handle_locked", old.get("handle_locked", True))
                 cat.setdefault("visible", old.get("visible", False))
+                if "display_label" not in cat and old.get("display_label"):
+                    cat["display_label"] = old.get("display_label")
 
-        shop.set_shop_metafield(NAMESPACE, TAXONOMY_KEY, tax_payload)
-        again = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
-        stored_raw = (again or {}).get("value") or ""
-        stored = json.loads(stored_raw) if isinstance(stored_raw, str) else stored_raw
-        if not isinstance(stored, list):
-            stored = tax_payload
-        updated_at = (again or {}).get("updatedAt")
-        bust_taxonomy_cache()
-        _set_cache(stored, updated_at=updated_at, source="live")
-        write_lkg_from_tax(stored, updated_at=updated_at)
+        stored, updated_at = _persist_tax(shop, tax_payload)
         return {
             "success": True,
-            "count": len(stored),
+            "count": _count_nodes(stored),
             "taxonomy_updated_at": updated_at,
         }
 
@@ -645,6 +1602,9 @@ def iter_taxonomy_nodes(tax: list):
         for sub in cat.get("subcategories") or []:
             if sub.get("handle"):
                 yield "subcategory", cat, sub
+            for child in sub.get("children") or []:
+                if child.get("handle"):
+                    yield "sub_subcategory", cat, child
 
 
 def find_node_by_handle(tax: list, handle: str) -> tuple[str | None, dict | None, dict | None]:

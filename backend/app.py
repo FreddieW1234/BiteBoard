@@ -4281,6 +4281,7 @@ def api_create_subcategory():
             category=(data.get("category") or "").strip(),
             label=(data.get("label") or "").strip(),
             handle=(data.get("handle") or "").strip() or None,
+            display_label=(data.get("display_label") or "").strip() or None,
             seo_title=(data.get("seo_title") or "").strip() or None,
             seo_description=(data.get("seo_description") or "").strip() or None,
             indexable=bool(data.get("indexable", True)),
@@ -4291,9 +4292,144 @@ def api_create_subcategory():
         return _taxonomy_error_response(e)
 
 
+@app.route('/api/category-editor/sub-subcategory', methods=['POST'])
+def api_create_sub_subcategory():
+    """Create third-level node: three AND rules + unpublished collection."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        result = taxmod.create_sub_subcategory(
+            category=(data.get("category") or "").strip(),
+            parent_label=(data.get("parent_label") or data.get("subcategory") or "").strip(),
+            label=(data.get("label") or "").strip(),
+            handle=(data.get("handle") or "").strip() or None,
+            display_label=(data.get("display_label") or "").strip() or None,
+            seo_title=(data.get("seo_title") or "").strip() or None,
+            seo_description=(data.get("seo_description") or "").strip() or None,
+            indexable=bool(data.get("indexable", True)),
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/category', methods=['POST'])
+def api_create_category():
+    """Create top-level category: custom_category choice + single-rule collection."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        result = taxmod.create_category(
+            category=(data.get("category") or data.get("label") or "").strip(),
+            handle=(data.get("handle") or "").strip() or None,
+            display_label=(data.get("display_label") or "").strip() or None,
+            seo_title=(data.get("seo_title") or "").strip() or None,
+            seo_description=(data.get("seo_description") or "").strip() or None,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/ensure-defs', methods=['POST'])
+def api_ensure_taxonomy_defs():
+    """Ensure sub_subcategory definition (smart-collection on); strip subcategory_2 BLANK."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        out = {"success": True}
+        out["sub_subcategory"] = taxmod.ensure_sub_subcategory_definitions()
+        if data.get("strip_blank", True):
+            out["strip_subcategory_2_blank"] = taxmod.strip_subcategory_2_blank()
+        return jsonify(out)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/node/<path:handle>', methods=['GET'])
+def api_get_node_metadata(handle):
+    try:
+        from shopify_client import taxonomy as taxmod
+        return jsonify(taxmod.get_node_metadata(handle))
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/node/<path:handle>/metadata', methods=['PUT'])
+def api_update_node_metadata(handle):
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        result = taxmod.update_node_metadata(
+            handle,
+            display_label=data.get("display_label"),
+            clear_display_label=bool(data.get("clear_display_label")),
+            collection_title=(data.get("collection_title") or data.get("title") or None),
+            description_html=data.get("description_html"),
+            seo_title=data.get("seo_title"),
+            seo_description=data.get("seo_description"),
+            indexable=data.get("indexable") if "indexable" in data else None,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/node/<path:handle>/rename-handle', methods=['POST'])
+def api_rename_handle(handle):
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        new_handle = (data.get("new_handle") or data.get("handle") or "").strip()
+        result = taxmod.rename_handle(
+            handle,
+            new_handle,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/node/<path:handle>/rename-choice/preview', methods=['POST'])
+def api_preview_rename_choice(handle):
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        new_value = (data.get("new_value") or data.get("label") or data.get("category") or "").strip()
+        result = taxmod.preview_rename_choice(
+            handle,
+            new_value,
+            product_cap=int(data.get("product_cap") or 50),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/node/<path:handle>/rename-choice/apply', methods=['POST'])
+def api_apply_rename_choice(handle):
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        new_value = (data.get("new_value") or data.get("label") or data.get("category") or "").strip()
+        result = taxmod.apply_rename_choice(
+            handle,
+            new_value,
+            expected_updated_at=data.get("expected_updated_at"),
+            confirm=bool(data.get("confirm")),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
 @app.route('/api/category-editor/publish', methods=['POST'])
 def api_taxonomy_publish_now():
-    """Publish collection + set taxonomy visible (indexable + products > 0)."""
+    """API retained for ops; Category Editor UI no longer exposes Publish."""
     try:
         from shopify_client import taxonomy as taxmod
         data = request.get_json() or {}
@@ -4311,7 +4447,7 @@ def api_taxonomy_publish_now():
 
 @app.route('/api/category-editor/taxonomy', methods=['PUT'])
 def api_save_taxonomy():
-    """Save reordered/edited taxonomy (handles remain locked)."""
+    """Save reordered/edited taxonomy (handles remain locked; depth validated)."""
     try:
         from shopify_client import taxonomy as taxmod
         data = request.get_json() or {}
@@ -4329,14 +4465,21 @@ def api_save_taxonomy():
 
 @app.route('/api/category-editor/categories', methods=['POST'])
 def api_update_categories():
-    """Removed: runtime categories.py rewrite was RCE-adjacent / deploy-hostile."""
-    return jsonify({
-        "success": False,
-        "error": (
-            "Gone. categories.py is no longer rewritten at runtime. "
-            "Use GET/PUT taxonomy APIs and POST /api/category-editor/subcategory."
-        ),
-    }), 410
+    """Create a top-level category (replaces former categories.py rewrite endpoint)."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        result = taxmod.create_category(
+            category=(data.get("category") or data.get("label") or "").strip(),
+            handle=(data.get("handle") or "").strip() or None,
+            display_label=(data.get("display_label") or "").strip() or None,
+            seo_title=(data.get("seo_title") or "").strip() or None,
+            seo_description=(data.get("seo_description") or "").strip() or None,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
 
 if __name__ == '__main__':
     app.run(debug=False, threaded=True)

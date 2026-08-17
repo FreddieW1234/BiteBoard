@@ -223,6 +223,278 @@ class Shopify:
             "count": len(updated),
         }
 
+    def set_definition_choices(self, namespace, key, choices, owner_type="PRODUCT"):
+        """
+        Replace the choices validation list. Echoes smartCollectionCondition.enabled.
+        """
+        definition = self.metafield_definition(namespace, key, owner_type)
+        if definition is None:
+            raise ShopifyError(f"no definition {namespace}.{key}")
+        sc_enabled = bool(definition.get("smart_collection_condition"))
+        result = self.gql(
+            """
+          mutation($def: MetafieldDefinitionUpdateInput!) {
+            metafieldDefinitionUpdate(definition: $def) {
+              updatedDefinition { id }
+              userErrors { field message code }
+            }
+          }
+        """,
+            {
+                "def": {
+                    "namespace": namespace,
+                    "key": key,
+                    "ownerType": owner_type,
+                    "capabilities": {
+                        "smartCollectionCondition": {"enabled": sc_enabled},
+                    },
+                    "validations": [
+                        {"name": "choices", "value": json.dumps(list(choices))}
+                    ],
+                }
+            },
+        )["metafieldDefinitionUpdate"]
+        self._check(result, "metafieldDefinitionUpdate")
+        self._cache.pop(("mfdef", namespace, key, owner_type), None)
+        return {"count": len(choices), "smart_collection_condition": sc_enabled}
+
+    def strip_blank_choices(self, namespace, key, owner_type="PRODUCT"):
+        """Remove BLANK placeholder entries; echo capability (do not force on)."""
+        definition = self.metafield_definition(namespace, key, owner_type)
+        if definition is None:
+            return {"stripped": False, "reason": "missing"}
+        before = list(definition.get("choices") or [])
+        after = [c for c in before if str(c).strip().upper() != "BLANK"]
+        if after == before:
+            return {
+                "stripped": False,
+                "count": len(after),
+                "smart_collection_condition": bool(
+                    definition.get("smart_collection_condition")
+                ),
+            }
+        self.set_definition_choices(namespace, key, after, owner_type)
+        return {
+            "stripped": True,
+            "removed": len(before) - len(after),
+            "count": len(after),
+            "smart_collection_condition": bool(
+                definition.get("smart_collection_condition")
+            ),
+        }
+
+    def ensure_list_choice_definition(
+        self,
+        namespace,
+        key,
+        *,
+        name: str,
+        smart_collection_condition: bool,
+        owner_type="PRODUCT",
+    ):
+        """
+        Ensure a list.single_line_text_field definition with choices validation.
+        Creates if missing; enables smartCollectionCondition when requested.
+        Does not insert BLANK placeholders.
+        """
+        existing = self.metafield_definition(namespace, key, owner_type)
+        if existing is not None:
+            if smart_collection_condition and not existing.get(
+                "smart_collection_condition"
+            ):
+                result = self.gql(
+                    """
+                  mutation($def: MetafieldDefinitionUpdateInput!) {
+                    metafieldDefinitionUpdate(definition: $def) {
+                      updatedDefinition { id }
+                      userErrors { field message code }
+                    }
+                  }
+                """,
+                    {
+                        "def": {
+                            "namespace": namespace,
+                            "key": key,
+                            "ownerType": owner_type,
+                            "capabilities": {
+                                "smartCollectionCondition": {"enabled": True},
+                            },
+                        }
+                    },
+                )["metafieldDefinitionUpdate"]
+                self._check(result, "metafieldDefinitionUpdate")
+                self._cache.pop(("mfdef", namespace, key, owner_type), None)
+                existing = self.metafield_definition(namespace, key, owner_type)
+            return existing
+
+        result = self.gql(
+            """
+          mutation($def: MetafieldDefinitionInput!) {
+            metafieldDefinitionCreate(definition: $def) {
+              createdDefinition { id }
+              userErrors { field message code }
+            }
+          }
+        """,
+            {
+                "def": {
+                    "name": name,
+                    "namespace": namespace,
+                    "key": key,
+                    "type": "list.single_line_text_field",
+                    "ownerType": owner_type,
+                    "validations": [{"name": "choices", "value": "[]"}],
+                    "capabilities": {
+                        "smartCollectionCondition": {
+                            "enabled": bool(smart_collection_condition),
+                        },
+                    },
+                }
+            },
+        )["metafieldDefinitionCreate"]
+        self._check(result, "metafieldDefinitionCreate")
+        self._cache.pop(("mfdef", namespace, key, owner_type), None)
+        created = self.metafield_definition(namespace, key, owner_type)
+        if created is None:
+            raise ShopifyError(f"failed to create definition {namespace}.{key}")
+        return created
+
+    def collection_detail(self, collection_id):
+        """Title, SEO, description, ruleSet for metadata panel / rule rewrites."""
+        data = self.gql(
+            """
+          query($id: ID!) {
+            collection(id: $id) {
+              id handle title descriptionHtml
+              seo { title description }
+              ruleSet {
+                appliedDisjunctively
+                rules {
+                  column relation condition
+                  conditionObject {
+                    ... on CollectionRuleMetafieldCondition {
+                      metafieldDefinition { id namespace key }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        """,
+            {"id": collection_id},
+        )
+        return data.get("collection")
+
+    def set_collection_rules(self, collection_id, *, applied_disjunctive, rules_input):
+        result = self.gql(
+            """
+          mutation($input: CollectionInput!) {
+            collectionUpdate(input: $input) {
+              collection { id }
+              userErrors { field message }
+            }
+          }
+        """,
+            {
+                "input": {
+                    "id": collection_id,
+                    "ruleSet": {
+                        "appliedDisjunctively": bool(applied_disjunctive),
+                        "rules": rules_input,
+                    },
+                }
+            },
+        )["collectionUpdate"]
+        return self._check(result, "collectionUpdate")
+
+    def products_with_choice_value(self, namespace, key, value, *, limit=500):
+        """
+        Scan products whose list/single metafield contains `value`.
+        Returns list of {id, title, metafield_id, mf_type, all_values}.
+        """
+        out = []
+        cursor = None
+        needle = str(value).strip()
+        while True:
+            data = self.gql(
+                """
+              query($cursor: String, $ns: String!, $key: String!) {
+                products(first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  edges {
+                    node {
+                      id title
+                      metafield(namespace: $ns, key: $key) { id type value }
+                    }
+                  }
+                }
+              }
+            """,
+                {"cursor": cursor, "ns": namespace, "key": key},
+            )
+            block = data["products"]
+            for edge in block["edges"]:
+                node = edge["node"]
+                mf = node.get("metafield") or {}
+                vals = self._parse_mf_list(mf.get("value"), mf.get("type"))
+                if needle not in vals:
+                    continue
+                out.append(
+                    {
+                        "id": node["id"],
+                        "title": node.get("title") or "",
+                        "metafield_id": mf.get("id"),
+                        "mf_type": mf.get("type") or "",
+                        "all_values": vals,
+                    }
+                )
+                if len(out) >= limit:
+                    return out
+            if not block["pageInfo"]["hasNextPage"]:
+                break
+            cursor = block["pageInfo"]["endCursor"]
+        return out
+
+    @staticmethod
+    def _parse_mf_list(raw, mf_type):
+        if raw is None or raw == "":
+            return []
+        if isinstance(raw, list):
+            return [str(x) for x in raw]
+        s = str(raw)
+        if (mf_type or "").startswith("list.") or s.startswith("["):
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except (TypeError, ValueError):
+                pass
+        return [s]
+
+    def set_product_metafield_list(self, owner_id, namespace, key, values, mf_type):
+        result = self.gql(
+            """
+          mutation($mf: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $mf) {
+              metafields { id }
+              userErrors { field message code }
+            }
+          }
+        """,
+            {
+                "mf": [
+                    {
+                        "ownerId": owner_id,
+                        "namespace": namespace,
+                        "key": key,
+                        "type": mf_type or "list.single_line_text_field",
+                        "value": json.dumps(list(values)),
+                    }
+                ]
+            },
+        )["metafieldsSet"]
+        return self._check(result, "metafieldsSet")
+
     # ------------------------------------------------------------- metafields
     def set_shop_metafield(self, namespace, key, value, mf_type="json"):
         result = self.gql("""

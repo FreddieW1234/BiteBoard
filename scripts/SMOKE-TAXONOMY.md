@@ -12,14 +12,24 @@ Throwaway name: **`zz-smoke-DELETEME`**, leave **In menu** checked (indexable tr
 
 **Visibility policy:** collections with products are `visible`; `indexable: false` is deliberate menu exclusion only — not “was empty historically”.
 
-1. Category Editor banner reads **live** (green), not FALLBACK.
+1. Category Editor loads live taxonomy (not FALLBACK).
 2. Create subcategory `zz-smoke-DELETEME` under any category -> choice added + unpublished collection.
-3. Publish -> only if the collection has products; otherwise skip with note (do not false-fail). Prefer tagging one product temporarily.
+3. Publish is **not** in the editor UI — use webhooks / `reconcile_visibility` (or ops `POST /api/category-editor/publish`). Prefer tagging one product temporarily so Phase 7 flips visible.
 4. **Product Creator** shows the new choice:
    - After create, **restart the backend process** (preferred) or wait 300s TTL.
    - Real failure only if still missing after a clean restart.
 5. Reorder + Save in Category Editor -> persisted on reload.
 6. Unpublish throwaway collection if possible; leave `zz-smoke-DELETEME` marked for later delete.
+
+## L3 acceptance — Industries → Hospitality → B&B
+
+End-to-end for the third taxonomy layer (Product Creator picker is **out of scope** this ship):
+
+1. `POST /api/category-editor/ensure-defs` (or open Category Editor — it calls this on load): ensures `custom.sub_subcategory` with smart-collection **on**; strips `BLANK` from `subcategory_2` while echoing capability **false**.
+2. Create (or confirm) category **Industries**, subcategory **Hospitality**, then **Add sub-sub** → **B&B** (or `Bed & Breakfast`).
+3. Shopify collection has **three AND rules**: `custom.custom_category` = Industries, `custom.subcategory` (or `_2`) = Hospitality, `custom.sub_subcategory` = B&B. Starts unpublished / `visible: false`.
+4. Tag a product with those three metafield values → webhook or reconcile publishes; mega-menu shows nested grandchild (desktop nest + drawer `grandchildlink`) using `display_label` if set, else label. Links use stored **handle** only.
+5. Metadata panel: edit Menu name (`display_label`), collection SEO, and (preview→apply) choice rename; subcategory rename preview lists cascading child collections.
 
 ## metafieldDefinitionUpdate / append_choice
 
