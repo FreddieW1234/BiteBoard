@@ -12,9 +12,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f6f8fa; min-height: 100vh; color: #1f2937;
+            background: #f6f8fa; min-height: 100vh; height: 100%; color: #1f2937; overflow: hidden;
         }
-        .app-layout { display: flex; min-height: 100vh; }
+        html { height: 100%; }
+        .app-layout { display: flex; height: 100vh; min-height: 100vh; overflow: hidden; }
         .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
         .sidebar.collapsed { width: 64px; }
         .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
@@ -34,19 +35,20 @@
         .app-tab.active i { color: #fff; }
         .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
         .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; width: 100%; justify-content: center; }
-        .main-wrap { flex: 1; min-width: 0; padding: 24px; }
-        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; }
+        .main-wrap { flex: 1; min-width: 0; min-height: 0; padding: 24px; display: flex; flex-direction: column; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 20px 0; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .page-title i { color: #4f46e5; }
 
         .category-section {
             background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
             padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); width: 100%;
+            flex: 1; min-height: 0; display: flex; flex-direction: column;
         }
         .category-section h2 {
             font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: #333;
-            display: flex; align-items: center; gap: 8px;
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0;
         }
-        .item-list { margin-bottom: 16px; width: 100%; }
+        .item-list { flex: 1; min-height: 0; overflow-y: auto; width: 100%; padding-bottom: 8px; }
 
         .category-group { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; width: 100%; }
         .category-group.dragging { opacity: 0.45; }
@@ -82,7 +84,12 @@
         .btn-icon:hover { background: rgba(0,0,0,0.08); }
         .category-header .btn-icon { color: #fff; }
 
-        .add-item-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+        .add-forms-bar {
+            flex-shrink: 0; margin-top: 8px; padding-top: 12px;
+            border-top: 1px solid #e5e7eb; background: #fff;
+        }
+        .add-item-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+        .add-forms-bar .add-item-form:first-child { margin-top: 0; }
         .add-item-input {
             padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem;
             flex: 1; min-width: 140px;
@@ -122,21 +129,30 @@
         .btn-danger:hover { background: #b91c1c; }
         .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; background: #fca5a5; color: #7f1d1d; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .alert { display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem; }
+        .alert { display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem; flex-shrink: 0; }
         .alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
         .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
         .muted { color: #6b7280; font-size: 0.75rem; }
 
-        body.embed-mode { background: transparent; min-height: 0; }
+        body.embed-mode { background: transparent; height: 100%; min-height: 0; overflow: hidden; }
         body.embed-mode .sidebar { display: none !important; }
-        body.embed-mode .app-layout { display: block; min-height: 0; }
-        body.embed-mode .main-wrap { padding: 0 0 8px; }
+        body.embed-mode .app-layout {
+            display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
+        }
+        body.embed-mode .main-wrap {
+            flex: 1; min-height: 0; padding: 0; overflow: hidden;
+        }
         body.embed-mode .page-title { display: none; }
         body.embed-mode .category-section {
             border: none; box-shadow: none; background: transparent;
-            border-radius: 0; padding: 0;
+            border-radius: 0; padding: 0; flex: 1; min-height: 0;
         }
         body.embed-mode .category-section > h2 { display: none; }
+        body.embed-mode .add-forms-bar {
+            background: #f6f8fa; border-top: 1px solid #e5e7eb;
+            padding: 10px 0 4px; margin-top: 0;
+        }
+        html:has(body.embed-mode) { height: 100%; }
     </style>
 </head>
 <body class="{% if embed %}embed-mode{% endif %}">
@@ -172,21 +188,22 @@
                     <div class="empty-state muted">Loading…</div>
                 </div>
 
-                <div class="add-item-form" id="addCategoryForm">
-                    <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
-                    <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
+                <div class="add-forms-bar">
+                    <div class="add-item-form" id="addCategoryForm">
+                        <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
+                        <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
+                    </div>
+                    <div class="add-item-form">
+                        <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
+                        <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
+                        <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
+                    </div>
+                    <div class="add-item-form">
+                        <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
+                        <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
+                        <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
+                    </div>
                 </div>
-                <div class="add-item-form">
-                    <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
-                    <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
-                    <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
-                </div>
-                <div class="add-item-form">
-                    <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
-                    <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
-                    <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
-                </div>
-
             </div>
         </div>
     </div>
