@@ -4796,6 +4796,19 @@
                             return; // done with the filters item
                         }
 
+                        if (key === 'recycle_info') {
+                            const labels = Array.from(
+                                inputElement.querySelectorAll('input[type="checkbox"][data-recycle-option]:checked')
+                            ).map(cb => (cb.value || '').trim()).filter(Boolean);
+                            metafieldsData.push({
+                                namespace: namespace || 'custom',
+                                key: 'recycle_info',
+                                type: metafieldType || 'single_line_text_field',
+                                value: formatRecycleInfoValue(labels),
+                            });
+                            return;
+                        }
+
                         // Handle custom dropdowns for category and subcategory
                         let value;
                         if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
@@ -6261,7 +6274,8 @@
                 }
                 
                 const isFreeTextList = String(metafield.key || '').toLowerCase() === 'alternative_spellings';
-                const hasOptions = (!isFreeTextList && !hasEmojiButtons && !isLongTextField
+                const isRecycleInfo = String(metafield.key || '').toLowerCase() === 'recycle_info';
+                const hasOptions = (!isFreeTextList && !isRecycleInfo && !hasEmojiButtons && !isLongTextField
                     && (metafield.available_options && metafield.available_options.length > 1));
                 const currentValue = metafield.value || '';
                 
@@ -6361,6 +6375,21 @@
                         </div>
                     `;
                     console.log(`✅ Custom dropdown HTML created for filters`);
+                } else if (metafield.key === 'recycle_info') {
+                    inputElement = `
+                        <div class="custom-dropdown" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="recycle_info" data-type="${metafield.type || 'single_line_text_field'}">
+                            <div class="dropdown-trigger-wrap">
+                                <div class="dropdown-button" onclick="toggleDropdown(this)">
+                                    <span class="dropdown-text">Select recycle info...</span>
+                                    <span class="dropdown-arrow">▼</span>
+                                </div>
+                                <div class="dropdown-content" style="display: none;">
+                                    <div class="dropdown-loading">Loading options...</div>
+                                </div>
+                            </div>
+                            <ul class="dropdown-selected-list" aria-label="Selected recycle info"></ul>
+                        </div>
+                    `;
                 } else if (metafield.key === 'origination') {
                     const origOptions = ['0', '50', '75'];
                     let origSelected = String(currentValue || '').trim();
@@ -6465,7 +6494,7 @@
                     if (cardBtn) {
                         cardBtn.addEventListener('click', function fillCardPrintAndRecycle() {
                             const printEl = document.querySelector('textarea[data-key="print_info"], select[data-key="print_info"]');
-                            const recycleEl = document.querySelector('textarea[data-key="recycle_info"], select[data-key="recycle_info"]');
+                            const recycleEl = document.querySelector('.custom-dropdown[data-key="recycle_info"], textarea[data-key="recycle_info"], select[data-key="recycle_info"]');
                             if (printEl) {
                                 if (printEl.tagName === 'TEXTAREA') {
                                     printEl.value = 'Digitally printed card';
@@ -6476,11 +6505,13 @@
                                 }
                             }
                             if (recycleEl) {
-                                if (recycleEl.tagName === 'TEXTAREA') {
-                                    recycleEl.value = 'Card recyclable';
+                                if (recycleEl.classList && recycleEl.classList.contains('custom-dropdown')) {
+                                    setRecycleInfoDropdownValues(recycleEl, ['Card']);
+                                } else if (recycleEl.tagName === 'TEXTAREA') {
+                                    recycleEl.value = 'Card Recyclable';
                                     recycleEl.dispatchEvent(new Event('input', { bubbles: true }));
-                                } else {
-                                    const opt = Array.from(recycleEl.options).find(o => (o.value || '').trim() === 'Card recyclable');
+                                } else if (recycleEl.tagName === 'SELECT') {
+                                    const opt = Array.from(recycleEl.options).find(o => /card\s+recyclable/i.test((o.value || '').trim()));
                                     if (opt) { recycleEl.value = opt.value; recycleEl.dispatchEvent(new Event('change', { bubbles: true })); }
                                 }
                             }
@@ -6526,6 +6557,13 @@
                 }
 
                 // For custom dropdowns, load options immediately and set initial values
+                if (metafield.key === 'recycle_info') {
+                    const dropdown = metafieldDiv.querySelector('.custom-dropdown');
+                    if (dropdown) {
+                        loadRecycleInfoDropdownOptions(dropdown);
+                        if (metafield.value) setRecycleInfoDropdownValues(dropdown, parseRecycleInfoValue(metafield.value));
+                    }
+                }
                 if (metafield.key === 'custom_category' || metafield.key === 'subcategory' || metafield.key === 'filters') {
                     const dropdown = metafieldDiv.querySelector('.custom-dropdown');
                     if (dropdown) {
@@ -7413,6 +7451,89 @@
             }
         });
 
+        // Recycle Info multi-select: labels tickable; saved as "X Recyclable" / "X Reusable"
+        const RECYCLE_INFO_OPTIONS = [
+            { label: 'Card', reusable: false },
+            { label: 'Paper', reusable: false },
+            { label: 'Foil', reusable: false },
+            { label: 'Plastic', reusable: false },
+            { label: 'Net', reusable: false },
+            { label: 'Tin', reusable: false },
+            { label: 'Bag', reusable: true },
+            { label: 'Bowl & Fork', reusable: true },
+            { label: 'Jar', reusable: false },
+        ];
+
+        function formatRecycleInfoValue(labels) {
+            const wanted = new Set((labels || []).map(l => String(l || '').trim()).filter(Boolean));
+            return RECYCLE_INFO_OPTIONS
+                .filter(opt => wanted.has(opt.label))
+                .map(opt => `${opt.label} ${opt.reusable ? 'Reusable' : 'Recyclable'}`)
+                .join(', ');
+        }
+
+        function parseRecycleInfoValue(raw) {
+            const text = String(raw == null ? '' : raw).trim();
+            if (!text) return [];
+            let parts = [];
+            if (text.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (Array.isArray(parsed)) parts = parsed.map(x => String(x || '').trim()).filter(Boolean);
+                } catch (_) { /* fall through */ }
+            }
+            if (!parts.length) parts = text.split(',').map(p => p.trim()).filter(Boolean);
+            const selected = [];
+            parts.forEach(part => {
+                const cleaned = part.replace(/\s+(recyclable|reusable)\s*$/i, '').trim();
+                const match = RECYCLE_INFO_OPTIONS.find(o =>
+                    o.label.toLowerCase() === cleaned.toLowerCase()
+                    || o.label.toLowerCase() === part.toLowerCase()
+                );
+                if (match && !selected.includes(match.label)) selected.push(match.label);
+            });
+            return selected;
+        }
+
+        function setRecycleInfoDropdownValues(dropdown, labels) {
+            if (!dropdown) return;
+            const wanted = new Set((labels || []).map(l => String(l || '').trim()).filter(Boolean));
+            dropdown.querySelectorAll('input[type="checkbox"][data-recycle-option]').forEach(cb => {
+                cb.checked = wanted.has((cb.value || '').trim());
+            });
+            updateDropdownText(dropdown);
+        }
+
+        function loadRecycleInfoDropdownOptions(dropdown) {
+            if (!dropdown) return;
+            const content = dropdown.querySelector('.dropdown-content');
+            if (!content) return;
+            content.innerHTML = '';
+            const optionsList = document.createElement('div');
+            optionsList.className = 'dropdown-options-list';
+            content.appendChild(optionsList);
+            RECYCLE_INFO_OPTIONS.forEach((opt, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'dropdown-option';
+                const safeId = `recycle_info_${index}_${String(opt.label).replace(/[^a-zA-Z0-9]+/g, '_')}`;
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = safeId;
+                checkbox.value = opt.label;
+                checkbox.setAttribute('data-recycle-option', '1');
+                const label = document.createElement('label');
+                label.htmlFor = safeId;
+                label.textContent = opt.label;
+                optionDiv.appendChild(checkbox);
+                optionDiv.appendChild(label);
+                optionsList.appendChild(optionDiv);
+                checkbox.addEventListener('change', function () {
+                    updateDropdownText(dropdown);
+                });
+            });
+            updateDropdownText(dropdown);
+        }
+
         // Custom Dropdown Functions
         function toggleDropdown(button) {
             const dropdown = button.closest('.custom-dropdown');
@@ -7463,7 +7584,11 @@
             const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
             const textElement = dropdown.querySelector('.dropdown-text');
             const key = dropdown.dataset.key;
-            textElement.textContent = key === 'custom_category' ? 'Select categories...' : (key === 'filters' ? 'Select filters...' : (key === 'categorysub' ? 'Select category & subcategory...' : 'Select subcategories...'));
+            textElement.textContent = key === 'custom_category' ? 'Select categories...'
+                : (key === 'filters' ? 'Select filters...'
+                : (key === 'categorysub' ? 'Select category & subcategory...'
+                : (key === 'recycle_info' ? 'Select recycle info...'
+                : 'Select subcategories...')));
             // Update bullet list of selected options below the dropdown
             const listEl = dropdown.querySelector('.dropdown-selected-list');
             if (listEl) {
@@ -9188,7 +9313,10 @@
                         }
                     } else if (input.classList.contains('custom-dropdown')) {
                         // For custom dropdowns, set checkbox selections
-                        if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
+                        if (key === 'recycle_info') {
+                            setRecycleInfoDropdownValues(input, parseRecycleInfoValue(value));
+                            console.log(`✅ Set recycle_info dropdown from:`, value);
+                        } else if (key === 'custom_category' || (key && key.startsWith('subcategory'))) {
                             // Clear all checkboxes first
                             const checkboxes = input.querySelectorAll('input[type="checkbox"]');
                             checkboxes.forEach(checkbox => checkbox.checked = false);

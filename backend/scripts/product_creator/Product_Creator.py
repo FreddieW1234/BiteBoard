@@ -4064,6 +4064,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
             "sku",
+            "recycle_info",
         ]) | storefront_clearable_keys() | set(FILTER_GROUP_KEYS or []) | set(CUSTOM_OPTION_METAFIELD_KEYS)
 
         def _is_clearable(ns, k):
