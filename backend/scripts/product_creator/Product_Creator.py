@@ -5422,6 +5422,37 @@ def create_product(product_data):
                     print(f"[warn] Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
             else:
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
+
+            # Phase 7: if this product joined taxonomy smart collections, publish them
+            # when they have Online-Store-published products (and set visible=true).
+            try:
+                cats_for_vis = [str(c).strip() for c in (categories or []) if str(c).strip()]
+                subs_for_vis = [str(s).strip() for s in (subcategories or []) if str(s).strip()]
+                children_for_vis = [
+                    str(s).strip() for s in (sub_subcategories or []) if str(s).strip()
+                ]
+                if cats_for_vis or subs_for_vis or children_for_vis:
+                    from shopify_client import taxonomy as taxmod
+                    product_status = str((product or {}).get("status") or "").strip().lower()
+                    vis = taxmod.reconcile_choices(
+                        categories=cats_for_vis,
+                        subcategories=subs_for_vis,
+                        sub_subcategories=children_for_vis,
+                        write=True,
+                        expect_published_product=(product_status == "active"),
+                    )
+                    published_n = sum(
+                        1
+                        for r in (vis.get("results") or [])
+                        if (r or {}).get("action") == "published"
+                    )
+                    print(
+                        f"[ok] Taxonomy visibility: reconciled {len(vis.get('handles') or [])} "
+                        f"handle(s), published {published_n}",
+                        flush=True,
+                    )
+            except Exception as e:
+                print(f"[warn] Taxonomy visibility reconcile skipped: {e}", flush=True)
             
             # Step 4: Run Price Bandit script to create variants (skip when pricing cleared)
             time.sleep(0.5)

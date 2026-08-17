@@ -46,7 +46,7 @@
             font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; color: #333;
             display: flex; align-items: center; gap: 8px;
         }
-        .item-list { max-height: 70vh; overflow-y: auto; margin-bottom: 16px; width: 100%; }
+        .item-list { margin-bottom: 16px; width: 100%; }
 
         .category-group { margin-bottom: 12px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; width: 100%; }
         .category-group.dragging { opacity: 0.45; }
@@ -62,7 +62,7 @@
             background: #fff; border-radius: 6px; border-left: 3px solid #667eea; width: 100%;
         }
         .child-row { padding-left: 36px; border-left-color: #94a3b8; background: #fafafa; }
-        .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
+        .sub-block.dragging, .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
         .sub-block { margin-bottom: 8px; width: 100%; }
         .children-container { width: 100%; }
 
@@ -73,7 +73,8 @@
         .subcategory-row .menu-name-input, .child-row .menu-name-input {
             border: 1px solid #e5e7eb; background: #fff; color: #111827; font-weight: 500;
         }
-        .drag-handle { cursor: grab; opacity: 0.7; flex-shrink: 0; }
+        .drag-handle { cursor: grab; opacity: 0.7; flex-shrink: 0; user-select: none; -webkit-user-select: none; }
+        .drag-handle:active { cursor: grabbing; }
         .btn-icon {
             border: none; background: transparent; cursor: pointer; padding: 4px 6px;
             color: inherit; border-radius: 4px; flex-shrink: 0;
@@ -121,17 +122,21 @@
         .btn-danger:hover { background: #b91c1c; }
         .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; background: #fca5a5; color: #7f1d1d; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .save-section { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
         .alert { display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 0.875rem; }
         .alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
         .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
         .muted { color: #6b7280; font-size: 0.75rem; }
 
-        body.embed-mode { background: #f6f8fa; }
+        body.embed-mode { background: transparent; min-height: 0; }
         body.embed-mode .sidebar { display: none !important; }
-        body.embed-mode .app-layout { display: block; }
-        body.embed-mode .main-wrap { padding: 8px 12px 24px; }
+        body.embed-mode .app-layout { display: block; min-height: 0; }
+        body.embed-mode .main-wrap { padding: 0 0 8px; }
         body.embed-mode .page-title { display: none; }
+        body.embed-mode .category-section {
+            border: none; box-shadow: none; background: transparent;
+            border-radius: 0; padding: 0;
+        }
+        body.embed-mode .category-section > h2 { display: none; }
     </style>
 </head>
 <body class="{% if embed %}embed-mode{% endif %}">
@@ -174,26 +179,14 @@
                 <div class="add-item-form">
                     <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
                     <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
-                    <label class="muted" style="display:flex;align-items:center;gap:4px;">
-                        <input type="checkbox" id="indexableInput" checked> In menu
-                    </label>
                     <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
                 </div>
                 <div class="add-item-form">
                     <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
                     <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
-                    <label class="muted" style="display:flex;align-items:center;gap:4px;">
-                        <input type="checkbox" id="childIndexableInput" checked> In menu
-                    </label>
                     <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
                 </div>
 
-                <div class="save-section">
-                    <button class="btn btn-success" id="saveBtn" onclick="saveTaxonomy()">
-                        <i class="fas fa-save"></i> Save order / menu names
-                    </button>
-                </div>
-                <p class="meta-hint">Inline names are cosmetic menu labels. Use the sliders icon for SEO title, description, and handle.</p>
             </div>
         </div>
     </div>
@@ -372,6 +365,41 @@
             } else {
                 found.node.display_label = v;
             }
+            persistDisplayLabel(handle, found.node.display_label || '');
+        }
+
+        let displayLabelSaveTimer = null;
+        function persistDisplayLabel(handle, displayLabel) {
+            clearTimeout(displayLabelSaveTimer);
+            displayLabelSaveTimer = setTimeout(async () => {
+                if (!isTaxonomyMode()) return;
+                try {
+                    const body = {
+                        expected_updated_at: taxonomyUpdatedAt,
+                    };
+                    if ((displayLabel || '').trim()) {
+                        body.display_label = displayLabel.trim();
+                    } else {
+                        body.clear_display_label = true;
+                        body.display_label = '';
+                    }
+                    const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle) + '/metadata', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await res.json();
+                    if (res.status === 409) {
+                        showError(data.error || 'Conflict — reload and retry menu name');
+                        if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                        return;
+                    }
+                    if (!res.ok || !data.success) throw new Error(data.error || 'Menu name save failed');
+                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                } catch (err) {
+                    showError(err.message || String(err));
+                }
+            }, 400);
         }
 
         function updateSelects() {
@@ -388,128 +416,164 @@
             parentSel.innerHTML = opts;
         }
 
-        /* ---------- Constrained DnD ---------- */
+        /* ---------- Constrained DnD (delegated; one setup) ---------- */
+        let dndWired = false;
+        let dragState = null; // { kind: 'category'|'sub'|'child', el }
+
         function setupDnD() {
             const list = document.getElementById('categoriesList');
+            if (!list || dndWired) return;
+            dndWired = true;
 
-            list.querySelectorAll('.category-group').forEach((group) => {
-                const header = group.querySelector('.category-header');
-                const handle = header.querySelector('[data-drag="category"]');
-                handle.addEventListener('mousedown', () => { header.draggable = true; });
-                header.addEventListener('dragstart', (e) => {
-                    if (!e.target.closest('[data-drag="category"]')) { e.preventDefault(); return; }
-                    group.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', 'category');
-                    e.dataTransfer.effectAllowed = 'move';
-                });
-                header.addEventListener('dragend', () => {
-                    header.draggable = false;
-                    group.classList.remove('dragging');
-                    syncOrderFromDOM();
-                    renderTree();
-                    updateSelects();
-                });
+            list.addEventListener('mousedown', (e) => {
+                const handle = e.target.closest('.drag-handle');
+                if (!handle || !list.contains(handle)) return;
+                const kind = handle.getAttribute('data-drag');
+                let el = null;
+                if (kind === 'category') el = handle.closest('.category-group');
+                else if (kind === 'sub') el = handle.closest('.sub-block');
+                else if (kind === 'child') el = handle.closest('.child-row');
+                if (!el) return;
+                el.draggable = true;
+                dragState = { kind, el };
+            });
+
+            document.addEventListener('mouseup', () => {
+                // Delay so dragstart can mark .dragging first (Windows fires mouseup early).
+                setTimeout(() => {
+                    if (!dragState) return;
+                    if (dragState.el.classList.contains('dragging')) return;
+                    dragState.el.draggable = false;
+                    dragState = null;
+                }, 120);
+            });
+
+            list.addEventListener('dragstart', (e) => {
+                if (!dragState || !dragState.el.contains(e.target)) {
+                    e.preventDefault();
+                    return;
+                }
+                const { kind, el } = dragState;
+                el.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', kind);
+                // Avoid ghosting inputs
+                try {
+                    const ghost = el.cloneNode(true);
+                    ghost.style.width = el.getBoundingClientRect().width + 'px';
+                    ghost.style.opacity = '0.85';
+                    ghost.style.position = 'absolute';
+                    ghost.style.top = '-9999px';
+                    document.body.appendChild(ghost);
+                    e.dataTransfer.setDragImage(ghost, 20, 12);
+                    setTimeout(() => ghost.remove(), 0);
+                } catch (_) { /* ignore */ }
+                e.stopPropagation();
             });
 
             list.addEventListener('dragover', (e) => {
-                const draggingCat = list.querySelector('.category-group.dragging');
-                if (!draggingCat) return;
+                if (!dragState) return;
+                const { kind, el } = dragState;
                 e.preventDefault();
-                const after = getAfter(list, e.clientY, '.category-group', draggingCat);
-                if (!after) list.appendChild(draggingCat);
-                else list.insertBefore(draggingCat, after);
+                e.dataTransfer.dropEffect = 'move';
+
+                if (kind === 'category') {
+                    const after = getDragAfterElement(list, e.clientY, '.category-group', el);
+                    if (after) list.insertBefore(el, after);
+                    else list.appendChild(el);
+                    return;
+                }
+
+                if (kind === 'sub') {
+                    // Prefer drop target under cursor; fall back to current parent container
+                    const over = e.target.closest('[data-drop="sub"]')
+                        || e.target.closest('.category-group')?.querySelector('[data-drop="sub"]');
+                    const container = over || el.closest('[data-drop="sub"]');
+                    if (!container || !list.contains(container)) return;
+                    const after = getDragAfterElement(container, e.clientY, '.sub-block', el);
+                    if (after) container.insertBefore(el, after);
+                    else container.appendChild(el);
+                    return;
+                }
+
+                if (kind === 'child') {
+                    const over = e.target.closest('[data-drop="child"]')
+                        || e.target.closest('.sub-block')?.querySelector('[data-drop="child"]');
+                    const container = over || el.closest('[data-drop="child"]');
+                    if (!container || !list.contains(container)) return;
+                    const after = getDragAfterElement(container, e.clientY, '.child-row', el);
+                    if (after) container.insertBefore(el, after);
+                    else container.appendChild(el);
+                }
             });
 
-            list.querySelectorAll('.subcategory-row').forEach((row) => {
-                row.draggable = true;
-                row.addEventListener('dragstart', (e) => {
-                    row.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', 'sub');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.stopPropagation();
-                });
-                row.addEventListener('dragend', () => {
-                    row.classList.remove('dragging');
-                    // move the whole sub-block with the row
-                    syncOrderFromDOM();
-                    renderTree();
-                    updateSelects();
-                });
+            list.addEventListener('drop', (e) => {
+                if (!dragState) return;
+                e.preventDefault();
             });
 
-            list.querySelectorAll('[data-drop="sub"]').forEach((container) => {
-                container.addEventListener('dragover', (e) => {
-                    const dragging = list.querySelector('.subcategory-row.dragging');
-                    if (!dragging) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const block = dragging.closest('.sub-block');
-                    const after = getAfter(container, e.clientY, '.sub-block', block);
-                    if (!after) container.appendChild(block);
-                    else container.insertBefore(block, after);
-                });
-            });
+            const finishDrag = () => {
+                if (!dragState) return;
+                const { el } = dragState;
+                el.classList.remove('dragging');
+                el.draggable = false;
+                dragState = null;
+                syncOrderFromDOM();
+                renderTree();
+                updateSelects();
+                persistTaxonomyOrder();
+            };
 
-            list.querySelectorAll('.child-row').forEach((row) => {
-                row.draggable = true;
-                row.addEventListener('dragstart', (e) => {
-                    row.classList.add('dragging');
-                    e.dataTransfer.setData('text/plain', 'child');
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.stopPropagation();
-                });
-                row.addEventListener('dragend', () => {
-                    row.classList.remove('dragging');
-                    syncOrderFromDOM();
-                    renderTree();
-                    updateSelects();
-                });
-            });
-
-            list.querySelectorAll('[data-drop="child"]').forEach((container) => {
-                container.addEventListener('dragover', (e) => {
-                    const dragging = list.querySelector('.child-row.dragging');
-                    if (!dragging) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const after = getAfter(container, e.clientY, '.child-row', dragging);
-                    if (!after) container.appendChild(dragging);
-                    else container.insertBefore(dragging, after);
-                });
-            });
+            list.addEventListener('dragend', finishDrag);
         }
 
-        function getAfter(container, y, selector, current) {
-            const els = [...container.querySelectorAll(selector)].filter(el => el !== current);
-            return els.reduce((closest, child) => {
+        function getDragAfterElement(container, y, selector, current) {
+            const els = [...container.querySelectorAll(`:scope > ${selector}`)]
+                .filter(el => el !== current);
+            let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+            for (const child of els) {
                 const box = child.getBoundingClientRect();
                 const offset = y - box.top - box.height / 2;
-                if (offset < 0 && offset > closest.offset) return { offset, element: child };
-                return closest;
-            }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+                if (offset < 0 && offset > closest.offset) {
+                    closest = { offset, element: child };
+                }
+            }
+            return closest.element;
         }
 
         function syncOrderFromDOM() {
             const list = document.getElementById('categoriesList');
             const byHandle = {};
             taxonomyData.forEach(c => {
-                byHandle[c.handle] = c;
+                if (c.handle) byHandle[c.handle] = c;
                 (c.subcategories || []).forEach(s => {
-                    byHandle[s.handle] = s;
-                    (s.children || []).forEach(ch => { byHandle[ch.handle] = ch; });
+                    if (s.handle) byHandle[s.handle] = s;
+                    (s.children || []).forEach(ch => {
+                        if (ch.handle) byHandle[ch.handle] = ch;
+                    });
                 });
             });
             const next = [];
-            list.querySelectorAll('.category-group').forEach((group, ci) => {
+            list.querySelectorAll(':scope > .category-group').forEach((group, ci) => {
                 const ch = group.dataset.handle;
-                const cat = { ...(byHandle[ch] || {}), handle: ch, position: ci + 1, subcategories: [] };
-                group.querySelectorAll(':scope > .subcategories-container > .sub-block').forEach((block, si) => {
+                const prev = byHandle[ch] || {};
+                const cat = { ...prev, handle: ch, position: ci + 1, subcategories: [] };
+                const subContainer = group.querySelector(':scope > .subcategories-container');
+                (subContainer
+                    ? subContainer.querySelectorAll(':scope > .sub-block')
+                    : []
+                ).forEach((block, si) => {
                     const sh = block.dataset.handle;
-                    const sub = { ...(byHandle[sh] || {}), handle: sh, position: si + 1, children: [] };
-                    block.querySelectorAll(':scope > .children-container > .child-row').forEach((row, xi) => {
+                    const prevSub = byHandle[sh] || {};
+                    const sub = { ...prevSub, handle: sh, position: si + 1, children: [] };
+                    const childContainer = block.querySelector(':scope > .children-container');
+                    (childContainer
+                        ? childContainer.querySelectorAll(':scope > .child-row')
+                        : []
+                    ).forEach((row, xi) => {
                         const hh = row.dataset.handle;
-                        const child = { ...(byHandle[hh] || {}), handle: hh, position: xi + 1 };
-                        sub.children.push(child);
+                        const prevChild = byHandle[hh] || {};
+                        sub.children.push({ ...prevChild, handle: hh, position: xi + 1 });
                     });
                     cat.subcategories.push(sub);
                 });
@@ -543,7 +607,6 @@
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
             const category = document.getElementById('categorySelect').value;
             const label = document.getElementById('subcategoryInput').value.trim();
-            const indexable = document.getElementById('indexableInput').checked;
             if (!category || !label) { showError('Pick a category and enter a label'); return; }
             const btn = document.getElementById('addSubBtn');
             btn.disabled = true;
@@ -551,7 +614,7 @@
                 const res = await fetch('/api/category-editor/subcategory', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category, label, indexable, expected_updated_at: taxonomyUpdatedAt }),
+                    body: JSON.stringify({ category, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
                 });
                 const data = await res.json();
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
@@ -568,7 +631,6 @@
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
             const parent = document.getElementById('parentSubSelect').value;
             const label = document.getElementById('childInput').value.trim();
-            const indexable = document.getElementById('childIndexableInput').checked;
             if (!parent || !label) { showError('Pick a parent subcategory and enter a label'); return; }
             const [category, parent_label] = parent.split('||');
             const btn = document.getElementById('addChildBtn');
@@ -577,7 +639,7 @@
                 const res = await fetch('/api/category-editor/sub-subcategory', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category, parent_label, label, indexable, expected_updated_at: taxonomyUpdatedAt }),
+                    body: JSON.stringify({ category, parent_label, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
                 });
                 const data = await res.json();
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
@@ -590,13 +652,10 @@
             finally { btn.disabled = false; }
         }
 
-        async function saveTaxonomy() {
-            if (!isTaxonomyMode()) { showError('Cannot save in fallback mode'); return; }
-            syncOrderFromDOM();
-            const btn = document.getElementById('saveBtn');
-            const prev = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+        let taxonomySaveInFlight = false;
+        async function persistTaxonomyOrder() {
+            if (!isTaxonomyMode() || taxonomySaveInFlight) return;
+            taxonomySaveInFlight = true;
             try {
                 const res = await fetch('/api/category-editor/taxonomy', {
                     method: 'PUT',
@@ -605,16 +664,17 @@
                 });
                 const data = await res.json();
                 if (res.status === 409) {
-                    showError((data.error || 'Conflict') + ' — local tree kept; reload when ready.');
+                    showError((data.error || 'Conflict') + ' — reload and retry reorder.');
                     if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
                     return;
                 }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
+                if (!res.ok || !data.success) throw new Error(data.error || 'Reorder save failed');
                 if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('Order and menu names saved.');
-                await loadCategories();
-            } catch (err) { showError(err.message || String(err)); }
-            finally { btn.disabled = false; btn.innerHTML = prev; }
+            } catch (err) {
+                showError(err.message || String(err));
+            } finally {
+                taxonomySaveInFlight = false;
+            }
         }
 
         /* ---------- Metadata modal ---------- */

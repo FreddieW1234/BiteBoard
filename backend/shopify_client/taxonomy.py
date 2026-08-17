@@ -1765,6 +1765,106 @@ def find_node_by_handle(tax: list, handle: str) -> tuple[str | None, dict | None
     return None, None, None
 
 
+def handles_for_choices(
+    tax: list,
+    *,
+    categories: list | None = None,
+    subcategories: list | None = None,
+    sub_subcategories: list | None = None,
+) -> list[str]:
+    """
+    Resolve taxonomy collection handles that a product with these choice labels
+    would join (category + matching subcategory + matching sub-subcategory).
+    """
+    cat_set = {str(x).strip() for x in (categories or []) if str(x).strip()}
+    sub_set = {str(x).strip() for x in (subcategories or []) if str(x).strip()}
+    child_set = {str(x).strip() for x in (sub_subcategories or []) if str(x).strip()}
+    if not cat_set and not sub_set and not child_set:
+        return []
+
+    handles: list[str] = []
+    seen: set[str] = set()
+
+    def _add(handle: str | None) -> None:
+        h = (handle or "").strip()
+        if h and h not in seen:
+            seen.add(h)
+            handles.append(h)
+
+    for cat in tax or []:
+        cname = (cat.get("category") or "").strip()
+        parent_ok = (not cat_set) or (cname in cat_set)
+        if cname in cat_set:
+            _add(cat.get("handle"))
+        for sub in cat.get("subcategories") or []:
+            slabel = (sub.get("label") or "").strip()
+            sub_ok = (not sub_set) or (slabel in sub_set)
+            if slabel in sub_set and parent_ok:
+                _add(sub.get("handle"))
+            for child in sub.get("children") or []:
+                clabel = (child.get("label") or "").strip()
+                if clabel in child_set and parent_ok and sub_ok:
+                    _add(child.get("handle"))
+    return handles
+
+
+def reconcile_choices(
+    *,
+    categories: list | None = None,
+    subcategories: list | None = None,
+    sub_subcategories: list | None = None,
+    write: bool = True,
+    retries: int = 3,
+    retry_delay_sec: float = 1.5,
+    expect_published_product: bool = True,
+) -> dict:
+    """
+    After a product's taxonomy metafields change, reconcile Online Store publish
+    for every matching collection handle (Phase 7).
+
+    When expect_published_product is True, retries briefly so smart-collection
+    membership can catch up before deciding count is still zero.
+    """
+    try:
+        tax = load_taxonomy(require=False) or []
+    except Exception:
+        tax = []
+    handles = handles_for_choices(
+        tax,
+        categories=categories,
+        subcategories=subcategories,
+        sub_subcategories=sub_subcategories,
+    )
+    results: list[dict] = []
+    for handle in handles:
+        last: dict | None = None
+        attempts = max(1, int(retries or 1))
+        for attempt in range(attempts):
+            last = reconcile_handle(handle, write=write)
+            count = int((last or {}).get("count") or 0)
+            is_pub = bool((last or {}).get("is_published"))
+            indexable = (last or {}).get("indexable", True)
+            # Lag: product tagged but collection productsCount not updated yet.
+            if (
+                write
+                and expect_published_product
+                and indexable is not False
+                and count == 0
+                and not is_pub
+                and attempt + 1 < attempts
+            ):
+                time.sleep(float(retry_delay_sec))
+                continue
+            break
+        if last is not None:
+            results.append(last)
+    return {
+        "success": True,
+        "handles": handles,
+        "results": results,
+    }
+
+
 def apply_visibility_rule(
     node: dict,
     published_count: int,
