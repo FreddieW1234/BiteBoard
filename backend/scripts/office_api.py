@@ -198,7 +198,7 @@ def fetch_file(order: str, item: str, filename: str) -> requests.Response:
 
 
 def delete_file(order: str, item: str, filename: str) -> dict | None:
-    """Soft-delete (archive) a file — never passes permanent=true."""
+    """Soft-delete (archive) a file - never passes permanent=true."""
     url = f"{_url(order, item, 'files', filename)}"
     resp = _request("DELETE", url)
     result = _handle_response(resp)
@@ -300,7 +300,7 @@ def _companies_url(company_id: str = "", *suffix: str) -> str:
 
 
 def list_companies(*, full: bool = False) -> dict:
-    """``GET /companies`` — durable company overview from the office server."""
+    """``GET /companies`` - durable company overview from the office server."""
     url = _companies_url()
     params = {"full": "true"} if full else None
     resp = _request("GET", url, params=params, timeout=_COMPANIES_TIMEOUT)
@@ -311,7 +311,7 @@ def list_companies(*, full: bool = False) -> dict:
 
 
 def get_company(company_id: str) -> dict:
-    """``GET /companies/{id}`` — one company with members and notes."""
+    """``GET /companies/{id}`` - one company with members and notes."""
     cid = (company_id or "").strip()
     if not cid:
         raise OfficeApiError("Company id is required")
@@ -323,7 +323,7 @@ def get_company(company_id: str) -> dict:
 
 
 def create_company(name: str, *, company_id: str | None = None) -> dict:
-    """``POST /companies`` — create on the office server."""
+    """``POST /companies`` - create on the office server."""
     payload: dict = {"name": (name or "").strip()}
     if company_id:
         payload["id"] = str(company_id).strip()
@@ -335,7 +335,7 @@ def create_company(name: str, *, company_id: str | None = None) -> dict:
 
 
 def rename_company(company_id: str, name: str) -> dict:
-    """``PUT /companies/{id}`` — rename on the office server."""
+    """``PUT /companies/{id}`` - rename on the office server."""
     cid = (company_id or "").strip()
     resp = _request("PUT", _companies_url(cid), json={"name": (name or "").strip()})
     result = _handle_response(resp)
@@ -345,7 +345,7 @@ def rename_company(company_id: str, name: str) -> dict:
 
 
 def delete_company(company_id: str) -> dict:
-    """``DELETE /companies/{id}`` — remove company record only (no Shopify customer changes)."""
+    """``DELETE /companies/{id}`` - remove company record only (no Shopify customer changes)."""
     cid = (company_id or "").strip()
     resp = _request("DELETE", _companies_url(cid), timeout=_COMPANIES_TIMEOUT)
     result = _handle_response(resp)
@@ -355,7 +355,7 @@ def delete_company(company_id: str) -> dict:
 
 
 def add_company_member(company_id: str, customer_id: str, *, move: bool = False) -> dict:
-    """``POST /companies/{id}/members`` — link customer by Shopify id."""
+    """``POST /companies/{id}/members`` - link customer by Shopify id."""
     cid = (company_id or "").strip()
     resp = _request(
         "POST",
@@ -414,7 +414,7 @@ def delete_company_note(company_id: str, note_id: str) -> dict:
 
 
 def get_customer_company(customer_id: str) -> dict:
-    """``GET /customers/{id}/company`` — reverse lookup."""
+    """``GET /customers/{id}/company`` - reverse lookup."""
     cid = str(customer_id or "").strip()
     url = f"{OFFICE_API_URL.rstrip('/')}/customers/{quote(cid, safe='')}/company"
     resp = _request("GET", url)
@@ -449,7 +449,7 @@ def _print_error_message(resp: requests.Response) -> str:
     if code == 502:
         return (
             detail
-            or "Printer unreachable — the host PC may be asleep or the share is down."
+            or "Printer unreachable - the host PC may be asleep or the share is down."
         )
     if code == 504:
         return detail or "Printer did not respond within 30 seconds."
@@ -457,7 +457,7 @@ def _print_error_message(resp: requests.Response) -> str:
 
 
 def print_health() -> dict:
-    """``GET /print/health`` → ``{configured: bool, ...}``."""
+    """``GET /print/health`` -> ``{configured: bool, ...}``."""
     _require_config()
     url = f"{OFFICE_API_URL.rstrip('/')}/print/health"
     resp = _request("GET", url, timeout=10)
@@ -475,7 +475,7 @@ def print_health() -> dict:
 
 
 def _as_zpl_text(zpl: str | bytes) -> str:
-    """Normalize FedEx/office label bytes into raw ZPL text (^XA…^XZ)."""
+    """Normalize FedEx/office label bytes into raw ZPL text (^XA...^XZ)."""
     if isinstance(zpl, bytes):
         text = zpl.decode("utf-8", errors="replace")
     else:
@@ -513,7 +513,7 @@ def store_label(
     carrier: str | None = None,
     item_label: str | None = None,
 ) -> dict:
-    """``POST /orders/{order}/items/{item}/label`` — persist ZPL on office disk."""
+    """``POST /orders/{order}/items/{item}/label`` - persist ZPL on office disk."""
     _require_config()
     order = (order or "").strip()
     item = (item or "").strip()
@@ -560,7 +560,7 @@ def store_label(
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from label store")
     logger.info(
-        "Office store_label ok for %s / %s → %s v%s",
+        "Office store_label ok for %s / %s -> %s v%s",
         order,
         item,
         result.get("filename"),
@@ -570,7 +570,7 @@ def store_label(
 
 
 def list_labels(order: str, item: str) -> dict:
-    """``GET /orders/{order}/items/{item}/labels`` — newest first."""
+    """``GET /orders/{order}/items/{item}/labels`` - newest first."""
     _require_config()
     url = f"{_url(order, item)}/labels"
     resp = _request("GET", url, timeout=_TIMEOUT)
@@ -602,7 +602,7 @@ def _item_slug(item_id: str) -> str:
 
 
 def _item_key_variants(item: str) -> list[str]:
-    """Try ``2-foo-bar`` and ``foo-bar`` — diary vs disk folder keys can differ."""
+    """Try ``2-foo-bar`` and ``foo-bar`` - diary vs disk folder keys can differ."""
     text = (item or "").strip()
     if not text:
         return []
@@ -640,7 +640,7 @@ def _item_keys_match(want: str, got: str) -> bool:
 
 
 def _order_key_variants(order: str) -> list[str]:
-    """Try both ``#S1065`` and ``S1065`` — disk folders vary."""
+    """Try both ``#S1065`` and ``S1065`` - disk folders vary."""
     text = (order or "").strip()
     if not text:
         return []
@@ -780,7 +780,7 @@ def _labels_from_payload(payload, *, order_key: str, source: str) -> list[dict]:
 
 
 def _label_get_metadata(order_key: str, item: str) -> dict | None:
-    """``GET …/label`` — authoritative when labels exist on the office server."""
+    """``GET .../label`` - authoritative when labels exist on the office server."""
     url = f"{_url(order_key, item)}/label"
     try:
         resp = _request("GET", url, timeout=15)
@@ -995,7 +995,7 @@ def find_label_files(order: str, item: str) -> list[dict]:
 def get_label(order: str, item: str, version: int | None = None) -> dict:
     """Load ZPL for an order line from the office order/item folder.
 
-    Prefers dedicated ``GET …/label``, then falls back to ``GET …/files/{filename}``
+    Prefers dedicated ``GET .../label``, then falls back to ``GET .../files/{filename}``
     for ``label-*.zpl`` files sitting beside artwork/proofs.
     """
     _require_config()
@@ -1242,7 +1242,7 @@ def print_label(
 
 
 # --------------------------------------------------------------------------- #
-# Snapshots — durable JSON store on the office server (survives Render redeploy,
+# Snapshots - durable JSON store on the office server (survives Render redeploy,
 # shared across instances). Two shapes: named documents and per-kind items.
 # See the /snapshots API in the office app.py. The payload field is opaque JSON.
 # --------------------------------------------------------------------------- #
@@ -1376,7 +1376,7 @@ def upload_stock_design(product_id: str | int, file_stream, filename: str, produ
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
     if not raw:
-        raise OfficeApiError("Stock designs ZIP was empty — nothing was sent to the office server")
+        raise OfficeApiError("Stock designs ZIP was empty - nothing was sent to the office server")
     safe_name = (filename or "stock-designs.zip").strip() or "stock-designs.zip"
     if not safe_name.lower().endswith(".zip"):
         safe_name = f"{safe_name}.zip"

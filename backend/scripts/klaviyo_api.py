@@ -1,4 +1,4 @@
-"""Klaviyo Events API — trigger transactional production-update emails via Flow."""
+"""Klaviyo Events API - trigger transactional production-update emails via Flow."""
 
 from __future__ import annotations
 

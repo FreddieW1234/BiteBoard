@@ -1,0 +1,2550 @@
+[
+  {
+    "id": "gid://shopify/Collection/672422035834",
+    "handle": "mandatory-fees",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "TYPE",
+        "relation": "EQUALS",
+        "condition": "Fee",
+        "conditionObject": {}
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/672732316026",
+    "handle": "globofilter-best-selling-products-index",
+    "appliedDisjunctively": true,
+    "rules": [
+      {
+        "column": "VARIANT_PRICE",
+        "relation": "GREATER_THAN",
+        "condition": "-9999",
+        "conditionObject": {}
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377262970",
+    "handle": "chocolate-favourites",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Favourites",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377295738",
+    "handle": "chocolate-bars",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Bars",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377328506",
+    "handle": "chocolate-assorted",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Assorted",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377361274",
+    "handle": "chocolate-shapes-novelties",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Shapes & Novelties",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377426810",
+    "handle": "chocolate-lollipops",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Lollipops",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377459578",
+    "handle": "chocolate-advent-calendars",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Advent Calendars",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377623418",
+    "handle": "chocolate",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377787258",
+    "handle": "sweets-gums-jellies",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Gums & Jellies",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377820026",
+    "handle": "sweets-toffees-chews",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Toffees & Chews",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377885562",
+    "handle": "sweets-boiled-hard",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Boiled & Hard",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377918330",
+    "handle": "sweets-mints",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Mints",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683377983866",
+    "handle": "sweets-fudge-nougat-coconut-ice",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Fudge, Nougat & Coconut Ice",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378016634",
+    "handle": "sweets-sherbet-fizzy",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sherbet & Fizzy",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378049402",
+    "handle": "sweets-lollipops",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Lollipops",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378114938",
+    "handle": "sweets-retro-novelty",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Retro & Novelty",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378147706",
+    "handle": "sweets",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sweets",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378246010",
+    "handle": "dietary-vegan",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dietary",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Vegan",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378344314",
+    "handle": "dietary-vegetarian",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dietary",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Vegetarian",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378540922",
+    "handle": "dietary-gluten-free",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dietary",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Gluten Free",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378573690",
+    "handle": "dietary-dairy-free",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dietary",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dairy Free",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378606458",
+    "handle": "dietary",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Dietary",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378671994",
+    "handle": "biscuits-cakes-biscuits-cookies",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cookies",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378704762",
+    "handle": "biscuits-cakes-cake-bars-slices-flapjacks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Cake Bars, Slices & Flapjacks ",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378737530",
+    "handle": "biscuits-cakes-mini-cakes-cupcakes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Mini Cakes & Cupcakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378803066",
+    "handle": "biscuits-cakes-cakes-traybakes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Cakes & Traybakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378868602",
+    "handle": "biscuits-cakes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Biscuits & Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378901370",
+    "handle": "snacks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378966906",
+    "handle": "snacks-crisps-chips",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Crisps & Chips",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683378999674",
+    "handle": "snacks-popcorn",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Popcorn",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379065210",
+    "handle": "snacks-pretzels",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Pretzels",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379229050",
+    "handle": "snacks-nuts-dried-fruit-savoury-mixes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Nuts, Dried Fruit & Savoury Mixes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379294586",
+    "handle": "snacks-rice-cakes-corn-cakes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Rice Cakes & Corn Cakes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379753338",
+    "handle": "snacks-crackers-savoury-biscuits",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Crackers & Savoury Biscuits",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379818874",
+    "handle": "snacks-protein-cereal-energy-bars",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Protein, Cereal & Energy Bars",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683379851642",
+    "handle": "snacks-snack-pots-dippers",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snacks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Snack Pots & Dippers",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380048250",
+    "handle": "drinks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380081018",
+    "handle": "drinks-tea",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Tea",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380113786",
+    "handle": "drinks-coffee",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Coffee",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380179322",
+    "handle": "drinks-hot-chocolate-malt-drinks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Hot Chocolate & Malt Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380212090",
+    "handle": "drinks-soft-drinks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Soft Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380310394",
+    "handle": "drinks-juices",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Juices",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380343162",
+    "handle": "drinks-water-flavoured-water",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Water & Flavoured Water",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683380441466",
+    "handle": "drinks-energy-sports-drinks",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Energy & Sports Drinks",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381031290",
+    "handle": "seasonal",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381064058",
+    "handle": "seasonal-valentines-day",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Valentine's Day",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381129594",
+    "handle": "seasonal-chinese-new-year",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chinese New Year",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381162362",
+    "handle": "seasonal-easter",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Easter",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381260666",
+    "handle": "seasonal-mothers-day",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Mother's Day",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381326202",
+    "handle": "seasonal-fathers-day",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Father's Day",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381358970",
+    "handle": "seasonal-summer",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Summer",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381391738",
+    "handle": "ramadan-eid",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Ramadan & Eid",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381424506",
+    "handle": "seasonal-diwali",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Diwali",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381457274",
+    "handle": "seasonal-halloween",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Halloween",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381522810",
+    "handle": "seasonal-hanukkah",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Hanukkah",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683381555578",
+    "handle": "seasonal-christmas",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Christmas",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382112634",
+    "handle": "industries",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382145402",
+    "handle": "industries-retail",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Retail",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382178170",
+    "handle": "industries-hospitality",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Hospitality",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382243706",
+    "handle": "industries-offices-services",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Offices & Services",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382276474",
+    "handle": "industries-education",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Education",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382342010",
+    "handle": "industries-health-care",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Health & Care",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382473082",
+    "handle": "industries-travel-leisure",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Travel & Leisure",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382538618",
+    "handle": "industries-media-entertainment",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Media & Creative",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382669690",
+    "handle": "industries-trade-construction",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Industries",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Trade & Construction ",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382833530",
+    "handle": "events",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382899066",
+    "handle": "events-appreciation-workplace-events",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Appreciation & Workplace Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382931834",
+    "handle": "events-fun-feel-good-days",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Fun & Feel Good Days",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683382997370",
+    "handle": "events-community-charities-causes",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Community Charities & Causes",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383062906",
+    "handle": "events-wellbeing-inclusion-events",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Wellbeing & Inclusion Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383095674",
+    "handle": "events-sports-events",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Sports Events",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383193978",
+    "handle": "food-pantry",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383226746",
+    "handle": "food-pantry-cereal-porridge",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Cereal & Porridge",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383292282",
+    "handle": "food-pantry-soup",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Soup",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383390586",
+    "handle": "food-pantry-pasta-noodles",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Pasta & Noodles",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383423354",
+    "handle": "food-pantry-rice-grains",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Rice & Grains",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383488890",
+    "handle": "food-pantry-desserts",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Desserts",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383521658",
+    "handle": "food-pantry-baking-kits",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Baking Ktis",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383587194",
+    "handle": "food-pantry-spreads-jams-condiments",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Spreads, Jams & Condiments ",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383619962",
+    "handle": "food-pantry-herbs-spices-seasonings",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Herbs, Spices & Seasonings",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383652730",
+    "handle": "food-pantry-ice-freeze-pops",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Food & Pantry",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Ice & Freeze Pops",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383685498",
+    "handle": "branded-merchandise-packaging",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Branded Merchandise & Packaging",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383751034",
+    "handle": "branded-merchandise-packaging-packaging",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Branded Merchandise & Packaging",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Packaging ",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383783802",
+    "handle": "branded-merchandise-packaging-merchandise",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Branded Merchandise & Packaging",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Merchandise",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683383816570",
+    "handle": "branded-merchandise-packaging-fulfillment-service",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Branded Merchandise & Packaging",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Fulfillment Service",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683433951610",
+    "handle": "recommend",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Chocolate",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "gid://shopify/Collection/683440898426",
+    "handle": "seasonal-new-year",
+    "appliedDisjunctively": false,
+    "rules": [
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "Seasonal",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452065146",
+            "namespace": "custom",
+            "key": "custom_category"
+          }
+        }
+      },
+      {
+        "column": "PRODUCT_METAFIELD_DEFINITION",
+        "relation": "EQUALS",
+        "condition": "New Year",
+        "conditionObject": {
+          "metafieldDefinition": {
+            "id": "gid://shopify/MetafieldDefinition/225452425594",
+            "namespace": "custom",
+            "key": "subcategory"
+          }
+        }
+      }
+    ]
+  }
+]

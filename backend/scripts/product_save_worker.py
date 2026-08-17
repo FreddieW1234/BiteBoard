@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Background save worker — one daemon thread per Render instance.
+"""Background save worker - one daemon thread per Render instance.
 
 Loop: reap stale jobs, claim the next queued job, run it in a subprocess
 (``product_save_runner.py``), capture its stdout as the job log, then either
 requeue (attempts remaining) or move the job to a terminal state. A verified
 success cross-checks every touched product via ``sync_products_after_save``
-(immediate Shopify → office sync, not gated by the 30-minute catalog TTL).
+(immediate Shopify -> office sync, not gated by the 30-minute catalog TTL).
 
 Guarded by ``SAVE_WORKER_ENABLED``. Free-tier Render instances sleep when idle,
 which pauses the worker; ``reap_stale`` requeues anything left running when the
@@ -78,7 +78,7 @@ def _run_job(job: dict) -> None:
     env["PYTHONUNBUFFERED"] = "1"  # child flushes stdout promptly so logs stream live
     timeout = int(SAVE_JOB_TIMEOUT_SEC)
 
-    # Stream the runner's output so the Queue → Logs tab shows progress live
+    # Stream the runner's output so the Queue -> Logs tab shows progress live
     # instead of only at the end. A reader thread appends lines; this loop
     # flushes the accumulated log to the job record every few seconds and
     # enforces the timeout even if the child goes silent.
@@ -138,7 +138,7 @@ def _run_job(job: dict) -> None:
                     proc.kill()
                 except Exception:
                     pass
-                print(f"[save-worker] job {job_id} no longer running — stopped subprocess", flush=True)
+                print(f"[save-worker] job {job_id} no longer running - stopped subprocess", flush=True)
                 return
         if finished:
             break
@@ -147,7 +147,7 @@ def _run_job(job: dict) -> None:
     reader.join(timeout=2)
     logs = _current_logs()
     if timed_out:
-        logs += f"\n💥 Runner timed out after {timeout}s"
+        logs += f"\n[error] Runner timed out after {timeout}s"
         result = {"ok": False, "success": False, "verify": [], "error": "timeout"}
     else:
         result = _parse_result(logs)
@@ -159,7 +159,7 @@ def _run_job(job: dict) -> None:
 
     if ok:
         queue.complete(job_id, "done", verify=verify, logs=logs, error=None)
-        # Immediate Shopify → office cross-check for every product this save
+        # Immediate Shopify -> office cross-check for every product this save
         # touched (not gated by the 30-minute full-catalog TTL).
         cross_ids = result.get("cross_check_ids") or []
         if product_id and product_id not in cross_ids and str(product_id) not in {str(x) for x in cross_ids}:
@@ -168,7 +168,7 @@ def _run_job(job: dict) -> None:
         print(f"[save-worker] job {job_id} done (product {product_id})", flush=True)
         return
 
-    # Not ok — refresh the claimed job to read the incremented attempt count.
+    # Not ok - refresh the claimed job to read the incremented attempt count.
     current = queue.get_job(job_id) or job
     attempts = int(current.get("attempts", 0))
     max_attempts = int(current.get("max_attempts", 1))
@@ -215,7 +215,7 @@ def _enough_memory() -> bool:
     """True unless the instance is close to OOM (guards the save subprocess)."""
     avail = _available_mb()
     if avail is None:
-        return True  # can't measure (e.g. dev/Windows) — don't block saves
+        return True  # can't measure (e.g. dev/Windows) - don't block saves
     return avail >= float(SAVE_MIN_FREE_MB)
 
 
@@ -244,7 +244,7 @@ def _loop() -> None:
             # never OOM-kill the web process. Jobs stay queued and run later.
             if not _enough_memory():
                 if now - last_mem_warn > 30:
-                    print(f"[save-worker] low memory (<{SAVE_MIN_FREE_MB}MB free) — deferring saves", flush=True)
+                    print(f"[save-worker] low memory (<{SAVE_MIN_FREE_MB}MB free) - deferring saves", flush=True)
                     last_mem_warn = now
                 time.sleep(poll)
                 continue

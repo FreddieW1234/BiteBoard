@@ -26,7 +26,7 @@ STORE_DOMAIN = os.environ.get("SHOPIFY_STORE_DOMAIN", "")
 API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2025-07")
 ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 
-# Staff portal logins (hardcoded — blocks customers from staff area only).
+# Staff portal logins (hardcoded - blocks customers from staff area only).
 # "dev" can see Files / Dev / Artwork Updater; other staff cannot.
 STAFF_ACCOUNTS = {
     "Chocolate1!": "Chocolate2!",
@@ -108,7 +108,7 @@ SAVE_MIN_FREE_MB = int(os.environ.get("SAVE_MIN_FREE_MB", "150"))
 
 # Request-thread watchdog. The app runs on one gunicorn worker with a fixed
 # thread pool, so a few slow requests can occupy every thread and leave the site
-# unable to answer anything at all — even /healthz, which does no I/O. Only a
+# unable to answer anything at all - even /healthz, which does no I/O. Only a
 # stack dump taken from inside the process while it is saturated shows what the
 # threads are actually stuck on.
 # WATCHDOG_BUSY: in-flight requests that count as saturated. WATCHDOG_SLOW_SEC: a
@@ -127,7 +127,7 @@ THREAD_WATCHDOG_COOLDOWN_SEC = int(os.environ.get("THREAD_WATCHDOG_COOLDOWN_SEC"
 # when several staff open Product Creator at once.
 SHOPIFY_FILES_MEM_TTL = int(os.environ.get("SHOPIFY_FILES_MEM_TTL", "120"))
 
-# Klaviyo — production update emails (transactional Flow triggered by Events API)
+# Klaviyo - production update emails (transactional Flow triggered by Events API)
 KLAVIYO_API_KEY = os.environ.get("KLAVIYO_API_KEY") or ""
 KLAVIYO_API_REVISION = os.environ.get("KLAVIYO_API_REVISION", "2025-01-15")
 KLAVIYO_METRIC_NAME = os.environ.get("KLAVIYO_METRIC_NAME", "Bite Production Update")
@@ -153,7 +153,7 @@ FEDEX_METER_NUMBER = os.environ.get("FEDEX_METER_NUMBER") or ""
 # OAuth: Client ID = FedEx "API Key"; Client Secret = FedEx "Secret Key"
 FEDEX_CLIENT_ID = os.environ.get("FEDEX_CLIENT_ID") or FEDEX_API_KEY or ""
 FEDEX_CLIENT_SECRET = os.environ.get("FEDEX_CLIENT_SECRET") or ""
-# Label generation (thermal ZPL). Stock 9.7×14.8 cm portrait ≈ STOCK_4X6 —
+# Label generation (thermal ZPL). Stock 9.7×14.8 cm portrait ≈ STOCK_4X6 -
 # FedEx has no custom-mm enum; closest thermal stock is 4×6.
 FEDEX_LABEL_STOCK_TYPE = (os.environ.get("FEDEX_LABEL_STOCK_TYPE") or "STOCK_4X6").strip()
 # TOP_EDGE_OF_TEXT_FIRST | BOTTOM_EDGE_OF_TEXT_FIRST
@@ -163,7 +163,7 @@ FEDEX_LABEL_PRINTING_ORIENTATION = (
 # NONE | LEFT | RIGHT | UPSIDE_DOWN (empty = omit from request)
 FEDEX_LABEL_ROTATION = (os.environ.get("FEDEX_LABEL_ROTATION") or "").strip()
 
-# Palletways — pallet consignments
+# Palletways - pallet consignments
 PALLETWAYS_API_KEY = os.environ.get("PALLETWAYS_API_KEY") or ""
 PALLETWAYS_API_URL = (os.environ.get("PALLETWAYS_API_URL") or "https://api.palletways.com").rstrip("/")
 
@@ -177,9 +177,13 @@ SHIP_FROM_STATE = os.environ.get("SHIP_FROM_STATE") or os.environ.get("SHIPSTATI
 SHIP_FROM_POSTCODE = os.environ.get("SHIP_FROM_POSTCODE") or os.environ.get("SHIPSTATION_ORIGIN_POSTCODE") or ""
 SHIP_FROM_COUNTRY = os.environ.get("SHIP_FROM_COUNTRY") or os.environ.get("SHIPSTATION_ORIGIN_COUNTRY") or "GB"
 
-# Office LAN print server — receives ZPL/PDF jobs from Render (optional in phase 1)
+# Office LAN print server - receives ZPL/PDF jobs from Render (optional in phase 1)
 OFFICE_PRINT_SERVER_URL = (os.environ.get("OFFICE_PRINT_SERVER_URL") or "").rstrip("/")
 OFFICE_PRINT_SERVER_KEY = os.environ.get("OFFICE_PRINT_SERVER_KEY") or ""
+
+# Phase 7 — Shopify collection webhooks (HMAC) + nightly reconcile cron
+SHOPIFY_WEBHOOK_SECRET = os.environ.get("SHOPIFY_WEBHOOK_SECRET") or ""
+CRON_SECRET = os.environ.get("CRON_SECRET") or ""
 
 # Common headers for API requests
 SHOPIFY_HEADERS = {

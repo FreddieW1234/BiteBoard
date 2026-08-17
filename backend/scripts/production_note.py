@@ -180,7 +180,7 @@ def _origination_fee(line: dict, order: dict) -> str:
 
 
 def _delivery_address(order: dict, product_section: dict | None) -> str:
-    """Shopify order shipping address — not the native order note text."""
+    """Shopify order shipping address - not the native order note text."""
     shipping = order.get("shipping_address") or {}
     text = (shipping.get("text") or "").strip()
     if text:

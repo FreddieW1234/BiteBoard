@@ -16,7 +16,7 @@ _LABEL_HEIGHT_MM = float(os.environ.get("LABEL_HEIGHT_MM") or "148")
 _FEDEX_DPI = int(os.environ.get("LABEL_DPI") or "203")
 # Signed horizontal shift: +mm = left, −mm = right (ZPL ``^LS``). Default −7 mm right.
 _FEDEX_SHIFT_MM = float(os.environ.get("FEDEX_LABEL_SHIFT_MM") or "-7")
-# Print-time 180° — set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
+# Print-time 180° - set FEDEX_LABEL_PRINT_ROTATE_180=0 once FedEx orientation is right.
 _FEDEX_ROTATE_180 = os.environ.get("FEDEX_LABEL_PRINT_ROTATE_180", "1").lower() in (
     "1",
     "true",
@@ -98,7 +98,7 @@ def printer_ready() -> bool:
 
 
 def first_zpl_label(zpl: str) -> str:
-    """Keep only the first ``^XA…^XZ`` block.
+    """Keep only the first ``^XA...^XZ`` block.
 
     FedEx often returns two formats in one payload (e.g. label + extra doc),
     which makes the Zebra print twice.
@@ -109,7 +109,7 @@ def first_zpl_label(zpl: str) -> str:
     matches = list(re.finditer(r"\^XA[\s\S]*?\^XZ", text, flags=re.IGNORECASE))
     if len(matches) <= 1:
         return text
-    logger.info("ZPL contained %s label blocks — sending only the first", len(matches))
+    logger.info("ZPL contained %s label blocks - sending only the first", len(matches))
     return matches[0].group(0)
 
 
@@ -364,7 +364,7 @@ def _should_adjust_fedex(carrier: str, zpl_text: str) -> bool:
     carrier_l = (carrier or "").strip().lower()
     if carrier_l == "fedex":
         return True
-    # Reprint paths sometimes omit carrier — detect FedEx ZPL content.
+    # Reprint paths sometimes omit carrier - detect FedEx ZPL content.
     sample = (zpl_text or "")[:4000].upper()
     return "FEDEX" in sample or "FDX" in sample
 
@@ -383,10 +383,10 @@ def send_print_job(
     FedEx labels always pass through ``finalize_fedex_zpl_for_print`` so
     ``FEDEX_LABEL_SHIFT_MM`` / scale env vars apply on every print/reprint.
     """
-    del profile  # unused — office API only accepts raw ZPL
+    del profile  # unused - office API only accepts raw ZPL
     if not configured():
         logger.info(
-            "Office API not configured — skipping print for %s (%s)",
+            "Office API not configured - skipping print for %s (%s)",
             order_name,
             tracking_number,
         )

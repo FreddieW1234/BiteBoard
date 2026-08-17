@@ -11,7 +11,7 @@ from scripts.office_api import item_key  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-# Temporary — remove once diary key matching is confirmed in production logs.
+# Temporary - remove once diary key matching is confirmed in production logs.
 _DEBUG_DIARY_KEYS = True
 
 _DATE_FORMATS = ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y")

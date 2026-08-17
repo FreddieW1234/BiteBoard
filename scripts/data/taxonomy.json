@@ -1,0 +1,767 @@
+[
+  {
+    "category": "Chocolate",
+    "handle": "personalised-chocolate",
+    "position": 1,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Favourites",
+        "handle": "best-selling-personalised-chocolate",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Bars",
+        "handle": "personalised-chocolate-bars",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Assorted",
+        "handle": "personalised-assorted-chocolate-boxes",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Shapes & Novelties",
+        "handle": "promotional-moulded-chocolate-shapes",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Lollipops",
+        "handle": "branded-chocolate-lollipops",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Advent Calendars",
+        "handle": "personalised-advent-calendars",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Sweets",
+    "handle": "promotional-sweets",
+    "position": 2,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Gums & Jellies",
+        "handle": "promotional-jelly-sweets",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Toffees & Chews",
+        "handle": "promotional-toffees-and-chews",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Boiled & Hard",
+        "handle": "promotional-boiled-sweets",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Mints",
+        "handle": "printed-mint-tins",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Fudge, Nougat & Coconut Ice",
+        "handle": "promotional-fudge-and-nougat",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Sherbet & Fizzy",
+        "handle": "promotional-fizzy-sweets",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Lollipops",
+        "handle": "branded-lollipops",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Retro & Novelty",
+        "handle": "promotional-retro-sweets",
+        "position": 8,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Dietary",
+    "handle": "vegan-and-free-from-promotional-sweets",
+    "position": 3,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Vegan",
+        "handle": "promotional-vegan-sweets",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Vegetarian",
+        "handle": "promotional-vegetarian-sweets",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Gluten Free",
+        "handle": "promotional-gluten-free-sweets",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Dairy Free",
+        "handle": "promotional-dairy-free-sweets",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Biscuits & Cakes",
+    "handle": "promotional-biscuits-and-cakes",
+    "position": 4,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Biscuits & Cookies",
+        "handle": "branded-biscuits-and-cookies",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Cake Bars, Slices & Flapjacks",
+        "handle": "branded-cake-bars-and-flapjacks",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Mini Cakes & Cupcakes",
+        "handle": "branded-mini-cakes-and-cupcakes",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Cakes & Traybakes",
+        "handle": "branded-cakes-and-traybakes",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Snacks",
+    "handle": "promotional-snacks",
+    "position": 5,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Crisps & Chips",
+        "handle": "branded-crisps-and-snack-tubes",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Popcorn",
+        "handle": "promotional-popcorn",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Pretzels",
+        "handle": "branded-pretzels",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Nuts, Dried Fruit & Savoury Mixes",
+        "handle": "branded-nuts-and-dried-fruit",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Rice Cakes & Corn Cakes",
+        "handle": "branded-rice-cakes",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Crackers & Savoury Biscuits",
+        "handle": "branded-crackers-and-savoury-biscuits",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Protein, Cereal & Energy Bars",
+        "handle": "branded-protein-and-cereal-bars",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Snack Pots & Dippers",
+        "handle": "branded-snack-pots-and-dippers",
+        "position": 8,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Drinks",
+    "handle": "promotional-drinks",
+    "position": 6,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Tea",
+        "handle": "branded-tea-sachets",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Coffee",
+        "handle": "promotional-coffee-sachets",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Hot Chocolate & Malt Drinks",
+        "handle": "branded-hot-chocolate-sachets",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Soft Drinks",
+        "handle": "branded-soft-drinks",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Juices",
+        "handle": "branded-juice-drinks",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Water & Flavoured Water",
+        "handle": "branded-bottled-water",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Energy & Sports Drinks",
+        "handle": "promotional-energy-drinks",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Seasonal",
+    "handle": "seasonal-promotional-confectionery",
+    "position": 7,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Valentine's Day",
+        "handle": "promotional-valentines-day-gifts",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Chinese New Year",
+        "handle": "promotional-chinese-new-year-gifts",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Easter",
+        "handle": "promotional-easter-gifts",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Mother's Day",
+        "handle": "promotional-mothers-day-gifts",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Father's Day",
+        "handle": "promotional-fathers-day-gifts",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Summer",
+        "handle": "promotional-summer-gifts",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Ramadan & Eid",
+        "handle": "personalised-ramadan-calendars",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Diwali",
+        "handle": "promotional-diwali-gifts",
+        "position": 8,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Halloween",
+        "handle": "promotional-halloween-sweets",
+        "position": 9,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Hanukkah",
+        "handle": "promotional-hanukkah-gifts",
+        "position": 10,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Christmas",
+        "handle": "promotional-christmas-gifts",
+        "position": 11,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "New Year",
+        "handle": "promotional-new-year-gifts",
+        "position": 12,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Industries",
+    "handle": "promotional-gifts-by-industry",
+    "position": 8,
+    "visible": false,
+    "subcategories": [
+      {
+        "label": "Retail",
+        "handle": "promotional-gifts-for-retail",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Hospitality",
+        "handle": "promotional-gifts-for-hospitality",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Offices & Services",
+        "handle": "promotional-gifts-for-offices",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Education",
+        "handle": "promotional-gifts-for-schools",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Health & Care",
+        "handle": "promotional-gifts-for-healthcare",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Travel & Leisure",
+        "handle": "promotional-gifts-for-travel-and-leisure",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Media & Creative",
+        "handle": "promotional-gifts-for-media-and-creative",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Trade & Construction",
+        "handle": "promotional-gifts-for-construction",
+        "position": 8,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Events",
+    "handle": "promotional-gifts-for-events",
+    "position": 9,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Appreciation & Workplace Events",
+        "handle": "employee-appreciation-gifts",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Fun & Feel Good Days",
+        "handle": "promotional-gifts-for-awareness-days",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Community Charities & Causes",
+        "handle": "promotional-gifts-for-charities",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Wellbeing & Inclusion Events",
+        "handle": "promotional-gifts-for-wellbeing-days",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Sports Events",
+        "handle": "promotional-sports-giveaways",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Food & Pantry",
+    "handle": "branded-food-and-pantry",
+    "position": 10,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Cereal & Porridge",
+        "handle": "branded-cereal-and-porridge-pots",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Soup",
+        "handle": "branded-soup",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Pasta & Noodles",
+        "handle": "branded-pasta-and-noodles",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Rice & Grains",
+        "handle": "branded-rice-and-grains",
+        "position": 4,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Desserts",
+        "handle": "branded-desserts",
+        "position": 5,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Baking Kits",
+        "handle": "branded-baking-kits",
+        "position": 6,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Spreads, Jams & Condiments",
+        "handle": "branded-jams-and-condiments",
+        "position": 7,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Herbs, Spices & Seasonings",
+        "handle": "branded-herbs-and-spices",
+        "position": 8,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Ice & Freeze Pops",
+        "handle": "branded-ice-pops",
+        "position": 9,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  },
+  {
+    "category": "Branded Merchandise & Packaging",
+    "handle": "promotional-merchandise-and-packaging",
+    "position": 11,
+    "visible": true,
+    "subcategories": [
+      {
+        "label": "Packaging",
+        "handle": "promotional-packaging",
+        "position": 1,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      },
+      {
+        "label": "Merchandise",
+        "handle": "branded-merchandise",
+        "position": 2,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": true,
+        "handle_locked": true
+      },
+      {
+        "label": "Fulfillment Service",
+        "handle": "promotional-merchandise-fulfilment",
+        "position": 3,
+        "indexable": true,
+        "metafield_key": "subcategory",
+        "visible": false,
+        "handle_locked": true
+      }
+    ],
+    "handle_locked": true
+  }
+]

@@ -2,7 +2,7 @@
 Storefront product option metafields written on BiteBoard product save.
 
 Colour fields: comma-separated Name:Code pairs (single_line_text_field).
-Fee toggles: full choice lists (list.single_line_text_field) — prices live on fee products.
+Fee toggles: full choice lists (list.single_line_text_field) - prices live on fee products.
 """
 from __future__ import annotations
 

@@ -35,7 +35,7 @@ def on_starting(server):
     )
     if slots < 2:
         print(
-            "⚠️ Gunicorn is serving ONE request at a time — a single slow request "
+            "[warn] Gunicorn is serving ONE request at a time - a single slow request "
             "will hang the whole site. Check the start command in the Render dashboard.",
             flush=True,
         )

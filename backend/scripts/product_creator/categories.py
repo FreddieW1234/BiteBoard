@@ -4,7 +4,7 @@ Category and Subcategory definitions for product metafields
 This file contains the preset choices for the custom metafields:
 - custom.custom_category
 - custom.subcategory
-- custom.parent_child / custom.parent_child2 — Parent/Child options are read live from
+- custom.parent_child / custom.parent_child2 - Parent/Child options are read live from
   Shopify metafield definition choice lists (PARENT_CHILD_CHOICES below is fallback only)
 - custom.parent_child2 (overflow when parent_child hits Shopify's choice-list limit)
 
@@ -12,12 +12,13 @@ Category/subcategory/filter lists below are still maintained in this file.
 """
 
 import json
+import os
 import time
 
 import requests
 
 # Fallback Parent/Child choices if Shopify metafield definitions cannot be read.
-# Live source of truth: Shopify Admin → metafield definitions for
+# Live source of truth: Shopify Admin -> metafield definitions for
 # custom.parent_child and custom.parent_child2 (choices validation).
 PARENT_CHILD_CHOICES = [
     "Parent - Chocolate Bar Mini",
@@ -152,7 +153,7 @@ PARENT_CHILD_CHOICES = [
 # Shopify limits choice lists to 128 options (~64 families); parent_child2 continues the same list.
 PARENT_CHILD2_FIRST_ITEM = "Parent - Jelly Bears Mini A Box"
 
-# Legacy optional ID map for resolving a Parent type → product ID when the live
+# Legacy optional ID map for resolving a Parent type -> product ID when the live
 # store scan cannot find one. Parent/Child dropdown options and Create-from-Parent
 # lists now come from Shopify metafield definition choices + live product scan.
 PARENT_PRODUCTS = [
@@ -355,7 +356,7 @@ SUBCATEGORIES = [
     "Rice & Grains",
     "Desserts",
     "Baking Kits",
-    "Spreads, Jams and Condiments",
+    "Spreads, Jams & Condiments",
     "Herbs, Spices & Seasonings",
     "Ice & Freeze Pops",
     # Branded Merchandise & Packaging
@@ -368,6 +369,20 @@ SUBCATEGORIES = [
 # All current subcategories fit within Shopify's 128-choice limit, so they all live in the
 # single "subcategory" metafield and subcategory_2 stays empty (set to None).
 SUBCATEGORY_2_FIRST_ITEM = None
+
+# Shopify requires at least one choice to create a list definition. subcategory_2 was
+# seeded with this placeholder; it is replaced on first real overflow append and must
+# never appear in Product Creator / category UIs.
+SUBCATEGORY_2_PLACEHOLDER = "BLANK"
+
+
+def is_subcategory_overflow_placeholder(value) -> bool:
+    return str(value or "").strip().upper() == SUBCATEGORY_2_PLACEHOLDER
+
+
+def filter_subcategory_placeholders(choices):
+    """Drop BLANK (and case variants) from choice lists used in the product UI."""
+    return [c for c in (choices or []) if not is_subcategory_overflow_placeholder(c)]
 
 # Category to subcategory mapping
 # This dictionary stores which subcategories belong to which categories
@@ -460,7 +475,7 @@ CATEGORY_MAPPING = {
         "Rice & Grains",
         "Desserts",
         "Baking Kits",
-        "Spreads, Jams and Condiments",
+        "Spreads, Jams & Condiments",
         "Herbs, Spices & Seasonings",
         "Ice & Freeze Pops",
     ],
@@ -471,36 +486,182 @@ CATEGORY_MAPPING = {
     ],
 }
 
+_CATEGORY_CHOICE_CACHE = {
+    "at": 0.0,
+    "categories": None,
+    "subcategories": None,
+    "subcategory": None,
+    "subcategory_2": None,
+    "source": None,  # "live" | "cached" | "fallback"
+    "fetched_at": None,
+}
+_CATEGORY_CHOICE_TTL_SEC = 300
+_CHOICE_LKG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data",
+    "category-choices-lkg.json",
+)
+
+
+def _read_choice_lkg():
+    try:
+        if not os.path.isfile(_CHOICE_LKG_PATH):
+            return None
+        with open(_CHOICE_LKG_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        if not data.get("categories") and not data.get("subcategories"):
+            return None
+        return data
+    except Exception as exc:
+        print(f"[error] choice LKG read failed: {exc}", flush=True)
+        return None
+
+
+def _write_choice_lkg(cats, sub, sub2, merged):
+    if not cats and not merged:
+        print("[error] choice LKG poison guard: refusing empty write", flush=True)
+        return
+    existing = _read_choice_lkg()
+    if existing:
+        old_n = len(existing.get("subcategories") or [])
+        new_n = len(merged or [])
+        if old_n > 0 and new_n < old_n * 0.5:
+            print(
+                f"[error] choice LKG poison guard: refusing shrink {old_n} -> {new_n}",
+                flush=True,
+            )
+            return
+    try:
+        os.makedirs(os.path.dirname(_CHOICE_LKG_PATH), exist_ok=True)
+        payload = {
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "categories": list(cats),
+            "subcategory": list(sub),
+            "subcategory_2": list(sub2),
+            "subcategories": list(merged),
+            "note": "Ephemeral on Render - same container only.",
+        }
+        with open(_CHOICE_LKG_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    except Exception as exc:
+        print(f"[error] choice LKG write failed: {exc}", flush=True)
+
+
+def _load_category_choice_cache(force=False):
+    """Load custom_category + subcategory(+_2): live -> LKG -> hardcoded ERROR."""
+    now = time.time()
+    cached = _CATEGORY_CHOICE_CACHE
+    if (
+        not force
+        and cached.get("categories") is not None
+        and (now - float(cached.get("at") or 0)) < _CATEGORY_CHOICE_TTL_SEC
+    ):
+        return cached
+
+    cats = fetch_shopify_metafield_definition_choices("custom", "custom_category")
+    sub = fetch_shopify_metafield_definition_choices("custom", "subcategory")
+    sub2 = fetch_shopify_metafield_definition_choices("custom", "subcategory_2")
+    source = "live"
+    if cats or sub:
+        sub_seen = {c.lower() for c in sub}
+        sub2 = filter_subcategory_placeholders(
+            [c for c in sub2 if c.lower() not in sub_seen]
+        )
+        merged_subs = list(sub) + list(sub2)
+        _write_choice_lkg(cats, sub, sub2, merged_subs)
+    else:
+        lkg = _read_choice_lkg()
+        if lkg:
+            cats = list(lkg.get("categories") or [])
+            sub = list(lkg.get("subcategory") or [])
+            sub2 = filter_subcategory_placeholders(lkg.get("subcategory_2") or [])
+            merged_subs = filter_subcategory_placeholders(
+                lkg.get("subcategories") or (sub + sub2)
+            )
+            source = "cached"
+            print(
+                "[warn] category choices serving LKG (Shopify empty/unavailable)",
+                flush=True,
+            )
+        else:
+            cats = list(CATEGORIES)
+            sub = list(SUBCATEGORIES)
+            sub2 = []
+            merged_subs = list(sub)
+            source = "fallback"
+            print(
+                "[error] category choices FALLBACK to hardcoded lists - "
+                "Shopify unavailable and no LKG. Do not edit taxonomy.",
+                flush=True,
+            )
+
+    cached["at"] = now
+    cached["categories"] = list(cats)
+    cached["subcategory"] = list(sub)
+    cached["subcategory_2"] = list(sub2)
+    cached["subcategories"] = list(merged_subs)
+    cached["source"] = source
+    cached["fetched_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    print(
+        f"[ok] Category/subcategory choices loaded from {source}: "
+        f"categories={len(cats)}, subcategory={len(sub)}, "
+        f"subcategory_2={len(sub2)}, merged_subs={len(merged_subs)}",
+        flush=True,
+    )
+    return cached
+
+
+def refresh_category_choice_cache():
+    """Force-refresh Shopify-backed category/subcategory choice cache."""
+    return _load_category_choice_cache(force=True)
+
+
 def get_category_choices():
-    """
-    Get the list of available category choices
-    
-    Returns:
-        list: List of category choices
-    """
-    return CATEGORIES.copy()
+    """Live custom.custom_category choices from Shopify; fallback to CATEGORIES."""
+    cache = _load_category_choice_cache()
+    return list(cache.get("categories") or CATEGORIES)
+
 
 def get_subcategory_choices():
+    """Live subcategory + subcategory_2 choices from Shopify; fallback to SUBCATEGORIES.
+
+    subcategory_2 placeholder BLANK is never returned.
     """
-    Get the list of available subcategory choices
-    
-    Returns:
-        list: List of subcategory choices
-    """
-    return SUBCATEGORIES.copy()
+    cache = _load_category_choice_cache()
+    return filter_subcategory_placeholders(
+        cache.get("subcategories") or SUBCATEGORIES
+    )
+
 
 def get_category_subcategory_groups():
     """
-    Get categories with their subcategories for the combined Category & Subcategory dropdown.
+    Categories with subcategories for the combined Category & Subcategory dropdown.
 
-    Each category is shown as a bold, non-selectable heading; its subcategories are the
-    selectable options. Selecting a subcategory implies (and saves) its parent category.
-    Note: a subcategory may appear under more than one category (e.g. "Lollipops" under
-    both Chocolate and Sweets) - it is listed under each.
-
-    Returns:
-        list: List of {category, subcategories} dicts (in CATEGORY_MAPPING order)
+    Prefers shop.custom.taxonomy; falls back to CATEGORY_MAPPING when unset.
     """
+    try:
+        from shopify_client import taxonomy as taxmod
+
+        tax = taxmod.load_taxonomy(require=False)
+        if tax:
+            return [
+                {
+                    "category": c.get("category"),
+                    "subcategories": [
+                        s.get("label")
+                        for s in (c.get("subcategories") or [])
+                        if s.get("label")
+                    ],
+                }
+                for c in tax
+                if c.get("category")
+            ]
+    except Exception as exc:
+        print(f"[error] taxonomy groups unavailable, using CATEGORY_MAPPING: {exc}", flush=True)
+
     return [
         {"category": cat, "subcategories": list(subs)}
         for cat, subs in CATEGORY_MAPPING.items()
@@ -597,11 +758,11 @@ def fetch_shopify_metafield_definition_choices(namespace, key):
             timeout=20,
         )
         if resp.status_code != 200:
-            print(f"⚠️ Shopify metafield choices HTTP {resp.status_code} for {namespace}.{key}", flush=True)
+            print(f"[warn] Shopify metafield choices HTTP {resp.status_code} for {namespace}.{key}", flush=True)
             return []
         payload = resp.json() or {}
         if payload.get("errors"):
-            print(f"⚠️ Shopify metafield choices GraphQL errors for {namespace}.{key}: {payload.get('errors')}", flush=True)
+            print(f"[warn] Shopify metafield choices GraphQL errors for {namespace}.{key}: {payload.get('errors')}", flush=True)
             return []
         edges = (
             ((payload.get("data") or {}).get("metafieldDefinitions") or {}).get("edges")
@@ -627,7 +788,7 @@ def fetch_shopify_metafield_definition_choices(namespace, key):
             return []
         return []
     except Exception as exc:
-        print(f"⚠️ Failed reading Shopify choices for {namespace}.{key}: {exc}", flush=True)
+        print(f"[warn] Failed reading Shopify choices for {namespace}.{key}: {exc}", flush=True)
         return []
 
 
@@ -659,7 +820,7 @@ def _load_parent_child_choice_cache(force=False):
     if not pc and not pc2:
         pc, pc2 = _fallback_parent_child_chunks()
         source = "fallback"
-        print("⚠️ Using hardcoded PARENT_CHILD_CHOICES fallback (Shopify definition choices empty)", flush=True)
+        print("[warn] Using hardcoded PARENT_CHILD_CHOICES fallback (Shopify definition choices empty)", flush=True)
     else:
         # Keep definition order; append overflow without duplicating.
         pc_set = {c.lower() for c in pc}
@@ -672,7 +833,7 @@ def _load_parent_child_choice_cache(force=False):
     cached["merged"] = merged
     cached["source"] = source
     print(
-        f"✅ Parent/Child choices loaded from {source}: "
+        f"[ok] Parent/Child choices loaded from {source}: "
         f"parent_child={len(pc)}, parent_child2={len(pc2)}, merged={len(merged)}",
         flush=True,
     )
@@ -770,20 +931,26 @@ def get_metafield_choices(metafield_key):
     if metafield_key == "custom_category":
         return get_category_choices()
     elif metafield_key == "subcategory":
-        # Everything before "Sweets"
+        cache = _load_category_choice_cache()
+        chunk = cache.get("subcategory")
+        if chunk is not None and cache.get("source") in ("live", "cached", "shopify"):
+            return list(chunk)
         idx = _subcategory_2_start_index()
-        return SUBCATEGORIES[:idx]
+        return list(SUBCATEGORIES[:idx])
     elif metafield_key == "subcategory_2":
-        # "Sweets" and everything after
+        cache = _load_category_choice_cache()
+        chunk = cache.get("subcategory_2")
+        if chunk is not None and cache.get("source") in ("live", "cached", "shopify"):
+            return filter_subcategory_placeholders(chunk)
         idx = _subcategory_2_start_index()
-        return SUBCATEGORIES[idx:]
+        return filter_subcategory_placeholders(SUBCATEGORIES[idx:])
     elif metafield_key.startswith("subcategory_"):
         # subcategory_3, etc. - not used currently; keep slice by 128 for future
         try:
             chunk_index = int(metafield_key.split("_")[-1]) - 1
             start_idx = chunk_index * 128
             end_idx = start_idx + 128
-            return SUBCATEGORIES[start_idx:end_idx]
+            return get_subcategory_choices()[start_idx:end_idx]
         except (ValueError, IndexError):
             return []
     elif metafield_key == "parent_child":
@@ -801,13 +968,35 @@ def get_metafield_choices(metafield_key):
 
 def get_subcategory_metafield_key(subcategory):
     """
-    Determine which metafield key should be used for a given subcategory.
-    subcategory = everything before "Sweets"; subcategory_2 = "Sweets" and everything after.
+    Route a subcategory value to custom.subcategory or custom.subcategory_2.
+    Prefers live Shopify choice membership; falls back to SUBCATEGORIES index.
     """
     s = str(subcategory).strip()
     if not s:
         return "subcategory"
-    
+
+    cache = _load_category_choice_cache()
+    if cache.get("source") in ("live", "cached", "shopify"):
+        pc = cache.get("subcategory") or []
+        pc2 = cache.get("subcategory_2") or []
+        s_lower = s.lower()
+
+        def _in(choices):
+            for choice in choices:
+                c = str(choice)
+                if c == s or c.strip() == s or c.strip().lower() == s_lower:
+                    return True
+            return False
+
+        if _in(pc):
+            return "subcategory"
+        if _in(pc2):
+            return "subcategory_2"
+        # Unknown: prefer overflow when primary looks full
+        if pc2 or len(pc) >= 120:
+            return "subcategory_2"
+        return "subcategory"
+
     s_norm = " ".join(s.replace("\u00a0", " ").split())
 
     if s in SUBCATEGORIES:

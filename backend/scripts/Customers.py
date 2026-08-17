@@ -103,7 +103,7 @@ def _graphql_request(query, variables=None):
             # If Shopify still returned a customers page, use it (partial success).
             data = payload.get("data") or {}
             if data.get("customers"):
-                print(f"⚠️ Customers GraphQL warnings (using data anyway): {err_str[:300]}", flush=True)
+                print(f"[warn] Customers GraphQL warnings (using data anyway): {err_str[:300]}", flush=True)
                 return data
             raise RuntimeError(err_str)
         return payload.get("data") or {}
@@ -373,7 +373,7 @@ def _customer_company_locked(mf: dict) -> bool:
 
 
 def set_customer_company_link(customer_id: str | int, company_id: str, company_name: str) -> dict:
-    """Assign customer to a company — overwrite company name and store company id on Shopify."""
+    """Assign customer to a company - overwrite company name and store company id on Shopify."""
     payload = {
         "company_name": (company_name or "").strip(),
         "linked_company_id": str(company_id or "").strip(),
@@ -447,7 +447,7 @@ def update_customer_details(customer_id, payload, *, allow_company_override: boo
                 "value": value,
             })
         elif shopify_key in existing_by_key:
-            # Cleared field — remove metafield (Shopify rejects blank values on set)
+            # Cleared field - remove metafield (Shopify rejects blank values on set)
             metafields_to_delete.append({
                 "ownerId": owner_gid,
                 "namespace": CUSTOMER_METAFIELD_NAMESPACE,
@@ -586,7 +586,7 @@ def _fetch_all_customers_graphql(on_page=None):
             node = edge.get("node") or {}
             if node:
                 customers.append(_format_customer_graphql(node))
-        print(f"📥 Customers GraphQL page {page}: {len(customers)} so far", flush=True)
+        print(f"[recv] Customers GraphQL page {page}: {len(customers)} so far", flush=True)
         if on_page is not None:
             on_page(customers)
         page_info = customers_data.get("pageInfo") or {}
@@ -609,7 +609,7 @@ def _fetch_all_customers(on_page=None):
 
 _CUSTOMERS_CACHE: dict | None = None
 _CUSTOMERS_CACHE_AT = 0.0
-_CUSTOMERS_CACHE_TTL = 90  # seconds — avoids repeated full Shopify pulls on tab switches
+_CUSTOMERS_CACHE_TTL = 90  # seconds - avoids repeated full Shopify pulls on tab switches
 _CUSTOMERS_REFRESH_LOCK = None  # lazy threading.Lock
 _CUSTOMERS_REFRESHING = False
 _CUSTOMERS_LAST_ERROR = None
@@ -638,9 +638,9 @@ def _refresh_customers_overview_bg():
 
         customers = _fetch_all_customers(on_page=_on_page)
         _publish_customers_partial(customers, building=False)
-        print(f"✅ Customers overview refreshed ({len(customers)} customers)", flush=True)
+        print(f"[ok] Customers overview refreshed ({len(customers)} customers)", flush=True)
     except Exception as exc:
-        print(f"⚠️ Customers background refresh failed: {exc}", flush=True)
+        print(f"[warn] Customers background refresh failed: {exc}", flush=True)
         existing = (_CUSTOMERS_CACHE or {}).get("customers") or []
         _publish_customers_partial(existing, building=False, error=exc)
     finally:
@@ -661,7 +661,7 @@ def _kick_customers_refresh():
 def get_customers_overview(*, refresh: bool = False):
     """Return all Shopify customers as a flat list (stale-while-revalidate).
 
-    Never runs the full Shopify scan on a gunicorn request thread — that is what
+    Never runs the full Shopify scan on a gunicorn request thread - that is what
     saturates the pool and makes Render's 5s /healthz check time out. Fresh cache
     is returned immediately; stale/cold/refresh always rebuild in a background
     thread and return whatever we have now (possibly empty with building=True).
@@ -677,7 +677,7 @@ def get_customers_overview(*, refresh: bool = False):
     ):
         return cached
 
-    # Already building — just return the latest partial/empty snapshot.
+    # Already building - just return the latest partial/empty snapshot.
     with _customers_refresh_lock():
         already = _CUSTOMERS_REFRESHING
     if already and cached is not None:

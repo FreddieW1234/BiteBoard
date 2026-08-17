@@ -101,7 +101,7 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
     
     try:
         # First, ensure the product has the correct options
-        print(f"🔧 Ensuring product has correct options before creating variants...", flush=True)
+        print(f"[cfg] Ensuring product has correct options before creating variants...", flush=True)
         
         # Get current product options
         get_product_query = """
@@ -124,16 +124,16 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
         get_product_response = requests.post(graphql_url, json={'query': get_product_query, 'variables': get_product_variables}, headers=HEADERS)
         
         if get_product_response.status_code != 200:
-            print(f"❌ Failed to get product options: {get_product_response.status_code}", flush=True)
+            print(f"[error] Failed to get product options: {get_product_response.status_code}", flush=True)
             return []
         
         product_data = get_product_response.json()
         if 'errors' in product_data:
-            print(f"❌ Error getting product: {product_data['errors']}", flush=True)
+            print(f"[error] Error getting product: {product_data['errors']}", flush=True)
             return []
         
         current_options = product_data.get('data', {}).get('product', {}).get('options', [])
-        print(f"🔍 Current product options: {[opt.get('name') for opt in current_options]}", flush=True)
+        print(f"[scan] Current product options: {[opt.get('name') for opt in current_options]}", flush=True)
         
         # Determine required options
         if colours and len(colours) > 0:
@@ -146,8 +146,8 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
         needs_option_update = set(required_options) != set(current_option_names)
         
         if needs_option_update:
-            print(f"🔧 Product options need updating from {current_option_names} to {required_options}", flush=True)
-            print(f"ℹ️ Using REST API for variant creation to handle option updates properly", flush=True)
+            print(f"[cfg] Product options need updating from {current_option_names} to {required_options}", flush=True)
+            print(f"[info] Using REST API for variant creation to handle option updates properly", flush=True)
             # Return empty list to force REST API usage
             return []
         
@@ -158,7 +158,7 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
         
         for i in range(0, len(variants), batch_size):
             batch_variants = variants[i:i + batch_size]
-            print(f"🔄 Creating variants batch {i//batch_size + 1} ({len(batch_variants)} variants)...", flush=True)
+            print(f"[retry] Creating variants batch {i//batch_size + 1} ({len(batch_variants)} variants)...", flush=True)
             
             # Convert variants to GraphQL format for bulk creation
             variant_inputs = []
@@ -213,16 +213,16 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
             if bulk_create_response.status_code == 200:
                 bulk_create_data = bulk_create_response.json()
                 if 'errors' in bulk_create_data:
-                    print(f"❌ Bulk create GraphQL errors: {bulk_create_data['errors']}", flush=True)
+                    print(f"[error] Bulk create GraphQL errors: {bulk_create_data['errors']}", flush=True)
                     continue
                 
                 bulk_create_result = bulk_create_data.get('data', {}).get('productVariantsBulkCreate', {})
                 if bulk_create_result.get('userErrors'):
-                    print(f"❌ Bulk create user errors: {bulk_create_result['userErrors']}", flush=True)
+                    print(f"[error] Bulk create user errors: {bulk_create_result['userErrors']}", flush=True)
                     # Don't continue if there are user errors - they indicate a problem with the data
                     # Instead, try to fix the issue or skip this batch
                     if any('Option does not exist' in str(error) for error in bulk_create_result['userErrors']):
-                        print(f"⚠️ Option error detected - this may be due to missing product options", flush=True)
+                        print(f"[warn] Option error detected - this may be due to missing product options", flush=True)
                     continue
                 
                 created_variants = bulk_create_result.get('productVariants', [])
@@ -233,10 +233,10 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
                         'selectedOptions': variant.get('selectedOptions', [])
                     })
                 
-                print(f"✔️ Created {len(created_variants)} variants in batch {i//batch_size + 1}", flush=True)
+                print(f"[ok] Created {len(created_variants)} variants in batch {i//batch_size + 1}", flush=True)
             else:
-                print(f"❌ Bulk create request failed: {bulk_create_response.status_code}", flush=True)
-                print(f"❌ Response: {bulk_create_response.text}", flush=True)
+                print(f"[error] Bulk create request failed: {bulk_create_response.status_code}", flush=True)
+                print(f"[error] Response: {bulk_create_response.text}", flush=True)
             
             # Longer delay between batches for large quantities to avoid rate limits
             if i + batch_size < len(variants):
@@ -245,11 +245,11 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
                 delay = 2.0 if len(variants) > 100 else 1.0
                 time.sleep(delay)
         
-        print(f"✔️ Created {len(all_created_variants)} variants via GraphQL for {product_name} ({sku})", flush=True)
+        print(f"[ok] Created {len(all_created_variants)} variants via GraphQL for {product_name} ({sku})", flush=True)
         
         # Now update SKU and other properties using REST API since productVariantsBulkCreate doesn't support them
         if all_created_variants:
-            print(f"🔄 Updating variant SKUs and properties via REST API...", flush=True)
+            print(f"[retry] Updating variant SKUs and properties via REST API...", flush=True)
             for idx, created_variant in enumerate(all_created_variants):
                 if idx >= len(variants):
                     break
@@ -273,19 +273,19 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
                 update_response = requests.put(update_url, json=update_payload, headers=HEADERS)
                 
                 if update_response.status_code != 200:
-                    print(f"⚠️ Failed to update variant {variant_id}: {update_response.text}", flush=True)
+                    print(f"[warn] Failed to update variant {variant_id}: {update_response.text}", flush=True)
                 
                 # Add small delay to avoid rate limiting
                 if idx % 10 == 0 and idx > 0:
                     import time
                     time.sleep(0.2)
             
-            print(f"✔️ Updated {len(all_created_variants)} variant SKUs and properties", flush=True)
+            print(f"[ok] Updated {len(all_created_variants)} variant SKUs and properties", flush=True)
         
         return all_created_variants
         
     except Exception as e:
-        print(f"❌ Error updating product variants via GraphQL for {product_name} ({sku}): {str(e)}", flush=True)
+        print(f"[error] Error updating product variants via GraphQL for {product_name} ({sku}): {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return []
@@ -293,11 +293,11 @@ def update_product_variants_graphql(product_id, variants, product_name, sku, col
 
 def update_product_variants(product_id, variants, product_name, sku, colours=None):
     """PUT full product options + variants array. Returns updated variants list on success."""
-    print(f"🔍 update_product_variants called with {len(variants)} variants", flush=True)
+    print(f"[scan] update_product_variants called with {len(variants)} variants", flush=True)
     
     # For existing products with option changes, always use REST API for reliability
     # GraphQL has limitations with option updates and variant deletion
-    print(f"🔄 Using REST API for {len(variants)} variants (more reliable for option updates)", flush=True)
+    print(f"[retry] Using REST API for {len(variants)} variants (more reliable for option updates)", flush=True)
     
     # Use REST API with batching for large variant counts
     url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
@@ -321,7 +321,7 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
                 option_values["Quantity"].add(variant.get("option1", ""))
                 option_values["Customer Type"].add(variant.get("option2", ""))
     
-    print(f"🔍 Extracted option values: {dict(option_values)}", flush=True)
+    print(f"[scan] Extracted option values: {dict(option_values)}", flush=True)
     
     # Build options with values
     options_with_values = []
@@ -337,13 +337,13 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
         else:
             options_with_values.append(option)
     
-    print(f"🔧 Updating product with {len(options_with_values)} options and {len(variants)} variants", flush=True)
-    print(f"🔍 Options: {[opt.get('name') for opt in options_with_values]}", flush=True)
-    print(f"🔍 Options with values: {options_with_values}", flush=True)
-    print(f"🔍 About to attempt variant creation...", flush=True)
+    print(f"[cfg] Updating product with {len(options_with_values)} options and {len(variants)} variants", flush=True)
+    print(f"[scan] Options: {[opt.get('name') for opt in options_with_values]}", flush=True)
+    print(f"[scan] Options with values: {options_with_values}", flush=True)
+    print(f"[scan] About to attempt variant creation...", flush=True)
     
     # Simple approach: Update product with ALL variants at once
-    print(f"🔄 Updating product with ALL {len(variants)} variants at once", flush=True)
+    print(f"[retry] Updating product with ALL {len(variants)} variants at once", flush=True)
     
     # First, get the current product to preserve required fields like title and existing variants
     existing_variants = []
@@ -364,11 +364,11 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
             current_product = get_resp.json().get("product", {})
             product_title = current_product.get("title", product_name)
             existing_variants = current_product.get("variants", [])
-            print(f"🔍 Found {len(existing_variants)} existing variants on product", flush=True)
+            print(f"[scan] Found {len(existing_variants)} existing variants on product", flush=True)
         else:
             product_title = product_name
     except Exception as e:
-        print(f"⚠️ Could not fetch current product: {e}, using provided name", flush=True)
+        print(f"[warn] Could not fetch current product: {e}, using provided name", flush=True)
         product_title = product_name
     
     # If we have existing variants and we're trying to add new ones with different options,
@@ -432,7 +432,7 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
     
     # Log the payload for debugging
     import json
-    print(f"🔍 Payload being sent to Shopify: {json.dumps(payload, indent=2)}", flush=True)
+    print(f"[scan] Payload being sent to Shopify: {json.dumps(payload, indent=2)}", flush=True)
     
     try:
         # Handle redirects and rate limit (429) with retry
@@ -457,37 +457,37 @@ def update_product_variants(product_id, variants, product_name, sku, colours=Non
         if resp.status_code == 200:
             result = resp.json().get("product", {})
             created_variants = result.get("variants", [])
-            print(f"✔️ Product variants updated successfully for {product_name} ({sku})", flush=True)
-            print(f"✔️ Created {len(created_variants)} variants total", flush=True)
+            print(f"[ok] Product variants updated successfully for {product_name} ({sku})", flush=True)
+            print(f"[ok] Created {len(created_variants)} variants total", flush=True)
             return created_variants
         elif resp.status_code == 422:
-            print(f"❌ Validation error updating product variants for {product_name} ({sku}): {resp.status_code}", flush=True)
-            print(f"❌ Response text: {resp.text}", flush=True)
+            print(f"[error] Validation error updating product variants for {product_name} ({sku}): {resp.status_code}", flush=True)
+            print(f"[error] Response text: {resp.text}", flush=True)
             try:
                 error_data = resp.json()
-                print(f"❌ Error details: {error_data}", flush=True)
+                print(f"[error] Error details: {error_data}", flush=True)
                 # Check if it's a variant-related error
                 if 'errors' in error_data:
                     errors = error_data['errors']
                     if 'variants' in errors:
-                        print(f"⚠️ Variant-specific errors: {errors['variants']}", flush=True)
+                        print(f"[warn] Variant-specific errors: {errors['variants']}", flush=True)
                     if 'options' in errors:
-                        print(f"⚠️ Option-specific errors: {errors['options']}", flush=True)
+                        print(f"[warn] Option-specific errors: {errors['options']}", flush=True)
             except:
                 pass
         else:
-            print(f"❌ Failed to update product variants for {product_name} ({sku}): {resp.status_code}", flush=True)
-            print(f"❌ Response text: {resp.text}", flush=True)
+            print(f"[error] Failed to update product variants for {product_name} ({sku}): {resp.status_code}", flush=True)
+            print(f"[error] Response text: {resp.text}", flush=True)
             # Try to parse error details
             try:
                 error_data = resp.json()
                 if 'errors' in error_data:
-                    print(f"❌ Error details: {json.dumps(error_data['errors'], indent=2)}", flush=True)
+                    print(f"[error] Error details: {json.dumps(error_data['errors'], indent=2)}", flush=True)
             except:
                 pass
         return []
     except Exception as e:
-        print(f"❌ Error updating product variants for {product_name} ({sku}): {str(e)}", flush=True)
+        print(f"[error] Error updating product variants for {product_name} ({sku}): {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return []
@@ -503,7 +503,7 @@ def get_unit_weight_grams(metafields):
         try:
             return int(unit_weight)
         except ValueError:
-            print("❌ Unit weight metafield value is not a valid integer", flush=True)
+            print("[error] Unit weight metafield value is not a valid integer", flush=True)
     return 0
 
 
@@ -530,13 +530,13 @@ def parse_bands(value_str, product_name, field_name):
     try:
         data = json.loads(value_str)
     except Exception as e:
-        print(f"❌ Error parsing {field_name} JSON for {product_name}: {e}", flush=True)
+        print(f"[error] Error parsing {field_name} JSON for {product_name}: {e}", flush=True)
         return []
     if not isinstance(data, list):
-        print(f"❌ Invalid data for {field_name} in {product_name}. Expected list.", flush=True)
+        print(f"[error] Invalid data for {field_name} in {product_name}. Expected list.", flush=True)
         return []
     if not all(validate_band_structure(b) for b in data):
-        print(f"❌ Invalid band structure in {field_name} for {product_name}. Each band must have min, max, price.", flush=True)
+        print(f"[error] Invalid band structure in {field_name} for {product_name}. Each band must have min, max, price.", flush=True)
         return []
     
     # Convert string prices to floats for processing (so we can do calculations)
@@ -641,7 +641,7 @@ def enrich_bands_with_variant_ids(bands, updated_variants, customer_type, colour
                     None,
                 )
                 if match:
-                    print(f"ℹ️ Matched variant for label '{label}' and customer type '{customer_type}' using first colour variant (colour: {match.get('option1', 'unknown')})", flush=True)
+                    print(f"[info] Matched variant for label '{label}' and customer type '{customer_type}' using first colour variant (colour: {match.get('option1', 'unknown')})", flush=True)
         
         if match and match.get("id"):
             enriched_band = {**band, "id": match["id"]}
@@ -663,12 +663,12 @@ def update_metafield(metafield_id, value, metafield_name, product_name, sku):
     resp = safe_request("PUT", url, headers=HEADERS, json=payload)
     if resp.status_code == 200:
         print(
-            f"✔️ Updated metafield {metafield_name}, on {product_name} ({sku}), (ID: {metafield_id})",
+            f"[ok] Updated metafield {metafield_name}, on {product_name} ({sku}), (ID: {metafield_id})",
             flush=True,
         )
         return True
     print(
-        f"❌ Failed to update metafield {metafield_name} on {product_name} ({sku}): {resp.status_code} {resp.text}",
+        f"[error] Failed to update metafield {metafield_name} on {product_name} ({sku}): {resp.status_code} {resp.text}",
         flush=True,
     )
     return False
@@ -690,12 +690,12 @@ def create_metafield(product_id, key, value, product_name, sku):
     if resp.status_code == 201:
         metafield = resp.json().get("metafield") or {}
         print(
-            f"✔️ Created metafield {key} with ID {metafield.get('id')}, on {product_name} ({sku})",
+            f"[ok] Created metafield {key} with ID {metafield.get('id')}, on {product_name} ({sku})",
             flush=True,
         )
         return metafield.get("id")
     print(
-        f"❌ Failed to create metafield {key} on {product_name} ({sku}): {resp.status_code} {resp.text}",
+        f"[error] Failed to create metafield {key} on {product_name} ({sku}): {resp.status_code} {resp.text}",
         flush=True,
     )
     return None
@@ -715,9 +715,9 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             import json
             try:
                 colour_images = json.loads(colour_images)
-                print(f"🔧 Converted colour_images from string to dict", flush=True)
+                print(f"[cfg] Converted colour_images from string to dict", flush=True)
             except Exception as e:
-                print(f"⚠️ Failed to parse colour_images: {e}", flush=True)
+                print(f"[warn] Failed to parse colour_images: {e}", flush=True)
                 colour_images = None
         
         product_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}.json"
@@ -726,18 +726,18 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
 
         if not product_data.get("image"):
             print(
-                f"❌ No main image found for product {product_name} (ID: {product_id}). Skipping image sync.",
+                f"[error] No main image found for product {product_name} (ID: {product_id}). Skipping image sync.",
                 flush=True,
             )
             return False
 
         # Wait a moment for all variants to be fully available in the API
-        print(f"⏳ Waiting for all variants to be available...", flush=True)
+        print(f"[wait] Waiting for all variants to be available...", flush=True)
         import time
         time.sleep(2.0)
         
         # Fetch fresh product data with pagination to get ALL variants
-        print(f"🔄 Fetching fresh product data for image assignment...", flush=True)
+        print(f"[retry] Fetching fresh product data for image assignment...", flush=True)
         fresh_product_data = product_data  # fallback to original data
         
         # Try up to 3 times to get all variants
@@ -761,7 +761,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                         else:
                             variants_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/variants.json?limit=250"
                         
-                        print(f"🔄 Fetching variants page {page_num}...", flush=True)
+                        print(f"[retry] Fetching variants page {page_num}...", flush=True)
                         variants_resp = requests.get(variants_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
                         
                         if variants_resp.status_code == 200:
@@ -769,7 +769,7 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                             page_variants = variants_data.get("variants", [])
                             all_variants.extend(page_variants)
                             
-                            print(f"✅ Page {page_num}: {len(page_variants)} variants fetched", flush=True)
+                            print(f"[ok] Page {page_num}: {len(page_variants)} variants fetched", flush=True)
                             
                             # Check for next page
                             link_header = variants_resp.headers.get('Link', '')
@@ -784,28 +784,28 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                             
                             break  # No more pages
                         else:
-                            print(f"⚠️ Failed to fetch variants page {page_num}: {variants_resp.status_code}", flush=True)
+                            print(f"[warn] Failed to fetch variants page {page_num}: {variants_resp.status_code}", flush=True)
                             break
                     
                     # Update the product data with all variants
                     fresh_product_data["variants"] = all_variants
                     variant_count = len(all_variants)
-                    print(f"✅ Fresh product data fetched (attempt {attempt}): {variant_count} variants found total", flush=True)
+                    print(f"[ok] Fresh product data fetched (attempt {attempt}): {variant_count} variants found total", flush=True)
                     
                     # If we have variants, we're good (no need to check exact count)
                     if variant_count > 0:
-                        print(f"✅ Found {variant_count} variants, proceeding with image assignment", flush=True)
+                        print(f"[ok] Found {variant_count} variants, proceeding with image assignment", flush=True)
                         break
                     else:
-                        print(f"⚠️ No variants found, retrying...", flush=True)
+                        print(f"[warn] No variants found, retrying...", flush=True)
                         if attempt < 3:
                             time.sleep(2.0)  # Wait longer before retry
                 else:
-                    print(f"⚠️ Failed to fetch fresh product data (attempt {attempt}): {fresh_resp.status_code}", flush=True)
+                    print(f"[warn] Failed to fetch fresh product data (attempt {attempt}): {fresh_resp.status_code}", flush=True)
                     if attempt < 3:
                         time.sleep(2.0)
             except Exception as e:
-                print(f"⚠️ Error fetching fresh product data (attempt {attempt}): {str(e)}", flush=True)
+                print(f"[warn] Error fetching fresh product data (attempt {attempt}): {str(e)}", flush=True)
                 if attempt < 3:
                     time.sleep(2.0)
         
@@ -817,29 +817,29 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
             images.sort(key=lambda x: x.get('position', 999))
             # The first image (position 1) should be the main image
             main_image_id = images[0].get("id")
-            print(f"🔍 Main image determined: ID {main_image_id} at position {images[0].get('position', '?')}", flush=True)
+            print(f"[scan] Main image determined: ID {main_image_id} at position {images[0].get('position', '?')}", flush=True)
         else:
             # Fallback to product.image if images array is empty
             main_image_id = (fresh_product_data.get("image") or {}).get("id")
-            print(f"🔍 Main image from product.image: ID {main_image_id}", flush=True)
+            print(f"[scan] Main image from product.image: ID {main_image_id}", flush=True)
         
         all_variant_ids = [v.get("id") for v in fresh_product_data.get("variants", []) if v.get("id")]
         
         if not main_image_id or not all_variant_ids:
             print(
-                f"❌ Missing main image or variants for product {product_name} (ID: {product_id}).",
+                f"[error] Missing main image or variants for product {product_name} (ID: {product_id}).",
                 flush=True,
             )
             return False
         
         # If colours exist, try to map images to colours
         if colours and len(colours) > 0:
-            print(f"🎨 Checking for colour-specific images for {len(colours)} colours...", flush=True)
-            print(f"🔍 Main image (position 1) ID: {main_image_id}", flush=True)
+            print(f"[art] Checking for colour-specific images for {len(colours)} colours...", flush=True)
+            print(f"[scan] Main image (position 1) ID: {main_image_id}", flush=True)
             
             # If no images found, wait and retry once (for new products where images might not be indexed yet)
             if not images and colour_images:
-                print(f"⚠️ No images found in product data, waiting 2 seconds and retrying...", flush=True)
+                print(f"[warn] No images found in product data, waiting 2 seconds and retrying...", flush=True)
                 time.sleep(2.0)
                 # Fetch product data again
                 retry_resp = requests.get(fresh_product_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
@@ -848,14 +848,14 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                     images = retry_data.get("images", [])
                     if images:
                         images.sort(key=lambda x: x.get('position', 999))
-                    print(f"🔍 Retry: Found {len(images)} images", flush=True)
+                    print(f"[scan] Retry: Found {len(images)} images", flush=True)
             
             # Create a map of colour to variant IDs
             colour_to_variants = {}
             variants_found = fresh_product_data.get("variants", [])
-            print(f"🔍 Found {len(variants_found)} variants for image assignment", flush=True)
+            print(f"[scan] Found {len(variants_found)} variants for image assignment", flush=True)
             if variants_found:
-                print(f"🔍 First variant for image assignment: {variants_found[0]}", flush=True)
+                print(f"[scan] First variant for image assignment: {variants_found[0]}", flush=True)
             
             for variant in variants_found:
                 option1 = variant.get("option1", "")
@@ -864,52 +864,52 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                         colour_to_variants[option1] = []
                     colour_to_variants[option1].append(variant.get("id"))
             
-            print(f"🔍 Colour to variants mapping: {colour_to_variants}", flush=True)
-            print(f"🔍 Total variants found for image assignment: {len(variants_found)}", flush=True)
-            print(f"🔍 Variants per colour: {len(variants_found) // len(colours) if colours else 'N/A'}", flush=True)
+            print(f"[scan] Colour to variants mapping: {colour_to_variants}", flush=True)
+            print(f"[scan] Total variants found for image assignment: {len(variants_found)}", flush=True)
+            print(f"[scan] Variants per colour: {len(variants_found) // len(colours) if colours else 'N/A'}", flush=True)
             
             # Try to find images for each colour
             assigned_variants = set()
-            print(f"🔍 Available images: {len(images)}", flush=True)
+            print(f"[scan] Available images: {len(images)}", flush=True)
             if images:
-                print(f"🔍 Image positions: {[(i, img.get('position', '?'), img.get('id')) for i, img in enumerate(images)]}", flush=True)
-                print(f"🔍 Sample image structure: id={images[0].get('id')}, position={images[0].get('position')}", flush=True)
+                print(f"[scan] Image positions: {[(i, img.get('position', '?'), img.get('id')) for i, img in enumerate(images)]}", flush=True)
+                print(f"[scan] Sample image structure: id={images[0].get('id')}, position={images[0].get('position')}", flush=True)
             if colour_images:
-                print(f"🔍 colour_images mapping: {colour_images}", flush=True)
-                print(f"🔍 Expected image order based on media_order should match these indices", flush=True)
+                print(f"[scan] colour_images mapping: {colour_images}", flush=True)
+                print(f"[scan] Expected image order based on media_order should match these indices", flush=True)
             for colour in colours:
-                print(f"🔍 Processing colour: {colour}", flush=True)
+                print(f"[scan] Processing colour: {colour}", flush=True)
                 if colour not in colour_to_variants:
-                    print(f"⚠️ No variants found for colour: {colour}", flush=True)
+                    print(f"[warn] No variants found for colour: {colour}", flush=True)
                     continue
                 else:
-                    print(f"✅ Found {len(colour_to_variants[colour])} variants for colour: {colour}", flush=True)
+                    print(f"[ok] Found {len(colour_to_variants[colour])} variants for colour: {colour}", flush=True)
                 
                 # Extract colour name (before colon if present) for matching with colour_images
                 # Colours can be "Colour:Code" format, but colour_images uses just "Colour"
                 colour_name = colour.split(':')[0] if ':' in colour else colour
-                print(f"🔍 Using colour name '{colour_name}' for image mapping (from '{colour}')", flush=True)
+                print(f"[scan] Using colour name '{colour_name}' for image mapping (from '{colour}')", flush=True)
                 
                 # First check if there's a specific image mapping from frontend
                 colour_image = None
                 if colour_images and colour_name in colour_images:
                     # The mapping contains the image index (order in which images were attached)
                     image_index = colour_images[colour_name]
-                    print(f"🔍 Looking for image at index: {image_index} (out of {len(images)} images) for colour '{colour_name}'", flush=True)
+                    print(f"[scan] Looking for image at index: {image_index} (out of {len(images)} images) for colour '{colour_name}'", flush=True)
                     # Get image by index if it exists
                     if isinstance(image_index, int) and 0 <= image_index < len(images):
                         colour_image = images[image_index]
-                        print(f"✔️ Found image at index {image_index} for colour {colour}", flush=True)
+                        print(f"[ok] Found image at index {image_index} for colour {colour}", flush=True)
                     elif isinstance(image_index, str) and image_index.isdigit():
                         # Fallback: try as integer index
                         idx = int(image_index)
                         if 0 <= idx < len(images):
                             colour_image = images[idx]
-                            print(f"✔️ Found image at index {idx} for colour {colour} (converted from string)", flush=True)
+                            print(f"[ok] Found image at index {idx} for colour {colour} (converted from string)", flush=True)
                         else:
-                            print(f"⚠️ Invalid image index {image_index}", flush=True)
+                            print(f"[warn] Invalid image index {image_index}", flush=True)
                     else:
-                        print(f"⚠️ Invalid image index format: {image_index}", flush=True)
+                        print(f"[warn] Invalid image index format: {image_index}", flush=True)
                 
                 # Fallback: Look for an image with the colour in its filename/alt text
                 if not colour_image:
@@ -940,12 +940,12 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                         update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
                     
                     if update_response.status_code == 200:
-                        print(f"✔️ Assigned image {img_id} to {colour} variants", flush=True)
+                        print(f"[ok] Assigned image {img_id} to {colour} variants", flush=True)
                         for v_id in variant_ids:
                             assigned_variants.add(v_id)
             
             # First, assign main image to ALL variants (this ensures all variants have the main image by default)
-            print(f"🔍 Assigning main image to ALL {len(all_variant_ids)} variants first...", flush=True)
+            print(f"[scan] Assigning main image to ALL {len(all_variant_ids)} variants first...", flush=True)
             update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
             update_data = {"image": {"id": main_image_id, "variant_ids": all_variant_ids}}
             try:
@@ -958,17 +958,17 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                         redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
                     update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
                 if update_response.status_code == 200:
-                    print(f"✔️ Main image assigned to all variants", flush=True)
+                    print(f"[ok] Main image assigned to all variants", flush=True)
                 else:
-                    print(f"⚠️ Failed to assign main image to all variants: {update_response.status_code}", flush=True)
+                    print(f"[warn] Failed to assign main image to all variants: {update_response.status_code}", flush=True)
             except (requests.Timeout, requests.ConnectionError) as e:
-                print(f"⚠️ Assigning main image to all variants timed out or failed ({type(e).__name__}) - product created, image assignment skipped", flush=True)
+                print(f"[warn] Assigning main image to all variants timed out or failed ({type(e).__name__}) - product created, image assignment skipped", flush=True)
             
             # Now assign specific colour images (these will override the main image for those variants)
             # The colour-specific images are already assigned above, so we're done
-            print(f"🔍 Total variant IDs: {len(all_variant_ids)}", flush=True)
-            print(f"🔍 Assigned variants (with specific images): {len(assigned_variants)}", flush=True)
-            print(f"🔍 Remaining variants (keeping main image): {len(all_variant_ids) - len(assigned_variants)}", flush=True)
+            print(f"[scan] Total variant IDs: {len(all_variant_ids)}", flush=True)
+            print(f"[scan] Assigned variants (with specific images): {len(assigned_variants)}", flush=True)
+            print(f"[scan] Remaining variants (keeping main image): {len(all_variant_ids) - len(assigned_variants)}", flush=True)
         else:
             # No colours - assign main image to all variants
             update_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/images/{main_image_id}.json"
@@ -983,15 +983,15 @@ def attach_main_image_to_variants(product_id, product_name, colours=None, colour
                         redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
                     update_response = requests.put(redirect_url, headers=HEADERS, json=update_data, allow_redirects=True, timeout=REQUEST_TIMEOUT)
                 if update_response.status_code == 200:
-                    print(f"✔️ All variants of product '{product_name}' have matching image.", flush=True)
+                    print(f"[ok] All variants of product '{product_name}' have matching image.", flush=True)
                     return True
             except (requests.Timeout, requests.ConnectionError) as e:
-                print(f"⚠️ Assign main image (no colours) timed out or failed ({type(e).__name__}) - product created", flush=True)
+                print(f"[warn] Assign main image (no colours) timed out or failed ({type(e).__name__}) - product created", flush=True)
         
-        print(f"✔️ Image assignment complete for product '{product_name}'", flush=True)
+        print(f"[ok] Image assignment complete for product '{product_name}'", flush=True)
         return True
     except Exception as e:
-        print(f"⚠️ Exception during main image variant update: {e}", flush=True)
+        print(f"[warn] Exception during main image variant update: {e}", flush=True)
         import traceback
         traceback.print_exc()
         return False
@@ -1002,7 +1002,7 @@ def process_product(product):
         product_id = product.get("id")
         product_name = product.get("title", "Unknown Product")
         if not product_id:
-            print("❌ Invalid product structure - missing ID", flush=True)
+            print("[error] Invalid product structure - missing ID", flush=True)
             return
 
         if "origination" in (product_name or "").lower():
@@ -1020,17 +1020,17 @@ def process_product(product):
             "sku",
             "product_colours",
         ]
-        print(f"🔍 Fetching metafields for product {product_name} (ID: {product_id})", flush=True)
+        print(f"[scan] Fetching metafields for product {product_name} (ID: {product_id})", flush=True)
         metafields = get_metafields_by_keys(product_id, keys_to_fetch)
-        print(f"🔍 Fetched metafields: {list(metafields.keys())}", flush=True)
+        print(f"[scan] Fetched metafields: {list(metafields.keys())}", flush=True)
         
         # Debug: Check if product_colours is in the fetched metafields
         if "product_colours" in metafields:
-            print(f"🔍 product_colours metafield found in fetched metafields", flush=True)
-            print(f"🔍 product_colours value: '{metafields['product_colours'].get('value', '')}'", flush=True)
+            print(f"[scan] product_colours metafield found in fetched metafields", flush=True)
+            print(f"[scan] product_colours value: '{metafields['product_colours'].get('value', '')}'", flush=True)
         else:
-            print(f"⚠️ product_colours metafield NOT found in fetched metafields", flush=True)
-            print(f"🔍 Trying to fetch all metafields manually...", flush=True)
+            print(f"[warn] product_colours metafield NOT found in fetched metafields", flush=True)
+            print(f"[scan] Trying to fetch all metafields manually...", flush=True)
             # Try to fetch the metafield directly
             try:
                 import requests
@@ -1040,37 +1040,37 @@ def process_product(product):
                 resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 200:
                     all_mfs = resp.json().get("metafields", [])
-                    print(f"🔍 Total metafields on product: {len(all_mfs)}", flush=True)
+                    print(f"[scan] Total metafields on product: {len(all_mfs)}", flush=True)
                     colours_mf = [m for m in all_mfs if m.get("key") == "product_colours" and m.get("namespace") == "custom"]
                     if colours_mf:
-                        print(f"🔍 Found product_colours metafield directly: '{colours_mf[0].get('value', '')}'", flush=True)
+                        print(f"[scan] Found product_colours metafield directly: '{colours_mf[0].get('value', '')}'", flush=True)
                     else:
-                        print(f"⚠️ product_colours metafield not found on product", flush=True)
+                        print(f"[warn] product_colours metafield not found on product", flush=True)
             except Exception as e:
-                print(f"❌ Error fetching metafields directly: {e}", flush=True)
+                print(f"[error] Error fetching metafields directly: {e}", flush=True)
 
         sku = get_sku(metafields)
         unit_weight = get_unit_weight_grams(metafields)
         
-        # product_colours is stored on the product for Product Manager display only — not used for variants
+        # product_colours is stored on the product for Product Manager display only - not used for variants
         colours = []
         colour_codes = {}
         if "product_colours" in metafields:
             colours_str = metafields["product_colours"].get("value", "").strip()
             if colours_str:
-                print(f"🎨 product_colours metafield present ({colours_str!r}) — stored only, not creating colour variants", flush=True)
+                print(f"[art] product_colours metafield present ({colours_str!r}) - stored only, not creating colour variants", flush=True)
         
         print(f" Using Unit weight: {unit_weight}g and SKU: '{sku}'", flush=True)
 
         # Required pricing metafields
         if "pricejsontr" not in metafields or "pricejsoner" not in metafields:
-            print(f"❌ Missing required raw JSON metafields for {product_name}. Skipping.", flush=True)
+            print(f"[error] Missing required raw JSON metafields for {product_name}. Skipping.", flush=True)
             return
 
         trade_raw = parse_bands(metafields["pricejsontr"].get("value", "[]"), product_name, "pricejsontr")
         endc_raw = parse_bands(metafields["pricejsoner"].get("value", "[]"), product_name, "pricejsoner")
         if not trade_raw and not endc_raw:
-            print(f"❌ No valid pricing bands found for {product_name}. Skipping.", flush=True)
+            print(f"[error] No valid pricing bands found for {product_name}. Skipping.", flush=True)
             return
 
         variants = build_variants(trade_raw, endc_raw, sku, unit_weight, colours, colour_codes)
@@ -1078,10 +1078,10 @@ def process_product(product):
         
         # Debug: Show first variant structure
         if variants:
-            print(f"🔍 First variant structure: {variants[0]}", flush=True)
+            print(f"[scan] First variant structure: {variants[0]}", flush=True)
         
         # Use GraphQL to delete all variants at once (much more efficient)
-        print(f"🗑️ Deleting existing variants using GraphQL...", flush=True)
+        print(f"[delete] Deleting existing variants using GraphQL...", flush=True)
         variants_deleted = False
         try:
             # Import here to avoid issues with variable scoping
@@ -1114,13 +1114,13 @@ def process_product(product):
             if get_response.status_code == 200:
                 get_data = get_response.json()
                 if 'errors' in get_data:
-                    print(f"❌ Error fetching variants: {get_data['errors']}", flush=True)
+                    print(f"[error] Error fetching variants: {get_data['errors']}", flush=True)
                 else:
                     variants_data = get_data.get('data', {}).get('product', {}).get('variants', {}).get('edges', [])
                     variant_ids = [edge['node']['id'] for edge in variants_data]
                     
                     if variant_ids:
-                        print(f"🔍 Found {len(variant_ids)} existing variants to delete", flush=True)
+                        print(f"[scan] Found {len(variant_ids)} existing variants to delete", flush=True)
                         
                         # Delete all variants using GraphQL bulk operation
                         delete_variants_query = """
@@ -1147,45 +1147,45 @@ def process_product(product):
                         if delete_response.status_code == 200:
                             delete_data = delete_response.json()
                             if 'errors' in delete_data:
-                                print(f"❌ GraphQL delete errors: {delete_data['errors']}", flush=True)
+                                print(f"[error] GraphQL delete errors: {delete_data['errors']}", flush=True)
                             else:
                                 delete_result = delete_data.get('data', {}).get('productVariantsBulkDelete', {})
                                 if delete_result.get('userErrors'):
-                                    print(f"❌ Delete user errors: {delete_result['userErrors']}", flush=True)
+                                    print(f"[error] Delete user errors: {delete_result['userErrors']}", flush=True)
                                     # Check if it's the "last variant" error
                                     if any('last variant' in str(error).lower() for error in delete_result['userErrors']):
-                                        print(f"ℹ️ Cannot delete last variant - will update it instead", flush=True)
+                                        print(f"[info] Cannot delete last variant - will update it instead", flush=True)
                                         variants_deleted = False  # Mark that we couldn't delete
                                         # Don't abort, continue with variant creation
                                     else:
-                                        print(f"⚠️ Other deletion errors - continuing anyway", flush=True)
+                                        print(f"[warn] Other deletion errors - continuing anyway", flush=True)
                                         variants_deleted = False
                                 else:
                                     # GraphQL deletion doesn't return deleted IDs, just check for success
-                                    print(f"✅ Successfully deleted {len(variant_ids)} variants via GraphQL", flush=True)
+                                    print(f"[ok] Successfully deleted {len(variant_ids)} variants via GraphQL", flush=True)
                                     variants_deleted = True
                                     
                                     # Short wait for eventual consistency
                                     time.sleep(1.0)
                     else:
-                        print(f"✅ No existing variants found", flush=True)
+                        print(f"[ok] No existing variants found", flush=True)
             else:
-                print(f"❌ Failed to fetch variants: {get_response.status_code}", flush=True)
+                print(f"[error] Failed to fetch variants: {get_response.status_code}", flush=True)
                 
         except Exception as e:
-            print(f"⚠️ Could not delete existing variants: {e}", flush=True)
-            print(f"⚠️ Continuing anyway...", flush=True)
+            print(f"[warn] Could not delete existing variants: {e}", flush=True)
+            print(f"[warn] Continuing anyway...", flush=True)
             variants_deleted = False
         
         # If we couldn't delete variants (e.g., last variant error), we need to handle this differently
         if not variants_deleted and len(variants) > 1:
-            print(f"ℹ️ Could not delete existing variants - this is expected for products with only one variant", flush=True)
-            print(f"ℹ️ Will update the product with new options and variants", flush=True)
+            print(f"[info] Could not delete existing variants - this is expected for products with only one variant", flush=True)
+            print(f"[info] Will update the product with new options and variants", flush=True)
         
         updated_variants = update_product_variants(product_id, variants, product_name, sku, colours)
-        print(f"🔍 update_product_variants returned: {len(updated_variants) if updated_variants else 0} variants", flush=True)
+        print(f"[scan] update_product_variants returned: {len(updated_variants) if updated_variants else 0} variants", flush=True)
         if not updated_variants:
-            print(f"❌ Aborting due to variant update failure for {product_name}.", flush=True)
+            print(f"[error] Aborting due to variant update failure for {product_name}.", flush=True)
             return False
 
         # Enrich bands with Shopify variant IDs and persist
@@ -1195,16 +1195,16 @@ def process_product(product):
         set_or_update_metafield(metafields, product_id, "pricejsoneid", enriched_endc, product_name, sku)
 
         # Wait a moment for variants to be fully saved before attaching images
-        print(f"⏳ Waiting 2 seconds for variants to be fully saved...", flush=True)
+        print(f"[wait] Waiting 2 seconds for variants to be fully saved...", flush=True)
         time.sleep(2.0)
 
         # Sync main image across variants
         attach_main_image_to_variants(product_id, product_name, colours=None, colour_images=None)
 
-        print(f"✅ Successfully processed product: {product_name}", flush=True)
+        print(f"[ok] Successfully processed product: {product_name}", flush=True)
         return True
     except Exception as e:
-        print(f"❌ Error processing product {product.get('title', 'Unknown')}: {str(e)}", flush=True)
+        print(f"[error] Error processing product {product.get('title', 'Unknown')}: {str(e)}", flush=True)
         return False
 
 
@@ -1255,39 +1255,39 @@ def main():
         if len(sys.argv) > 1:
             if sys.argv[1] == "--products" and len(sys.argv) > 2:
                 product_ids = sys.argv[2].strip().split(",")
-                print(f"🔍 Processing specific products by IDs: {product_ids}", flush=True)
+                print(f"[scan] Processing specific products by IDs: {product_ids}", flush=True)
             else:
                 product_filter = sys.argv[1].strip()
-                print(f"🔍 Filtering for product: {product_filter}", flush=True)
+                print(f"[scan] Filtering for product: {product_filter}", flush=True)
 
         products = get_all_products()
         if not products:
-            print("❌ No products fetched from Shopify API", flush=True)
+            print("[error] No products fetched from Shopify API", flush=True)
             return 1
 
         print(f"📦 Total products fetched: {len(products)}", flush=True)
         products = _filter_products(products, product_ids=product_ids, product_filter=product_filter)
         if not products:
             if product_ids:
-                print(f"❌ No products found with the specified IDs: {product_ids}", flush=True)
+                print(f"[error] No products found with the specified IDs: {product_ids}", flush=True)
             elif product_filter:
-                print(f"❌ No products found matching: '{product_filter}'", flush=True)
+                print(f"[error] No products found matching: '{product_filter}'", flush=True)
                 print("💡 Try searching by: product name, product ID, or SKU", flush=True)
             else:
-                print("❌ No products to process", flush=True)
+                print("[error] No products to process", flush=True)
             return 1
 
-        print(f"🚀 Starting to process {len(products)} products...", flush=True)
+        print(f"[go] Starting to process {len(products)} products...", flush=True)
 
         successful = 0
         failed = 0
         for i, product in enumerate(products, 1):
             try:
-                print(f"📝 Processing product {i}/{len(products)}: {product.get('title', 'Unknown')}", flush=True)
+                print(f"[note] Processing product {i}/{len(products)}: {product.get('title', 'Unknown')}", flush=True)
                 process_product(product)
                 successful += 1
             except Exception as e:
-                print(f"❌ Failed to process product {product.get('title', 'Unknown')}: {str(e)}", flush=True)
+                print(f"[error] Failed to process product {product.get('title', 'Unknown')}: {str(e)}", flush=True)
                 failed += 1
                 continue
             if i < len(products):
@@ -1295,10 +1295,10 @@ def main():
 
         print("=" * 60, flush=True)
         print(f"🎉 Completed processing {len(products)} products!", flush=True)
-        print(f"✅ Successful: {successful}, ❌ Failed: {failed}", flush=True)
+        print(f"[ok] Successful: {successful}, [error] Failed: {failed}", flush=True)
         return 0
     except Exception as e:
-        print(f"❌ Fatal error in main function: {str(e)}", flush=True)
+        print(f"[error] Fatal error in main function: {str(e)}", flush=True)
         return 1
 
 

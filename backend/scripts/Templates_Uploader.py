@@ -162,7 +162,7 @@ def upload_zip_and_set_metafield(
     default_base: str = 'artwork_templates',
 ):
     # files is list of { filename, content(bytes), content_type }
-    # Stock Designs expects a single pre-made ZIP from the user's computer —
+    # Stock Designs expects a single pre-made ZIP from the user's computer -
     # upload that file as-is so we don't nest ZIP-inside-ZIP.
     use_existing_zip = (
         (metafield_key or '') == 'stockdesigns'

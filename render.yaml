@@ -11,6 +11,8 @@ services:
     startCommand: gunicorn app:app --chdir backend -c gunicorn.conf.py --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 300
     autoDeploy: true
     envVars:
+      - key: PYTHONUTF8
+        value: "1"
       - key: SHOPIFY_STORE_DOMAIN
         sync: false
       - key: SHOPIFY_API_VERSION
@@ -87,5 +89,27 @@ services:
       - key: OFFICE_PRINT_SERVER_URL
         sync: false
       - key: OFFICE_PRINT_SERVER_KEY
+        sync: false
+      - key: SHOPIFY_WEBHOOK_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  # Nightly Phase 7 visibility backstop — 03:00 UTC (04:00 BST in summer).
+  # HTTP-POSTs the web service so webhook/reconcile share one code path.
+  # Tony sets CRON_SECRET (same value on web + cron) and RECONCILE_VISIBILITY_URL
+  # to https://<web-service>/api/cron/reconcile-visibility
+  - type: cron
+    name: reconcile-visibility-nightly
+    runtime: native
+    plan: free
+    region: oregon
+    schedule: "0 3 * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS -X POST "$RECONCILE_VISIBILITY_URL" -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "{}"'
+    envVars:
+      - key: CRON_SECRET
+        sync: false
+      - key: RECONCILE_VISIBILITY_URL
         sync: false
 

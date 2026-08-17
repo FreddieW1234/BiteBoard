@@ -1,10 +1,18 @@
+import sys
+
+# Must run before any other imports that may print (Windows cp1252 stdout).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 from flask import Flask, render_template, jsonify, Response, make_response, request, session, redirect, url_for
 import os
 import subprocess
 import requests
 import time
 import threading
-import sys
 from datetime import datetime
 import json
 
@@ -30,8 +38,17 @@ from portal_auth import (  # type: ignore
 from maintenance import init_maintenance  # type: ignore
 from dev_browser import init_dev_browser  # type: ignore
 
-print(f"🔧 Config loaded — STORE_DOMAIN={'✅ set (' + STORE_DOMAIN[:20] + '...)' if STORE_DOMAIN else '❌ EMPTY'}, "
-      f"ACCESS_TOKEN={'✅ set' if ACCESS_TOKEN else '❌ EMPTY'}, API_VERSION={API_VERSION}", flush=True)
+print(
+    f"[ok] stdio encoding stdout={getattr(sys.stdout, 'encoding', None)!r} "
+    f"stderr={getattr(sys.stderr, 'encoding', None)!r}",
+    flush=True,
+)
+_sd = "set (" + STORE_DOMAIN[:20] + "...)" if STORE_DOMAIN else "EMPTY"
+_tok = "set" if ACCESS_TOKEN else "EMPTY"
+print(
+    f"[ok] Config loaded - STORE_DOMAIN={_sd}, ACCESS_TOKEN={_tok}, API_VERSION={API_VERSION}",
+    flush=True,
+)
 
 app = Flask(
     __name__,
@@ -53,7 +70,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = FLASK_SESSION_SECURE
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
 
-print("🔐 Staff login enabled", flush=True)
+print("[auth] Staff login enabled", flush=True)
 
 # Tracks in-flight requests and dumps thread stacks when the pool saturates.
 # Registered first so every request is accounted for; it never short-circuits,
@@ -62,7 +79,7 @@ try:
     from scripts.thread_watchdog import init_watchdog as _init_watchdog  # type: ignore
     _init_watchdog(app)
 except Exception as _wd_err:
-    print(f"⚠️ Thread watchdog not started: {_wd_err}", flush=True)
+    print(f"[warn] Thread watchdog not started: {_wd_err}", flush=True)
 
 # Registered before portal_auth_gate below: Flask runs before_request handlers
 # in registration order, so the maintenance page must win over the staff auth
@@ -77,7 +94,7 @@ try:
     from scripts.product_save_worker import start_worker as _start_save_worker  # type: ignore
     _start_save_worker(app)
 except Exception as _sw_err:
-    print(f"⚠️ Save worker not started: {_sw_err}", flush=True)
+    print(f"[warn] Save worker not started: {_sw_err}", flush=True)
 
 # Warm the customers overview off the request path so the first staff visit
 # after boot does not compete with Render's /healthz for a free gunicorn thread.
@@ -89,11 +106,11 @@ try:
         try:
             _warm_customers()
         except Exception as _warm_err:
-            print(f"⚠️ Customers cache warm skipped: {_warm_err}", flush=True)
+            print(f"[warn] Customers cache warm skipped: {_warm_err}", flush=True)
 
     threading.Thread(target=_warm_caches_soon, daemon=True).start()
 except Exception as _warm_imp_err:
-    print(f"⚠️ Customers cache warm not scheduled: {_warm_imp_err}", flush=True)
+    print(f"[warn] Customers cache warm not scheduled: {_warm_imp_err}", flush=True)
 
 
 @app.errorhandler(413)
@@ -133,7 +150,7 @@ def portal_auth_gate():
         if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Staff login required"}), 401
         return redirect(url_for("staff_login", next=path))
-    # Files / Dev / Artwork Updater — only the dedicated "dev" staff account.
+    # Files / Dev / Artwork Updater - only the dedicated "dev" staff account.
     if is_staff_dev_only_path(path) and not staff_can_access_dev_tools():
         if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Not authorised"}), 403
@@ -364,7 +381,7 @@ def api_health():
         except Exception as e:
             info["shopify_error"] = f"{type(e).__name__}: {e}"
     else:
-        info["shopify_status"] = "skipped — missing config"
+        info["shopify_status"] = "skipped - missing config"
     return jsonify(info)
 
 @app.route('/api/perf-check')
@@ -374,7 +391,7 @@ def api_perf_check():
     Page data is served from cache, so when the site feels slow it is nearly
     always one of the things underneath: the office server (every cached read
     goes through it) or Shopify. Times each separately and reports whether this
-    instance's caches are warm — each instance has its own, so a freshly scaled
+    instance's caches are warm - each instance has its own, so a freshly scaled
     instance starts cold.
     """
     out = {'instance': os.environ.get('RENDER_INSTANCE_ID', '?')}
@@ -405,7 +422,7 @@ def api_perf_check():
         )
         out['shopify_ms'] = round((time.perf_counter() - start) * 1000)
         out['shopify_status'] = r.status_code
-        # "32/40" means 32 of 40 cost points used — near the cap means throttling.
+        # "32/40" means 32 of 40 cost points used - near the cap means throttling.
         out['shopify_call_limit'] = r.headers.get('X-Shopify-Shop-Api-Call-Limit')
     except Exception as e:
         out['shopify_ms'] = round((time.perf_counter() - start) * 1000)
@@ -479,7 +496,7 @@ def api_products():
         return jsonify(formatted_products)
     except Exception as e:
         try:
-            print(f"💥 Products error: {str(e)}")
+            print(f"[error] Products error: {str(e)}")
         except (OSError, ValueError):
             pass
         return jsonify([])
@@ -548,7 +565,7 @@ def api_live_products_count():
         return jsonify({'success': True, 'count': count_i})
     except Exception as e:
         try:
-            print(f"💥 Live products count error: {str(e)}", flush=True)
+            print(f"[error] Live products count error: {str(e)}", flush=True)
         except (OSError, ValueError):
             pass
         return jsonify({'success': False, 'count': 0})
@@ -610,7 +627,7 @@ def api_collections():
                 }), 502
             payload = resp.json()
             if payload.get('errors'):
-                # Older schemas used productsCount as Int — retry once with that shape.
+                # Older schemas used productsCount as Int - retry once with that shape.
                 err_text = json.dumps(payload.get('errors'))
                 if 'productsCount' in err_text and 'count' in err_text and not collections:
                     query = query.replace(
@@ -706,7 +723,7 @@ def api_collections():
             'collections': collections,
         })
     except Exception as e:
-        print(f"💥 Collections list error: {e}", flush=True)
+        print(f"[error] Collections list error: {e}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -740,7 +757,7 @@ def _build_shopify_files_cache():
             _SHOPIFY_FILES_CACHE["files"] = files
             _SHOPIFY_FILES_CACHE["at"] = time.time()
         try:
-            print(f"📁 Loaded {len(files)} files (cached {SHOPIFY_FILES_MEM_TTL}s)", flush=True)
+            print(f"[files] Loaded {len(files)} files (cached {SHOPIFY_FILES_MEM_TTL}s)", flush=True)
         except (OSError, ValueError):
             pass
         return files
@@ -781,7 +798,7 @@ def api_shopify_files():
                 claim = True
 
         if not claim:
-            # Another thread is building — return empty immediately so this
+            # Another thread is building - return empty immediately so this
             # request (and /healthz) are not held for the full Shopify scan.
             return jsonify([])
 
@@ -792,7 +809,7 @@ def api_shopify_files():
         with _SHOPIFY_FILES_LOCK:
             _SHOPIFY_FILES_BUILDING = False
         try:
-            print(f"💥 Error loading files: {str(e)}", flush=True)
+            print(f"[error] Error loading files: {str(e)}", flush=True)
         except (OSError, ValueError):
             pass
         return jsonify([])
@@ -811,7 +828,7 @@ def api_upload_file():
         if file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'}), 400
         
-        print(f"📤 Uploading: {file.filename} ({file_type})")
+        print(f"[upload] Uploading: {file.filename} ({file_type})")
         
         # Save the uploaded file temporarily
         import tempfile
@@ -831,15 +848,15 @@ def api_upload_file():
                 from Artwork_Updater import upload_file_to_shopify  # type: ignore
             except ImportError as e:
                 error_msg = f"Failed to import Artwork_Updater: {str(e)}"
-                print(f"❌ {error_msg}")
+                print(f"[error] {error_msg}")
                 return jsonify({'success': False, 'error': error_msg}), 500
             
             # Upload the file to Shopify using the temporary file path
-            print(f"🔄 Starting Shopify upload for: {file.filename}")
+            print(f"[retry] Starting Shopify upload for: {file.filename}")
             result = upload_file_to_shopify(temp_file_path, file.filename)
 
             if isinstance(result, dict) and result.get('success'):
-                print(f"✅ Upload successful: {file.filename}")
+                print(f"[ok] Upload successful: {file.filename}")
                 _invalidate_shopify_files_cache()
                 return jsonify({
                     'success': True,
@@ -853,23 +870,23 @@ def api_upload_file():
                 })
             else:
                 error_msg = (result.get('error') if isinstance(result, dict) else None) or 'Upload function returned no result'
-                print(f"❌ Upload failed: {error_msg}")
+                print(f"[error] Upload failed: {error_msg}")
                 return jsonify({'success': False, 'error': error_msg}), 400
                 
         finally:
             # Clean up the temporary file
             try:
                 os.unlink(temp_file_path)
-                print(f"🧹 Cleaned up temporary file: {temp_file_path}")
+                print(f"[cleanup] Cleaned up temporary file: {temp_file_path}")
             except Exception as cleanup_error:
-                print(f"⚠️ Warning: Could not clean up temporary file {temp_file_path}: {cleanup_error}")
+                print(f"[warn] Warning: Could not clean up temporary file {temp_file_path}: {cleanup_error}")
             
     except Exception as e:
         error_msg = str(e)
         # Limit error message length to prevent long strings
         if len(error_msg) > 200:
             error_msg = error_msg[:200] + "..."
-        print(f"💥 Upload error: {error_msg}")
+        print(f"[error] Upload error: {error_msg}")
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/upload-progress')
@@ -921,7 +938,7 @@ def api_suggest_filename():
         return jsonify({'suggestedName': suggested_name})
         
     except Exception as e:
-        print(f"💥 Error suggesting filename: {str(e)}")
+        print(f"[error] Error suggesting filename: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/delete_file', methods=['POST'])
@@ -935,7 +952,7 @@ def delete_file():
         if not file_id:
             return jsonify({'success': False, 'error': 'No file ID provided'}), 400
         
-        print(f"🗑️ Deleting file: {filename} (ID: {file_id})")
+        print(f"[delete] Deleting file: {filename} (ID: {file_id})")
         
         # GraphQL mutation to delete the file
         graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
@@ -972,7 +989,7 @@ def delete_file():
             # Check for GraphQL errors
             if 'errors' in data:
                 error_msg = f"GraphQL errors: {data['errors']}"
-                print(f"❌ {error_msg}")
+                print(f"[error] {error_msg}")
                 return jsonify({'success': False, 'error': error_msg}), 400
             
             if 'data' in data and 'fileDelete' in data['data']:
@@ -980,11 +997,11 @@ def delete_file():
                 
                 if result.get('userErrors'):
                     error_msg = f"User errors: {result['userErrors']}"
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
                     return jsonify({'success': False, 'error': error_msg}), 400
                 
                 if result.get('deletedFileIds'):
-                    print(f"✅ File deleted successfully: {filename}")
+                    print(f"[ok] File deleted successfully: {filename}")
                     return jsonify({
                         'success': True,
                         'message': f'File "{filename}" deleted successfully',
@@ -992,20 +1009,20 @@ def delete_file():
                     })
                 else:
                     error_msg = 'File was not deleted - no deleted file IDs returned'
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
                     return jsonify({'success': False, 'error': error_msg}), 400
             else:
                 error_msg = 'Invalid response format from Shopify'
-                print(f"❌ {error_msg}")
+                print(f"[error] {error_msg}")
                 return jsonify({'success': False, 'error': error_msg}), 400
         else:
             error_msg = f"HTTP error: {response.status_code}"
-            print(f"❌ {error_msg}")
+            print(f"[error] {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
             
     except Exception as e:
         error_msg = str(e)
-        print(f"💥 Delete error: {error_msg}")
+        print(f"[error] Delete error: {error_msg}")
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/check_file_usage', methods=['POST'])
@@ -1019,7 +1036,7 @@ def check_file_usage():
         if not file_id:
             return jsonify({'success': False, 'error': 'No file ID provided'}), 400
         
-        print(f"🔍 Checking file usage: {filename} (ID: {file_id})")
+        print(f"[scan] Checking file usage: {filename} (ID: {file_id})")
         
         # Import the Artwork_Updater script to use its functions
         import sys
@@ -1029,7 +1046,7 @@ def check_file_usage():
             from Artwork_Updater import fetch_all_products, get_filename_from_file_id  # type: ignore
         except ImportError as e:
             error_msg = f"Failed to import Artwork_Updater: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"[error] {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 500
         
         # Fetch all products and check if any use this file
@@ -1047,7 +1064,7 @@ def check_file_usage():
         
         is_used = len(products_using_file) > 0
         
-        print(f"📊 File usage check: {filename} is {'used' if is_used else 'not used'} in {len(products_using_file)} products")
+        print(f"[stats] File usage check: {filename} is {'used' if is_used else 'not used'} in {len(products_using_file)} products")
         
         return jsonify({
             'success': True,
@@ -1058,7 +1075,7 @@ def check_file_usage():
         
     except Exception as e:
         error_msg = str(e)
-        print(f"💥 File usage check error: {error_msg}")
+        print(f"[error] File usage check error: {error_msg}")
         return jsonify({'success': False, 'error': error_msg}), 500
 
 @app.route('/api/update-products-to-file', methods=['POST'])
@@ -1171,7 +1188,7 @@ def api_product_detail(product_id):
         
         return jsonify(formatted_product)
     except Exception as e:
-        print(f"💥 Product detail error: {str(e)}")
+        print(f"[error] Product detail error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def _shopify_get_with_retry(url, headers, max_retries=2):
@@ -1180,12 +1197,12 @@ def _shopify_get_with_retry(url, headers, max_retries=2):
         try:
             resp = requests.get(url, headers=headers, timeout=15)
         except requests.exceptions.Timeout:
-            print(f"⚠️ Shopify GET timeout (attempt {attempt+1}/{max_retries+1}): {url[:80]}", flush=True)
+            print(f"[warn] Shopify GET timeout (attempt {attempt+1}/{max_retries+1}): {url[:80]}", flush=True)
             if attempt < max_retries:
                 continue
             return None, {"error": "Request timed out", "detail": f"Shopify API did not respond after {max_retries + 1} attempts"}
         except requests.exceptions.RequestException as e:
-            print(f"❌ Shopify GET error (attempt {attempt+1}/{max_retries+1}): {type(e).__name__}: {e}", flush=True)
+            print(f"[error] Shopify GET error (attempt {attempt+1}/{max_retries+1}): {type(e).__name__}: {e}", flush=True)
             return None, {"error": f"Connection failed: {type(e).__name__}", "detail": str(e)[:300]}
         if resp.status_code == 429:
             if attempt < max_retries:
@@ -1224,7 +1241,7 @@ def api_product_prices(product_id):
             return jsonify({"error": "Failed to fetch product"}), 400
         return jsonify(formatted_product)
     except Exception as e:
-        print(f"💥 Product prices error: {str(e)}")
+        print(f"[error] Product prices error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/metafield/update', methods=['POST'])
@@ -1368,7 +1385,7 @@ def api_update_metafield():
         try:
             run_price_bandit_for_product(product_id)
         except Exception as e:
-            print(f"⚠️ Price Bandit run failed: {str(e)}")
+            print(f"[warn] Price Bandit run failed: {str(e)}")
         try:
             from scripts.product_creator.Product_Creator import sync_product_snapshot
             sync_product_snapshot(product_id)
@@ -1377,7 +1394,7 @@ def api_update_metafield():
         return jsonify({"success": True, "message": "Metafield updated successfully and Price Bandit triggered"})
 
     except Exception as e:
-        print(f"💥 Metafield update error: {str(e)}")
+        print(f"[error] Metafield update error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
@@ -1444,7 +1461,7 @@ def api_update_price_metafields():
         try:
             run_price_bandit_for_product(product_id)
         except Exception as e:
-            print(f"⚠️ Price Bandit run failed: {str(e)}")
+            print(f"[warn] Price Bandit run failed: {str(e)}")
         try:
             from scripts.product_creator.Product_Creator import sync_product_snapshot
             sync_product_snapshot(product_id)
@@ -1453,7 +1470,7 @@ def api_update_price_metafields():
         return jsonify({"success": True, "message": "Price metafields saved and Price Bandit triggered"})
 
     except Exception as e:
-        print(f"💥 update_price_metafields error: {str(e)}")
+        print(f"[error] update_price_metafields error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
@@ -1579,7 +1596,7 @@ def api_bulk_update_field():
             "errors": errors[:50],
         })
     except Exception as e:
-        print(f"💥 bulk-update-field error: {str(e)}")
+        print(f"[error] bulk-update-field error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
@@ -1622,7 +1639,7 @@ def run_price_bandit_for_product(product_id):
             return False
             
     except Exception as e:
-        print(f"💥 Price Bandit error: {str(e)}")
+        print(f"[error] Price Bandit error: {str(e)}")
         return False
 
 @app.route('/api/price-bandit/run', methods=['POST'])
@@ -1678,7 +1695,7 @@ def api_templates_uploader_upload_zip():
         zip_name = request.form.get('zip_name', 'artwork_templates')
         explicit_version = request.form.get('explicit_version')
         metafield_key = (request.form.get('metafield_key') or 'artworktemplates').strip() or 'artworktemplates'
-        # Stock designs now live on the office server — use /api/stock-designs instead.
+        # Stock designs now live on the office server - use /api/stock-designs instead.
         if metafield_key != 'artworktemplates':
             return jsonify({'success': False, 'error': f'Unsupported metafield_key: {metafield_key}'}), 400
         if not product_id:
@@ -1728,7 +1745,7 @@ def api_templates_uploader_upload_zip():
 
 
 # --------------------------------------------------------------------------- #
-# Stock Designs — stored on the office server under data/stock designs/
+# Stock Designs - stored on the office server under data/stock designs/
 # (NOT Shopify metafields). Portal proxies so the browser never sees the API key.
 # --------------------------------------------------------------------------- #
 @app.route('/api/stock-designs/<product_id>', methods=['GET'])
@@ -1753,7 +1770,7 @@ def api_stock_designs_upload(product_id):
     if not pid.isdigit():
         return jsonify({
             'success': False,
-            'error': 'A Shopify product id is required — create/save the product before uploading stock designs.',
+            'error': 'A Shopify product id is required - create/save the product before uploading stock designs.',
         }), 400
     f = request.files.get('file') or (request.files.getlist('files') or [None])[0]
     if not f or not f.filename:
@@ -1828,7 +1845,7 @@ def api_stock_designs_exists(product_id):
         resp.headers['Cache-Control'] = 'public, max-age=300'
         return _stock_designs_apply_cors(resp)
     except OfficeApiError:
-        # Office down → hide the button rather than surface an error on the storefront.
+        # Office down -> hide the button rather than surface an error on the storefront.
         return _stock_designs_apply_cors(jsonify({'exists': False, 'count': 0, 'offline': True}))
     except Exception:
         return _stock_designs_apply_cors(jsonify({'exists': False, 'count': 0, 'offline': True}))
@@ -2368,7 +2385,7 @@ def _parse_product_form(req):
                     else:
                         data[key] = value
                 except (json.JSONDecodeError, ValueError) as e:
-                    print(f"⚠️ Failed to parse {key}: {e}", flush=True)
+                    print(f"[warn] Failed to parse {key}: {e}", flush=True)
                     data[key] = value
             else:
                 data[key] = value
@@ -2391,7 +2408,7 @@ def _parse_product_form(req):
         data['media_files'] = media_files
 
         # Selected Shopify media IDs to keep. Only set when the editor sent a
-        # media state (media_order present) — an omitted key means "leave images
+        # media state (media_order present) - an omitted key means "leave images
         # alone", while media_order=[] with no ids means "delete all".
         shopify_media_ids = req.form.getlist('shopify_media_ids')
         if shopify_media_ids:
@@ -2462,7 +2479,7 @@ def api_create_product():
 
         result = create_product(data)
 
-        # Immediate Shopify → office cross-check for every product this save
+        # Immediate Shopify -> office cross-check for every product this save
         # touched (bypasses the 30-minute full-catalog TTL window).
         try:
             if isinstance(result, dict) and result.get('success'):
@@ -2511,7 +2528,7 @@ class _ThreadStdoutCapture:
     """Tee this thread's stdout into a buffer, leaving other threads alone.
 
     A synchronous save runs for minutes, and contextlib.redirect_stdout swaps
-    sys.stdout for the whole process — with a single gunicorn worker running 12
+    sys.stdout for the whole process - with a single gunicorn worker running 12
     threads that swallows every other request's logging into this buffer for the
     duration of the save.
     """
@@ -2551,7 +2568,7 @@ def api_product_queue_enqueue():
     """Enqueue a write-behind product save.
 
     New image files are uploaded here, because binary content can't be parked in
-    the queue store — but only the upload. Everything after it (metafields, Price
+    the queue store - but only the upload. Everything after it (metafields, Price
     Bandit, child propagation) goes to the background worker and is verified
     against Shopify, so a save never occupies this single-worker web process for
     longer than the upload takes.
@@ -2611,13 +2628,13 @@ def api_product_queue_enqueue():
                 # False ⇒ leave media_files in place so the sync path below still
                 # uploads them; ignore return on exception (same fallback).
                 if not preupload_media_for_background_save(product_id, data):
-                    print("[API] media pre-upload incomplete — saving synchronously", flush=True)
+                    print("[API] media pre-upload incomplete - saving synchronously", flush=True)
             except Exception as _ue:
                 print(f"[API] media pre-upload skipped: {_ue}", flush=True)
 
         # Brand-new products (no Shopify id yet) MUST run synchronously so the
         # client gets a product_id back. Queuing a create left the form in
-        # "create" mode — a second Save then created a duplicate product.
+        # "create" mode - a second Save then created a duplicate product.
         needs_sync = (
             bool(data.get('media_files'))
             or bool(data.get('media_urls'))
@@ -2672,8 +2689,8 @@ def api_product_queue_enqueue():
             payload['verify'] = verify
             return jsonify(payload), (200 if success else 500)
 
-        # Background path: metadata-only edit — return instantly.
-        # If this is a parent product, lock its children too — the save
+        # Background path: metadata-only edit - return instantly.
+        # If this is a parent product, lock its children too - the save
         # propagates parent fields to every child in the family.
         # Resolved from the cached families tree: the live lookup paginates the
         # whole catalog and would stall this request (and the instance) for as
@@ -2731,7 +2748,7 @@ def api_product_queue_list():
     Every open editor/Products tab polls this, so the office round trip is
     shared. Within the TTL everyone gets the same cached answer, and while one
     thread is refreshing the rest are handed the previous one rather than
-    queueing up behind it — with a single gunicorn worker, a pile-up here is
+    queueing up behind it - with a single gunicorn worker, a pile-up here is
     enough to stop the whole site responding.
     """
     now = time.time()
@@ -2763,7 +2780,7 @@ def api_product_queue_list():
                 'finished_at': j.get('finished_at'),
                 'error': j.get('error'),
                 'verify_ok': (all(r.get('ok') for r in verify) if verify else None),
-                # Running, but its worker has gone quiet — offer a manual requeue.
+                # Running, but its worker has gone quiet - offer a manual requeue.
                 'stalled': queue.is_stalled(j),
             })
         payload = {'jobs': summary, 'locked': queue.locked_product_ids(jobs=jobs)}
@@ -3003,7 +3020,7 @@ def api_order_info_update(order_id):
 
 @app.route("/orders/<order_id>/production-notes")
 def production_notes_page(order_id):
-    """Printable production notes — one page per product line item (staff only)."""
+    """Printable production notes - one page per product line item (staff only)."""
     if not is_staff_authenticated():
         return redirect(url_for("staff_login", next=request.path))
     if not can_access_order(order_id):
@@ -3030,7 +3047,7 @@ def production_notes_page(order_id):
 
 @app.route("/orders/<order_id>/art-job-sheet")
 def art_job_sheet_page(order_id):
-    """Printable personalised art job sheet — one page per product line (staff only)."""
+    """Printable personalised art job sheet - one page per product line (staff only)."""
     if not is_staff_authenticated():
         return redirect(url_for("staff_login", next=request.path))
     if not can_access_order(order_id):
@@ -3583,7 +3600,7 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
         if stage == "approved":
             pass
         elif note and stage.startswith("proof_"):
-            pass  # request changes — same stage, note in history
+            pass  # request changes - same stage, note in history
         else:
             return jsonify({"success": False, "error": "Invalid status update"}), 400
     elif not by:
@@ -3941,7 +3958,7 @@ def api_customer_type_tag(customer_id):
 
 @app.route('/api/customers/<customer_id>/type-assigned-notify', methods=['POST'])
 def api_customer_type_assigned_notify(customer_id):
-    """Staff: send Klaviyo event after pending → trade/end-customer (explicit confirmation)."""
+    """Staff: send Klaviyo event after pending -> trade/end-customer (explicit confirmation)."""
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
 
@@ -4049,939 +4066,265 @@ def api_foil_colours():
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error fetching foil colours: {str(e)}'}), 500
 
-def map_subcategories_to_categories(categories, subcategories):
-    """
-    Map subcategories to their parent categories based on naming patterns
-    Returns a dictionary mapping category -> [subcategories]
-    """
-    category_map = {}
-    
-    # Initialize all categories with empty lists
-    for cat in categories:
-        category_map[cat] = []
-    
-    # Map subcategories to categories based on patterns
-    for subcat in subcategories:
-        matched = False
-        
-        for cat in categories:
-            # Pattern matching (similar to Category Editor logic)
-            if "Biscuits" in cat:
-                if "Biscuits" in subcat or "Cake" in subcat or "Cupcakes" in subcat or "Pies" in subcat:
-                    category_map[cat].append(subcat)
-                    matched = True
-                    break
-            elif "Cereal" in cat:
-                if "Cereal" in subcat or "Porridge" in subcat:
-                    category_map[cat].append(subcat)
-                    matched = True
-                    break
-            elif "Chewing Gum" in cat and subcat == "Mint":
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Chocolate" and subcat in ["Balls", "Bars", "Coins", "Hearts", "Neapolitans", "Single Shapes", "Truffles"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Crips" in cat and subcat in ["BBQ", "Beef", "Cheese & Onion", "Plain/Original", "Salt & Vinegar", "Sour Cream"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Dried Fruits" in cat and subcat in ["Apricots", "Bananas", "Dates"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Drinks" and subcat in ["Coffee", "Fizzy", "Hot Chocolate", "Still", "Tea", "Water"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Jams" in cat and ("Marmalade" in subcat or "Marmite" in subcat or "Nutella" in subcat or "Jam" in subcat):
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Lollipops" and subcat in ["Chocolate", "Sugar"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Popcorn - Popped" in cat and subcat in ["Sweet", "Sweet & Salty", "Salted", "Toffee"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Popcorn - Microwave" in cat and subcat in ["Butter", "Salted", "Sweet"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Pretzels" and subcat in ["Original", "Sour Cream & Onion"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Protein" and subcat in ["Bars", "Nuts"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif "Savoury Snacks" in cat and subcat in ["Bars", "Bags", "Packs"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Soup" and subcat in ["Chicken", "Leek & Potato", "Minestrone", "Tomato"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Sprinkles" and subcat in ["Shapes", "Vermicelli"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Sweets" and subcat in ["Boiled/Compressed", "Jellies"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Mints" and subcat in ["Boiled Sweets", "Compressed Mints", "Chewing Gum"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Vegan" and subcat in ["Sweets", "Treats"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Packaging" and (subcat in ["Bags", "Bottle", "Card", "Eco", "Header Card", "Jar", "Label", "Nets", "Organza Bag", "Popcorn Box", "Plastic Box", "Tin", "Tub", "Wrap"] or "Card Box" in subcat):
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Seasonal" and subcat in ["Valentines Day", "Ramadan", "Eid", "Easter", "Summer", "Halloween", "Black Friday", "Christmas", "New Year"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Themes" and subcat in ["Achievement", "Anniversary", "Appreciation", "Awards", "Back To School", "British", "Carnival", "Celebrations", "Community", "Countdown to Launch", "Customers", "Diversity & Inclusion", "Empowerment", "Football", "Ideas", "Heroes", "Loyalty", "Mental Health", "Meet The Team", "Milestones", "Product Launch", "Referral Rewards", "Sale", "Saver Offers", "Success", "Staff", "Support", "Sustainability", "Thank You", "University", "Volunteer", "Wellbeing", "We Miss You"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Events & Charities" and subcat in ["Cancer Research", "Careers Week", "Mental Health Awareness", "Movember", "Pride", "Wimbledon", "World Bee Day", "Volunteers Week", "World Blood Donor Day", "World Cup - Football", "World Cup - Rugby"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-            elif cat == "Brands" and subcat in ["Cadbury", "Haribo", "Heinz", "Jordans", "Kellom", "Mars", "McVities", "Nature Valley", "Nestle", "Swizzels", "Walkers"]:
-                category_map[cat].append(subcat)
-                matched = True
-                break
-        
-        if not matched:
-            # If no match found, add to "Uncategorized"
-            if "Uncategorized" not in category_map:
-                category_map["Uncategorized"] = []
-            category_map["Uncategorized"].append(subcat)
-    
-    return category_map
+# Retired Phase 4 sync helpers (map_subcategories_to_categories,
+# sync_category_collections, sync_metafield_definitions). Create/publish now
+# goes through shopify_client.taxonomy; visibility via Phase 7 reconcile.
 
-def sync_category_collections(categories, subcategories, category_mapping=None):
-    """Create or update Shopify collections for categories and subcategories using GraphQL"""
-    try:
-        from config import STORE_DOMAIN, ACCESS_TOKEN, API_VERSION
-        import time
-        import json
-        
-        graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-        headers = {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json'
-        }
-        
-        results = {
-            'categories_created': 0,
-            'categories_updated': 0,
-            'subcategories_created': 0,
-            'subcategories_updated': 0,
-            'errors': []
-        }
-        
-        # Map subcategories to categories
-        if category_mapping:
-            category_map = category_mapping
-        else:
-            try:
-                from scripts.product_creator.categories import CATEGORY_MAPPING
-                category_map = CATEGORY_MAPPING if CATEGORY_MAPPING else {}
-                if not category_map:
-                    category_map = map_subcategories_to_categories(categories, subcategories)
-            except (ImportError, AttributeError):
-                category_map = map_subcategories_to_categories(categories, subcategories)
-        
-        # Fetch all metafield definitions dynamically
-        print("📋 Fetching metafield definitions...")
-        
-        # Build query for all possible subcategory metafields (max is ~128 subcategories per metafield)
-        max_subcat_index = len(subcategories) // 128 + 2  # Add buffer for safety
-        subcategory_aliases = []
-        subcategory_queries = []
-        
-        # Always query for subcategory (index 0)
-        subcategory_aliases.append("subcategory")
-        subcategory_queries.append('subcategory: metafieldDefinitions(first: 1, namespace: "custom", key: "subcategory", ownerType: PRODUCT) { edges { node { id key } } }')
-        
-        # Query for subcategory_2, subcategory_3, etc.
-        for i in range(2, max_subcat_index + 1):
-            alias = f"subcategory_{i}"
-            subcategory_aliases.append(alias)
-            subcategory_queries.append(f'{alias}: metafieldDefinitions(first: 1, namespace: "custom", key: "{alias}", ownerType: PRODUCT) {{ edges {{ node {{ id key }} }} }}')
-        
-        get_defs_query = f"""
-        query {{
-            customCategory: metafieldDefinitions(first: 1, namespace: "custom", key: "custom_category", ownerType: PRODUCT) {{
-                edges {{
-                    node {{
-                        id
-                        key
-                    }}
-                }}
-            }}
-            {chr(10).join(subcategory_queries)}
-        }}
-        """
-        
-        defs_response = requests.post(graphql_url, json={'query': get_defs_query}, headers=headers)
-        metafield_defs = {}
-        
-        if defs_response.status_code == 200:
-            defs_data = defs_response.json()
-            if 'errors' in defs_data:
-                error_msg = f"Error fetching metafield definitions: {defs_data['errors']}"
-                print(f"❌ {error_msg}")
-                results['errors'].append(error_msg)
-            else:
-                data = defs_data.get('data', {})
-                
-                # Get custom_category
-                if data.get('customCategory', {}).get('edges'):
-                    metafield_defs['custom_category'] = data['customCategory']['edges'][0]['node']['id']
-                    print(f"✅ Found custom_category metafield definition")
-                else:
-                    error_msg = "Metafield definition 'custom_category' not found"
-                    print(f"❌ {error_msg}")
-                    results['errors'].append(error_msg)
-                    return results
-                
-                # Get all subcategory metafields
-                for alias in subcategory_aliases:
-                    if data.get(alias, {}).get('edges'):
-                        metafield_defs[alias] = data[alias]['edges'][0]['node']['id']
-                        print(f"✅ Found {alias} metafield definition")
-        else:
-            error_msg = f"Failed to fetch metafield definitions: HTTP {defs_response.status_code}"
-            print(f"❌ {error_msg}")
-            results['errors'].append(error_msg)
-            return results
-        
-        if not metafield_defs.get('custom_category'):
-            error_msg = "Missing required metafield definition: custom_category"
-            results['errors'].append(error_msg)
-            return results
-        
-        # Fetch all existing collections in batches
-        print("📋 Fetching existing collections...")
-        existing_collections = {}
-        cursor = None
-        has_next = True
-        
-        while has_next:
-            query = """
-            query getCollections($cursor: String) {
-                collections(first: 250, after: $cursor, query: "collection_type:smart") {
-                    pageInfo {
-                        hasNextPage
-                        endCursor
-                    }
-                    edges {
-                        node {
-                            id
-                            title
-                            ruleSet {
-                                rules {
-                                    column
-                                    relation
-                                    condition
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            """
-            
-            variables = {"cursor": cursor} if cursor else {}
-            response = requests.post(graphql_url, json={'query': query, 'variables': variables}, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'errors' in data:
-                    error_msg = f"Error fetching collections: {data['errors']}"
-                    print(f"❌ {error_msg}")
-                    results['errors'].append(error_msg)
-                    break
-                
-                collections_data = data.get('data', {}).get('collections', {})
-                edges = collections_data.get('edges', [])
-                
-                for edge in edges:
-                    collection = edge['node']
-                    existing_collections[collection['title']] = collection['id']
-                    # Debug: Print rules structure for first collection to see how Shopify stores metafield rules
-                    if collection.get('ruleSet') and collection['ruleSet'].get('rules'):
-                        if len(existing_collections) == 1:  # Only print for first collection
-                            print(f"🔍 Debug: First collection '{collection['title']}' rules structure:")
-                            print(f"   {json.dumps(collection['ruleSet']['rules'], indent=2)}")
-                
-                page_info = collections_data.get('pageInfo', {})
-                has_next = page_info.get('hasNextPage', False)
-                cursor = page_info.get('endCursor')
-            else:
-                error_msg = f"Failed to fetch collections: HTTP {response.status_code}"
-                print(f"❌ {error_msg}")
-                results['errors'].append(error_msg)
-                break
-        
-        print(f"✅ Found {len(existing_collections)} existing smart collections")
-        
-        # Helper function to create/update a collection
-        def create_or_update_collection(title, rules, is_update=False, collection_id=None):
-            """Create or update a smart collection with given rules"""
-            mutation_name = "collectionUpdate" if is_update else "collectionCreate"
-            mutation = f"""
-            mutation {mutation_name}($input: CollectionInput!) {{
-                {mutation_name}(input: $input) {{
-                    collection {{
-                                id
-                                title
-                    }}
-                    userErrors {{
-                                field
-                                message
-                    }}
-                }}
-            }}
-            """
-            
-            input_data = {
-                            "ruleSet": {
-                                "appliedDisjunctively": False,
-                    "rules": rules
-                }
-            }
-            
-            if is_update:
-                input_data["id"] = collection_id
-            else:
-                input_data["title"] = title
-            
-            variables = {"input": input_data}
-            response = requests.post(graphql_url, json={'query': mutation, 'variables': variables}, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                mutation_name = "collectionUpdate" if is_update else "collectionCreate"
-                
-                if 'errors' in data:
-                    return {'success': False, 'error': data['errors']}
-                
-                result = data.get('data', {}).get(mutation_name, {})
-                
-                if result.get('userErrors'):
-                    return {'success': False, 'error': result['userErrors']}
-                
-                return {'success': True}
-            else:
-                return {'success': False, 'error': f"HTTP {response.status_code}"}
-        
-        category_def_id = metafield_defs['custom_category']
-        
-        # Process category collections
-        print(f"📋 Processing {len(categories)} category collections...")
-        for i, category in enumerate(categories, 1):
-            try:
-                if i % 10 == 0:  # Only sleep every 10 requests
-                    time.sleep(0.2)
-                
-                collection_title = category
-                collection_id = existing_collections.get(collection_title)
-                
-                rules = [{
-                    "column": "PRODUCT_METAFIELD_DEFINITION",
-                    "relation": "EQUALS",
-                    "condition": collection_title
-                }]
-                
-                result = create_or_update_collection(
-                    collection_title,
-                    rules,
-                    is_update=(collection_id is not None),
-                    collection_id=collection_id
-                )
-                
-                if result['success']:
-                    if collection_id:
-                        results['categories_updated'] += 1
-                    else:
-                        results['categories_created'] += 1
-                else:
-                    error = result.get('error', 'Unknown error')
-                    error_msg = f"Error processing category '{category}': {error}"
-                    results['errors'].append(error_msg)
-                            
-            except Exception as e:
-                error_msg = f"Error processing category collection '{category}': {str(e)}"
-                results['errors'].append(error_msg)
-        
-        # Process subcategory collections
-        print(f"📋 Processing subcategory collections...")
-        try:
-            from scripts.product_creator.categories import get_subcategory_metafield_key
-        except (ImportError, AttributeError):
-            get_subcategory_metafield_key = lambda x: "subcategory"
-        
-        subcategory_count = 0
-        for category, subcats in category_map.items():
-            for subcat in subcats:
-                try:
-                    subcategory_count += 1
-                    if subcategory_count % 10 == 0:  # Only sleep every 10 requests
-                        time.sleep(0.2)
-                    
-                    collection_title = subcat
-                    collection_id = existing_collections.get(collection_title)
-                    
-                    # Get the metafield key for this subcategory
-                    metafield_key = get_subcategory_metafield_key(subcat)
-                    subcat_def_id = metafield_defs.get(metafield_key)
-                    
-                    if not subcat_def_id:
-                        error_msg = f"Metafield definition '{metafield_key}' not found for subcategory '{subcat}'"
-                        results['errors'].append(error_msg)
-                        continue
-                    
-                    # Create rules: both category and subcategory must match
-                    rules = [
-                        {
-                            "column": "PRODUCT_METAFIELD_DEFINITION",
-                            "relation": "EQUALS",
-                            "condition": category
-                        },
-                        {
-                            "column": "PRODUCT_METAFIELD_DEFINITION",
-                            "relation": "EQUALS",
-                            "condition": subcat
-                        }
-                    ]
-                    
-                    result = create_or_update_collection(
-                        collection_title,
-                        rules,
-                        is_update=(collection_id is not None),
-                        collection_id=collection_id
-                    )
-                    
-                    if result['success']:
-                        if collection_id:
-                            results['subcategories_updated'] += 1
-                        else:
-                            results['subcategories_created'] += 1
-                    else:
-                        error = result.get('error', 'Unknown error')
-                        error_msg = f"Error processing subcategory '{subcat}': {error}"
-                        results['errors'].append(error_msg)
-                                
-                except Exception as e:
-                    error_msg = f"Error processing subcategory collection '{subcat}': {str(e)}"
-                    results['errors'].append(error_msg)
-        
-        # Return results
-        total_created = results['categories_created'] + results['subcategories_created']
-        total_updated = results['categories_updated'] + results['subcategories_updated']
-        
-        if results['errors']:
-            return {
-                'success': False,
-                'message': f"Collections sync completed with {len(results['errors'])} error(s)",
-                'errors': results['errors'],
-                'created': total_created,
-                'updated': total_updated
-            }
-        else:
-            return {
-                'success': True,
-                'message': f"Collections synced successfully: {total_created} created, {total_updated} updated",
-                'created': total_created,
-                'updated': total_updated
-            }
-            
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'errors': [f'Error syncing collections: {str(e)}']}
 
-def sync_metafield_definitions(categories, subcategories):
-    """Sync categories and subcategories to Shopify metafield definitions"""
+def _verify_shopify_webhook_hmac(raw_body: bytes, hmac_header: str | None) -> bool:
+    """SHA256 base64 HMAC of raw body vs X-Shopify-Hmac-Sha256."""
+    import base64
+    import hashlib
+    import hmac as hmac_mod
+
+    from config import SHOPIFY_WEBHOOK_SECRET
+
+    secret = (SHOPIFY_WEBHOOK_SECRET or "").strip()
+    if not secret or not hmac_header:
+        return False
+    digest = hmac_mod.new(secret.encode("utf-8"), raw_body, hashlib.sha256).digest()
+    computed = base64.b64encode(digest).decode("utf-8")
+    return hmac_mod.compare_digest(computed, hmac_header.strip())
+
+
+@app.route("/webhooks/shopify/collections", methods=["POST"])
+def webhook_shopify_collections():
+    """
+    collections/create + collections/update — reconcile one handle.
+    HMAC required. Noop returns 200 without taxonomy metafield write.
+    """
+    raw = request.get_data() or b""
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256")
+    if not _verify_shopify_webhook_hmac(raw, hmac_header):
+        return jsonify({"success": False, "error": "Invalid HMAC"}), 401
+
+    topic = (request.headers.get("X-Shopify-Topic") or "").strip().lower()
+    if topic not in ("collections/create", "collections/update"):
+        return jsonify({"success": True, "ignored": True, "topic": topic}), 200
+
     try:
-        from config import STORE_DOMAIN, ACCESS_TOKEN, API_VERSION
-        
-        # Deduplicate subcategories while preserving order
-        seen = set()
-        deduplicated_subcategories = []
-        duplicates = []
-        for subcat in subcategories:
-            if subcat not in seen:
-                seen.add(subcat)
-                deduplicated_subcategories.append(subcat)
-            else:
-                duplicates.append(subcat)
-        
-        if duplicates:
-            print(f"⚠️ Found {len(duplicates)} duplicate subcategories: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}")
-            print(f"📊 Deduplicated: {len(subcategories)} → {len(deduplicated_subcategories)} subcategories")
-        
-        subcategories = deduplicated_subcategories
-        
-        graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
-        headers = {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json'
-        }
-        
-        results = {
-            'category_synced': False,
-            'subcategory_synced': False,
-            'errors': []
-        }
-        
-        # Sync custom_category metafield definition (product type)
-        try:
-            # Query for product metafield definitions
-            get_query = """
-            query getMetafieldDefinition($namespace: String!, $key: String!, $ownerType: MetafieldOwnerType!) {
-                metafieldDefinitions(first: 1, namespace: $namespace, key: $key, ownerType: $ownerType) {
-                    edges {
-                        node {
-                            id
-                            name
-                            namespace
-                            key
-                            ownerType
-                            type {
-                                name
-                            }
-                            validations {
-                                name
-                                value
-                            }
-                            capabilities {
-                                smartCollectionCondition {
-                                    enabled
-                                }
-                            }
-                        }
-                    }
-                }
+        payload = json.loads(raw.decode("utf-8") if raw else "{}")
+    except Exception:
+        return jsonify({"success": False, "error": "Invalid JSON"}), 400
+
+    handle = (payload.get("handle") or "").strip()
+    if not handle:
+        return jsonify({"success": True, "ignored": True, "reason": "no handle"}), 200
+
+    try:
+        from shopify_client import taxonomy as taxmod
+
+        result = taxmod.reconcile_handle(handle, write=True)
+        return jsonify(
+            {
+                "success": True,
+                "topic": topic,
+                "handle": handle,
+                "action": result.get("action"),
+                "count": result.get("count"),
+                "taxonomy_written": bool(result.get("taxonomy_written")),
             }
-            """
-            
-            # Check if category definition exists (product type)
-            variables = {
-                "namespace": "custom",
-                "key": "custom_category",
-                "ownerType": "PRODUCT"
-            }
-            
-            response = requests.post(graphql_url, json={'query': get_query, 'variables': variables}, headers=headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'errors' in data:
-                    print(f"❌ GraphQL errors for category: {data['errors']}")
-                    results['errors'].append(f"Category definition query error: {data['errors']}")
-                else:
-                    edges = data.get('data', {}).get('metafieldDefinitions', {}).get('edges', [])
-                    print(f"🔍 Found {len(edges)} category metafield definition(s)")
-                    if edges:
-                        print(f"🔍 Current definition structure: {json.dumps(edges[0]['node'], indent=2)}")
-                    
-                    if edges:
-                        # Update existing definition
-                        definition_node = edges[0]['node']
-                        # Convert choices list to JSON string (matching the existing structure)
-                        choices_json = json.dumps(categories)
-                        
-                        # Preserve existing capabilities and ensure smartCollectionCondition is enabled
-                        existing_capabilities = definition_node.get("capabilities", {})
-                        capabilities = existing_capabilities.copy() if existing_capabilities else {}
-                        capabilities["smartCollectionCondition"] = {"enabled": True}
-                        
-                        update_mutation = """
-                        mutation updateMetafieldDefinition($definition: MetafieldDefinitionUpdateInput!) {
-                            metafieldDefinitionUpdate(definition: $definition) {
-                                userErrors {
-                                    field
-                                    message
-                                }
-                            }
-                        }
-                        """
-                        
-                        update_variables = {
-                            "definition": {
-                                "name": definition_node["name"],
-                                "namespace": definition_node["namespace"],
-                                "key": definition_node["key"],
-                                "ownerType": definition_node["ownerType"],
-                                "capabilities": capabilities,
-                                "validations": [
-                                    {
-                                        "name": "choices",
-                                        "value": choices_json
-                                    }
-                                ]
-                            }
-                        }
-                        
-                        update_response = requests.post(graphql_url, json={'query': update_mutation, 'variables': update_variables}, headers=headers)
-                        
-                        if update_response.status_code == 200:
-                            update_data = update_response.json()
-                            if 'errors' in update_data:
-                                results['errors'].append(f"Category definition update error: {update_data['errors']}")
-                            elif update_data.get('data', {}).get('metafieldDefinitionUpdate', {}).get('userErrors'):
-                                errors = update_data['data']['metafieldDefinitionUpdate']['userErrors']
-                                results['errors'].append(f"Category definition user errors: {errors}")
-                            else:
-                                results['category_synced'] = True
-                                print(f"✅ Updated custom_category metafield definition with {len(categories)} choices")
-                    else:
-                        print(f"ℹ️ custom_category metafield definition not found - creating is not supported via API, will need manual creation")
-                        results['errors'].append("custom_category metafield definition not found - please create it manually in Shopify")
-            else:
-                results['errors'].append(f"Failed to fetch category definition: HTTP {response.status_code}")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            results['errors'].append(f"Error syncing category definition: {str(e)}")
-        
-        # Sync subcategory metafield definitions (product type)
-        # Use same boundary as categories.py: subcategory = before "Sweets", subcategory_2 = "Sweets" and after
-        from scripts.product_creator.categories import get_metafield_choices as get_subcategory_choices_by_key
-        MAX_CHOICES_PER_METAFIELD = 128
-        subcategory_chunk_list = [
-            ("subcategory", get_subcategory_choices_by_key("subcategory") or []),
-            ("subcategory_2", get_subcategory_choices_by_key("subcategory_2") or []),
-        ]
-        # Drop subcategory_2 if empty (e.g. if boundary not in list)
-        subcategory_chunk_list = [(k, c) for k, c in subcategory_chunk_list if c]
-        
-        print(f"📊 Subcategory definitions: subcategory ({len(subcategory_chunk_list[0][1])} choices), subcategory_2 ({len(subcategory_chunk_list[1][1]) if len(subcategory_chunk_list) > 1 else 0} choices)")
-        
-        update_mutation = """
-        mutation updateMetafieldDefinition($definition: MetafieldDefinitionUpdateInput!) {
-            metafieldDefinitionUpdate(definition: $definition) {
-                userErrors {
-                    field
-                    message
-                }
-            }
-        }
-        """
-        
-        for metafield_key, chunk in subcategory_chunk_list:
-            if len(chunk) > MAX_CHOICES_PER_METAFIELD:
-                error_msg = f"{metafield_key} has {len(chunk)} items, exceeds {MAX_CHOICES_PER_METAFIELD} limit"
-                print(f"❌ {error_msg}")
-                results['errors'].append(error_msg)
-                continue
-            
-            print(f"🔄 Processing {metafield_key}: {len(chunk)} subcategories")
-            try:
-                variables = {
-                    "namespace": "custom",
-                    "key": metafield_key,
-                    "ownerType": "PRODUCT"
-                }
-                
-                response = requests.post(graphql_url, json={'query': get_query, 'variables': variables}, headers=headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'errors' in data:
-                        print(f"❌ GraphQL errors for {metafield_key}: {data['errors']}")
-                        results['errors'].append(f"{metafield_key} definition query error: {data['errors']}")
-                        continue
-                    
-                    edges = data.get('data', {}).get('metafieldDefinitions', {}).get('edges', [])
-                    print(f"🔍 Found {len(edges)} {metafield_key} metafield definition(s)")
-                    
-                    if edges:
-                        # Update existing definition
-                        # Convert choices list to JSON string (matching the existing structure)
-                        choices_json = json.dumps(chunk)
-                        print(f"📝 Updating {metafield_key} with {len(chunk)} choices: {choices_json[:100]}...")
-                        
-                        definition_node = edges[0]['node']
-                        # Preserve existing capabilities and ensure smartCollectionCondition is enabled
-                        existing_capabilities = definition_node.get("capabilities", {})
-                        capabilities = existing_capabilities.copy() if existing_capabilities else {}
-                        capabilities["smartCollectionCondition"] = {"enabled": True}
-                        
-                        update_variables = {
-                            "definition": {
-                                "name": definition_node["name"],
-                                "namespace": definition_node["namespace"],
-                                "key": definition_node["key"],
-                                "ownerType": definition_node["ownerType"],
-                                "capabilities": capabilities,
-                                "validations": [
-                                    {
-                                        "name": "choices",
-                                        "value": choices_json
-                                    }
-                                ]
-                            }
-                        }
-                        
-                        update_response = requests.post(graphql_url, json={'query': update_mutation, 'variables': update_variables}, headers=headers)
-                        
-                        if update_response.status_code == 200:
-                            update_data = update_response.json()
-                            if 'errors' in update_data:
-                                results['errors'].append(f"{metafield_key} definition update error: {update_data['errors']}")
-                            elif update_data.get('data', {}).get('metafieldDefinitionUpdate', {}).get('userErrors'):
-                                errors = update_data['data']['metafieldDefinitionUpdate']['userErrors']
-                                print(f"❌ {metafield_key} definition user errors: {errors}")
-                                results['errors'].append(f"{metafield_key} definition user errors: {errors}")
-                            else:
-                                results['subcategory_synced'] = True
-                                print(f"✅ Updated {metafield_key} metafield definition with {len(chunk)} choices")
-                    else:
-                        print(f"ℹ️ {metafield_key} metafield definition not found - creating is not supported via API, will need manual creation")
-                        results['errors'].append(f"{metafield_key} metafield definition not found - please create it manually in Shopify")
-                else:
-                    results['errors'].append(f"Failed to fetch {metafield_key} definition: HTTP {response.status_code}")
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                results['errors'].append(f"Error syncing {metafield_key} definition: {str(e)}")
-        
-        if results['category_synced'] and results['subcategory_synced']:
-            return {'success': True, 'message': 'Successfully synced both metafield definitions'}
-        elif results['category_synced'] or results['subcategory_synced']:
-            return {'success': True, 'message': f"Partially synced: category={results['category_synced']}, subcategory={results['subcategory_synced']}", 'errors': results['errors']}
-        else:
-            return {'success': False, 'errors': results['errors']}
-            
+        ), 200
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {'success': False, 'errors': [f'Error syncing metafield definitions: {str(e)}']}
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/cron/reconcile-visibility", methods=["POST"])
+def cron_reconcile_visibility():
+    """Nightly backstop. Authorization: Bearer <CRON_SECRET>. Circuit breaker stays on."""
+    from config import CRON_SECRET
+    import hmac as hmac_mod
+
+    expected = (CRON_SECRET or "").strip()
+    auth = (request.headers.get("Authorization") or "").strip()
+    token = ""
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    if not expected or not token or not hmac_mod.compare_digest(token, expected):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    try:
+        from shopify_client import taxonomy as taxmod
+        from shopify_client.taxonomy import VisibilityCircuitBreaker
+
+        try:
+            report = taxmod.reconcile_visibility(write=True, force=False)
+        except VisibilityCircuitBreaker as e:
+            report = e.report or {}
+            return jsonify(
+                {
+                    "success": False,
+                    "circuit_breaker_tripped": True,
+                    "error": str(e),
+                    "counts": report.get("counts"),
+                }
+            ), 503
+
+        counts = report.get("counts") or {}
+        return jsonify(
+            {
+                "success": bool(report.get("success", True)),
+                "circuit_breaker_tripped": False,
+                "taxonomy_written": bool(report.get("taxonomy_written")),
+                "taxonomy_updated_at": report.get("taxonomy_updated_at"),
+                "counts": counts,
+                "error": report.get("error"),
+            }
+        ), 200 if report.get("success", True) else 500
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/api/category-editor/categories', methods=['GET'])
 def api_get_categories():
-    """Get current categories and subcategories from categories.py"""
+    """Taxonomy from shop.custom.taxonomy with source/age metadata."""
     try:
-        from scripts.product_creator.categories import get_category_choices, get_subcategory_choices
-        
+        from shopify_client import taxonomy as taxmod
+        from scripts.product_creator.categories import (
+            get_category_choices,
+            get_subcategory_choices,
+            CATEGORY_MAPPING,
+        )
+
+        meta = taxmod.load_taxonomy_meta(require=False)
+        tax = meta.get("taxonomy") or []
+        source = meta.get("source") or "fallback"
+
+        if tax and source in ("live", "cached"):
+            categories = [c.get("category") for c in tax if c.get("category")]
+            subcategories = []
+            category_mapping = {}
+            for c in tax:
+                name = c.get("category") or ""
+                subs = [s.get("label") for s in (c.get("subcategories") or []) if s.get("label")]
+                category_mapping[name] = subs
+                for label in subs:
+                    if label not in subcategories:
+                        subcategories.append(label)
+            banner_source = "live" if source == "live" else "cached"
+            return jsonify({
+                "success": True,
+                "source": banner_source,
+                "taxonomy_source": source,
+                "taxonomy": tax,
+                "taxonomy_updated_at": meta.get("updated_at"),
+                "fetched_at": meta.get("fetched_at"),
+                "source_age_sec": meta.get("source_age_sec"),
+                "categories": categories,
+                "subcategories": subcategories,
+                "category_mapping": category_mapping,
+                "cache_note": (
+                    "LKG is ephemeral on Render (same container only). "
+                    "Choice cache refreshes on create; restart worker if Product Creator looks stale."
+                ),
+            })
+
         categories = get_category_choices()
         subcategories = get_subcategory_choices()
-        
-        # Try to get the stored mapping
-        category_mapping = {}
-        try:
-            from scripts.product_creator.categories import CATEGORY_MAPPING
-            category_mapping = CATEGORY_MAPPING if CATEGORY_MAPPING else {}
-        except (ImportError, AttributeError):
-            # If mapping doesn't exist or is empty, create empty dict
-            pass
-        
+        category_mapping = CATEGORY_MAPPING if CATEGORY_MAPPING else {}
         return jsonify({
-            'success': True,
-            'categories': categories,
-            'subcategories': subcategories,
-            'category_mapping': category_mapping
+            "success": True,
+            "source": "fallback",
+            "taxonomy_source": "fallback",
+            "taxonomy": [],
+            "taxonomy_updated_at": None,
+            "fetched_at": meta.get("fetched_at"),
+            "source_age_sec": meta.get("source_age_sec"),
+            "categories": categories,
+            "subcategories": subcategories,
+            "category_mapping": category_mapping,
+            "warning": (
+                "FALLBACK - do not edit. shop.custom.taxonomy empty/unavailable and no LKG. "
+                "Run Phase 1 seed before creating nodes."
+            ),
         })
     except Exception as e:
         return jsonify({
-            'success': False,
-            'error': f'Error fetching categories: {str(e)}'
+            "success": False,
+            "error": f"Error fetching categories: {str(e)}"
         }), 500
+
+
+def _taxonomy_error_response(exc):
+    from shopify_client.taxonomy import TaxonomyConflict
+    from shopify_client.bite_shopify import ShopifyError
+    if isinstance(exc, TaxonomyConflict):
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "conflict": True,
+            "taxonomy_updated_at": getattr(exc, "current_updated_at", None),
+        }), 409
+    code = 400 if isinstance(exc, ShopifyError) else 500
+    return jsonify({"success": False, "error": str(exc)}), code
+
+
+@app.route('/api/category-editor/subcategory', methods=['POST'])
+def api_create_subcategory():
+    """Create subcategory: choice + unpublished collection + taxonomy node."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        result = taxmod.create_subcategory(
+            category=(data.get("category") or "").strip(),
+            label=(data.get("label") or "").strip(),
+            handle=(data.get("handle") or "").strip() or None,
+            seo_title=(data.get("seo_title") or "").strip() or None,
+            seo_description=(data.get("seo_description") or "").strip() or None,
+            indexable=bool(data.get("indexable", True)),
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/publish', methods=['POST'])
+def api_taxonomy_publish_now():
+    """Publish collection + set taxonomy visible (indexable + products > 0)."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        handle = (data.get("handle") or "").strip()
+        if not handle:
+            return jsonify({"success": False, "error": "handle required"}), 400
+        result = taxmod.publish_now(
+            handle,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
+@app.route('/api/category-editor/taxonomy', methods=['PUT'])
+def api_save_taxonomy():
+    """Save reordered/edited taxonomy (handles remain locked)."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        data = request.get_json() or {}
+        tax = data.get("taxonomy")
+        if not isinstance(tax, list):
+            return jsonify({"success": False, "error": "taxonomy must be a list"}), 400
+        result = taxmod.reorder_and_patch(
+            tax,
+            expected_updated_at=data.get("expected_updated_at"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
 
 @app.route('/api/category-editor/categories', methods=['POST'])
 def api_update_categories():
-    """Update categories and subcategories in categories.py"""
-    try:
-        data = request.get_json()
-        categories = data.get('categories', [])
-        subcategories = data.get('subcategories', [])
-        category_mapping = data.get('category_mapping', {})
-        
-        # Debug: log received data
-        print(f"📥 Received save request:")
-        print(f"  Categories: {len(categories)}")
-        print(f"  Subcategories: {len(subcategories)}")
-        print(f"  Category mapping: {len(category_mapping)} categories")
-        if category_mapping:
-            for cat, subcats in list(category_mapping.items())[:3]:
-                print(f"    {cat}: {len(subcats)} subcategories")
-        
-        if not isinstance(categories, list) or not isinstance(subcategories, list):
-            return jsonify({
-                'success': False,
-                'error': 'Categories and subcategories must be arrays'
-            }), 400
-        
-        # Path to categories.py file
-        categories_file = os.path.join(os.path.dirname(__file__), 'scripts', 'product_creator', 'categories.py')
-        
-        # Read the current file
-        with open(categories_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Generate new categories list string
-        categories_str = '[\n'
-        for cat in categories:
-            cat_escaped = cat.replace('"', '\\"').replace('\\', '\\\\')
-            categories_str += f'    "{cat_escaped}",\n'
-        categories_str += ']'
-        
-        # Generate new subcategories list string with category headings
-        # Use the mapping to add category comments before each group
-        subcategories_str = '[\n'
-        
-        # Track which subcategories we've already added
-        added_subcats = set()
-        
-        # Iterate through categories in order and add their subcategories with headings
-        for cat in categories:
-            if cat in category_mapping and category_mapping[cat] and len(category_mapping[cat]) > 0:
-                # Add category heading as comment
-                subcategories_str += f'    # {cat}\n'
-                
-                # Add subcategories for this category
-                for subcat in category_mapping[cat]:
-                    if subcat in subcategories and subcat not in added_subcats:
-                        subcat_escaped = subcat.replace('"', '\\"').replace('\\', '\\\\')
-                        subcategories_str += f'    "{subcat_escaped}",\n'
-                        added_subcats.add(subcat)
-        
-        # Add any subcategories not in the mapping (shouldn't happen, but safety check)
-        for subcat in subcategories:
-            if subcat not in added_subcats:
-                subcat_escaped = subcat.replace('"', '\\"').replace('\\', '\\\\')
-                subcategories_str += f'    "{subcat_escaped}",\n'
-                added_subcats.add(subcat)
-        
-        subcategories_str += ']'
-        
-        # Generate category mapping dictionary string
-        # Only include categories that have subcategories
-        mapping_str = '{\n'
-        mapping_has_content = False
-        if category_mapping:
-            for cat in categories:
-                if cat in category_mapping and category_mapping[cat] and len(category_mapping[cat]) > 0:
-                    cat_escaped = cat.replace('"', '\\"').replace('\\', '\\\\')
-                    mapping_str += f'    "{cat_escaped}": [\n'
-                    for subcat in category_mapping[cat]:
-                        subcat_escaped = subcat.replace('"', '\\"').replace('\\', '\\\\')
-                        mapping_str += f'        "{subcat_escaped}",\n'
-                    mapping_str += '    ],\n'
-                    mapping_has_content = True
-        mapping_str += '}'
-        
-        # Replace CATEGORIES list - match from CATEGORIES = to the closing bracket
-        import re
-        # Match CATEGORIES = [ ... ] including newlines
-        cat_pattern = r'(CATEGORIES\s*=\s*)\[[\s\S]*?\]'
-        content = re.sub(cat_pattern, r'\1' + categories_str, content, count=1, flags=re.DOTALL)
-        
-        # Replace SUBCATEGORIES list - match from SUBCATEGORIES = to the closing bracket
-        subcat_pattern = r'(SUBCATEGORIES\s*=\s*)\[[\s\S]*?\]'
-        content = re.sub(subcat_pattern, r'\1' + subcategories_str, content, count=1, flags=re.DOTALL)
-        
-        # Replace or add CATEGORY_MAPPING (only if it has content)
-        if mapping_has_content:
-            # Check if CATEGORY_MAPPING exists in the file
-            if 'CATEGORY_MAPPING' in content:
-                # Replace existing mapping - match from CATEGORY_MAPPING = to the closing brace
-                # Handle both empty {} and multi-line dictionaries
-                mapping_pattern = r'(CATEGORY_MAPPING\s*=\s*)\{[\s\S]*?\}'
-                content = re.sub(mapping_pattern, r'\1' + mapping_str, content, count=1, flags=re.DOTALL)
-            else:
-                # Add mapping after SUBCATEGORIES list
-                # Find the end of SUBCATEGORIES list (closing bracket followed by newline)
-                subcat_pattern_end = r'(SUBCATEGORIES\s*=\s*\[[\s\S]*?\])\n'
-                replacement = r'\1\n\n# Category to subcategory mapping\n# This dictionary stores which subcategories belong to which categories\n# Format: {"Category Name": ["Subcategory1", "Subcategory2", ...]}\nCATEGORY_MAPPING = ' + mapping_str + '\n'
-                content = re.sub(subcat_pattern_end, replacement, content, count=1, flags=re.DOTALL)
-        else:
-            print("⚠️ No category mapping content to save - mapping is empty")
-        
-        # Debug: print mapping to console
-        if category_mapping:
-            print(f"📝 Saving category mapping with {len(category_mapping)} categories")
-            for cat, subcats in category_mapping.items():
-                if subcats:
-                    print(f"  {cat}: {len(subcats)} subcategories - {subcats[:3]}{'...' if len(subcats) > 3 else ''}")
-        else:
-            print(f"⚠️ No category mapping received in save request")
-        
-        # Write back to file
-        with open(categories_file, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        # Sync to Shopify metafield definitions
-        sync_result = None
-        try:
-            sync_result = sync_metafield_definitions(categories, subcategories)
-            if not sync_result['success']:
-                errors = sync_result.get('errors', [])
-                error_msg = '; '.join(errors) if errors else 'Unknown error'
-                print(f"⚠️ Warning: Failed to sync metafield definitions: {error_msg}")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"⚠️ Warning: Error syncing metafield definitions: {str(e)}")
-            sync_result = {'success': False, 'errors': [str(e)]}
-            # Don't fail the save operation if sync fails
-        
-        # Sync collections - pass the category_mapping so it uses the correct mapping
-        collections_result = None
-        try:
-            # Add delay to ensure metafield definition updates have propagated
-            if sync_result and sync_result.get('success'):
-                print("⏳ Waiting 3 seconds for metafield definition updates to propagate...")
-                import time
-                time.sleep(3)
-            
-            collections_result = sync_category_collections(categories, subcategories, category_mapping=category_mapping)
-            if not collections_result['success']:
-                errors = collections_result.get('errors', [])
-                error_msg = '; '.join(errors) if errors else 'Unknown error'
-                print(f"⚠️ Warning: Failed to sync collections: {error_msg}")
-            else:
-                # Only print errors if there are any
-                if collections_result.get('errors'):
-                    print(f"⚠️ Collection sync errors: {len(collections_result.get('errors', []))} error(s)")
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"⚠️ Warning: Error syncing collections: {str(e)}")
-            collections_result = {'success': False, 'errors': [str(e)]}
-            # Don't fail the save operation if collections fail
-        
-        return jsonify({
-            'success': True,
-            'message': 'Categories and subcategories updated successfully',
-            'sync_result': sync_result if 'sync_result' in locals() else None,
-            'collections_result': collections_result if 'collections_result' in locals() else None
-        })
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Error updating categories: {str(e)}'
-        }), 500
+    """Removed: runtime categories.py rewrite was RCE-adjacent / deploy-hostile."""
+    return jsonify({
+        "success": False,
+        "error": (
+            "Gone. categories.py is no longer rewritten at runtime. "
+            "Use GET/PUT taxonomy APIs and POST /api/category-editor/subcategory."
+        ),
+    }), 410
 
 if __name__ == '__main__':
     app.run(debug=False, threaded=True)

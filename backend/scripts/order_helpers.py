@@ -248,7 +248,7 @@ def _merge_property_pairs(properties: list[dict]) -> tuple[list[str], list[dict]
 
 
 def _build_meta_line(variant_title: str) -> str:
-    """Qty band / customer type only — option choices are shown in the stacked property list."""
+    """Qty band / customer type only - option choices are shown in the stacked property list."""
     return (variant_title or "").strip()
 
 
@@ -308,7 +308,7 @@ def _selected_option_names(properties: list[dict]) -> list[str]:
         if not val:
             continue
         names.append(val)
-        # Folded colour display "Red:R" → also match on "Red"
+        # Folded colour display "Red:R" -> also match on "Red"
         if ":" in val:
             names.append(val.split(":", 1)[0].strip())
     # Prefer longer / more specific names first
@@ -318,7 +318,7 @@ def _selected_option_names(properties: list[dict]) -> list[str]:
 
 def resolve_line_item_display_sku(sku: str, properties: list[dict] | None = None) -> str:
     """
-    If the line SKU is a JSON list of option→code mappings, return the product
+    If the line SKU is a JSON list of option->code mappings, return the product
     code for the selected option (e.g. M12645 for Flavour = Cranberry & Raspberry).
     Otherwise return the SKU unchanged.
     """
@@ -346,7 +346,7 @@ def resolve_line_item_display_sku(sku: str, properties: list[dict] | None = None
 
 
 def _clean_fee_title(title: str) -> str:
-    """Remove trailing variant marker e.g. 'Origination Fee (50)' → 'Origination Fee'."""
+    """Remove trailing variant marker e.g. 'Origination Fee (50)' -> 'Origination Fee'."""
     return re.sub(r"\s*\(\d+\)\s*$", "", (title or "").strip()).strip()
 
 
@@ -448,7 +448,7 @@ def format_line_item(li: dict) -> dict:
     storefront_props, remaining = _order_storefront_line_properties(properties)
     display_properties = storefront_props + remaining
     # When custom.sku is a JSON list of option codes, show the code for the
-    # selected option (e.g. Flavour = Cranberry & Raspberry → M12645).
+    # selected option (e.g. Flavour = Cranberry & Raspberry -> M12645).
     sku = resolve_line_item_display_sku(raw_sku, display_properties)
     is_fee = is_fee_item(title)
     unit_price = unit_money.get("amount") or "0.00"
@@ -1008,7 +1008,7 @@ def format_payment_method(node: dict) -> dict:
     if financial:
         financial_title = financial.title()
         return {"method": "unknown", "label": financial_title, "detail": ""}
-    return {"method": "unknown", "label": "—", "detail": ""}
+    return {"method": "unknown", "label": "-", "detail": ""}
 
 
 def _shop_money(node: dict, field: str) -> tuple[str, str]:

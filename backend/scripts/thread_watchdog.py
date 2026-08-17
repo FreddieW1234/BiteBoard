@@ -2,7 +2,7 @@
 
 The app runs on a single gunicorn worker with a fixed thread pool, so a handful
 of slow requests can occupy every thread and leave the site unable to answer
-anything — including /healthz, which does no I/O at all. From outside, that is
+anything - including /healthz, which does no I/O at all. From outside, that is
 indistinguishable from a slow dependency: the browser just waits. The only way
 to tell which operation is holding the threads is to look at their stacks while
 it is happening, so this samples in the background and dumps to stdout (i.e. the
@@ -12,7 +12,7 @@ Note the blind spot: this can only see requests the app has actually been handed
 Requests still waiting in the kernel's accept backlog are invisible, so if the
 server is configured to handle very few at once, a total outage can show up here
 as an almost idle process. That is exactly what happened while gunicorn was
-running its default sync worker — one request at a time, everything else queued
+running its default sync worker - one request at a time, everything else queued
 out of sight. The concurrency in gunicorn.conf.py is what makes these numbers
 mean anything.
 
@@ -90,7 +90,7 @@ def dump(reason=""):
     out = [
         "",
         "=" * 78,
-        f"THREAD WATCHDOG {_now_iso()} — {reason}",
+        f"THREAD WATCHDOG {_now_iso()} - {reason}",
         f"in-flight requests: {len(rows)}",
     ]
     for r in rows:
@@ -102,7 +102,7 @@ def dump(reason=""):
             continue  # the watchdog's own stack is noise
         req = by_thread.get(tid)
         label = f"{req['method']} {req['path']} ({req['age_s']}s)" if req else "idle/background"
-        out.append(f"\nThread {names.get(tid, '?')} [{tid}] — {label}")
+        out.append(f"\nThread {names.get(tid, '?')} [{tid}] - {label}")
         out.extend("  " + ln.rstrip() for ln in traceback.format_stack(frame))
 
     out.append("=" * 78)
@@ -125,7 +125,7 @@ def _loop():
             _last_dump_at = now
             dump(reason)
         except Exception as exc:  # a diagnostic must never take the app down
-            print(f"⚠️ Thread watchdog error: {exc}", flush=True)
+            print(f"[warn] Thread watchdog error: {exc}", flush=True)
 
 
 def init_watchdog(app):
@@ -159,7 +159,7 @@ def init_watchdog(app):
     _started = True
     threading.Thread(target=_loop, name="thread-watchdog", daemon=True).start()
     print(
-        f"🩺 Thread watchdog on — dump at {THREAD_WATCHDOG_BUSY} in-flight "
+        f"🩺 Thread watchdog on - dump at {THREAD_WATCHDOG_BUSY} in-flight "
         f"or a request over {THREAD_WATCHDOG_SLOW_SEC}s",
         flush=True,
     )

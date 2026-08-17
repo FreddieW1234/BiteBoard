@@ -48,7 +48,7 @@ def get_staff_username() -> str | None:
 
 
 def staff_can_access_dev_tools() -> bool:
-    """Files / Dev / Artwork Updater — only the dedicated dev account."""
+    """Files / Dev / Artwork Updater - only the dedicated dev account."""
     u = get_staff_username()
     return bool(u and u in STAFF_DEV_TOOL_USERNAMES)
 
@@ -123,6 +123,12 @@ def is_staff_public_path(path: str) -> bool:
     # must stay reachable to clear the maintenance bypass cookie.
     public = {"/staff/login", "/api/health", "/test", "/healthz", "/maint-exit"}
     if path in public:
+        return True
+    # Shopify collection webhooks (HMAC-verified in the route).
+    if path == "/webhooks/shopify/collections":
+        return True
+    # Nightly reconcile (Bearer CRON_SECRET verified in the route).
+    if path == "/api/cron/reconcile-visibility":
         return True
     # Storefront stock-designs: product page checks /exists and downloads /latest
     # without a portal staff session. Staff list/upload/delete stay protected.

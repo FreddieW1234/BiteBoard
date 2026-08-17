@@ -19,7 +19,7 @@ def _file_kind(name: str, kind: str | None) -> str:
 
 
 def browse_office_files(*, search: str = "", max_orders: int = 150) -> dict:
-    """Return a tree of orders → line items → files from the Office API."""
+    """Return a tree of orders -> line items -> files from the Office API."""
     from scripts.Orders import get_orders_overview  # type: ignore
     from scripts.office_api import get_order, list_files, item_key, OfficeApiError  # type: ignore
 

@@ -1,0 +1,2 @@
+# Taxonomy metafield backups (no credentials). Safe to commit for off-machine restore.
+# Restore: python scripts/set_taxonomy_metafield.py --restore scripts/data/backups/<file>.json --yes

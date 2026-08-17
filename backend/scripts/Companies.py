@@ -1,4 +1,4 @@
-"""Staff company management — durable store on office server, Shopify metafield sync on Render."""
+"""Staff company management - durable store on office server, Shopify metafield sync on Render."""
 
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ def _kick_companies_refresh() -> None:
 
 
 def get_companies_overview(*, refresh: bool = False) -> dict:
-    """Company list with stale-while-revalidate — never blocks a request thread
+    """Company list with stale-while-revalidate - never blocks a request thread
     on the office round-trip when we already have a copy (or while building)."""
     now = time.time()
     cached = _COMPANIES_LIST_CACHE
@@ -332,7 +332,7 @@ def delete_company_note(company_id: str, note_id: str) -> dict:
 
 
 def delete_company(company_id: str) -> dict:
-    """Delete a company record only — does not modify Shopify customer metafields."""
+    """Delete a company record only - does not modify Shopify customer metafields."""
     cid = (company_id or "").strip()
     if not cid:
         return {"success": False, "error": "Company id is required"}

@@ -1,0 +1,86 @@
+action,collection_title,current_handle,new_handle,products,priority,seo_title,seo_description
+rename,Seasonal - Ramadan & Eid,ramadan-eid,personalised-ramadan-calendars,13,Critical,,
+rename,Events - Sports Events,events-sports-events,promotional-sports-giveaways,7,Critical,,
+rename,Chocolate - Advent Calendars,chocolate-advent-calendars,personalised-advent-calendars,4,Critical,,
+rename,Sweets - Lollipops,sweets-lollipops,branded-lollipops,4,Critical,,
+rename,Sweets - Mints,sweets-mints,printed-mint-tins,3,Critical,,
+rename,Seasonal,seasonal,seasonal-promotional-confectionery,150,High,,
+rename,Chocolate,chocolate,personalised-chocolate,61,High,,
+rename,Seasonal - Christmas,seasonal-christmas,promotional-christmas-gifts,51,High,,
+rename,Sweets,sweets,promotional-sweets,36,High,,
+rename,Chocolate - Shapes & Novelties,chocolate-shapes-novelties,promotional-moulded-chocolate-shapes,28,High,,
+rename,Dietary - Vegan,dietary-vegan,promotional-vegan-sweets,16,High,,
+rename,Chocolate - Bars,chocolate-bars,personalised-chocolate-bars,10,High,,
+rename,Snacks - Crisps & Chips,snacks-crisps-chips,branded-crisps-and-snack-tubes,8,High,,
+rename,Snacks - Popcorn,snacks-popcorn,promotional-popcorn,7,High,,
+rename,Drinks - Coffee,drinks-coffee,promotional-coffee-sachets,2,High,,
+rename,Food & Pantry,food-pantry,branded-food-and-pantry,2,High,,
+rename,Seasonal - Easter,seasonal-easter,promotional-easter-gifts,38,Med,,
+rename,Branded Merchandise & Packaging,branded-merchandise-packaging,promotional-merchandise-and-packaging,37,Med,,"Branded merchandise and custom promotional packaging. Printed boxes, bags and gift presentation, plus full fulfilment services."
+rename,Branded Merchandise & Packaging - Merchandise,branded-merchandise-packaging-merchandise,branded-merchandise,37,Med,,"Branded merchandise to pair with your confectionery — printed goods sourced, produced and delivered from one UK supplier."
+rename,Events,events,promotional-gifts-for-events,34,Med,,
+rename,Snacks,snacks,promotional-snacks,24,Med,,
+rename,Drinks,drinks,promotional-drinks,24,Med,,
+rename,Sweets - Gums & Jellies,sweets-gums-jellies,promotional-jelly-sweets,22,Med,,
+rename,Drinks - Tea,drinks-tea,branded-tea-sachets,17,Med,,
+rename,Dietary,dietary,vegan-and-free-from-promotional-sweets,16,Med,,
+rename,Chocolate - Assorted,chocolate-assorted,personalised-assorted-chocolate-boxes,15,Med,,
+rename,Biscuits & Cakes,biscuits-cakes,promotional-biscuits-and-cakes,15,Med,,
+rename,Biscuits & Cakes - Biscuits & Cookies,biscuits-cakes-biscuits-cookies,branded-biscuits-and-cookies,14,Med,,
+rename,Seasonal - Halloween,seasonal-halloween,promotional-halloween-sweets,14,Med,,
+rename,"Snacks - Protein, Cereal & Energy Bars",snacks-protein-cereal-energy-bars,branded-protein-and-cereal-bars,4,Med,,
+rename,Chocolate - Lollipops,chocolate-lollipops,branded-chocolate-lollipops,3,Med,,
+rename,Sweets - Retro & Novelty,sweets-retro-novelty,promotional-retro-sweets,3,Med,,
+rename,Seasonal - Valentine's Day,seasonal-valentines-day,promotional-valentines-day-gifts,24,Low,,
+rename,Events - Wellbeing & Inclusion Events,events-wellbeing-inclusion-events,promotional-gifts-for-wellbeing-days,17,Low,,
+rename,Events - Community Charities & Causes,events-community-charities-causes,promotional-gifts-for-charities,10,Low,,"Branded confectionery for charities and community causes — fundraising sweets, donor thank-yous and event giveaways."
+rename,Seasonal - Summer,seasonal-summer,promotional-summer-gifts,6,Low,,"Branded summer confectionery and giveaways. Heat-stable sweets, ice pops and event-friendly packs for outdoor activations."
+rename,Sweets - Toffees & Chews,sweets-toffees-chews,promotional-toffees-and-chews,4,Low,,"Branded toffees and chewy sweets in printed packaging. Classic favourites for events, trade shows and customer giveaways."
+rename,Drinks - Soft Drinks,drinks-soft-drinks,branded-soft-drinks,3,Low,,"Branded soft drinks with custom printed labels and sleeves. Cans and bottles for festivals, launches and hospitality."
+rename,Drinks - Hot Chocolate & Malt Drinks,drinks-hot-chocolate-malt-drinks,branded-hot-chocolate-sachets,2,Low,,
+rename,Biscuits & Cakes - Mini Cakes & Cupcakes,biscuits-cakes-mini-cakes-cupcakes,branded-mini-cakes-and-cupcakes,1,Low,,"Mini cakes and cupcakes with edible printed logos and branded packaging. Perfect for launches, anniversaries and celebrations."
+rename,"Snacks - Nuts, Dried Fruit & Savoury Mixes",snacks-nuts-dried-fruit-savoury-mixes,branded-nuts-and-dried-fruit,1,Low,,"Branded nuts, dried fruit and savoury mixes in printed packs. Healthier snacking options for wellbeing days and office deliveries."
+unpublish,Branded Merchandise & Packaging - Fulfillment Service,branded-merchandise-packaging-fulfillment-service,,0,Critical,,"UK promotional merchandise fulfilment — storage, pick and pack, kitting and nationwide despatch of your branded stock."
+unpublish,Industries - Health & Care,industries-health-care,,0,High,,"Branded confectionery for healthcare and care providers — NHS giveaways, staff thank-yous and awareness campaign sweets."
+unpublish,Branded Merchandise & Packaging - Packaging,branded-merchandise-packaging-packaging,,0,High,,"Custom promotional packaging printed with your branding — boxes, bags, sleeves and gift presentation, manufactured in the UK."
+unpublish,Drinks - Water & Flavoured Water,drinks-water-flavoured-water,,0,Med,,"Branded bottled water with full-colour printed labels. Still, sparkling and flavoured options for events and conferences."
+unpublish,Drinks - Energy & Sports Drinks,drinks-energy-sports-drinks,,0,Med,,"Branded energy and sports drinks with printed labels. Ideal for sports events, gyms and high-energy brand activations."
+unpublish,Industries,industries,,0,Med,,"Branded confectionery chosen by sector — retail, hospitality, education, healthcare, construction and more. Ideas that suit your audience."
+unpublish,Industries - Retail,industries-retail,,0,Med,,"Branded confectionery for retail — till-point sweets, loyalty gifts and seasonal giveaways that drive footfall and repeat visits."
+unpublish,Industries - Hospitality,industries-hospitality,,0,Med,,"Branded confectionery for hotels, pubs and restaurants — pillow chocolates, mint tins and printed welcome treats."
+unpublish,Industries - Education,industries-education,,0,Med,,"Branded confectionery for schools, colleges and universities — open day giveaways, fundraising sweets and student welcome packs."
+unpublish,Events - Appreciation & Workplace Events,events-appreciation-workplace-events,,0,Med,,
+unpublish,Food & Pantry - Ice & Freeze Pops,food-pantry-ice-freeze-pops,,0,Med,,"Branded ice pops and freeze pops with printed wrappers. Summer event giveaways, festivals and outdoor activations."
+unpublish,Chocolate - Favourites,chocolate-favourites,,14,Low,,
+unpublish,Seasonal - New Year,seasonal-new-year,,4,Low,,
+unpublish,Snacks - Crackers & Savoury Biscuits,snacks-crackers-savoury-biscuits,,2,Low,,"Branded crackers and savoury biscuits in printed packs. Ideal for hospitality trays, hampers and corporate catering."
+unpublish,Snacks - Snack Pots & Dippers,snacks-snack-pots-dippers,,2,Low,,"Branded snack pots and dipper packs with printed sleeves. Self-contained snacks for travel, events and lunch boxes."
+unpublish,Food & Pantry - Soup,food-pantry-soup,,1,Low,,Branded instant soup sachets and pots with your logo. Warming winter giveaways for staff and outdoor event crews.
+unpublish,Food & Pantry - Desserts,food-pantry-desserts,,1,Low,,Branded desserts and pudding pots in printed packaging. Sweet finishers for hospitality and corporate catering.
+unpublish,Sweets - Boiled & Hard,sweets-boiled-hard,,0,Low,,"Branded boiled and hard sweets in printed wrappers and bags. Long shelf life, budget friendly, ideal for reception desks and events."
+unpublish,"Sweets - Fudge, Nougat & Coconut Ice",sweets-fudge-nougat-coconut-ice,,0,Low,,"Branded fudge, nougat and coconut ice in printed boxes and bags. Premium feel for corporate gifting and hospitality."
+unpublish,Sweets - Sherbet & Fizzy,sweets-sherbet-fizzy,,0,Low,,"Branded fizzy and sherbet sweets in printed packs. Bright, nostalgic and popular with younger audiences at events and open days."
+unpublish,Dietary - Vegetarian,dietary-vegetarian,,0,Low,,"Branded vegetarian sweets free from gelatine. Suitable for mixed-audience events, schools and workplace giveaways."
+unpublish,Dietary - Gluten Free,dietary-gluten-free,,0,Low,,Branded gluten free sweets and chocolate for events and giveaways. Clearly labelled products for allergen-aware audiences.
+unpublish,Dietary - Dairy Free,dietary-dairy-free,,0,Low,,Branded dairy free sweets and chocolate alternatives. Inclusive options for corporate events and customer gifting.
+unpublish,"Biscuits & Cakes - Cake Bars, Slices & Flapjacks",biscuits-cakes-cake-bars-slices-flapjacks,,0,Low,,"Branded cake bars, slices and flapjacks in printed wrappers. Individually wrapped and ideal for conferences and welcome packs."
+unpublish,Biscuits & Cakes - Cakes & Traybakes,biscuits-cakes-cakes-traybakes,,0,Low,,"Branded cakes and traybakes for corporate celebrations. Edible logo printing and custom boxes, delivered across the UK."
+unpublish,Snacks - Pretzels,snacks-pretzels,,0,Low,,"Branded pretzel packs with your logo. Savoury alternative to sweets for conferences, hospitality and office snacking."
+unpublish,Snacks - Rice Cakes & Corn Cakes,snacks-rice-cakes-corn-cakes,,0,Low,,"Branded rice cakes and corn cakes in printed packaging. Light, low calorie snacks for wellbeing and fitness campaigns."
+unpublish,Drinks - Juices,drinks-juices,,0,Low,,"Branded juice drinks in printed cartons and bottles. Healthier refreshment for wellbeing days, family events and open days."
+unpublish,Seasonal - Chinese New Year,seasonal-chinese-new-year,,0,Low,,Branded Chinese New Year confectionery and gifts. Red and gold packaging options for client gifting and cultural celebrations.
+unpublish,Seasonal - Mother's Day,seasonal-mothers-day,,0,Low,,Branded Mother's Day chocolate and confectionery gifts. Thoughtful printed packaging for customer and staff appreciation.
+unpublish,Seasonal - Father's Day,seasonal-fathers-day,,0,Low,,"Branded Father's Day chocolate and sweets in printed packaging. Simple, well-received gifts for customers and staff."
+unpublish,Seasonal - Diwali,seasonal-diwali,,0,Low,,Branded Diwali gifts and confectionery for inclusive workplace celebrations. Printed boxes and sweet selections.
+unpublish,Seasonal - Hanukkah,seasonal-hanukkah,,0,Low,,Branded Hanukkah chocolate and gifts including chocolate coins. Inclusive seasonal gifting for diverse workplaces.
+unpublish,Industries - Offices & Services,industries-offices-services,,0,Low,,"Branded confectionery for offices and professional services — desk drops, reception bowls and client meeting treats."
+unpublish,Industries - Travel & Leisure,industries-travel-leisure,,0,Low,,"Branded confectionery for travel, tourism and leisure operators — welcome treats, in-flight sweets and attraction giveaways."
+unpublish,Industries - Media & Creative,industries-media-entertainment,,0,Low,,"Branded confectionery for agencies and media brands — launch giveaways, press pack fillers and campaign activations."
+unpublish,Industries - Trade & Construction,industries-trade-construction,,0,Low,,"Branded confectionery for trade and construction — site welcome packs, merchant counter sweets and toolbox talk treats."
+unpublish,Events - Fun & Feel Good Days,events-fun-feel-good-days,,0,Low,,Branded confectionery for national awareness and feel-good days. Themed packaging for campaigns throughout the calendar.
+unpublish,Food & Pantry - Cereal & Porridge,food-pantry-cereal-porridge,,0,Low,,"Branded cereal and porridge pots with printed sleeves. Breakfast giveaways for conferences, hotels and welcome packs."
+unpublish,Food & Pantry - Pasta & Noodles,food-pantry-pasta-noodles,,0,Low,,Branded pasta and instant noodle pots with printed sleeves. Practical branded lunches for offices and student packs.
+unpublish,Food & Pantry - Rice & Grains,food-pantry-rice-grains,,0,Low,,"Branded rice and grain products in printed packaging for hampers, food banks and community campaigns."
+unpublish,Food & Pantry - Baking Kits,food-pantry-baking-kits,,0,Low,,"Branded baking kits in printed boxes. Engaging take-home gifts for team events, family days and virtual activities."
+unpublish,"Food & Pantry - Spreads, Jams & Condiments",food-pantry-spreads-jams-condiments,,0,Low,,"Branded jams, spreads and condiment sachets with printed labels. Hotel breakfast trays, hampers and hospitality use."
+unpublish,"Food & Pantry - Herbs, Spices & Seasonings",food-pantry-herbs-spices-seasonings,,0,Low,,"Branded herbs, spices and seasoning sachets with printed labels for food brands, hampers and recipe promotions."

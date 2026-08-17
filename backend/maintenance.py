@@ -5,7 +5,7 @@ staff can keep using the site normally while it is switched on. Render's own
 maintenance toggle is not usable for this because it blocks every request,
 including ours.
 
-Configuration (all via environment variables, read once at import — Render
+Configuration (all via environment variables, read once at import - Render
 restarts the service when an env var changes, so there is nothing to re-read
 at runtime):
 
@@ -93,7 +93,7 @@ def _wants_json() -> bool:
 
 
 def _maintenance_response():
-    """Identical for a wrong key and for no key at all — no hints either way."""
+    """Identical for a wrong key and for no key at all - no hints either way."""
     if _wants_json():
         response = make_response(jsonify({"status": "maintenance"}), 503)
     else:
@@ -170,7 +170,7 @@ def init_maintenance(app):
     app.add_url_rule("/healthz", "healthz", _healthz, methods=["GET"])
     app.add_url_rule("/maint-exit", "maint_exit", _maint_exit, methods=["GET"])
 
-    # When OFF, no hook is registered at all — zero per-request overhead.
+    # When OFF, no hook is registered at all - zero per-request overhead.
     if not MAINTENANCE_MODE:
         return
 
@@ -178,10 +178,10 @@ def init_maintenance(app):
 
     if not MAINT_KEY:
         logger.warning(
-            "MAINTENANCE_MODE is ON but MAINT_KEY is empty — no bypass is possible. "
+            "MAINTENANCE_MODE is ON but MAINT_KEY is empty - no bypass is possible. "
             "Every visitor, including staff, will see the maintenance page."
         )
     else:
-        logger.info("Maintenance mode ENABLED — bypass configured, cookie lasts %sh", MAINT_BYPASS_HOURS)
+        logger.info("Maintenance mode ENABLED - bypass configured, cookie lasts %sh", MAINT_BYPASS_HOURS)
 
     app.before_request(_maintenance_gate)

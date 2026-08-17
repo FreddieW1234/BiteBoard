@@ -1,4 +1,4 @@
-"""Staff shipping — direct carrier APIs (Royal Mail, FedEx, Palletways).
+"""Staff shipping - direct carrier APIs (Royal Mail, FedEx, Palletways).
 
 FedEx is live (sandbox/production via FEDEX_* env). Royal Mail and Palletways
 remain stubs until credentials/integrations are added.
@@ -179,7 +179,7 @@ def prepare_shipment(order_id: str | int, *, item_id: str | None = None) -> dict
         (li.get("weight_kg") or 0) * max(1, int(li.get("quantity") or 1))
         for li in items
     )
-    # Only prefill when Shopify has a real weight — never invent 1 kg.
+    # Only prefill when Shopify has a real weight - never invent 1 kg.
     known_weight = round(total_weight_kg, 3) if total_weight_kg > 0 else None
 
     return {
@@ -242,7 +242,7 @@ def _parse_weight_kg(value) -> float | None:
 
 
 def _weight_from_payload(payload: dict, prep: dict | None = None) -> float | None:
-    """Require an explicit positive weight — never invent a default kg."""
+    """Require an explicit positive weight - never invent a default kg."""
     weight = _parse_weight_kg(payload.get("weight_kg"))
     if weight is not None:
         return weight
@@ -438,7 +438,7 @@ def ship_order(payload: dict) -> dict:
         tracking = str(label.get("tracking_number") or "").strip()
         label_id = str(label.get("label_id") or tracking or "").strip()
         service_code = str(label.get("service_code") or service_type)
-        # Sandbox sometimes returns a label with no tracking — still stamp the row.
+        # Sandbox sometimes returns a label with no tracking - still stamp the row.
         if not tracking:
             tracking = label_id or f"FEDEX-{service_code}-{date.today().isoformat()}"
         if not label_id:
@@ -518,7 +518,7 @@ def ship_order(payload: dict) -> dict:
             )
         elif not office_ready:
             store_errors.append(
-                "Office API is not configured (OFFICE_API_URL / OFFICE_API_KEY) — cannot store label."
+                "Office API is not configured (OFFICE_API_URL / OFFICE_API_KEY) - cannot store label."
             )
         else:
             for item_id in stamp_ids:
@@ -611,7 +611,7 @@ def ship_order(payload: dict) -> dict:
             "label_download_url": label_url or None,
             "label_zpl_base64": base64.b64encode(label_bytes).decode("ascii") if label_bytes else None,
             "sandbox_note": (
-                "Sandbox/virtual response — not a live courier label."
+                "Sandbox/virtual response - not a live courier label."
                 if fedex_api.is_sandbox()
                 else None
             ),

@@ -1,4 +1,4 @@
-"""Smoke-test FedEx sandbox: OAuth → rates → optional test label.
+"""Smoke-test FedEx sandbox: OAuth -> rates -> optional test label.
 
 Usage (from backend/ with env vars set):
   python -m scripts.fedex_smoke_test
@@ -28,9 +28,9 @@ def main() -> int:
         )
         return 1
 
-    print("Requesting OAuth token…")
+    print("Requesting OAuth token...")
     token = fedex_api.get_access_token(force=True)
-    print("Token OK:", token[:16] + "…")
+    print("Token OK:", token[:16] + "...")
 
     ship_from = ship_from_address()
     if not ship_from.get("address1") or not ship_from.get("zip"):
@@ -43,7 +43,7 @@ def main() -> int:
             "zip": "EC1A 1BB",
             "country_code": "GB",
         }
-        print("SHIP_FROM_* incomplete — using sandbox placeholder origin.")
+        print("SHIP_FROM_* incomplete - using sandbox placeholder origin.")
 
     ship_to = {
         "name": "Freddie Wadley",
@@ -56,7 +56,7 @@ def main() -> int:
         "residential": True,
     }
 
-    print("Requesting rates…")
+    print("Requesting rates...")
     rates = fedex_api.get_rates(
         ship_from=ship_from,
         ship_to=ship_to,
@@ -73,12 +73,12 @@ def main() -> int:
         )
 
     if not rates:
-        print("No rates returned — check sandbox project APIs / account association.")
+        print("No rates returned - check sandbox project APIs / account association.")
         return 2
 
     if args.label:
         chosen = rates[0]
-        print("Creating test label for", chosen.get("service_code"), "…")
+        print("Creating test label for", chosen.get("service_code"), "...")
         service, packaging = fedex_api.parse_rate_id(chosen["rate_id"])
         label = fedex_api.create_label(
             ship_from=ship_from,

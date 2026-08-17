@@ -54,7 +54,7 @@ def fetch_all_metafields(product_id):
     # Remove limit to get ALL metafields, including blank ones
     url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
     
-    print(f"🔍 Fetching metafields for product {product_id}", flush=True)
+    print(f"[scan] Fetching metafields for product {product_id}", flush=True)
     page_count = 0
     
     while url:
@@ -63,12 +63,12 @@ def fetch_all_metafields(product_id):
         
         response = requests.get(url, headers=HEADERS)
         if response.status_code != 200:
-            print(f"❌ Failed to fetch page {page_count}: {response.status_code}", flush=True)
+            print(f"[error] Failed to fetch page {page_count}: {response.status_code}", flush=True)
             return []
         
         data = response.json()
         current_metafields = data.get("metafields", [])
-        print(f"📥 Page {page_count}: Got {len(current_metafields)} metafields", flush=True)
+        print(f"[recv] Page {page_count}: Got {len(current_metafields)} metafields", flush=True)
         
         # Debug: Show what we got on this page
         for i, m in enumerate(current_metafields):
@@ -85,18 +85,18 @@ def fetch_all_metafields(product_id):
             for part in parts:
                 if 'rel="next"' in part:
                     url = part[part.find("<")+1:part.find(">")]
-                    print(f"🔄 Next page found: {url}", flush=True)
+                    print(f"[retry] Next page found: {url}", flush=True)
                     break
         else:
             print(f"🔗 No Link header found", flush=True)
         
         if not url:
-            print(f"✅ No more pages, total metafields: {len(metafields)}", flush=True)
+            print(f"[ok] No more pages, total metafields: {len(metafields)}", flush=True)
     
-    print(f"📊 Total metafields collected: {len(metafields)}", flush=True)
+    print(f"[stats] Total metafields collected: {len(metafields)}", flush=True)
     
     # Debug: Show ALL metafields to see what we're working with
-    print("🔍 DEBUG: ALL metafields collected:", flush=True)
+    print("[scan] DEBUG: ALL metafields collected:", flush=True)
     for i, m in enumerate(metafields):
         print(f"   {i+1}. Namespace: '{m.get('namespace')}', Key: '{m.get('key')}', Type: '{m.get('type')}'", flush=True)
     
@@ -108,7 +108,7 @@ def fetch_all_metafields(product_id):
             namespace_breakdown[namespace] = []
         namespace_breakdown[namespace].append(m.get('key'))
     
-    print("📊 Metafields by namespace:", flush=True)
+    print("[stats] Metafields by namespace:", flush=True)
     for namespace, keys in namespace_breakdown.items():
         print(f"   {namespace}: {len(keys)} metafields - {keys}", flush=True)
         
@@ -119,16 +119,16 @@ def fetch_all_metafields(product_id):
         for m in packaging_fields:
             print(f"   - {m.get('namespace')}:{m.get('key')} = {m.get('value', '')[:100]}...", flush=True)
     else:
-        print("⚠️ No packaging-related fields found in raw metafields", flush=True)
+        print("[warn] No packaging-related fields found in raw metafields", flush=True)
         
     # Check for any fields with dots in the key
     dot_fields = [m for m in metafields if '.' in m.get('key', '')]
     if dot_fields:
-        print("🔍 Found fields with dots in key:", flush=True)
+        print("[scan] Found fields with dots in key:", flush=True)
         for m in dot_fields:
             print(f"   - {m.get('namespace')}:{m.get('key')} ({m.get('type')})", flush=True)
     else:
-        print("ℹ️ No fields with dots in key found", flush=True)
+        print("[info] No fields with dots in key found", flush=True)
     
     # Count by namespace
     namespace_counts = {}
@@ -136,12 +136,12 @@ def fetch_all_metafields(product_id):
         namespace = m.get('namespace', 'unknown')
         namespace_counts[namespace] = namespace_counts.get(namespace, 0) + 1
     
-    print("📊 Metafields by namespace:", flush=True)
+    print("[stats] Metafields by namespace:", flush=True)
     for namespace, count in sorted(namespace_counts.items()):
         print(f"   {namespace}: {count} metafields", flush=True)
     
     # Fetch metafield definitions to get available options for list types
-    print("🔍 Fetching metafield definitions for list options...", flush=True)
+    print("[scan] Fetching metafield definitions for list options...", flush=True)
     
     # Try to get all metafields from store to see what custom fields exist...
     try:
@@ -378,7 +378,7 @@ def fetch_all_metafields(product_id):
                 metafield['type'] = 'list.single_line_text_field'
     
     if not metafield_definitions:
-        print("⚠️ No metafield definitions found from any API endpoint", flush=True)
+        print("[warn] No metafield definitions found from any API endpoint", flush=True)
     
     # Process all metafields but mark some as filtered
     real_metafields = []
@@ -462,7 +462,7 @@ def create_metafield(product_id, namespace, key, value, metafield_type="single_l
                 from scripts.product_creator.categories import get_subcategory_metafield_key
                 correct_key = get_subcategory_metafield_key(value)
                 if correct_key != key:
-                    print(f"🔄 Subcategory '{value}' should be in '{correct_key}', not '{key}'. Using correct key.", flush=True)
+                    print(f"[retry] Subcategory '{value}' should be in '{correct_key}', not '{key}'. Using correct key.", flush=True)
                     key = correct_key
             except (ImportError, AttributeError):
                 # Fallback if helper function not available
@@ -475,7 +475,7 @@ def create_metafield(product_id, namespace, key, value, metafield_type="single_l
         formatted_value = value
         if metafield_type == 'list.single_line_text_field':
             formatted_value = f'["{value}"]'  # Format as JSON array for list types
-            print(f"📝 Formatting value for list type: {formatted_value}", flush=True)
+            print(f"[note] Formatting value for list type: {formatted_value}", flush=True)
 
         url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products/{product_id}/metafields.json"
         payload = {
@@ -492,15 +492,15 @@ def create_metafield(product_id, namespace, key, value, metafield_type="single_l
         
         if response.status_code == 201:
             metafield_id = response.json().get("metafield", {}).get("id")
-            print(f"✅ Successfully created metafield {key} with ID: {metafield_id}", flush=True)
+            print(f"[ok] Successfully created metafield {key} with ID: {metafield_id}", flush=True)
             return metafield_id
         else:
-            print(f"❌ Failed to create metafield {key}: {response.status_code}", flush=True)
+            print(f"[error] Failed to create metafield {key}: {response.status_code}", flush=True)
             print(f"   Response: {response.text}", flush=True)
             return None
             
     except Exception as e:
-        print(f"💥 Exception creating metafield {key}: {str(e)}", flush=True)
+        print(f"[error] Exception creating metafield {key}: {str(e)}", flush=True)
         return None
 
 def update_metafield(metafield_id, value, metafield_type=None):
@@ -519,7 +519,7 @@ def update_metafield(metafield_id, value, metafield_type=None):
         formatted_value = value
         if payload_type == 'list.single_line_text_field':
             formatted_value = f'["{value}"]'  # Format as JSON array for list types
-            print(f"📝 Formatting value for list type: {formatted_value}", flush=True)
+            print(f"[note] Formatting value for list type: {formatted_value}", flush=True)
 
         payload = {
             "metafield": {
@@ -529,20 +529,20 @@ def update_metafield(metafield_id, value, metafield_type=None):
             }
         }
         
-        print(f"🔄 Updating metafield {metafield_id} with value: {value[:50]}... (type: {payload_type})", flush=True)
+        print(f"[retry] Updating metafield {metafield_id} with value: {value[:50]}... (type: {payload_type})", flush=True)
         response = requests.put(url, headers=HEADERS, data=json.dumps(payload))
         
         if response.status_code == 200:
-            print(f"✅ Successfully updated metafield {metafield_id}", flush=True)
+            print(f"[ok] Successfully updated metafield {metafield_id}", flush=True)
             return True, "Metafield updated successfully"
         else:
-            print(f"❌ Failed to update metafield {metafield_id}: {response.status_code}", flush=True)
+            print(f"[error] Failed to update metafield {metafield_id}: {response.status_code}", flush=True)
             print(f"   Response: {response.text}", flush=True)
             print(f"   URL: {url}", flush=True)
             return False, f"HTTP {response.status_code}: {response.text}"
             
     except Exception as e:
-        print(f"💥 Exception updating metafield {metafield_id}: {str(e)}", flush=True)
+        print(f"[error] Exception updating metafield {metafield_id}: {str(e)}", flush=True)
         return False, str(e)
 
 if __name__ == "__main__":

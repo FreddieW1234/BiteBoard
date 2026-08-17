@@ -106,17 +106,17 @@ def fetch_files_with_graphql():
             response = make_graphql_request(query, variables)
 
             if response.status_code != 200:
-                print(f"❌ GraphQL request failed with status {response.status_code}. Response: {response.text[:500]}", flush=True)
+                print(f"[error] GraphQL request failed with status {response.status_code}. Response: {response.text[:500]}", flush=True)
                 break
 
             data = response.json()
 
             if 'errors' in data:
-                print(f"❌ GraphQL errors: {json.dumps(data['errors'], indent=2)}")
+                print(f"[error] GraphQL errors: {json.dumps(data['errors'], indent=2)}")
                 break
 
             if 'data' not in data or 'files' not in data['data']:
-                print(f"⚠️ GraphQL response missing 'data.files' field. Response: {response.text[:500]}", flush=True)
+                print(f"[warn] GraphQL response missing 'data.files' field. Response: {response.text[:500]}", flush=True)
                 break
 
             files_data = data['data']['files']
@@ -180,7 +180,7 @@ def fetch_files_with_graphql():
         return files
 
     except Exception as e:
-        print(f"❌ Error fetching files from Shopify: {str(e)}", flush=True)
+        print(f"[error] Error fetching files from Shopify: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return []
@@ -200,7 +200,7 @@ def upload_file_to_shopify(file_path, alt_text=""):
         
         try:
             # Step 1: Generate staged upload URL
-            print(f"📋 Step 1: Generating staged upload URL...")
+            print(f"[list] Step 1: Generating staged upload URL...")
             
             graphql_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
         
@@ -235,27 +235,27 @@ def upload_file_to_shopify(file_path, alt_text=""):
             response = make_graphql_request(mutation, variables)
             
             if response.status_code != 200:
-                print(f"❌ Step 1 failed: {response.status_code}")
+                print(f"[error] Step 1 failed: {response.status_code}")
                 return False
                 
             data = response.json()
             
             if 'errors' in data:
-                print(f"❌ GraphQL errors: {data['errors']}")
+                print(f"[error] GraphQL errors: {data['errors']}")
                 return False
                 
             if 'data' not in data or 'stagedUploadsCreate' not in data['data']:
-                print(f"❌ No staged upload data")
+                print(f"[error] No staged upload data")
                 return False
                 
             staged_upload = data['data']['stagedUploadsCreate']
             
             if staged_upload.get('userErrors'):
-                print(f"❌ User errors: {staged_upload['userErrors']}")
+                print(f"[error] User errors: {staged_upload['userErrors']}")
                 return False
                 
             if not staged_upload.get('stagedTargets'):
-                print(f"❌ No staged targets")
+                print(f"[error] No staged targets")
                 return False
                 
             staged_target = staged_upload['stagedTargets'][0]
@@ -354,17 +354,17 @@ def upload_file_to_shopify(file_path, alt_text=""):
             file_response = make_graphql_request(file_create_mutation, file_variables)
             
             if file_response.status_code != 200:
-                print(f"❌ Step 3 failed: {file_response.status_code}")
+                print(f"[error] Step 3 failed: {file_response.status_code}")
                 return False
                 
             file_data = file_response.json()
             
             if 'errors' in file_data:
-                print(f"❌ File creation errors: {file_data['errors']}")
+                print(f"[error] File creation errors: {file_data['errors']}")
                 return False
                 
             if 'data' in file_data and file_data['data']['fileCreate']['userErrors']:
-                print(f"❌ File creation user errors: {file_data['data']['fileCreate']['userErrors']}")
+                print(f"[error] File creation user errors: {file_data['data']['fileCreate']['userErrors']}")
                 return False
                 
             print(f"[UPLOAD] Step 3 complete: File record created successfully")
@@ -378,7 +378,7 @@ def upload_file_to_shopify(file_path, alt_text=""):
                 print(f"[WARNING] fileCreate succeeded but no file id returned")
                 return {'success': False, 'filename': filename, 'error': 'No file id returned from Shopify'}
 
-            # Keep alt text as the filename — Artwork Updater uses it to list and match files.
+            # Keep alt text as the filename - Artwork Updater uses it to list and match files.
             return {
                 'success': True,
                 'filename': filename,
@@ -473,27 +473,27 @@ def update_products_to_specific_file(target_filename, column, target_file_id=Non
                         if column == 'left':
                             # Left column: Artwork_Guidelines files (but not Artwork_Guidelines_A)
                             if actual_filename.startswith('Artwork_Guidelines') and not actual_filename.startswith('Artwork_Guidelines_A'):
-                                print(f"[PRODUCT UPDATE] ✅ Found Artwork_Guidelines reference in product: {product_title}")
+                                print(f"[PRODUCT UPDATE] [ok] Found Artwork_Guidelines reference in product: {product_title}")
                                 
                                 # Update the product metafield with the target file ID
                                 if update_product_metafield(product_id, metafield_id, target_file_global_id):
                                     updated_count += 1
-                                    print(f"[PRODUCT UPDATE] ✅ Updated: {product_title}")
+                                    print(f"[PRODUCT UPDATE] [ok] Updated: {product_title}")
                                 else:
-                                    print(f"[PRODUCT UPDATE] ❌ Failed to update: {product_title}")
+                                    print(f"[PRODUCT UPDATE] [error] Failed to update: {product_title}")
                         elif column == 'right':
                             # Right column: Only Artwork_Guidelines_A files
                             if actual_filename.startswith('Artwork_Guidelines_A'):
-                                print(f"[PRODUCT UPDATE] ✅ Found Artwork_Guidelines_A reference in product: {product_title}")
+                                print(f"[PRODUCT UPDATE] [ok] Found Artwork_Guidelines_A reference in product: {product_title}")
                                 
                                 # Update the product metafield with the target file ID
                                 if update_product_metafield(product_id, metafield_id, target_file_global_id):
                                     updated_count += 1
-                                    print(f"[PRODUCT UPDATE] ✅ Updated: {product_title}")
+                                    print(f"[PRODUCT UPDATE] [ok] Updated: {product_title}")
         else:
-                                    print(f"[PRODUCT UPDATE] ❌ Failed to update: {product_title}")
+                                    print(f"[PRODUCT UPDATE] [error] Failed to update: {product_title}")
         
-        print(f"[PRODUCT UPDATE] ✅ Completed: {updated_count}/{total_count} products updated")
+        print(f"[PRODUCT UPDATE] [ok] Completed: {updated_count}/{total_count} products updated")
         
         if column == 'left':
             file_type = 'Artwork_Guidelines'
@@ -600,7 +600,7 @@ def update_products_with_new_artwork(new_filename, column, new_version, previous
     Update all products that reference the previous artwork version with the new version
     """
     try:
-        print(f"[PRODUCT UPDATE] Starting update: {new_filename} (v{previous_version} → v{new_version})")
+        print(f"[PRODUCT UPDATE] Starting update: {new_filename} (v{previous_version} -> v{new_version})")
         
         # Determine the base name for the artwork
         if column == 'left':
@@ -648,7 +648,7 @@ def update_products_with_new_artwork(new_filename, column, new_version, previous
                     actual_filename = get_filename_from_file_id(numeric_id)
                     
                     if actual_filename and old_filename_pattern in actual_filename:
-                        print(f"[PRODUCT UPDATE] ✅ Found reference in product: {product_title}")
+                        print(f"[PRODUCT UPDATE] [ok] Found reference in product: {product_title}")
                         
                         # Get the new file ID for the updated artwork
                         new_file_id = get_file_id_from_filename(new_filename_pattern)
@@ -659,13 +659,13 @@ def update_products_with_new_artwork(new_filename, column, new_version, previous
                             # Update the product metafield with the new file ID
                             if update_product_metafield(product_id, metafield_id, new_file_global_id):
                                 updated_count += 1
-                                print(f"[PRODUCT UPDATE] ✅ Updated: {product_title}")
+                                print(f"[PRODUCT UPDATE] [ok] Updated: {product_title}")
                             else:
-                                print(f"[PRODUCT UPDATE] ❌ Failed to update: {product_title}")
+                                print(f"[PRODUCT UPDATE] [error] Failed to update: {product_title}")
                         else:
-                            print(f"[PRODUCT UPDATE] ❌ Could not find new file: {new_filename_pattern}")
+                            print(f"[PRODUCT UPDATE] [error] Could not find new file: {new_filename_pattern}")
         
-        print(f"[PRODUCT UPDATE] ✅ Completed: {updated_count}/{total_count} products updated")
+        print(f"[PRODUCT UPDATE] [ok] Completed: {updated_count}/{total_count} products updated")
         
         return {
             'updatedCount': updated_count,

@@ -4,7 +4,7 @@
 Each queued save is one office snapshot item under kind ``save_job``. The item
 id is the job id (a uuid hex, which matches the office id regex). This gives us a
 queue that survives Render restarts and is shared across Render instances without
-any new office-side code — it reuses the existing snapshot-item client methods.
+any new office-side code - it reuses the existing snapshot-item client methods.
 
 Job payload shape::
 
@@ -155,7 +155,7 @@ def enqueue(data: dict, product_id=None, title: str = "", locked_ids=None) -> di
             pid = int(product_id)
         except (TypeError, ValueError):
             pid = None
-    # Stamp into the payload the runner uses — job.product_id alone is not enough;
+    # Stamp into the payload the runner uses - job.product_id alone is not enough;
     # create_product() only updates when data["product_id"] is set.
     if pid is not None:
         data["product_id"] = pid
@@ -378,8 +378,8 @@ def cancel(job_id: str):
 def is_stalled(job, now=None) -> bool:
     """True when a running job has stopped proving its worker is alive.
 
-    claim_next always stamps a heartbeat, so a running job whose heartbeat — or,
-    for one claimed by an older build, whose start time — is older than the
+    claim_next always stamps a heartbeat, so a running job whose heartbeat - or,
+    for one claimed by an older build, whose start time - is older than the
     window has lost its worker. Saves are serialised across instances, so a
     stalled job holds up everything behind it until it is reclaimed.
     """
@@ -447,7 +447,7 @@ def reap_stale(jobs=None):
 
 
 def locked_product_ids(jobs=None) -> list:
-    """Product ids with an active (queued/running) save — these are locked.
+    """Product ids with an active (queued/running) save - these are locked.
 
     Includes any child products the job will propagate to (job['locked_ids']).
     Pass an already-fetched job list to avoid a second office round-trip.
@@ -496,7 +496,7 @@ def prune(retention_h=None, jobs=None):
 
 
 # --------------------------------------------------------------------------- #
-# Post-save verification — cross-check what we intended against what Shopify has
+# Post-save verification - cross-check what we intended against what Shopify has
 # --------------------------------------------------------------------------- #
 _PRICE_KEYS = {"pricejsontr", "pricejsoner"}
 
@@ -596,7 +596,7 @@ def verify_product(intended_data: dict, product_id) -> list:
     rows = []
     skip_inherited = _child_inherited_keys_to_skip(intended_data or {})
 
-    # Title — children inherit this from the parent after save, so the form
+    # Title - children inherit this from the parent after save, so the form
     # value is not the source of truth (same as inherited metafields).
     want_title = (intended_data.get("title") or "").strip()
     if want_title and not skip_inherited:
@@ -622,7 +622,7 @@ def verify_product(intended_data: dict, product_id) -> list:
         key = mf.get("key")
         if not key:
             continue
-        # Child products inherit these from the parent after save — form values
+        # Child products inherit these from the parent after save - form values
         # (e.g. default lead times 5/10) are not the source of truth.
         if key in skip_inherited:
             continue
@@ -653,7 +653,7 @@ def verify_product(intended_data: dict, product_id) -> list:
                 "ok": ok,
             })
 
-    # Top-level parent_child is never in the metafields array the client sends —
+    # Top-level parent_child is never in the metafields array the client sends -
     # create_product writes it separately. Check it when a value was intended.
     want_pc = _intended_parent_child_value(intended_data or {})
     clear_pc_raw = (intended_data or {}).get("clear_parent_child", False)

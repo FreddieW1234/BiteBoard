@@ -371,7 +371,7 @@ def get_rates(
             include_transit=False,
             preferred_currency=None,
         ),
-        # Weight-only — most reliable for virtualized sandbox
+        # Weight-only - most reliable for virtualized sandbox
         dict(
             include_dims=False,
             include_transit=False,
@@ -399,7 +399,7 @@ def get_rates(
                     logger.info("FedEx rates succeeded on retry attempt %s", i + 1)
                 return rates
             last_empty = data
-            # Keep trying simpler shapes — sandbox virtualization is picky.
+            # Keep trying simpler shapes - sandbox virtualization is picky.
             continue
         except FedExError as exc:
             last_error = exc
@@ -413,7 +413,7 @@ def get_rates(
                 "FedEx rates attempt %s failed (%s)%s",
                 i + 1,
                 exc,
-                " — retrying with simpler payload" if retryable and i + 1 < len(attempts) else "",
+                " - retrying with simpler payload" if retryable and i + 1 < len(attempts) else "",
             )
             if not retryable or i + 1 >= len(attempts):
                 break
@@ -421,7 +421,7 @@ def get_rates(
     if last_error and "SERVICE.UNAVAILABLE" in str(last_error).upper():
         raise FedExError(
             "FedEx sandbox is temporarily unavailable (SERVICE.UNAVAILABLE.ERROR). "
-            "This is usually on FedEx's side — OAuth worked, but rate quotes are down "
+            "This is usually on FedEx's side - OAuth worked, but rate quotes are down "
             "or our request didn't hit a virtualized test scenario. Try again later, "
             "or test the same call in FedEx's API docs / Postman collection."
         ) from last_error
@@ -433,7 +433,7 @@ def get_rates(
 
 
 def _money_value(block: object, *, default_currency: str = "GBP") -> tuple[float | None, str]:
-    """Parse FedEx money fields — either {amount,currency} or a bare number."""
+    """Parse FedEx money fields - either {amount,currency} or a bare number."""
     if block is None:
         return None, default_currency
     if isinstance(block, (int, float)):
@@ -630,7 +630,7 @@ def _label_specification(image_type: str) -> dict[str, Any]:
     """Build FedEx LabelSpecification for thermal/laser labels.
 
     Physical office stock is 9.7 cm wide × 14.8 cm tall (portrait). That is
-    FedEx's standard 4×6 thermal size (STOCK_4X6 / PAPER_4X6) — FedEx does not
+    FedEx's standard 4×6 thermal size (STOCK_4X6 / PAPER_4X6) - FedEx does not
     accept custom millimetre dimensions.
     """
     is_zpl = image_type.upper().startswith("ZPL")
@@ -749,7 +749,7 @@ def _decode_label_payload(encoded: str) -> bytes:
             return as_text.encode("utf-8")
         if decoded.startswith(b"^XA") or b"^XA" in decoded[:80]:
             return decoded
-        # Not ZPL (often PNG/PDF) — keep bytes for diagnostics but caller may reject.
+        # Not ZPL (often PNG/PDF) - keep bytes for diagnostics but caller may reject.
         return decoded
     except Exception as exc:
         logger.warning("Could not decode FedEx label: %s", exc)
@@ -845,7 +845,7 @@ def _normalize_label(data: dict, *, service_type: str) -> dict:
             len(label_bytes),
             label_bytes[:40],
         )
-        # Don't pass PNG/PDF through as "ZPL" — clear so store fails loudly.
+        # Don't pass PNG/PDF through as "ZPL" - clear so store fails loudly.
         label_bytes = b""
 
     if not tracking and not label_bytes and not label_url:
@@ -868,7 +868,7 @@ def _normalize_label(data: dict, *, service_type: str) -> dict:
 
 
 def parse_rate_id(rate_id: str) -> tuple[str, str]:
-    """Parse `fedex:SERVICE:PACKAGING` → (service_type, packaging_type)."""
+    """Parse `fedex:SERVICE:PACKAGING` -> (service_type, packaging_type)."""
     text = (rate_id or "").strip()
     parts = text.split(":")
     if len(parts) < 2 or parts[0].lower() != "fedex":

@@ -1,7 +1,7 @@
 """Deprecated local label cache.
 
 Labels are stored on the office server via ``office_api.store_label`` /
-``office_api.get_label``. Do not use this module for reprint — Render disk is
+``office_api.get_label``. Do not use this module for reprint - Render disk is
 ephemeral and is not the source of truth.
 """
 

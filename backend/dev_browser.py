@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Noise that would swamp the tree or blow up the response.
 SKIP_NAMES = {".git", "__pycache__", "node_modules", ".venv", "venv", ".pytest_cache", ".mypy_cache"}
 
-MAX_TEXT_BYTES = 2 * 1024 * 1024  # 2 MB cap — the instance only has 512 MB
+MAX_TEXT_BYTES = 2 * 1024 * 1024  # 2 MB cap - the instance only has 512 MB
 
 
 def _resolve(rel: str) -> Path:
@@ -113,7 +113,7 @@ def _dev_file():
     if size > MAX_TEXT_BYTES:
         return jsonify({
             "success": True, "path": _rel(target), "size": size, "truncated": True, "binary": False,
-            "content": f"File is {size:,} bytes — too large to display (limit {MAX_TEXT_BYTES:,}).",
+            "content": f"File is {size:,} bytes - too large to display (limit {MAX_TEXT_BYTES:,}).",
         })
 
     try:
@@ -124,7 +124,7 @@ def _dev_file():
     if _looks_binary(blob):
         return jsonify({
             "success": True, "path": _rel(target), "size": size, "truncated": False, "binary": True,
-            "content": f"Binary file — {size:,} bytes.",
+            "content": f"Binary file - {size:,} bytes.",
         })
 
     return jsonify({
@@ -139,7 +139,7 @@ def _dev_file():
 
 
 def _dev_products_snapshot_rebuild():
-    """Force a full Shopify → office products snapshot overwrite.
+    """Force a full Shopify -> office products snapshot overwrite.
 
     Runs in the background: a catalog scan can take minutes and must not hold a
     request thread. Staff-only via portal_auth_gate.

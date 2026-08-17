@@ -36,7 +36,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
-# Office snapshot store — durable, shared All Products cache. Imported lazily so
+# Office snapshot store - durable, shared All Products cache. Imported lazily so
 # this module still works if the office client is unavailable.
 try:
     from scripts import office_api  # type: ignore
@@ -78,8 +78,8 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         dict: Result with success status and any errors
     """
     try:
-        print(f"🔄 Managing media for product {product_id}...")
-        print(f"📋 Media IDs to keep: {shopify_media_ids_to_keep}")
+        print(f"[retry] Managing media for product {product_id}...")
+        print(f"[list] Media IDs to keep: {shopify_media_ids_to_keep}")
         
         # Get existing product media
         domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
@@ -97,7 +97,7 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
             if response.status_code == 200:
                 break
             elif response.status_code == 429 and _get_attempt < 2:
-                print(f"⚠️ Rate limit (429) on product GET for media, retrying ({_get_attempt+1}/3)...", flush=True)
+                print(f"[warn] Rate limit (429) on product GET for media, retrying ({_get_attempt+1}/3)...", flush=True)
                 continue
             else:
                 break
@@ -107,7 +107,7 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         product_data = response.json().get('product', {})
         existing_media = product_data.get('images', [])
         
-        print(f"📷 Found {len(existing_media)} existing media items")
+        print(f"[media] Found {len(existing_media)} existing media items")
         
         keep_ids = set()
         for media_id in shopify_media_ids_to_keep:
@@ -119,24 +119,24 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
             else:
                 keep_ids.add(str(media_id))
         
-        print(f"🔑 Keep IDs (normalized): {keep_ids}")
+        print(f"[key] Keep IDs (normalized): {keep_ids}")
         
         existing_ids = [str(img.get('id')) for img in existing_media]
-        print(f"📋 Existing media IDs on product: {existing_ids}")
+        print(f"[list] Existing media IDs on product: {existing_ids}")
         
         media_to_remove = []
         for media in existing_media:
             media_id = str(media.get('id'))
             if media_id not in keep_ids:
                 media_to_remove.append(media_id)
-                print(f"🗑️ Will remove media ID: {media_id} (not in keep list)")
+                print(f"[delete] Will remove media ID: {media_id} (not in keep list)")
             else:
-                print(f"✅ Will keep media ID: {media_id}")
+                print(f"[ok] Will keep media ID: {media_id}")
         
         if not media_to_remove:
-            print(f"ℹ️ No media to remove - all {len(existing_media)} existing images are in the keep list")
+            print(f"[info] No media to remove - all {len(existing_media)} existing images are in the keep list")
         else:
-            print(f"🗑️ Found {len(media_to_remove)} media items to remove: {media_to_remove}")
+            print(f"[delete] Found {len(media_to_remove)} media items to remove: {media_to_remove}")
         
         removed_count = 0
         errors = []
@@ -156,7 +156,7 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
                     r = requests.delete(loc, headers=headers)
                 if r.status_code == 429 and attempt < max_attempts - 1:
                     backoff = 2.0 * (attempt + 1)
-                    print(f"⚠️ Rate limit (429) on image delete, waiting {backoff}s (attempt {attempt+1}/{max_attempts})...", flush=True)
+                    print(f"[warn] Rate limit (429) on image delete, waiting {backoff}s (attempt {attempt+1}/{max_attempts})...", flush=True)
                     time.sleep(backoff)
                     continue
                 return r
@@ -165,22 +165,22 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         for media_id in media_to_remove:
             try:
                 delete_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{media_id}.json"
-                print(f"🗑️ Attempting to delete image {media_id} from product {product_id}...")
+                print(f"[delete] Attempting to delete image {media_id} from product {product_id}...")
                 delete_response = _delete_with_retry(delete_url)
                 
                 if delete_response.ok or delete_response.status_code == 204:
                     removed_count += 1
-                    print(f"✅ Successfully removed media ID: {media_id}")
+                    print(f"[ok] Successfully removed media ID: {media_id}")
                 else:
                     error_msg = f"Failed to remove media {media_id}: {delete_response.status_code}"
                     if delete_response.text:
                         error_msg += f" - {delete_response.text[:200]}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
             except Exception as e:
                 error_msg = f"Error removing media {media_id}: {str(e)}"
                 errors.append(error_msg)
-                print(f"💥 {error_msg}")
+                print(f"[error] {error_msg}")
         
         return {
             "success": len(errors) == 0,
@@ -190,7 +190,7 @@ def manage_product_media(product_id, shopify_media_ids_to_keep, shopify_domain=N
         
     except Exception as e:
         error_msg = f"Error managing product media: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "removed_count": 0,
@@ -215,7 +215,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         if not media_order:
             return {"success": True, "message": "No media order specified", "errors": []}
         
-        print(f"🔄 Reordering media by order for product {product_id}...")
+        print(f"[retry] Reordering media by order for product {product_id}...")
         
         # Use the provided domain or fall back to STORE_DOMAIN
         domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
@@ -236,7 +236,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         product_data = response.json().get('product', {})
         existing_images = product_data.get('images', [])
         
-        print(f"📷 Found {len(existing_images)} existing images on product")
+        print(f"[media] Found {len(existing_images)} existing images on product")
         
         # Normalize shopify_media_ids for comparison
         normalized_keep_ids = set()
@@ -273,8 +273,8 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         upload_count = sum(1 for item in media_order if item.get('type') == 'upload')
         shopify_count = sum(1 for item in media_order if item.get('type') == 'shopify')
         
-        print(f"📊 Media order: {upload_count} uploads, {shopify_count} Shopify media")
-        print(f"📊 Found {len(new_upload_ids)} newly uploaded images")
+        print(f"[stats] Media order: {upload_count} uploads, {shopify_count} Shopify media")
+        print(f"[stats] Found {len(new_upload_ids)} newly uploaded images")
         
         # Map media order to actual image IDs
         position_map = {}  # Maps desired position -> image ID
@@ -282,7 +282,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         upload_positions_processed = 0
         
         # Debug: Print all available images
-        print(f"🔍 All available images on product:")
+        print(f"[scan] All available images on product:")
         for img in existing_images:
             img_id = str(img.get('id', ''))
             img_pos = img.get('position', '?')
@@ -320,7 +320,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                             found = True
                             break
                     if not found:
-                        print(f"⚠️ Could not find Shopify media ID {media_id} in product images")
+                        print(f"[warn] Could not find Shopify media ID {media_id} in product images")
                         print(f"   Available image IDs: {list(all_image_map.keys())[:10]}...")  # Show first 10 for debugging
             elif item_type == 'upload':
                 # Match newly uploaded images by order
@@ -330,7 +330,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                     upload_positions_processed += 1
                     print(f"📍 Position {position}: New upload (image ID {image_id})")
                 else:
-                    print(f"⚠️ Could not find upload at index {upload_positions_processed} (only {len(new_upload_ids)} new uploads found)")
+                    print(f"[warn] Could not find upload at index {upload_positions_processed} (only {len(new_upload_ids)} new uploads found)")
                     # Fallback: For new products, all images might be "new uploads" or newly attached
                     # Try to use images not yet assigned, in the order they appear
                     remaining_images = [img for img in existing_images if str(img.get('id')) not in position_map.values()]
@@ -342,7 +342,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                         upload_positions_processed += 1
                         print(f"📍 Position {position}: Using fallback image ID {fallback_id} (not yet assigned)")
                     else:
-                        print(f"⚠️ No remaining images available for position {position}")
+                        print(f"[warn] No remaining images available for position {position}")
         
         # Verify we have all expected images before reordering
         missing_images = []
@@ -353,7 +353,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                     missing_images.append(media_id)
         
         if missing_images:
-            print(f"⚠️ Warning: {len(missing_images)} expected images not found. Attempting to continue with available images.")
+            print(f"[warn] Warning: {len(missing_images)} expected images not found. Attempting to continue with available images.")
         
         errors = []
         successful_updates = []
@@ -377,7 +377,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                         wait = max(2.0, float(r.headers.get("retry-after", 2)))
                     except (ValueError, TypeError):
                         pass
-                    print(f"⚠️ Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
+                    print(f"[warn] Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
                     time.sleep(wait)
                     continue
                 return r
@@ -389,18 +389,18 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
             update_response = _put_with_retry(put_url, payload, f"image position {position}")
             if update_response.ok:
                 successful_updates.append((position, image_id))
-                print(f"✅ Set position {position} for image ID: {image_id}")
+                print(f"[ok] Set position {position} for image ID: {image_id}")
             else:
                 error_msg = f"Failed to reorder image {image_id}: {update_response.status_code} - {update_response.text[:200]}"
                 errors.append(error_msg)
-                print(f"❌ {error_msg}")
+                print(f"[error] {error_msg}")
         
-        print(f"📊 Reordering summary: {len(successful_updates)} successful, {len(errors)} errors")
+        print(f"[stats] Reordering summary: {len(successful_updates)} successful, {len(errors)} errors")
         
         if position_map:
             first_position = min(position_map.keys())
             first_image_id = position_map[first_position]
-            print(f"🖼️ Setting image at position {first_position} (ID: {first_image_id}) as main product image...")
+            print(f"[img] Setting image at position {first_position} (ID: {first_image_id}) as main product image...")
             try:
                 product_update_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
                 product_update_payload = {
@@ -408,11 +408,11 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
                 }
                 r = _put_with_retry(product_update_url, product_update_payload, "set main image")
                 if r.status_code == 200:
-                    print(f"✅ Main product image set to image ID: {first_image_id}")
+                    print(f"[ok] Main product image set to image ID: {first_image_id}")
                 else:
-                    print(f"⚠️ Failed to set main product image: {r.status_code}")
+                    print(f"[warn] Failed to set main product image: {r.status_code}")
             except Exception as e:
-                print(f"⚠️ Error setting main product image: {e}")
+                print(f"[warn] Error setting main product image: {e}")
         
         return {
             "success": len(errors) == 0,
@@ -421,7 +421,7 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         
     except Exception as e:
         error_msg = f"Error reordering product media by order: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "errors": [error_msg]
@@ -443,7 +443,7 @@ def reorder_product_media(product_id, shopify_media_ids_in_order, shopify_domain
         if not shopify_media_ids_in_order:
             return {"success": True, "message": "No media to reorder", "errors": []}
         
-        print(f"🔄 Reordering {len(shopify_media_ids_in_order)} media items for product {product_id}...")
+        print(f"[retry] Reordering {len(shopify_media_ids_in_order)} media items for product {product_id}...")
         
         domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
         url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}.json"
@@ -485,11 +485,11 @@ def reorder_product_media(product_id, shopify_media_ids_in_order, shopify_domain
                 
                 update_response = requests.put(update_url, headers=headers, json=payload)
                 if update_response.ok:
-                    print(f"✅ Set position {position} for media ID: {media_id}")
+                    print(f"[ok] Set position {position} for media ID: {media_id}")
                 else:
                     error_msg = f"Failed to reorder media {media_id}: {update_response.status_code}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
         
         return {
             "success": len(errors) == 0,
@@ -498,7 +498,7 @@ def reorder_product_media(product_id, shopify_media_ids_in_order, shopify_domain
         
     except Exception as e:
         error_msg = f"Error reordering product media: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "errors": [error_msg]
@@ -545,22 +545,22 @@ def create_media_from_urls(product_id, media_urls, shopify_domain=None):
                     redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
                 resp = requests.post(redirect_url, json={"query": mutation, "variables": variables}, headers=headers, timeout=30)
             if resp.status_code != 200:
-                print(f"❌ create_media_from_urls HTTP {resp.status_code} for URL", flush=True)
+                print(f"[error] create_media_from_urls HTTP {resp.status_code} for URL", flush=True)
                 continue
             data = resp.json()
             if data.get("errors"):
-                print(f"❌ create_media_from_urls GraphQL errors: {data['errors']}", flush=True)
+                print(f"[error] create_media_from_urls GraphQL errors: {data['errors']}", flush=True)
                 continue
             payload = data.get("data", {}).get("productCreateMedia") or {}
             if payload.get("mediaUserErrors"):
-                print(f"❌ create_media_from_urls userErrors: {payload['mediaUserErrors']}", flush=True)
+                print(f"[error] create_media_from_urls userErrors: {payload['mediaUserErrors']}", flush=True)
                 continue
             if payload.get("media"):
                 created += len(payload["media"])
-                print(f"✅ Created media from URL ({created}/{len(media_urls)})", flush=True)
+                print(f"[ok] Created media from URL ({created}/{len(media_urls)})", flush=True)
         return {"success": True, "message": f"Created {created} media from URLs", "created": created}
     except Exception as e:
-        print(f"💥 create_media_from_urls error: {e}", flush=True)
+        print(f"[error] create_media_from_urls error: {e}", flush=True)
         return {"success": False, "errors": [str(e)], "created": 0}
 
 
@@ -588,7 +588,7 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         if total_media == 0:
             return {"success": True, "message": "No media files to upload", "errors": []}
         
-        print(f"🔄 Uploading {len(media_files)} new files and attaching {len(shopify_media_ids) if shopify_media_ids else 0} existing files to product {product_id}")
+        print(f"[retry] Uploading {len(media_files)} new files and attaching {len(shopify_media_ids) if shopify_media_ids else 0} existing files to product {product_id}")
         
         success_count = 0
         errors = []
@@ -608,7 +608,7 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         # existing files first, then upload new files to maintain the correct index mapping
         attached_media_count = 0
         if shopify_media_ids:
-            print(f"🔄 Attaching {len(shopify_media_ids)} existing Shopify media files to product {product_id} (FIRST to match frontend order)")
+            print(f"[retry] Attaching {len(shopify_media_ids)} existing Shopify media files to product {product_id} (FIRST to match frontend order)")
             
             try:
                 # Use the provided domain or fall back to STORE_DOMAIN
@@ -640,7 +640,7 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                         # Assume it's a numeric ID that wasn't converted properly
                         media_global_id = f"gid://shopify/MediaImage/{media_id_str}"
                     
-                    print(f"🔍 Attaching media with Global ID: {media_global_id}", flush=True)
+                    print(f"[scan] Attaching media with Global ID: {media_global_id}", flush=True)
                     file_updates.append({
                         "id": media_global_id,
                         "referencesToAdd": [product_global_id]
@@ -685,8 +685,8 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                     if 'errors' in data:
                         error_msg = f"GraphQL errors: {data['errors']}"
                         errors.append(error_msg)
-                        print(f"❌ {error_msg}", flush=True)
-                        print(f"🔍 Full response: {json.dumps(data, indent=2)}", flush=True)
+                        print(f"[error] {error_msg}", flush=True)
+                        print(f"[scan] Full response: {json.dumps(data, indent=2)}", flush=True)
                     elif 'data' in data and 'fileUpdate' in data['data']:
                         result = data['data']['fileUpdate']
                         
@@ -694,37 +694,37 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                             for error in result['userErrors']:
                                 error_msg = f"User error: {error.get('field', 'unknown')} - {error.get('message', 'Unknown error')}"
                                 errors.append(error_msg)
-                                print(f"❌ {error_msg}", flush=True)
+                                print(f"[error] {error_msg}", flush=True)
                         
                         if result.get('files'):
                             attached_media_count = len(result['files'])
                             success_count += attached_media_count
                             for file in result['files']:
                                 filename = file.get('alt', file.get('id', 'Unknown'))
-                                print(f"✅ Attached existing media: {filename}", flush=True)
+                                print(f"[ok] Attached existing media: {filename}", flush=True)
                             # Small delay to ensure attached files are indexed before uploading new files
                             if media_files:
-                                print("⏳ Waiting 1 second for attached files to be indexed...", flush=True)
+                                print("[wait] Waiting 1 second for attached files to be indexed...", flush=True)
                                 time.sleep(1.0)
                         else:
                             error_msg = "No files were attached - check file IDs and permissions"
                             errors.append(error_msg)
-                            print(f"❌ {error_msg}", flush=True)
-                            print(f"🔍 Response data: {json.dumps(data, indent=2)}", flush=True)
+                            print(f"[error] {error_msg}", flush=True)
+                            print(f"[scan] Response data: {json.dumps(data, indent=2)}", flush=True)
                     else:
                         error_msg = "Invalid response format from Shopify GraphQL"
                         errors.append(error_msg)
-                        print(f"❌ {error_msg}", flush=True)
-                        print(f"🔍 Response: {json.dumps(data, indent=2) if isinstance(data, dict) else str(data)}", flush=True)
+                        print(f"[error] {error_msg}", flush=True)
+                        print(f"[scan] Response: {json.dumps(data, indent=2) if isinstance(data, dict) else str(data)}", flush=True)
                 else:
                     error_msg = f"HTTP error: {response.status_code} - {response.text[:500]}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}", flush=True)
+                    print(f"[error] {error_msg}", flush=True)
                     
             except Exception as e:
                 error_msg = f"Error attaching existing media files: {str(e)}"
                 errors.append(error_msg)
-                print(f"💥 {error_msg}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
         
         # Upload new media files (AFTER attaching existing ones to maintain index order)
         for i, media_file in enumerate(media_files):
@@ -801,16 +801,16 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                     success_count += 1
                     response_data = response.json()
                     media_id = response_data.get('image', {}).get('id') or response_data.get('media', {}).get('id')
-                    print(f"✅ Uploaded {media_type}: {filename} (ID: {media_id})")
+                    print(f"[ok] Uploaded {media_type}: {filename} (ID: {media_id})")
                 else:
                     error_msg = f"Failed to upload {media_type} {filename}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
                     
             except Exception as e:
                 error_msg = f"Error uploading media file {filename}: {str(e)}"
                 errors.append(error_msg)
-                print(f"💥 {error_msg}")
+                print(f"[error] {error_msg}")
         
         # Fetch product images after upload to get their IDs
         product_images = []
@@ -821,9 +821,9 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
                 if get_response.status_code == 200:
                     product_data = get_response.json().get("product", {})
                     product_images = product_data.get("images", [])
-                    print(f"🔍 Fetched {len(product_images)} product images", flush=True)
+                    print(f"[scan] Fetched {len(product_images)} product images", flush=True)
             except Exception as e:
-                print(f"⚠️ Failed to fetch product images: {e}", flush=True)
+                print(f"[warn] Failed to fetch product images: {e}", flush=True)
         
         return {
             "success": len(errors) == 0,
@@ -834,7 +834,7 @@ def upload_media_to_product(product_id, media_files, shopify_media_ids=None, pro
         
     except Exception as e:
         error_msg = f"Error uploading media files: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "success_count": 0,
@@ -845,7 +845,7 @@ def _custom_sku_from_payload(data):
     """SKU from the save payload's custom.sku metafield, for media filenames.
 
     custom.sku may be a plain code, or a JSON array of
-    Colour:Pantone:ProductCode[:OptionType] entries — use the first product code.
+    Colour:Pantone:ProductCode[:OptionType] entries - use the first product code.
     """
     try:
         for mf in (data.get("metafields") or []):
@@ -877,8 +877,8 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
 
     This is what lets a save with new images be backgrounded like any other. The
     bytes have to go up while we still hold the request (they can't be parked in
-    the queue store), but everything after that — metafields, pricing, child
-    propagation — is left for the worker. The queued job comes out describing its
+    the queue store), but everything after that - metafields, pricing, child
+    propagation - is left for the worker. The queued job comes out describing its
     media purely as Shopify media IDs, so the worker only has to reorder.
 
     Mutates data in place. Returns True if the job is safe to background; False
@@ -901,7 +901,7 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
     try:
         existing = _fetch_images()
         if existing is None:
-            print(f"⚠️ Pre-upload: could not read images for product {product_id}", flush=True)
+            print(f"[warn] Pre-upload: could not read images for product {product_id}", flush=True)
             return False
         before_ids = {str(img.get("id")) for img in existing}
 
@@ -914,7 +914,7 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
             shopify_domain=domain,
         )
         if not result.get("success"):
-            print(f"⚠️ Pre-upload failed, falling back to a synchronous save: {result.get('errors')}", flush=True)
+            print(f"[warn] Pre-upload failed, falling back to a synchronous save: {result.get('errors')}", flush=True)
             return False
 
         after = result.get("product_images") or _fetch_images() or []
@@ -923,7 +923,7 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
         new_ids = [str(img.get("id")) for img in new_images]
 
         if len(new_ids) != len(media_files):
-            print(f"⚠️ Pre-upload: expected {len(media_files)} new images, found {len(new_ids)}; "
+            print(f"[warn] Pre-upload: expected {len(media_files)} new images, found {len(new_ids)}; "
                   f"saving synchronously so the order isn't guessed", flush=True)
             return False
 
@@ -943,11 +943,11 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
         data["media_files"] = []
         data["media_count"] = len(remapped)
 
-        print(f"📤 Pre-uploaded {len(new_ids)} image(s) to product {product_id}; "
+        print(f"[upload] Pre-uploaded {len(new_ids)} image(s) to product {product_id}; "
               f"queuing the rest of the save", flush=True)
         return True
     except Exception as e:
-        print(f"⚠️ Pre-upload error, falling back to a synchronous save: {e}", flush=True)
+        print(f"[warn] Pre-upload error, falling back to a synchronous save: {e}", flush=True)
         return False
 
 
@@ -962,7 +962,7 @@ def _zero_all_variant_prices(product_id, shopify_domain=None):
     try:
         get_resp = requests.get(url, headers=headers, timeout=15)
         if get_resp.status_code != 200:
-            print(f"⚠️ Could not fetch product {product_id} to zero variant prices", flush=True)
+            print(f"[warn] Could not fetch product {product_id} to zero variant prices", flush=True)
             return False
         prod = get_resp.json().get("product", {})
         variants = prod.get("variants") or []
@@ -980,12 +980,12 @@ def _zero_all_variant_prices(product_id, shopify_domain=None):
         }
         put_resp = requests.put(url, headers=headers, json=payload, timeout=25)
         if put_resp.status_code == 200:
-            print(f"✅ Zeroed prices on {len(variants)} variant(s) for product {product_id}", flush=True)
+            print(f"[ok] Zeroed prices on {len(variants)} variant(s) for product {product_id}", flush=True)
             return True
-        print(f"⚠️ Failed to zero variant prices for product {product_id}: {put_resp.status_code}", flush=True)
+        print(f"[warn] Failed to zero variant prices for product {product_id}: {put_resp.status_code}", flush=True)
         return False
     except Exception as e:
-        print(f"⚠️ _zero_all_variant_prices error for product {product_id}: {e}", flush=True)
+        print(f"[warn] _zero_all_variant_prices error for product {product_id}: {e}", flush=True)
         return False
 
 
@@ -1010,7 +1010,7 @@ def update_product_taxable(product_id, taxable):
         # First, get the current product to get existing variants
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            print(f"❌ Failed to get product for taxable update: {response.status_code}")
+            print(f"[error] Failed to get product for taxable update: {response.status_code}")
             return False
         
         product_data = response.json()["product"]
@@ -1032,14 +1032,14 @@ def update_product_taxable(product_id, taxable):
         if update_response.status_code == 200:
             response_data = update_response.json()
             updated_variants = response_data.get("product", {}).get("variants", [])
-            print(f"✅ Updated taxable field to {taxable} for product {product_id}")
+            print(f"[ok] Updated taxable field to {taxable} for product {product_id}")
             return True
         else:
-            print(f"❌ Failed to update taxable field: {update_response.status_code} - {update_response.text}")
+            print(f"[error] Failed to update taxable field: {update_response.status_code} - {update_response.text}")
             return False
             
     except Exception as e:
-        print(f"💥 Error updating taxable field: {str(e)}")
+        print(f"[error] Error updating taxable field: {str(e)}")
         return False
 
 
@@ -1086,11 +1086,11 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
         try:
             resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
             if resp.status_code != 200:
-                print(f"⚠️ get_child_product_ids GraphQL HTTP {resp.status_code}", flush=True)
+                print(f"[warn] get_child_product_ids GraphQL HTTP {resp.status_code}", flush=True)
                 break
             data = resp.json()
             if data.get("errors"):
-                print(f"⚠️ get_child_product_ids GraphQL errors: {data.get('errors')}", flush=True)
+                print(f"[warn] get_child_product_ids GraphQL errors: {data.get('errors')}", flush=True)
                 break
             products_data = (data.get("data") or {}).get("products") or {}
             edges = products_data.get("edges") or []
@@ -1112,7 +1112,7 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
             if not cursor:
                 break
         except Exception as e:
-            print(f"⚠️ get_child_product_ids error: {e}", flush=True)
+            print(f"[warn] get_child_product_ids error: {e}", flush=True)
             break
     return ids
 
@@ -1122,8 +1122,8 @@ def get_child_product_ids_cached(parent_child_value):
 
     get_child_product_ids_by_parent_child_value() paginates the entire catalog,
     which is far too slow to sit inside a web request. This answers from the
-    warm families tree only — never building it, since a cold build is that same
-    full scan — and returns None when it can't, so the caller can carry on.
+    warm families tree only - never building it, since a cold build is that same
+    full scan - and returns None when it can't, so the caller can carry on.
     """
     val = (parent_child_value or "").strip()
     if not val or not _is_parent_child_type(val, "parent"):
@@ -1131,7 +1131,7 @@ def get_child_product_ids_cached(parent_child_value):
     try:
         cached = _named_snapshot_peek(_FAMILY_TREE_SNAPSHOT)
     except Exception as e:
-        print(f"⚠️ get_child_product_ids_cached: {e}", flush=True)
+        print(f"[warn] get_child_product_ids_cached: {e}", flush=True)
         return None
     if not cached:
         # Warm it for next time, but don't wait for it.
@@ -1438,7 +1438,7 @@ def _strip_html(value, limit=240):
     text = (text.replace("&nbsp;", " ").replace("&amp;", "&")
             .replace("&lt;", "<").replace("&gt;", ">").replace("&#39;", "'").replace("&quot;", '"'))
     text = " ".join(text.split())
-    return text[:limit].rstrip() + ("…" if len(text) > limit else "")
+    return text[:limit].rstrip() + ("..." if len(text) > limit else "")
 
 
 def _stringify_mf(value, limit=240):
@@ -1457,7 +1457,7 @@ def _stringify_mf(value, limit=240):
         parts = _parse_metafield_list(s)
         s = ", ".join(parts)
     if len(s) > limit:
-        return s[:limit].rstrip() + "…"
+        return s[:limit].rstrip() + "..."
     return s
 
 
@@ -1496,7 +1496,7 @@ def _metafields_list_has_pricing(metafields):
 
 
 def _product_has_prices(mf_map):
-    """All Products price indicator — only non-zero pricejsontr/pricejsoner tables count."""
+    """All Products price indicator - only non-zero pricejsontr/pricejsoner tables count."""
     return (
         _price_table_has_value(mf_map.get("pricejsontr"))
         or _price_table_has_value(mf_map.get("pricejsoner"))
@@ -2141,7 +2141,7 @@ def _refresh_products_snapshot_bg(shopify_domain=None):
                 _store_overview_cache(flat, now)
                 age = _snapshot_age(now)
                 if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
-                    return  # office snapshot is fresh enough — done cheaply
+                    return  # office snapshot is fresh enough - done cheaply
                 # Office snapshot is stale: rebuild it from Shopify.
         flat = _build_products_overview_from_shopify(shopify_domain)
         _write_products_snapshot(flat)
@@ -2180,7 +2180,7 @@ def invalidate_products_overview_cache():
     _PRODUCTS_FLAT_CACHE = None
 
 
-# Manual full Shopify → office overwrite (Dev tab). Separate from the SWR
+# Manual full Shopify -> office overwrite (Dev tab). Separate from the SWR
 # background refresh so a forced rebuild always hits Shopify even when the
 # office snapshot is still inside PRODUCTS_SNAPSHOT_TTL.
 _FORCE_REBUILD_LOCK = threading.Lock()
@@ -2203,7 +2203,7 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
     global _FORCE_REBUILD_STATE
     started = started_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
     try:
-        print("🔄 Force rebuild: scanning all Shopify products…", flush=True)
+        print("[retry] Force rebuild: scanning all Shopify products...", flush=True)
         flat = _build_products_overview_from_shopify(shopify_domain)
         _write_products_snapshot(flat, updated_by="force-rebuild")
         _store_overview_cache(flat)
@@ -2212,7 +2212,7 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
         except Exception as exc:
             logger.warning("Force rebuild: family snapshot refresh failed (%s)", exc)
         count = len(flat or [])
-        print(f"✅ Force rebuild complete: {count} products written to office snapshot", flush=True)
+        print(f"[ok] Force rebuild complete: {count} products written to office snapshot", flush=True)
         with _FORCE_REBUILD_LOCK:
             _FORCE_REBUILD_STATE = {
                 "status": "done",
@@ -2223,7 +2223,7 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
             }
     except Exception as exc:
         logger.warning("Force rebuild failed (%s)", exc)
-        print(f"❌ Force rebuild failed: {exc}", flush=True)
+        print(f"[error] Force rebuild failed: {exc}", flush=True)
         with _FORCE_REBUILD_LOCK:
             _FORCE_REBUILD_STATE = {
                 "status": "error",
@@ -2235,7 +2235,7 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
 
 
 def start_force_rebuild_products_snapshot(shopify_domain=None):
-    """Start a full Shopify → office overwrite in the background.
+    """Start a full Shopify -> office overwrite in the background.
 
     Returns (started: bool, state: dict). Rejects a second start while one is
     already running so two catalog scans can't pile onto the same instance.
@@ -2291,7 +2291,7 @@ def _sync_product_row_to_snapshot(row):
 def sync_product_snapshot(product_id, shopify_domain=None, refresh_families=True):
     """After a save: fetch one product from Shopify into office/mem caches immediately.
 
-    Bypasses PRODUCTS_SNAPSHOT_TTL — saved products are always re-read from Shopify
+    Bypasses PRODUCTS_SNAPSHOT_TTL - saved products are always re-read from Shopify
     so the All Products list and editor stay accurate without waiting for the
     30-minute full-catalog rebuild window.
     """
@@ -2329,7 +2329,7 @@ def sync_product_snapshot(product_id, shopify_domain=None, refresh_families=True
 def sync_products_after_save(product_ids, shopify_domain=None):
     """Cross-check every product touched by a save (parent + children + family edits).
 
-    Always pulls live Shopify data into the office snapshot for each id — not
+    Always pulls live Shopify data into the office snapshot for each id - not
     gated by PRODUCTS_SNAPSHOT_TTL. Family trees are force-rebuilt once at the end.
     """
     seen = set()
@@ -2344,14 +2344,14 @@ def sync_products_after_save(product_ids, shopify_domain=None):
         ordered.append(raw)
     if not ordered:
         return
-    print(f"🔄 Post-save cross-check: syncing {len(ordered)} product(s) from Shopify…", flush=True)
+    print(f"[retry] Post-save cross-check: syncing {len(ordered)} product(s) from Shopify...", flush=True)
     for pid in ordered:
         try:
             sync_product_snapshot(pid, shopify_domain, refresh_families=False)
-            print(f"✅ Post-save cross-check synced product {pid}", flush=True)
+            print(f"[ok] Post-save cross-check synced product {pid}", flush=True)
         except Exception as exc:
             logger.warning("Products: post-save sync failed for %s (%s)", pid, exc)
-            print(f"⚠️ Post-save cross-check failed for {pid}: {exc}", flush=True)
+            print(f"[warn] Post-save cross-check failed for {pid}: {exc}", flush=True)
     try:
         refresh_family_snapshots(force=True)
     except Exception as exc:
@@ -2393,7 +2393,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     # 1. In-process memory tier. Serve it immediately whenever we have a copy so
     # the office/Shopify round-trip is never on the request's critical path. When
     # the copy is older than the mem TTL, kick a single background refresh and
-    # still return the (slightly stale) copy now — true stale-while-revalidate.
+    # still return the (slightly stale) copy now - true stale-while-revalidate.
     if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
         if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
             _kick_products_refresh(shopify_domain)
@@ -2413,7 +2413,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
 
         # 3. Office reachable but no snapshot rows (or the read just failed/timed
         # out). Never block the request thread on a full Shopify rebuild if we
-        # already have a prior in-process copy — serve it (stale is fine) and
+        # already have a prior in-process copy - serve it (stale is fine) and
         # rebuild in the background. Only the very first cold start blocks.
         if _PRODUCTS_OVERVIEW_CACHE is not None:
             _kick_products_refresh(shopify_domain)
@@ -2439,7 +2439,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
 
 
 # --------------------------------------------------------------------------- #
-# Single-product editor detail — server-side SWR cache of the full payload the
+# Single-product editor detail - server-side SWR cache of the full payload the
 # Product Manager editor loads (matches /api/product/<id>/prices). Shared across
 # instances via the office snapshot (kind "product_detail") with a per-instance
 # memory tier and per-product singleflight background refresh.
@@ -2634,7 +2634,7 @@ def delete_product(product_id, shopify_domain=None):
     except Exception as exc:
         logger.warning("Delete product: family snapshot refresh failed for %s (%s)", pid, exc)
 
-    print(f"🗑️ Deleted Shopify product {pid}", flush=True)
+    print(f"[delete] Deleted Shopify product {pid}", flush=True)
     return {"success": True, "product_id": pid}
 
 
@@ -2689,7 +2689,7 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
 
 
 # --------------------------------------------------------------------------- #
-# Generic named-snapshot SWR — for catalog-wide, product-independent blobs that
+# Generic named-snapshot SWR - for catalog-wide, product-independent blobs that
 # are identical for every viewer (e.g. the product-families tree). Same tiers as
 # above: per-instance memory -> office named snapshot -> Shopify rebuild.
 # --------------------------------------------------------------------------- #
@@ -2913,7 +2913,7 @@ def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped,
                     url = part[part.find("<") + 1:part.find(">")].strip()
                     break
         except Exception as e:
-            print(f"⚠️ REST fallback error for {parent_child_value!r}: {e}", flush=True)
+            print(f"[warn] REST fallback error for {parent_child_value!r}: {e}", flush=True)
             break
     return result
 
@@ -2929,7 +2929,7 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
     child_value = "Child - " + str(parent_child_value).strip()[9:]
     domain = (shopify_domain or STORE_DOMAIN or "").replace("https://", "").replace("http://", "").rstrip("/").strip()
     if not domain:
-        print("⚠️ get_child_products_by_parent_child_value: SHOPIFY_STORE_DOMAIN is not set; cannot fetch children.", flush=True)
+        print("[warn] get_child_products_by_parent_child_value: SHOPIFY_STORE_DOMAIN is not set; cannot fetch children.", flush=True)
         return []
     graphql_url = f"https://{domain}/admin/api/{API_VERSION}/graphql.json"
     headers = {
@@ -2968,11 +2968,11 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
         try:
             resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
             if resp.status_code == 404:
-                print(f"⚠️ get_child_products_by_parent_child_value GraphQL 404; using REST fallback (same domain as rest of app).", flush=True)
+                print(f"[warn] get_child_products_by_parent_child_value GraphQL 404; using REST fallback (same domain as rest of app).", flush=True)
                 use_rest_fallback = True
                 break
             if resp.status_code != 200:
-                print(f"⚠️ get_child_products_by_parent_child_value HTTP {resp.status_code} for {parent_child_value!r}", flush=True)
+                print(f"[warn] get_child_products_by_parent_child_value HTTP {resp.status_code} for {parent_child_value!r}", flush=True)
                 try:
                     print(f"   Response: {resp.text[:500]}", flush=True)
                 except Exception:
@@ -2980,7 +2980,7 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
                 break
             data = resp.json()
             if data.get("errors"):
-                print(f"⚠️ get_child_products_by_parent_child_value GraphQL errors for {parent_child_value!r}: {data.get('errors')}", flush=True)
+                print(f"[warn] get_child_products_by_parent_child_value GraphQL errors for {parent_child_value!r}: {data.get('errors')}", flush=True)
                 break
             products_data = (data.get("data") or {}).get("products") or {}
             edges = products_data.get("edges") or []
@@ -3002,7 +3002,7 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
             if not cursor:
                 break
         except Exception as e:
-            print(f"⚠️ get_child_products_by_parent_child_value error for {parent_child_value!r}: {e}", flush=True)
+            print(f"[warn] get_child_products_by_parent_child_value error for {parent_child_value!r}: {e}", flush=True)
             break
     if use_rest_fallback:
         result = _get_child_products_by_parent_child_value_rest(domain, child_value_stripped, parent_child_value)
@@ -3013,7 +3013,7 @@ def _build_parent_child_tree(parents_only=False):
     """
     Return a tree of all parent products with their child products.
     Only products that ACTUALLY exist in the store with a "Parent - X" metafield are
-    included — the hardcoded PARENT_PRODUCTS preset list is intentionally NOT used here,
+    included - the hardcoded PARENT_PRODUCTS preset list is intentionally NOT used here,
     so the Product Families diagram never shows parent types that don't exist as products.
     When parents_only=True, the children lists are omitted (parents render immediately).
     Returns: { "tree": [ { "parent": {id, title}, "parent_value": "Parent - X", "children": [...] }, ... ] }
@@ -3086,7 +3086,7 @@ PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
 })
 
 # Parent-only preference: keep pushing this parent's main image to its children on save.
-# Not inherited — children do not carry the flag.
+# Not inherited - children do not carry the flag.
 MAIN_IMAGE_TO_CHILDREN_METAFIELD_KEY = "main_image_to_children"
 
 
@@ -3183,7 +3183,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 if leg_id:
                     try:
                         pid_found = int(leg_id)
-                        print(f"📋 Resolved parent product ID {pid_found} for {pv!r} via API (GraphQL)", flush=True)
+                        print(f"[list] Resolved parent product ID {pid_found} for {pv!r} via API (GraphQL)", flush=True)
                         return pid_found
                     except (TypeError, ValueError):
                         pass
@@ -3194,7 +3194,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 break
             time.sleep(0.25)
         except Exception as e:
-            print(f"⚠️ _find_parent_product_id_by_parent_value: {e}", flush=True)
+            print(f"[warn] _find_parent_product_id_by_parent_value: {e}", flush=True)
             break
     # REST fallback: list products and check metafields
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
@@ -3223,7 +3223,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                         matched = True
                         break
                 if matched:
-                    print(f"📋 Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
+                    print(f"[list] Resolved parent product ID {pid} for {pv!r} via API (REST)", flush=True)
                     return int(pid)
             link = r.headers.get("Link") or ""
             url = None
@@ -3232,7 +3232,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                     url = part[part.find("<") + 1:part.find(">")].strip()
                     break
         except Exception as e:
-            print(f"⚠️ _find_parent_product_id_by_parent_value REST: {e}", flush=True)
+            print(f"[warn] _find_parent_product_id_by_parent_value REST: {e}", flush=True)
             break
     return None
 
@@ -3248,7 +3248,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
     """
     parent_id = _get_parent_product_id_for_child(child_parent_child_value, shopify_domain)
     if not parent_id:
-        print(f"⚠️ Parent product not found for child type {child_parent_child_value!r} (add parent id to PARENT_PRODUCTS or ensure parent exists in store)", flush=True)
+        print(f"[warn] Parent product not found for child type {child_parent_child_value!r} (add parent id to PARENT_PRODUCTS or ensure parent exists in store)", flush=True)
         return None
     time.sleep(0.2)
     domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
@@ -3291,7 +3291,7 @@ def get_parent_inherited_data(child_parent_child_value, shopify_domain=None):
             "metafields": metafields,
         }
     except Exception as e:
-        print(f"⚠️ get_parent_inherited_data: {e}", flush=True)
+        print(f"[warn] get_parent_inherited_data: {e}", flush=True)
         return None
 
 
@@ -3308,7 +3308,7 @@ def _fetch_parent_propagate_metafields(parent_product_id, shopify_domain=None):
             timeout=15,
         )
         if mf_r.status_code != 200:
-            print(f"⚠️ Could not fetch parent metafields for propagation (HTTP {mf_r.status_code})", flush=True)
+            print(f"[warn] Could not fetch parent metafields for propagation (HTTP {mf_r.status_code})", flush=True)
             return metafields
         for m in mf_r.json().get("metafields", []):
             key = (m.get("key") or "").strip()
@@ -3321,9 +3321,9 @@ def _fetch_parent_propagate_metafields(parent_product_id, shopify_domain=None):
                     "value": m.get("value") or "",
                     "type": m.get("type") or "single_line_text_field",
                 })
-        print(f"📋 Loaded {len(metafields)} inheritable metafield(s) from parent {parent_product_id}", flush=True)
+        print(f"[list] Loaded {len(metafields)} inheritable metafield(s) from parent {parent_product_id}", flush=True)
     except Exception as e:
-        print(f"⚠️ _fetch_parent_propagate_metafields: {e}", flush=True)
+        print(f"[warn] _fetch_parent_propagate_metafields: {e}", flush=True)
     return metafields
 
 
@@ -3357,7 +3357,7 @@ def _inherit_metafields_with_clears(metafields):
             "value": "",
             "type": mf_type,
         })
-        print(f"📋 Parent cleared custom.{key} — will remove from children", flush=True)
+        print(f"[list] Parent cleared custom.{key} - will remove from children", flush=True)
     return result
 
 
@@ -3489,7 +3489,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     wait = max(2.0, float(r.headers.get("retry-after", 2)))
                 except (ValueError, TypeError):
                     pass
-                print(f"⚠️ Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
+                print(f"[warn] Rate limit (429) on {label}, waiting {wait}s then retry ({attempt+1}/2)...", flush=True)
                 time.sleep(wait)
                 continue
             return r
@@ -3498,27 +3498,27 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
     try:
         parent_resp = _request_with_retry("GET", f"{base_url}/products/{parent_product_id}/images.json", label="parent images")
         if parent_resp.status_code != 200:
-            print(f"⚠️ Main image propagation: could not read parent images ({parent_resp.status_code})", flush=True)
+            print(f"[warn] Main image propagation: could not read parent images ({parent_resp.status_code})", flush=True)
             return {"success": False, "updated": 0}
         parent_images = parent_resp.json().get("images", []) or []
     except Exception as e:
-        print(f"⚠️ Main image propagation: error reading parent images: {e}", flush=True)
+        print(f"[warn] Main image propagation: error reading parent images: {e}", flush=True)
         return {"success": False, "updated": 0}
 
     if not parent_images:
-        print("ℹ️ Main image propagation: parent has no images to share", flush=True)
+        print("[info] Main image propagation: parent has no images to share", flush=True)
         return {"success": True, "updated": 0}
 
     main_image = sorted(parent_images, key=lambda i: i.get("position") or 999)[0]
     main_src = (main_image.get("src") or "").strip()
     parent_image_id = main_image.get("id")
     if not main_src or not parent_image_id:
-        print("ℹ️ Main image propagation: parent main image has no source URL/id", flush=True)
+        print("[info] Main image propagation: parent main image has no source URL/id", flush=True)
         return {"success": True, "updated": 0}
     parent_stem = _image_name_stem(main_src)
     marker = _parent_main_alt_marker(parent_image_id)
 
-    print(f"🖼️ Pushing parent main image to {len(child_ids)} child product(s): {main_src.split('/')[-1][:60]}", flush=True)
+    print(f"[img] Pushing parent main image to {len(child_ids)} child product(s): {main_src.split('/')[-1][:60]}", flush=True)
 
     updated = 0
     skipped = 0
@@ -3526,7 +3526,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
         try:
             child_resp = _request_with_retry("GET", f"{base_url}/products/{cid}/images.json", label=f"child {cid} images")
             if child_resp.status_code != 200:
-                print(f"⚠️ Main image propagation: could not read images for child {cid} ({child_resp.status_code})", flush=True)
+                print(f"[warn] Main image propagation: could not read images for child {cid} ({child_resp.status_code})", flush=True)
                 continue
             child_images = child_resp.json().get("images", []) or []
 
@@ -3534,7 +3534,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
             existing = copies[0] if copies else None
 
             # Earlier saves could pile up tagged parent-main copies. Only delete
-            # extras that carry our alt marker — never delete on filename/stem
+            # extras that carry our alt marker - never delete on filename/stem
             # alone (child-only gallery images often share the sku/title prefix).
             for dup in copies[1:]:
                 dup_id = dup.get("id")
@@ -3542,8 +3542,8 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     continue
                 if not _image_has_parent_main_marker(dup, parent_image_id):
                     print(
-                        f"ℹ️ Skipping delete of child {cid} image {dup_id} "
-                        f"({_image_name_stem(dup.get('src'))!r}) — untagged, may be child-only",
+                        f"[info] Skipping delete of child {cid} image {dup_id} "
+                        f"({_image_name_stem(dup.get('src'))!r}) - untagged, may be child-only",
                         flush=True,
                     )
                     continue
@@ -3553,7 +3553,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     label=f"child {cid} dup image",
                 )
                 if deleted.status_code in (200, 204):
-                    print(f"🗑️ Removed duplicate parent-main image {dup_id} from child {cid}", flush=True)
+                    print(f"[delete] Removed duplicate parent-main image {dup_id} from child {cid}", flush=True)
                 time.sleep(0.15)
 
             if existing:
@@ -3562,7 +3562,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                 already_tagged = _image_has_parent_main_marker(existing, parent_image_id)
                 if already_main and already_tagged and len(copies) <= 1:
                     skipped += 1
-                    print(f"ℹ️ Child {cid} already has this parent main image — skipped", flush=True)
+                    print(f"[info] Child {cid} already has this parent main image - skipped", flush=True)
                     continue
 
                 patch = {"id": int(image_id)}
@@ -3577,7 +3577,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     label=f"child {cid} image position",
                 )
                 if move.status_code != 200:
-                    print(f"⚠️ Could not update existing image on child {cid}: {move.status_code}", flush=True)
+                    print(f"[warn] Could not update existing image on child {cid}: {move.status_code}", flush=True)
                     continue
             else:
                 created = _request_with_retry(
@@ -3587,7 +3587,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     label=f"child {cid} image add",
                 )
                 if created.status_code not in (200, 201):
-                    print(f"⚠️ Could not add main image to child {cid}: {created.status_code} - {created.text[:200]}", flush=True)
+                    print(f"[warn] Could not add main image to child {cid}: {created.status_code} - {created.text[:200]}", flush=True)
                     continue
                 image_id = (created.json().get("image") or {}).get("id")
 
@@ -3600,13 +3600,13 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
                     label=f"child {cid} main image",
                 )
             updated += 1
-            print(f"✅ Main image set on child product {cid}", flush=True)
+            print(f"[ok] Main image set on child product {cid}", flush=True)
         except Exception as e:
-            print(f"⚠️ Main image propagation failed for child {cid}: {e}", flush=True)
+            print(f"[warn] Main image propagation failed for child {cid}: {e}", flush=True)
         time.sleep(0.3)
 
     print(
-        f"📊 Main image propagation: {updated} updated, {skipped} already applied "
+        f"[stats] Main image propagation: {updated} updated, {skipped} already applied "
         f"({len(child_ids)} child product(s))",
         flush=True,
     )
@@ -3624,7 +3624,7 @@ def _family_key_from_parent_child(value):
 def get_family_product_ids(parent_child_value):
     """(parent_id, [child_ids]) for a family, read from the warm families tree.
 
-    Never builds the tree — a cold build is a full catalog scan — so returns
+    Never builds the tree - a cold build is a full catalog scan - so returns
     (None, []) when it can't answer.
     """
     family = _family_key_from_parent_child(parent_child_value)
@@ -3655,11 +3655,11 @@ def get_family_product_ids(parent_child_value):
 
 
 def resolve_family_product_ids(parent_child_value, shopify_domain=None, allow_live=False):
-    """(parent_id, [child_ids]) — warm tree first, optional live Shopify fallback.
+    """(parent_id, [child_ids]) - warm tree first, optional live Shopify fallback.
 
     ``allow_live=True`` is for the save worker (not web-request clicks): when the
     families snapshot is cold/missing, fall back to the same GraphQL child lookup
-    used by parent→child propagation so family image removal still finds members.
+    used by parent->child propagation so family image removal still finds members.
     """
     parent_id, child_ids = get_family_product_ids(parent_child_value)
     if parent_id or child_ids:
@@ -3671,17 +3671,17 @@ def resolve_family_product_ids(parent_child_value, shopify_domain=None, allow_li
     if not family:
         return None, []
     parent_value = "Parent - " + family
-    print(f"ℹ️ Family lookup: cache miss for {parent_value!r} — resolving live from Shopify", flush=True)
+    print(f"[info] Family lookup: cache miss for {parent_value!r} - resolving live from Shopify", flush=True)
     try:
         live_children = get_child_product_ids_by_parent_child_value(parent_value, shopify_domain) or []
     except Exception as exc:
-        print(f"⚠️ Family lookup: live child scan failed: {exc}", flush=True)
+        print(f"[warn] Family lookup: live child scan failed: {exc}", flush=True)
         live_children = []
     live_parent = None
     try:
         live_parent = _find_parent_product_id_by_parent_value(parent_value, shopify_domain)
     except Exception as exc:
-        print(f"⚠️ Family lookup: live parent scan failed: {exc}", flush=True)
+        print(f"[warn] Family lookup: live parent scan failed: {exc}", flush=True)
     return live_parent, list(live_children)
 
 
@@ -3851,7 +3851,7 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
     """
     stems, parent_image_ids = _normalize_family_removal_targets(image_srcs)
     if not stems and not parent_image_ids:
-        print("ℹ️ Family image removal: no usable src/id targets", flush=True)
+        print("[info] Family image removal: no usable src/id targets", flush=True)
         return {"success": True, "removed": 0, "product_ids": []}
 
     parent_id, child_ids = resolve_family_product_ids(
@@ -3863,14 +3863,14 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
     except (TypeError, ValueError):
         skip = None
     # When the cache/live lookup couldn't name the parent but we're saving the
-    # parent, children alone are enough — and vice versa for a child save.
+    # parent, children alone are enough - and vice versa for a child save.
     if skip is not None and skip not in members:
         # Still fine; skip just won't match anything in the list.
         pass
     members = [m for m in members if m and m != skip]
     if not members:
         print(
-            f"ℹ️ Family image removal: no other products found for "
+            f"[info] Family image removal: no other products found for "
             f"{(parent_child_value or '').strip()!r} (stems={stems}, ids={parent_image_ids})",
             flush=True,
         )
@@ -3881,7 +3881,7 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
     base_url = f"https://{domain}/admin/api/{API_VERSION}"
 
     print(
-        f"🗑️ Removing shared image from {len(members)} other product(s) "
+        f"[delete] Removing shared image from {len(members)} other product(s) "
         f"(stems={stems}, parent_image_ids={parent_image_ids})",
         flush=True,
     )
@@ -3889,7 +3889,7 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
     for mid in members:
         images = _product_images(mid, domain, headers)
         if images is None:
-            print(f"⚠️ Family image removal: could not read images for product {mid}", flush=True)
+            print(f"[warn] Family image removal: could not read images for product {mid}", flush=True)
             continue
         for img in images:
             if not _image_matches_family_removal(img, stems, parent_image_ids):
@@ -3905,18 +3905,18 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
                 )
                 if d.status_code in (200, 204):
                     removed += 1
-                    print(f"✅ Removed shared image {image_id} from product {mid}", flush=True)
+                    print(f"[ok] Removed shared image {image_id} from product {mid}", flush=True)
                 else:
                     print(
-                        f"⚠️ Could not remove image {image_id} from product {mid}: "
+                        f"[warn] Could not remove image {image_id} from product {mid}: "
                         f"{d.status_code} {d.text[:160]}",
                         flush=True,
                     )
             except Exception as e:
-                print(f"⚠️ Error removing image {image_id} from product {mid}: {e}", flush=True)
+                print(f"[warn] Error removing image {image_id} from product {mid}: {e}", flush=True)
         time.sleep(0.2)
 
-    print(f"📊 Family image removal: {removed} image(s) removed across {len(members)} product(s)", flush=True)
+    print(f"[stats] Family image removal: {removed} image(s) removed across {len(members)} product(s)", flush=True)
     return {"success": True, "removed": removed, "product_ids": members}
 
 
@@ -3931,15 +3931,15 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
         return []
     child_ids = get_child_product_ids_by_parent_child_value(parent_child_value, shopify_domain)
     if not child_ids:
-        print(f"📋 No child products found for {parent_child_value}", flush=True)
+        print(f"[list] No child products found for {parent_child_value}", flush=True)
         return []
-    print(f"📋 Propagating parent fields to {len(child_ids)} child product(s) for {parent_child_value}", flush=True)
+    print(f"[list] Propagating parent fields to {len(child_ids)} child product(s) for {parent_child_value}", flush=True)
 
     if product_data.get("main_image_to_children"):
         try:
             propagate_main_image_to_children(parent_product_id, child_ids, shopify_domain)
         except Exception as e:
-            print(f"⚠️ Main image propagation failed: {e}", flush=True)
+            print(f"[warn] Main image propagation failed: {e}", flush=True)
 
     # Re-read parent after save so children always get the full current inherited state
     time.sleep(0.5)
@@ -3994,26 +3994,26 @@ def propagate_parent_to_children(parent_product_id, product_data, metafields_sav
                 }
                 put_resp = requests.put(prod_url, headers=headers, json=payload, timeout=15)
                 if put_resp.status_code == 200:
-                    print(f"✅ Updated title, tags and taxable for child product {cid}", flush=True)
+                    print(f"[ok] Updated title, tags and taxable for child product {cid}", flush=True)
                     if should_run_price_bandit:
                         try:
                             from Price_Bandit import process_product
-                            print(f"🔄 Running Price Bandit on child {cid} ({child_title})...", flush=True)
+                            print(f"[retry] Running Price Bandit on child {cid} ({child_title})...", flush=True)
                             process_product({"id": cid, "title": child_title})
                         except Exception as pb_err:
-                            print(f"⚠️ Price Bandit failed for child {cid}: {pb_err}", flush=True)
+                            print(f"[warn] Price Bandit failed for child {cid}: {pb_err}", flush=True)
                     else:
                         _zero_all_variant_prices(cid, shopify_domain)
                     saved_list.append({"id": cid, "title": child_title, "is_parent": False})
                 else:
-                    print(f"⚠️ Failed to update title/tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
+                    print(f"[warn] Failed to update title/tags/taxable for child {cid}: {put_resp.status_code}", flush=True)
             else:
-                print(f"⚠️ Could not fetch child product {cid} for tags update", flush=True)
+                print(f"[warn] Could not fetch child product {cid} for tags update", flush=True)
                 tab_sync = sync_product_tab_body_from_metafields(cid, shopify_domain=domain)
                 if tab_sync.get("success"):
                     saved_list.append({"id": cid, "title": f"Product {cid}", "is_parent": False})
         except Exception as e:
-            print(f"⚠️ Error propagating to child {cid}: {e}", flush=True)
+            print(f"[warn] Error propagating to child {cid}: {e}", flush=True)
     return saved_list
 
 
@@ -4088,15 +4088,15 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                         ns, k = mf.get("namespace", ""), mf.get("key", "")
                         if ns and k:
                             existing_by_ns_key[(ns, k)] = mf.get("id")
-                    print(f"📋 Fetched {len(existing_by_ns_key)} existing metafields for upsert", flush=True)
+                    print(f"[list] Fetched {len(existing_by_ns_key)} existing metafields for upsert", flush=True)
                     break
                 elif resp.status_code == 429 and _mf_attempt < 2:
-                    print(f"⚠️ Metafield fetch got 429, retrying (attempt {_mf_attempt+1}/3)...", flush=True)
+                    print(f"[warn] Metafield fetch got 429, retrying (attempt {_mf_attempt+1}/3)...", flush=True)
                 else:
-                    print(f"⚠️ Metafield fetch returned {resp.status_code} - deletions may not work", flush=True)
+                    print(f"[warn] Metafield fetch returned {resp.status_code} - deletions may not work", flush=True)
                     break
         except Exception as e:
-            print(f"⚠️ Could not fetch existing metafields for upsert: {e}", flush=True)
+            print(f"[warn] Could not fetch existing metafields for upsert: {e}", flush=True)
         
         # Brief pause after fetch
         if metafields_data:
@@ -4136,13 +4136,13 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                         del_r = requests.delete(loc, headers=headers, timeout=15)
                                     if del_r.status_code == 429 and del_attempt < 3:
                                         backoff = 2.0 * (del_attempt + 1)
-                                        print(f"⚠️ Rate limit (429) deleting {namespace}.{key}, waiting {backoff}s (attempt {del_attempt+1}/4)...", flush=True)
+                                        print(f"[warn] Rate limit (429) deleting {namespace}.{key}, waiting {backoff}s (attempt {del_attempt+1}/4)...", flush=True)
                                         time.sleep(backoff)
                                         continue
                                     if del_r.status_code in (200, 204):
                                         success_count += 1
                                         del_ok = True
-                                        print(f"✅ Deleted metafield (cleared): {namespace}.{key}", flush=True)
+                                        print(f"[ok] Deleted metafield (cleared): {namespace}.{key}", flush=True)
                                     else:
                                         errors.append(f"Failed to delete {namespace}.{key}: {del_r.status_code}")
                                     break
@@ -4151,7 +4151,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                             except Exception as e:
                                 errors.append(f"Error deleting {namespace}.{key}: {e}")
                         else:
-                            print(f"ℹ️ No existing metafield found for {namespace}.{key} - nothing to delete", flush=True)
+                            print(f"[info] No existing metafield found for {namespace}.{key} - nothing to delete", flush=True)
                         continue
                     # Has value: fall through to create/update
 
@@ -4201,12 +4201,12 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                 if isinstance(parsed, list):
                                     filtered = [v for v in parsed if str(v).strip() in allowed]
                                     if filtered != parsed:
-                                        print(f"⚠️ Filtered subcategory values for {key}: kept {filtered}, removed {set(parsed) - set(filtered)}", flush=True)
+                                        print(f"[warn] Filtered subcategory values for {key}: kept {filtered}, removed {set(parsed) - set(filtered)}", flush=True)
                                     if not filtered:
                                         continue  # Skip - no valid choices; sending invalid value causes 422
                                     formatted_value = json.dumps(filtered)
                         except Exception as e:
-                            print(f"⚠️ Could not filter subcategory choices for {key}: {e}", flush=True)
+                            print(f"[warn] Could not filter subcategory choices for {key}: {e}", flush=True)
                     if namespace == "custom" and key in PARENT_CHILD_METAFIELD_KEYS:
                         try:
                             from .categories import get_metafield_choices
@@ -4234,14 +4234,14 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                             filtered.append(c)
                                     if filtered != parsed:
                                         print(
-                                            f"⚠️ Coerced parent/child values for {key}: {parsed} -> {filtered}",
+                                            f"[warn] Coerced parent/child values for {key}: {parsed} -> {filtered}",
                                             flush=True,
                                         )
                                     if not filtered:
                                         continue
                                     formatted_value = json.dumps(filtered)
                         except Exception as e:
-                            print(f"⚠️ Could not filter parent/child choices for {key}: {e}", flush=True)
+                            print(f"[warn] Could not filter parent/child choices for {key}: {e}", flush=True)
 
                 namespace = metafield_data.get("namespace", "custom")
                 key = metafield_data.get("key", "")
@@ -4288,7 +4288,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 for _retry in range(3):
                     if response.status_code == 429:
                         wait = 2.0 * (_retry + 1)
-                        print(f"⚠️ Rate limit (429) on metafield {namespace}.{key}, waiting {wait}s (retry {_retry+1}/3)...", flush=True)
+                        print(f"[warn] Rate limit (429) on metafield {namespace}.{key}, waiting {wait}s (retry {_retry+1}/3)...", flush=True)
                         time.sleep(wait)
                         response = _do_request()
                     else:
@@ -4297,7 +4297,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 if response.status_code in [200, 201]:
                     success_count += 1
                     action = "Updated" if existing_id else "Created"
-                    print(f"✅ {action} metafield: {namespace}.{key}", flush=True)
+                    print(f"[ok] {action} metafield: {namespace}.{key}", flush=True)
                 elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (
                     key == "subcategory" or (key and key.startswith("subcategory_")) or key in PARENT_CHILD_METAFIELD_KEYS
                 ):
@@ -4337,22 +4337,22 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                         if retry_resp.status_code in [200, 201]:
                                             success_count += 1
                                             action = "Updated" if existing_id else "Created"
-                                            print(f"✅ {action} metafield (after 422 retry): {namespace}.{key}", flush=True)
+                                            print(f"[ok] {action} metafield (after 422 retry): {namespace}.{key}", flush=True)
                                             continue
                     except Exception as retry_e:
-                        print(f"⚠️ 422 retry failed for {namespace}.{key}: {retry_e}", flush=True)
+                        print(f"[warn] 422 retry failed for {namespace}.{key}: {retry_e}", flush=True)
                     error_msg = f"Failed to create metafield {metafield_data.get('namespace')}.{metafield_data.get('key')}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
                 else:
                     error_msg = f"Failed to create metafield {metafield_data.get('namespace')}.{metafield_data.get('key')}: {response.status_code} - {response.text}"
                     errors.append(error_msg)
-                    print(f"❌ {error_msg}")
+                    print(f"[error] {error_msg}")
                     
             except Exception as e:
                 error_msg = f"Error creating metafield {metafield_data.get('namespace')}.{metafield_data.get('key')}: {str(e)}"
                 errors.append(error_msg)
-                print(f"💥 {error_msg}")
+                print(f"[error] {error_msg}")
         
         return {
             "success": len(errors) == 0,
@@ -4362,7 +4362,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         
     except Exception as e:
         error_msg = f"Error creating metafields: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "success_count": 0,
@@ -4412,15 +4412,15 @@ def create_product(product_data):
             domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
             url = f"https://{domain}/admin/api/{API_VERSION}/products/{existing_product_id}.json"
             method = "PUT"
-            print(f"🔄 Updating existing product {existing_product_id}")
+            print(f"[retry] Updating existing product {existing_product_id}")
         else:
             # Create new product
             # Ensure STORE_DOMAIN doesn't already include protocol and has no trailing slash
             domain = STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
             url = f"https://{domain}/admin/api/{API_VERSION}/products.json"
             method = "POST"
-            print(f"➕ Creating new product")
-            print(f"🔍 Final URL: {url}", flush=True)
+            print(f"[add] Creating new product")
+            print(f"[scan] Final URL: {url}", flush=True)
 
         headers = {
             "X-Shopify-Access-Token": ACCESS_TOKEN,
@@ -4442,9 +4442,9 @@ def create_product(product_data):
                     product_data["charge_vat"] = parent_inherited.get("charge_vat", True)
                     product_data["_parent_metafields"] = parent_inherited.get("metafields") or []
                     did_parent_fetch = True  # we did 2 API calls (product + metafields)
-                    print(f"📋 Child product: using parent's title, tags, VAT, SKU, and inherited metafields", flush=True)
+                    print(f"[list] Child product: using parent's title, tags, VAT, SKU, and inherited metafields", flush=True)
         except Exception as e:
-            print(f"⚠️ Skipping parent inherited data (non-fatal): {e}", flush=True)
+            print(f"[warn] Skipping parent inherited data (non-fatal): {e}", flush=True)
         
         # Determine if product should be taxable based on VAT setting
         tags = product_data.get("tags", "")
@@ -4467,7 +4467,7 @@ def create_product(product_data):
         # Validate that we have a title
         if not expected_title:
             error_msg = "Product title is required and cannot be empty"
-            print(f"❌ {error_msg}", flush=True)
+            print(f"[error] {error_msg}", flush=True)
             return {
                 "success": False,
                 "error": error_msg
@@ -4512,8 +4512,8 @@ def create_product(product_data):
         
         # Debug: Print the description being saved
         description = product_data.get("description", "")
-        print(f"🔍 Description being saved: {repr(description)}", flush=True)
-        print(f"🔍 Description contains h3: {'<h3>' in description}", flush=True)
+        print(f"[scan] Description being saved: {repr(description)}", flush=True)
+        print(f"[scan] Description contains h3: {'<h3>' in description}", flush=True)
         
         # Don't set options for NEW products - let Price Bandit handle the full variant structure
         # Setting options without variants causes Shopify API errors
@@ -4527,12 +4527,12 @@ def create_product(product_data):
         if method == "PUT":
             # Remove variants and options from payload - Shopify API doesn't allow clearing options
             # We'll only update product-level fields here, let Price Bandit handle variants later
-            print("ℹ️ Updating product-level fields only for existing product (Price Bandit will handle variants)")
+            print("[info] Updating product-level fields only for existing product (Price Bandit will handle variants)")
             payload["product"].pop("variants", None)
             # Don't send options field either
         
-        print(f"🔄 Step 1: {'Updating' if existing_product_id else 'Creating'} product: {product_data.get('title', 'Untitled')}")
-        print(f"🔍 Payload being sent to Shopify:", flush=True)
+        print(f"[retry] Step 1: {'Updating' if existing_product_id else 'Creating'} product: {product_data.get('title', 'Untitled')}")
+        print(f"[scan] Payload being sent to Shopify:", flush=True)
         import json
         print(json.dumps(payload, indent=2), flush=True)
 
@@ -4557,10 +4557,10 @@ def create_product(product_data):
                         wait_sec = max(3.0, float(response.headers.get("retry-after", 3)))
                     except (ValueError, TypeError):
                         pass
-                    print(f"⚠️ Step 1 rate limit (429), waiting {wait_sec}s then retry ({step1_attempt + 1}/3)...", flush=True)
+                    print(f"[warn] Step 1 rate limit (429), waiting {wait_sec}s then retry ({step1_attempt + 1}/3)...", flush=True)
                     time.sleep(wait_sec)
                     continue
-                print(f"❌ Shopify API returned 429 after retries. Response: {response.text[:500]}", flush=True)
+                print(f"[error] Shopify API returned 429 after retries. Response: {response.text[:500]}", flush=True)
                 return {"success": False, "error": f"Rate limit exceeded. {response.text[:300]}"}
             break
         # Handle redirects (301/302) and follow with same method (space out to avoid 429)
@@ -4578,7 +4578,7 @@ def create_product(product_data):
                 if method == "PUT":
                     response = requests.put(redirect_url, headers=headers, json=payload, allow_redirects=True)
                 else:
-                    print(f"⚠️ POST request redirected to: {redirect_url}", flush=True)
+                    print(f"[warn] POST request redirected to: {redirect_url}", flush=True)
                     response = requests.post(redirect_url, headers=headers, json=payload, allow_redirects=True)
                 if response.status_code == 429 and redirect_attempt < 3:
                     wait_sec = 3.0
@@ -4586,7 +4586,7 @@ def create_product(product_data):
                         wait_sec = max(3.0, float(response.headers.get("retry-after", 3)))
                     except (ValueError, TypeError):
                         pass
-                    print(f"⚠️ Step 1 (after redirect) rate limit (429), waiting {wait_sec}s then retry ({redirect_attempt + 1}/3)...", flush=True)
+                    print(f"[warn] Step 1 (after redirect) rate limit (429), waiting {wait_sec}s then retry ({redirect_attempt + 1}/3)...", flush=True)
                     time.sleep(wait_sec)
                     continue
                 break
@@ -4596,18 +4596,18 @@ def create_product(product_data):
             actual_shopify_domain = parsed.netloc
         
         # Log the full response for debugging
-        print(f"🔍 Shopify API Response Status: {response.status_code}", flush=True)
-        print(f"🔍 Shopify API Response Headers: {dict(response.headers)}", flush=True)
-        print(f"🔍 Shopify API Request URL: {url}", flush=True)
-        print(f"🔍 Shopify API Request Method: {method}", flush=True)
+        print(f"[scan] Shopify API Response Status: {response.status_code}", flush=True)
+        print(f"[scan] Shopify API Response Headers: {dict(response.headers)}", flush=True)
+        print(f"[scan] Shopify API Request URL: {url}", flush=True)
+        print(f"[scan] Shopify API Request Method: {method}", flush=True)
         
         # Log raw response text for debugging (first 2000 chars)
-        print(f"🔍 Raw Response Text (first 2000 chars): {response.text[:2000]}", flush=True)
+        print(f"[scan] Raw Response Text (first 2000 chars): {response.text[:2000]}", flush=True)
         
         # Check for non-success status codes first
         if response.status_code not in [200, 201]:
             error_msg = f"Shopify API returned status {response.status_code}. Response: {response.text[:1000]}"
-            print(f"❌ {error_msg}", flush=True)
+            print(f"[error] {error_msg}", flush=True)
             return {
                 "success": False,
                 "error": error_msg
@@ -4616,16 +4616,16 @@ def create_product(product_data):
         if response.status_code in [200, 201]:
             try:
                 result = response.json()
-                print(f"🔍 Shopify API Response JSON keys: {list(result.keys())}", flush=True)
+                print(f"[scan] Shopify API Response JSON keys: {list(result.keys())}", flush=True)
                 # Log a sample of the response for debugging (first 500 chars)
                 result_str = str(result)
                 if len(result_str) > 500:
-                    print(f"🔍 Shopify API Response (first 500 chars): {result_str[:500]}...", flush=True)
+                    print(f"[scan] Shopify API Response (first 500 chars): {result_str[:500]}...", flush=True)
                 else:
-                    print(f"🔍 Shopify API Response: {result_str}", flush=True)
+                    print(f"[scan] Shopify API Response: {result_str}", flush=True)
             except Exception as e:
                 error_msg = f"Failed to parse Shopify API response: {str(e)}. Response text: {response.text[:500]}"
-                print(f"❌ {error_msg}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
                 return {
                     "success": False,
                     "error": error_msg
@@ -4634,7 +4634,7 @@ def create_product(product_data):
             # Check for errors in the response body (Shopify sometimes returns 200 with errors)
             if "errors" in result:
                 error_msg = f"Shopify API returned errors: {result.get('errors')}"
-                print(f"❌ {error_msg}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
                 return {
                     "success": False,
                     "error": error_msg
@@ -4644,15 +4644,15 @@ def create_product(product_data):
             product = None
             if "product" in result:
                 product = result.get("product", {})
-                print(f"✅ Response contains 'product' (singular)", flush=True)
+                print(f"[ok] Response contains 'product' (singular)", flush=True)
             elif "products" in result:
                 products_list = result.get("products", [])
-                print(f"🔍 Response contains 'products' array with {len(products_list)} product(s)", flush=True)
+                print(f"[scan] Response contains 'products' array with {len(products_list)} product(s)", flush=True)
                 
                 # If we're creating a NEW product, getting a 'products' array is unexpected and likely an error
                 if not existing_product_id:
                     # Log all products in the array for debugging
-                    print(f"🔍 Products in response:", flush=True)
+                    print(f"[scan] Products in response:", flush=True)
                     for idx, p in enumerate(products_list[:10]):  # Limit to first 10 for readability
                         print(f"   {idx + 1}. ID: {p.get('id')}, Title: '{p.get('title')}', Created: {p.get('created_at')}", flush=True)
                     if len(products_list) > 10:
@@ -4664,12 +4664,12 @@ def create_product(product_data):
                         for p in products_list:
                             if p.get("title") == expected_title:
                                 matching_product = p
-                                print(f"✅ Found matching product by title: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                print(f"[ok] Found matching product by title: '{expected_title}' (ID: {p.get('id')})", flush=True)
                                 break
                     
                     # If no match found, try to fetch the product by making a separate API call
                     if not matching_product and expected_title:
-                        print(f"🔍 Product not found in response array. Attempting to fetch product by title...", flush=True)
+                        print(f"[scan] Product not found in response array. Attempting to fetch product by title...", flush=True)
                         try:
                             # Try to get the product by searching for it by title
                             from urllib.parse import quote
@@ -4681,14 +4681,14 @@ def create_product(product_data):
                                     for p in search_result["products"]:
                                         if p.get("title") == expected_title:
                                             matching_product = p
-                                            print(f"✅ Found product via search: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                            print(f"[ok] Found product via search: '{expected_title}' (ID: {p.get('id')})", flush=True)
                                             break
                         except Exception as e:
-                            print(f"⚠️ Error searching for product: {str(e)}", flush=True)
+                            print(f"[warn] Error searching for product: {str(e)}", flush=True)
                         
                         # If still not found, try getting the most recently created product (within last minute)
                         if not matching_product:
-                            print(f"🔍 Trying to find most recently created product...", flush=True)
+                            print(f"[scan] Trying to find most recently created product...", flush=True)
                             try:
                                 from datetime import datetime, timedelta
                                 now = datetime.utcnow()
@@ -4708,18 +4708,18 @@ def create_product(product_data):
                                                     if created_at.replace(tzinfo=None) >= one_minute_ago:
                                                         if p.get("title") == expected_title:
                                                             matching_product = p
-                                                            print(f"✅ Found recently created product: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                                            print(f"[ok] Found recently created product: '{expected_title}' (ID: {p.get('id')})", flush=True)
                                                             break
                                                 except:
                                                     pass
                             except Exception as e:
-                                print(f"⚠️ Error finding recent product: {str(e)}", flush=True)
+                                print(f"[warn] Error finding recent product: {str(e)}", flush=True)
                     
                     # If still no match found, this is an error - Shopify didn't create our product
                     if not matching_product:
                         error_msg = f"Failed to create product: Shopify API returned a list of existing products instead of the newly created product. Expected title: '{expected_title}'. The product was not found in the response or via search. This suggests the product was not created. Please check Shopify API logs or try again."
-                        print(f"❌ {error_msg}", flush=True)
-                        print(f"🔍 Full response (first 1000 chars): {str(result)[:1000]}", flush=True)
+                        print(f"[error] {error_msg}", flush=True)
+                        print(f"[scan] Full response (first 1000 chars): {str(result)[:1000]}", flush=True)
                         return {
                             "success": False,
                             "error": error_msg
@@ -4735,7 +4735,7 @@ def create_product(product_data):
                             for p in products_list:
                                 if p.get("title") == expected_title and p.get("id") == existing_product_id:
                                     matching_product = p
-                                    print(f"✅ Found matching updated product by title and ID: '{expected_title}' (ID: {p.get('id')})", flush=True)
+                                    print(f"[ok] Found matching updated product by title and ID: '{expected_title}' (ID: {p.get('id')})", flush=True)
                                     break
                         
                         # If no match found, use the product with matching ID
@@ -4743,12 +4743,12 @@ def create_product(product_data):
                             for p in products_list:
                                 if p.get("id") == existing_product_id:
                                     matching_product = p
-                                    print(f"✅ Found updated product by ID: {existing_product_id}", flush=True)
+                                    print(f"[ok] Found updated product by ID: {existing_product_id}", flush=True)
                                     break
                         
                         if not matching_product:
                             error_msg = f"Failed to update product: Could not find product {existing_product_id} in response. Response contains {len(products_list)} products."
-                            print(f"❌ {error_msg}", flush=True)
+                            print(f"[error] {error_msg}", flush=True)
                             return {
                                 "success": False,
                                 "error": error_msg
@@ -4757,7 +4757,7 @@ def create_product(product_data):
                         product = matching_product
                     else:
                         error_msg = f"Shopify API response contains 'products' but array is empty. Response: {result}"
-                        print(f"❌ {error_msg}", flush=True)
+                        print(f"[error] {error_msg}", flush=True)
                         return {
                             "success": False,
                             "error": error_msg
@@ -4765,7 +4765,7 @@ def create_product(product_data):
             
             if not product:
                 error_msg = f"Shopify API response does not contain a product. Response keys: {list(result.keys()) if result else 'None'}. Response: {str(result)[:500]}"
-                print(f"❌ {error_msg}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
                 return {
                     "success": False,
                     "error": error_msg
@@ -4774,7 +4774,7 @@ def create_product(product_data):
             product_id = product.get("id")
             if not product_id:
                 error_msg = f"Shopify API response does not contain a product ID. Product data: {product}"
-                print(f"❌ {error_msg}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
                 return {
                     "success": False,
                     "error": error_msg
@@ -4784,15 +4784,15 @@ def create_product(product_data):
             product_title = product.get("title", "")
             if not existing_product_id and expected_title and product_title != expected_title:
                 error_msg = f"Product title mismatch! Expected '{expected_title}' but got '{product_title}'. This may indicate the wrong product was returned."
-                print(f"❌ {error_msg}", flush=True)
-                print(f"⚠️ Product ID returned: {product_id}", flush=True)
+                print(f"[error] {error_msg}", flush=True)
+                print(f"[warn] Product ID returned: {product_id}", flush=True)
                 # Don't fail here - log the warning but continue, as this might be a Shopify API quirk
-                print(f"⚠️ Continuing with returned product, but this may not be the product you intended to create.", flush=True)
+                print(f"[warn] Continuing with returned product, but this may not be the product you intended to create.", flush=True)
             
             action = "updated" if existing_product_id else "created"
-            print(f"✅ Step 1 Complete: Product {action} successfully!", flush=True)
+            print(f"[ok] Step 1 Complete: Product {action} successfully!", flush=True)
             print(f"🆔 Product ID: {product_id}", flush=True)
-            print(f"📝 Title: {product.get('title')}", flush=True)
+            print(f"[note] Title: {product.get('title')}", flush=True)
             print(f"🔗 Handle: {product.get('handle')}", flush=True)
             print(f"🏷️ Tags: {tags}", flush=True)
             
@@ -4868,7 +4868,7 @@ def create_product(product_data):
                 # Now handle media based on whether we're updating or creating
                 if is_updating:
                     time.sleep(5.0)
-                    print(f"🔄 Step 2: Managing media for existing product - {len(media_files)} new files, {len(shopify_media_ids)} existing files to keep...")
+                    print(f"[retry] Step 2: Managing media for existing product - {len(media_files)} new files, {len(shopify_media_ids)} existing files to keep...")
 
                     media_explicitly_cleared = str(product_data.get("media_explicitly_cleared", "")).lower() in (
                         "1", "true", "yes",
@@ -4886,19 +4886,19 @@ def create_product(product_data):
 
                     # Step 2a: Remove media not in the keep list (only when user changed media)
                     if should_manage_media:
-                        print(f"🗑️ Step 2a: Removing unwanted media from product (keeping {len(shopify_media_ids) if shopify_media_ids else 0} images)...")
+                        print(f"[delete] Step 2a: Removing unwanted media from product (keeping {len(shopify_media_ids) if shopify_media_ids else 0} images)...")
                         manage_results = manage_product_media(product_id, shopify_media_ids or [], shopify_domain=actual_shopify_domain)
                         if manage_results.get("success"):
-                            print(f"✅ Step 2a Complete: Removed {manage_results.get('removed_count', 0)} unwanted media items")
+                            print(f"[ok] Step 2a Complete: Removed {manage_results.get('removed_count', 0)} unwanted media items")
                         else:
-                            print(f"⚠️ Step 2a Partial: Some media removal failed: {manage_results.get('errors', [])}")
+                            print(f"[warn] Step 2a Partial: Some media removal failed: {manage_results.get('errors', [])}")
                     else:
-                        print("ℹ️ Step 2a Skipped: No media changes in save — keeping existing product images")
+                        print("[info] Step 2a Skipped: No media changes in save - keeping existing product images")
                     
                     # Step 2b: Upload ONLY new media files (don't try to re-attach existing ones)
                     if has_new_media:
                         product_title = product_data.get("title", "")
-                        print(f"📤 Step 2b: Uploading {len(media_files)} new media files...")
+                        print(f"[upload] Step 2b: Uploading {len(media_files)} new media files...")
                         
                         # When updating, only upload new files (don't pass shopify_media_ids to avoid re-attachment attempts)
                         media_results = upload_media_to_product(
@@ -4910,35 +4910,35 @@ def create_product(product_data):
                             shopify_domain=actual_shopify_domain
                         )
                         if media_results["success"]:
-                            print(f"✅ Step 2b Complete: New media files uploaded successfully!")
+                            print(f"[ok] Step 2b Complete: New media files uploaded successfully!")
                         else:
-                            print(f"⚠️ Step 2b Partial: Some media files failed to upload: {media_results.get('errors', [])}")
+                            print(f"[warn] Step 2b Partial: Some media files failed to upload: {media_results.get('errors', [])}")
                     
                     # Step 2c: Reorder all media according to media_order
                     if has_new_media:
-                        print("⏳ Waiting for Shopify to process new uploads...")
+                        print("[wait] Waiting for Shopify to process new uploads...")
                         time.sleep(2)
                     else:
                         time.sleep(0.5)
                     
                     media_order = product_data.get("media_order", [])
                     if media_order:
-                        print(f"🔄 Step 2c: Reordering media according to media_order ({len(media_order)} items)...")
+                        print(f"[retry] Step 2c: Reordering media according to media_order ({len(media_order)} items)...")
                         reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
                         if reorder_results.get("success"):
-                            print(f"✅ Step 2c Complete: Media reordered successfully!")
+                            print(f"[ok] Step 2c Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
+                            print(f"[warn] Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     elif shopify_media_ids:
                         # Fallback to old method if no media_order provided
-                        print(f"🔄 Step 2c: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
+                        print(f"[retry] Step 2c: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
                         reorder_results = reorder_product_media(product_id, shopify_media_ids, shopify_domain=actual_shopify_domain)
                         if reorder_results.get("success"):
-                            print(f"✅ Step 2c Complete: Media reordered successfully!")
+                            print(f"[ok] Step 2c Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
+                            print(f"[warn] Step 2c Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     
-                    print(f"✅ Step 2 Complete: Media management finished for existing product!")
+                    print(f"[ok] Step 2 Complete: Media management finished for existing product!")
                 
                 elif has_new_media or total_media > 0:
                     # Creating new product - handle media_urls first (duplicate flow), then upload/attach
@@ -4946,14 +4946,14 @@ def create_product(product_data):
                     ids_to_attach = shopify_media_ids
                     if media_urls:
                         # Duplicate: create media from URLs (can't attach media from another product by ID)
-                        print(f"🔄 Step 2: Creating {len(media_urls)} media from URLs (duplicate), then {len(media_files)} new files for new product...")
+                        print(f"[retry] Step 2: Creating {len(media_urls)} media from URLs (duplicate), then {len(media_files)} new files for new product...")
                         url_results = create_media_from_urls(product_id, media_urls, shopify_domain=actual_shopify_domain)
                         if url_results.get("created", 0) > 0:
-                            print(f"✅ Created {url_results['created']} media from URLs")
+                            print(f"[ok] Created {url_results['created']} media from URLs")
                             time.sleep(1)
                         ids_to_attach = []  # Don't try to attach by ID when we used URLs
                     else:
-                        print(f"🔄 Step 2: Uploading {len(media_files)} new files and attaching {len(shopify_media_ids)} existing files for new product...")
+                        print(f"[retry] Step 2: Uploading {len(media_files)} new files and attaching {len(shopify_media_ids)} existing files for new product...")
                     
                     # Step 2a: Upload new files and attach existing (only when not using media_urls)
                     media_results = upload_media_to_product(
@@ -4965,42 +4965,42 @@ def create_product(product_data):
                         shopify_domain=actual_shopify_domain
                     )
                     if media_results.get("success"):
-                        print(f"✅ Step 2a Complete: All media files uploaded/attached successfully!")
+                        print(f"[ok] Step 2a Complete: All media files uploaded/attached successfully!")
                     else:
-                        print(f"⚠️ Step 2a Partial: Some media files failed to process: {media_results.get('errors', [])}")
+                        print(f"[warn] Step 2a Partial: Some media files failed to process: {media_results.get('errors', [])}")
                     
                     # Step 2b: Reorder all media according to media_order (same as existing product flow)
                     if has_new_media:
-                        print("⏳ Waiting for Shopify to process new uploads...")
+                        print("[wait] Waiting for Shopify to process new uploads...")
                         time.sleep(1)
                     
                     media_order = product_data.get("media_order", [])
-                    print(f"🔍 DEBUG: media_order received for new product: {media_order}")
-                    print(f"🔍 DEBUG: media_order type: {type(media_order)}, length: {len(media_order) if isinstance(media_order, list) else 'N/A'}")
+                    print(f"[scan] DEBUG: media_order received for new product: {media_order}")
+                    print(f"[scan] DEBUG: media_order type: {type(media_order)}, length: {len(media_order) if isinstance(media_order, list) else 'N/A'}")
                     if media_order:
-                        print(f"🔄 Step 2b: Reordering media according to media_order ({len(media_order)} items)...")
+                        print(f"[retry] Step 2b: Reordering media according to media_order ({len(media_order)} items)...")
                         debug_items = [f"{item.get('type', '?')} at pos {item.get('position', '?')}" for item in media_order]
-                        print(f"🔍 DEBUG: media_order items: {debug_items}")
+                        print(f"[scan] DEBUG: media_order items: {debug_items}")
                         # For new products, pass shopify_media_ids to help identify existing vs new images
                         # The reorder function will fetch ALL images from the product and match them to media_order
                         reorder_results = reorder_product_media_by_order(product_id, media_order, shopify_media_ids, shopify_domain=actual_shopify_domain)
                         if reorder_results.get("success"):
-                            print(f"✅ Step 2b Complete: Media reordered successfully!")
+                            print(f"[ok] Step 2b Complete: Media reordered successfully!")
                         else:
-                            print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
+                            print(f"[warn] Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     else:
-                        print(f"⚠️ WARNING: No media_order provided for new product! Cannot set image order.")
-                        print(f"🔍 DEBUG: product_data keys: {list(product_data.keys())}")
+                        print(f"[warn] WARNING: No media_order provided for new product! Cannot set image order.")
+                        print(f"[scan] DEBUG: product_data keys: {list(product_data.keys())}")
                         if shopify_media_ids:
                             # Fallback to old method if no media_order provided
-                            print(f"🔄 Step 2b: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
+                            print(f"[retry] Step 2b: Reordering {len(shopify_media_ids)} existing media items (fallback method)...")
                             reorder_results = reorder_product_media(product_id, shopify_media_ids, shopify_domain=actual_shopify_domain)
                             if reorder_results.get("success"):
-                                print(f"✅ Step 2b Complete: Media reordered successfully!")
+                                print(f"[ok] Step 2b Complete: Media reordered successfully!")
                             else:
-                                print(f"⚠️ Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
+                                print(f"[warn] Step 2b Partial: Some media reordering failed: {reorder_results.get('errors', [])}")
                     
-                    print(f"✅ Step 2 Complete: All media files processed successfully!")
+                    print(f"[ok] Step 2 Complete: All media files processed successfully!")
                 else:
                     print(f"⏭️ Step 2 Skipped: No media to manage")
             
@@ -5104,14 +5104,14 @@ def create_product(product_data):
                     resolved_pc = resolve_parent_child_choice_value(parent_child_value)
                     if resolved_pc != parent_child_value:
                         print(
-                            f"📂 Normalized parent/child '{parent_child_value}' -> '{resolved_pc}' "
+                            f"[folder] Normalized parent/child '{parent_child_value}' -> '{resolved_pc}' "
                             f"(matched Shopify choice, trailing-space safe)",
                             flush=True,
                         )
                     parent_child_value = resolved_pc
                     product_data["parent_child"] = parent_child_value
                 except Exception as e:
-                    print(f"⚠️ parent/child choice resolve skipped: {e}", flush=True)
+                    print(f"[warn] parent/child choice resolve skipped: {e}", flush=True)
             clear_parent_child_raw = product_data.get("clear_parent_child", False)
             if isinstance(clear_parent_child_raw, str):
                 clear_parent_child = clear_parent_child_raw.lower() in ("true", "1", "yes")
@@ -5121,7 +5121,7 @@ def create_product(product_data):
                 try:
                     from .categories import get_parent_child_metafield_key
                     pc_key = get_parent_child_metafield_key(parent_child_value)
-                    print(f"📂 Routed parent/child '{parent_child_value}' -> {pc_key}", flush=True)
+                    print(f"[folder] Routed parent/child '{parent_child_value}' -> {pc_key}", flush=True)
                     metafields.append({
                         "namespace": "custom",
                         "key": pc_key,
@@ -5136,7 +5136,7 @@ def create_product(product_data):
                         "type": "list.single_line_text_field",
                     })
                 except Exception as e:
-                    print(f"⚠️ Failed to route parent/child: {e}", flush=True)
+                    print(f"[warn] Failed to route parent/child: {e}", flush=True)
                     metafields.append({
                         "namespace": "custom",
                         "key": "parent_child",
@@ -5146,7 +5146,7 @@ def create_product(product_data):
             elif product_id and clear_parent_child:
                 # Only clear when the client explicitly says Parent? No and Child? No.
                 # An empty parent_child alone used to wipe the metafield whenever the
-                # UI raced the async dropdown — leaving products Unassigned by mistake.
+                # UI raced the async dropdown - leaving products Unassigned by mistake.
                 for pc_key in PARENT_CHILD_METAFIELD_KEYS:
                     metafields.append({
                         "namespace": "custom",
@@ -5154,10 +5154,10 @@ def create_product(product_data):
                         "value": "",
                         "type": "list.single_line_text_field",
                     })
-                print("🗑️ Parent/Child cleared - will delete parent_child and parent_child2 metafields", flush=True)
+                print("[delete] Parent/Child cleared - will delete parent_child and parent_child2 metafields", flush=True)
             elif product_id and not parent_child_value:
                 print(
-                    "ℹ️ parent_child empty on update without clear_parent_child — "
+                    "[info] parent_child empty on update without clear_parent_child - "
                     "leaving existing Parent/Child allocation unchanged",
                     flush=True,
                 )
@@ -5178,7 +5178,7 @@ def create_product(product_data):
                     "value": "",
                     "type": "list.single_line_text_field"
                 })
-                print("🗑️ Category cleared - will delete custom_category metafield", flush=True)
+                print("[delete] Category cleared - will delete custom_category metafield", flush=True)
             
             # Ensure subcategory metafields are saved - ALWAYS merge from top-level subcategories
             # (Frontend sends subcategories merged; we must route each to correct key: subcategory, subcategory_2, etc.)
@@ -5192,7 +5192,7 @@ def create_product(product_data):
                         if s:
                             key = get_subcategory_metafield_key(s)
                             by_key.setdefault(key, []).append(s)
-                            print(f"📂 Routed subcategory '{s}' -> {key}", flush=True)
+                            print(f"[folder] Routed subcategory '{s}' -> {key}", flush=True)
                     # Remove existing subcategory* metafields - we replace with routed values
                     metafields = [mf for mf in metafields if not (mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory"))]
                     for mf_key, vals in by_key.items():
@@ -5203,9 +5203,9 @@ def create_product(product_data):
                                 "value": json.dumps(vals),
                                 "type": "list.single_line_text_field"
                             })
-                            print(f"📂 Subcategory metafield {mf_key}: {vals}", flush=True)
+                            print(f"[folder] Subcategory metafield {mf_key}: {vals}", flush=True)
                 except Exception as e:
-                    print(f"⚠️ Failed to route subcategories: {e}", flush=True)
+                    print(f"[warn] Failed to route subcategories: {e}", flush=True)
             elif had_subcategory_mf:
                 # Subcategory was explicitly cleared - send empty so create_metafields deletes it (and any overflow)
                 metafields = [mf for mf in metafields if not (mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory"))]
@@ -5215,14 +5215,14 @@ def create_product(product_data):
                     "value": "",
                     "type": "list.single_line_text_field"
                 })
-                print("🗑️ Subcategory cleared - will delete subcategory metafield", flush=True)
+                print("[delete] Subcategory cleared - will delete subcategory metafield", flush=True)
             
             # Debug: log subcategory metafields being sent
             subcat_mfs = [mf for mf in metafields if mf.get("namespace") == "custom" and (mf.get("key") or "").startswith("subcategory")]
             if subcat_mfs:
-                print(f"📂 Subcategory metafields to save: {[(m.get('key'), m.get('value')) for m in subcat_mfs]}", flush=True)
+                print(f"[folder] Subcategory metafields to save: {[(m.get('key'), m.get('value')) for m in subcat_mfs]}", flush=True)
             elif subcategories:
-                print(f"⚠️ Subcategories from form but no subcategory metafields in list: {subcategories}", flush=True)
+                print(f"[warn] Subcategories from form but no subcategory metafields in list: {subcategories}", flush=True)
             
             # Colour + storefront option metafields (parent-only input; children inherit)
             is_parent_product = _is_parent_child_type(parent_child_value, "parent")
@@ -5235,9 +5235,9 @@ def create_product(product_data):
                 ):
                     key = entry["key"]
                     if entry.get("value"):
-                        print(f"🎨 {key} provided: {entry['value']}", flush=True)
+                        print(f"[art] {key} provided: {entry['value']}", flush=True)
                     else:
-                        print(f"🎨 Clearing {key}", flush=True)
+                        print(f"[art] Clearing {key}", flush=True)
                     metafields = [mf for mf in metafields if mf.get("key") != key]
                     metafields.append(entry)
 
@@ -5276,7 +5276,7 @@ def create_product(product_data):
                         "type": "single_line_text_field",
                     })
                     print(
-                        "🖼️ Main image → children preference: "
+                        "[img] Main image -> children preference: "
                         + ("enabled" if prefer_main else "cleared"),
                         flush=True,
                     )
@@ -5321,18 +5321,18 @@ def create_product(product_data):
                         "value": m.get("value", ""),
                         "type": m.get("type") or "single_line_text_field",
                     })
-                print(f"📋 Overwrote inherited metafields from parent", flush=True)
+                print(f"[list] Overwrote inherited metafields from parent", flush=True)
             
             if metafields and product_id:
                 time.sleep(1.0)
-                print(f"🔄 Step 3: Creating {len(metafields)} metafields...")
+                print(f"[retry] Step 3: Creating {len(metafields)} metafields...")
                 # Use the actual Shopify domain if we extracted it from redirects
                 metafield_results = create_metafields(product_id, metafields, shopify_domain=actual_shopify_domain)
                 if metafield_results.get("success"):
-                    print(f"✅ Step 3 Complete: All metafields created successfully!")
+                    print(f"[ok] Step 3 Complete: All metafields created successfully!")
                     time.sleep(0.2)
                 else:
-                    print(f"⚠️ Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
+                    print(f"[warn] Step 3 Partial: Some metafields failed to create: {metafield_results.get('errors', [])}")
             else:
                 print(f"⏭️ Step 3 Skipped: No metafields to create")
             
@@ -5340,14 +5340,14 @@ def create_product(product_data):
             time.sleep(0.5)
             has_pricing_in_save = _metafields_list_has_pricing(metafields)
             if not has_pricing_in_save and not is_child_product:
-                print("💰 No pricing bands — zeroing variant prices and skipping Price Bandit", flush=True)
+                print("💰 No pricing bands - zeroing variant prices and skipping Price Bandit", flush=True)
                 _zero_all_variant_prices(product_id, actual_shopify_domain)
             else:
                 if not existing_product_id:
-                    print("⏳ Waiting for images to be indexed before Price Bandit...", flush=True)
+                    print("[wait] Waiting for images to be indexed before Price Bandit...", flush=True)
                     time.sleep(1.0)
 
-                print(f"🔄 Step 4: Running Price Bandit script to create variants...")
+                print(f"[retry] Step 4: Running Price Bandit script to create variants...")
 
                 # Import Price Bandit functions first
                 try:
@@ -5371,10 +5371,10 @@ def create_product(product_data):
                             # Also update Price_Bandit's imported STORE_DOMAIN directly
                             Price_Bandit.STORE_DOMAIN = actual_shopify_domain
                         except Exception as e:
-                            print(f"⚠️ Could not update STORE_DOMAIN: {e}", flush=True)
+                            print(f"[warn] Could not update STORE_DOMAIN: {e}", flush=True)
                             original_store_domain = None
 
-                    print(f"🔍 Price Bandit imported successfully")
+                    print(f"[scan] Price Bandit imported successfully")
 
                     # Create a product object that Price Bandit expects
                     product_for_bandit = {
@@ -5382,19 +5382,19 @@ def create_product(product_data):
                         "title": product.get('title', 'Unknown Product')
                     }
 
-                    print(f"🔍 Running Price Bandit for product ID: {product_id}")
+                    print(f"[scan] Running Price Bandit for product ID: {product_id}")
 
                     # Run Price Bandit's process_product function
                     price_bandit_success = process_product(product_for_bandit)
                     if price_bandit_success:
-                        print(f"✅ Step 4 Complete: Price Bandit script executed successfully!")
+                        print(f"[ok] Step 4 Complete: Price Bandit script executed successfully!")
                     else:
-                        print(f"❌ Step 4 Failed: Price Bandit script failed to create variants!")
+                        print(f"[error] Step 4 Failed: Price Bandit script failed to create variants!")
 
                 except ImportError as e:
-                    print(f"❌ Step 4 Failed: Could not import Price Bandit: {str(e)}")
+                    print(f"[error] Step 4 Failed: Could not import Price Bandit: {str(e)}")
                 except Exception as e:
-                    print(f"❌ Step 4 Failed: Price Bandit execution error: {str(e)}")
+                    print(f"[error] Step 4 Failed: Price Bandit execution error: {str(e)}")
                     import traceback
                     traceback.print_exc()
                 finally:
@@ -5407,18 +5407,18 @@ def create_product(product_data):
                             if 'Price_Bandit' in locals():
                                 Price_Bandit.STORE_DOMAIN = original_store_domain
                         except Exception as e:
-                            print(f"⚠️ Could not restore STORE_DOMAIN: {e}", flush=True)
+                            print(f"[warn] Could not restore STORE_DOMAIN: {e}", flush=True)
             
             # Step 5: Update taxable field on variants if needed (Price Bandit sets taxable=True by default)
             if not taxable:  # If user selected "No" for charge VAT
-                print(f"🔄 Step 5: Updating taxable field to False on all variants...")
+                print(f"[retry] Step 5: Updating taxable field to False on all variants...")
                 taxable_updated = update_product_taxable(product_id, False)
                 if taxable_updated:
-                    print(f"✅ Step 5 Complete: Taxable field updated to False on all variants")
+                    print(f"[ok] Step 5 Complete: Taxable field updated to False on all variants")
                 else:
-                    print(f"❌ Step 5 Failed: Could not update taxable field")
+                    print(f"[error] Step 5 Failed: Could not update taxable field")
             else:
-                print(f"✅ Step 5 Complete: Variants created with taxable=True (Price Bandit default)")
+                print(f"[ok] Step 5 Complete: Variants created with taxable=True (Price Bandit default)")
             
             # Verify the product actually exists by fetching it (with timeout to avoid worker hang)
             verify_domain = actual_shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
@@ -5428,16 +5428,16 @@ def create_product(product_data):
                 if verify_response.status_code == 200:
                     verified_product = verify_response.json().get("product", {})
                     if verified_product.get("id") == product_id:
-                        print(f"✅ Verification: Product {product_id} confirmed to exist in Shopify", flush=True)
+                        print(f"[ok] Verification: Product {product_id} confirmed to exist in Shopify", flush=True)
                     else:
-                        print(f"⚠️ Warning: Product verification returned different product", flush=True)
+                        print(f"[warn] Warning: Product verification returned different product", flush=True)
                 else:
-                    print(f"⚠️ Warning: Could not verify product existence (status: {verify_response.status_code})", flush=True)
+                    print(f"[warn] Warning: Could not verify product existence (status: {verify_response.status_code})", flush=True)
             except (requests.Timeout, requests.ConnectionError) as e:
-                print(f"⚠️ Warning: Verification request skipped ({type(e).__name__}) - product was still created", flush=True)
+                print(f"[warn] Warning: Verification request skipped ({type(e).__name__}) - product was still created", flush=True)
             
             # An image the user deleted here that the whole family shared, if they
-            # confirmed removing it family-wide. Runs before parent→child
+            # confirmed removing it family-wide. Runs before parent->child
             # propagation so a still-ticked "main image to children" cannot
             # re-copy the image we just agreed to delete from children.
             parent_child_value = (product_data.get("parent_child") or "").strip()
@@ -5445,7 +5445,7 @@ def create_product(product_data):
             family_touched_ids = []
             if family_removals and parent_child_value:
                 print(
-                    f"🗑️ Family image removal requested ({len(family_removals)} target(s)) "
+                    f"[delete] Family image removal requested ({len(family_removals)} target(s)) "
                     f"for {parent_child_value!r}",
                     flush=True,
                 )
@@ -5458,12 +5458,12 @@ def create_product(product_data):
                     )
                     family_touched_ids = list((removal or {}).get("product_ids") or [])
                     print(
-                        f"📊 Family image removal result: removed={(removal or {}).get('removed')} "
+                        f"[stats] Family image removal result: removed={(removal or {}).get('removed')} "
                         f"products={family_touched_ids}",
                         flush=True,
                     )
                 except Exception as e:
-                    print(f"⚠️ Family image removal failed: {e}", flush=True)
+                    print(f"[warn] Family image removal failed: {e}", flush=True)
             
             # When saving a parent product, propagate inherited fields to all corresponding child products
             propagated_list = []
@@ -5480,9 +5480,9 @@ def create_product(product_data):
                 )
                 propagated_list.extend(child_saved or [])
                 if child_saved:
-                    print(f"✅ Propagated inherited fields to {len(child_saved)} child product(s)", flush=True)
+                    print(f"[ok] Propagated inherited fields to {len(child_saved)} child product(s)", flush=True)
                 else:
-                    print(f"ℹ️ No child products updated for {parent_child_value}", flush=True)
+                    print(f"[info] No child products updated for {parent_child_value}", flush=True)
 
             print(f"🎉 Product {action} process completed!")
             # Use actual_shopify_domain for the final URL if available
@@ -5512,7 +5512,7 @@ def create_product(product_data):
             return result
         else:
             error_msg = f"Failed to {method.lower()} product: {response.status_code} - {response.text}"
-            print(f"❌ {error_msg}")
+            print(f"[error] {error_msg}")
             return {
                 "success": False,
                 "error": error_msg
@@ -5520,7 +5520,7 @@ def create_product(product_data):
             
     except Exception as e:
         error_msg = f"Error creating product: {str(e)}"
-        print(f"💥 {error_msg}")
+        print(f"[error] {error_msg}")
         return {
             "success": False,
             "error": error_msg
@@ -5813,14 +5813,14 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == "--templates":
             templates = get_product_templates()
-            print("\n📋 Available Product Templates:")
+            print("\n[list] Available Product Templates:")
             for key, template in templates.items():
                 print(f"\n🔹 {template['name']}")
                 print(f"   {template['description']}")
             return
     
     # Interactive mode
-    print("\n📝 Enter product details:")
+    print("\n[note] Enter product details:")
     
     product_data = {
         "title": input("Product Title: ").strip(),
@@ -5837,7 +5837,7 @@ def main():
     # Validate the data
     validation = validate_product_data(product_data)
     if not validation["valid"]:
-        print("\n❌ Validation Errors:")
+        print("\n[error] Validation Errors:")
         for error in validation["errors"]:
             print(f"   • {error}")
         return
@@ -5846,9 +5846,9 @@ def main():
     result = create_product(product_data)
     
     if result["success"]:
-        print(f"\n✅ {result['message']}")
+        print(f"\n[ok] {result['message']}")
     else:
-        print(f"\n❌ {result['error']}")
+        print(f"\n[error] {result['error']}")
 
 if __name__ == "__main__":
     main()

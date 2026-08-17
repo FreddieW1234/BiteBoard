@@ -1,0 +1,172 @@
+timestamp,action,collection_title,collection_id,from,to,result,detail
+2026-08-17T09:54:10.785304,rename,Seasonal - Ramadan & Eid,gid://shopify/Collection/683381391738,ramadan-eid,personalised-ramadan-calendars,ok,13 products
+2026-08-17T09:54:11.620845,rename,Events - Sports Events,gid://shopify/Collection/683383095674,events-sports-events,promotional-sports-giveaways,ok,6 products
+2026-08-17T09:54:12.437521,rename,Chocolate - Advent Calendars,gid://shopify/Collection/683377459578,chocolate-advent-calendars,personalised-advent-calendars,ok,4 products
+2026-08-17T09:54:13.243942,rename,Sweets - Lollipops,gid://shopify/Collection/683378049402,sweets-lollipops,branded-lollipops,ok,4 products
+2026-08-17T09:54:14.121230,rename,Sweets - Mints,gid://shopify/Collection/683377918330,sweets-mints,printed-mint-tins,ok,3 products
+2026-08-17T09:55:04.870532,rename,Seasonal,gid://shopify/Collection/683381031290,seasonal,seasonal-promotional-confectionery,ok,156 products
+2026-08-17T09:55:05.799344,rename,Chocolate,gid://shopify/Collection/683377623418,chocolate,personalised-chocolate,ok,63 products
+2026-08-17T09:55:06.724506,rename,Seasonal - Christmas,gid://shopify/Collection/683381555578,seasonal-christmas,promotional-christmas-gifts,ok,55 products
+2026-08-17T09:55:07.596919,rename,Sweets,gid://shopify/Collection/683378147706,sweets,promotional-sweets,ok,38 products
+2026-08-17T09:55:08.535350,rename,Chocolate - Shapes & Novelties,gid://shopify/Collection/683377361274,chocolate-shapes-novelties,promotional-moulded-chocolate-shapes,ok,28 products
+2026-08-17T09:55:10.113551,rename,Chocolate - Bars,gid://shopify/Collection/683377295738,chocolate-bars,personalised-chocolate-bars,ok,10 products
+2026-08-17T09:55:10.921752,rename,Snacks - Crisps & Chips,gid://shopify/Collection/683378966906,snacks-crisps-chips,branded-crisps-and-snack-tubes,ok,8 products
+2026-08-17T09:55:11.795942,rename,Snacks - Popcorn,gid://shopify/Collection/683378999674,snacks-popcorn,promotional-popcorn,ok,7 products
+2026-08-17T09:55:12.604569,rename,Drinks - Coffee,gid://shopify/Collection/683380113786,drinks-coffee,promotional-coffee-sachets,ok,2 products
+2026-08-17T09:55:13.377238,rename,Food & Pantry,gid://shopify/Collection/683383193978,food-pastry,branded-food-and-pantry,ok,2 products
+2026-08-17T09:55:14.757873,rename,Seasonal - Easter,gid://shopify/Collection/683381162362,seasonal-easter,promotional-easter-gifts,ok,40 products
+2026-08-17T09:55:15.577438,rename,Branded Merchandise & Packaging,gid://shopify/Collection/683383685498,branded-merchandise-packaging,promotional-merchandise-and-packaging,ok,0 products +seo
+2026-08-17T09:55:16.441360,rename,Branded Merchandise & Packaging - Merchandise,gid://shopify/Collection/683383783802,branded-merchandise-packaging-merchandise,branded-merchandise,ok,0 products +seo
+2026-08-17T09:55:17.244135,rename,Events,gid://shopify/Collection/683382833530,events,promotional-gifts-for-events,ok,33 products
+2026-08-17T09:55:18.073830,rename,Snacks,gid://shopify/Collection/683378901370,snacks,promotional-snacks,ok,24 products
+2026-08-17T09:55:18.883403,rename,Drinks,gid://shopify/Collection/683380048250,drinks,promotional-drinks,ok,27 products
+2026-08-17T09:55:19.703941,rename,Sweets - Gums & Jellies,gid://shopify/Collection/683377787258,sweets-gums-jellies,promotional-jelly-sweets,ok,22 products
+2026-08-17T09:55:20.614870,rename,Drinks - Tea,gid://shopify/Collection/683380081018,drinks-tea,branded-tea-sachets,ok,17 products
+2026-08-17T09:55:21.440164,rename,Dietary,gid://shopify/Collection/683378606458,dietary,vegan-and-free-from-promotional-sweets,ok,16 products
+2026-08-17T09:55:22.265343,rename,Chocolate - Assorted,gid://shopify/Collection/683377328506,chocolate-assorted,personalised-assorted-chocolate-boxes,ok,12 products
+2026-08-17T09:55:23.179835,rename,Biscuits & Cakes,gid://shopify/Collection/683378868602,biscuits-cakes,promotional-biscuits-and-cakes,ok,15 products
+2026-08-17T09:55:24.108855,rename,Biscuits & Cakes - Biscuits & Cookies,gid://shopify/Collection/683378671994,biscuits-cakes-biscuits-cookies,branded-biscuits-and-cookies,ok,14 products
+2026-08-17T09:55:24.938556,rename,Seasonal - Halloween,gid://shopify/Collection/683381457274,seasonal-halloween,promotional-halloween-sweets,ok,14 products
+2026-08-17T09:55:25.739803,rename,"Snacks - Protein, Cereal & Energy Bars",gid://shopify/Collection/683379818874,snacks-protein-cereal-energy-bars,branded-protein-and-cereal-bars,ok,4 products
+2026-08-17T09:55:26.615810,rename,Chocolate - Lollipops,gid://shopify/Collection/683377426810,chocolate-lollipops,branded-chocolate-lollipops,ok,3 products
+2026-08-17T09:55:27.465656,rename,Sweets - Retro & Novelty,gid://shopify/Collection/683378114938,sweets-retro-novelty,promotional-retro-sweets,ok,4 products
+2026-08-17T09:55:28.958779,rename,Seasonal - Valentine's Day,gid://shopify/Collection/683381064058,seasonal-valentines-day,promotional-valentines-day-gifts,ok,24 products
+2026-08-17T09:55:29.828391,rename,Events - Wellbeing & Inclusion Events,gid://shopify/Collection/683383062906,events-wellbeing-inclusion-events,promotional-gifts-for-wellbeing-days,ok,17 products
+2026-08-17T09:55:30.737954,rename,Events - Community Charities & Causes,gid://shopify/Collection/683382997370,events-community-charities-causes,promotional-gifts-for-charities,ok,10 products +seo
+2026-08-17T09:55:31.649023,rename,Seasonal - Summer,gid://shopify/Collection/683381358970,seasonal-summer,promotional-summer-gifts,ok,6 products +seo
+2026-08-17T09:55:32.494981,rename,Sweets - Toffees & Chews,gid://shopify/Collection/683377820026,sweets-toffees-chews,promotional-toffees-and-chews,ok,6 products +seo
+2026-08-17T09:55:33.434992,rename,Drinks - Soft Drinks,gid://shopify/Collection/683380212090,drinks-soft-drinks,branded-soft-drinks,ok,6 products +seo
+2026-08-17T09:55:34.336929,rename,Drinks - Hot Chocolate & Malt Drinks,gid://shopify/Collection/683380179322,drinks-hot-chocolate-malt-drinks,branded-hot-chocolate-sachets,ok,2 products
+2026-08-17T09:55:35.252482,rename,Biscuits & Cakes - Mini Cakes & Cupcakes,gid://shopify/Collection/683378737530,biscuits-cakes-mini-cakes-cupcakes,branded-mini-cakes-and-cupcakes,ok,1 products +seo
+2026-08-17T09:55:36.043218,rename,"Snacks - Nuts, Dried Fruit & Savoury Mixes",gid://shopify/Collection/683379229050,snacks-nuts-dried-fruit-savoury-mixes,branded-nuts-and-dried-fruit,ok,1 products +seo
+2026-08-17T11:06:55.041297,unpublish,Branded Merchandise & Packaging - Fulfillment Service,gid://shopify/Collection/683383816570,branded-merchandise-packaging-fulfillment-service,,ok,0 products
+2026-08-17T11:06:55.523669,unpublish,Industries - Health & Care,gid://shopify/Collection/683382342010,industries-health-care,,ok,0 products
+2026-08-17T11:06:56.055520,unpublish,Branded Merchandise & Packaging - Packaging,gid://shopify/Collection/683383751034,branded-merchandise-packaging-packaging,,ok,0 products
+2026-08-17T11:06:56.555836,unpublish,Drinks - Water & Flavoured Water,gid://shopify/Collection/683380343162,drinks-water-flavoured-water,,ok,0 products
+2026-08-17T11:06:57.028996,unpublish,Drinks - Energy & Sports Drinks,gid://shopify/Collection/683380441466,drinks-energy-sports-drinks,,ok,0 products
+2026-08-17T11:06:57.505151,unpublish,Industries,gid://shopify/Collection/683382112634,industries,,ok,0 products
+2026-08-17T11:06:57.976929,unpublish,Industries - Retail,gid://shopify/Collection/683382145402,industries-retail,,ok,0 products
+2026-08-17T11:06:58.549108,unpublish,Industries - Hospitality,gid://shopify/Collection/683382178170,industries-hospitality,,ok,0 products
+2026-08-17T11:06:58.972360,unpublish,Industries - Education,gid://shopify/Collection/683382276474,industries-education,,ok,0 products
+2026-08-17T11:06:59.452612,unpublish,Events - Appreciation & Workplace Events,gid://shopify/Collection/683382899066,events-appreciation-workplace-events,,ok,0 products
+2026-08-17T11:07:01.139702,unpublish,Sweets - Boiled & Hard,gid://shopify/Collection/683377885562,sweets-boiled-hard,,ok,0 products
+2026-08-17T11:07:01.643461,unpublish,"Sweets - Fudge, Nougat & Coconut Ice",gid://shopify/Collection/683377983866,sweets-fudge-nougat-coconut-ice,,ok,0 products
+2026-08-17T11:07:02.073864,unpublish,Sweets - Sherbet & Fizzy,gid://shopify/Collection/683378016634,sweets-sherbet-fizzy,,ok,0 products
+2026-08-17T11:07:02.613388,unpublish,Dietary - Vegetarian,gid://shopify/Collection/683378344314,dietary-vegetarian,,ok,0 products
+2026-08-17T11:07:03.165992,unpublish,Dietary - Gluten Free,gid://shopify/Collection/683378540922,dietary-gluten-free,,ok,0 products
+2026-08-17T11:07:03.645141,unpublish,Dietary - Dairy Free,gid://shopify/Collection/683378573690,dietary-dairy-free,,ok,0 products
+2026-08-17T11:07:04.110299,unpublish,"Biscuits & Cakes - Cake Bars, Slices & Flapjacks",gid://shopify/Collection/683378704762,biscuits-cakes-cake-bars-slices-flapjacks,,ok,0 products
+2026-08-17T11:07:04.621020,unpublish,Biscuits & Cakes - Cakes & Traybakes,gid://shopify/Collection/683378803066,biscuits-cakes-cakes-traybakes,,ok,0 products
+2026-08-17T11:07:05.142109,unpublish,Snacks - Pretzels,gid://shopify/Collection/683379065210,snacks-pretzels,,ok,0 products
+2026-08-17T11:07:05.609706,unpublish,Snacks - Rice Cakes & Corn Cakes,gid://shopify/Collection/683379294586,snacks-rice-cakes-corn-cakes,,ok,0 products
+2026-08-17T11:07:06.091773,unpublish,Drinks - Juices,gid://shopify/Collection/683380310394,drinks-juices,,ok,0 products
+2026-08-17T11:07:06.530579,unpublish,Seasonal - Chinese New Year,gid://shopify/Collection/683381129594,seasonal-chinese-new-year,,ok,0 products
+2026-08-17T11:07:07.056899,unpublish,Seasonal - Mother's Day,gid://shopify/Collection/683381260666,seasonal-mothers-day,,ok,0 products
+2026-08-17T11:07:07.602812,unpublish,Seasonal - Father's Day,gid://shopify/Collection/683381326202,seasonal-fathers-day,,ok,0 products
+2026-08-17T11:07:08.070897,unpublish,Seasonal - Diwali,gid://shopify/Collection/683381424506,seasonal-diwali,,ok,0 products
+2026-08-17T11:07:08.514707,unpublish,Seasonal - Hanukkah,gid://shopify/Collection/683381522810,seasonal-hanukkah,,ok,0 products
+2026-08-17T11:07:08.920227,unpublish,Industries - Offices & Services,gid://shopify/Collection/683382243706,industries-offices-services,,ok,0 products
+2026-08-17T11:07:09.413545,unpublish,Industries - Travel & Leisure,gid://shopify/Collection/683382473082,industries-travel-leisure,,ok,0 products
+2026-08-17T11:07:09.861342,unpublish,Industries - Media & Creative,gid://shopify/Collection/683382538618,industries-media-entertainment,,ok,0 products
+2026-08-17T11:07:10.348662,unpublish,Industries - Trade & Construction,gid://shopify/Collection/683382669690,industries-trade-construction,,ok,0 products
+2026-08-17T11:07:10.951178,unpublish,Events - Fun & Feel Good Days,gid://shopify/Collection/683382931834,events-fun-feel-good-days,,ok,0 products
+2026-08-17T11:10:43.960449,unpublish,Branded Merchandise & Packaging - Fulfillment Service,gid://shopify/Collection/683383816570,branded-merchandise-packaging-fulfillment-service,,ok,0 products
+2026-08-17T11:10:44.314736,unpublish,Industries - Health & Care,gid://shopify/Collection/683382342010,industries-health-care,,ok,0 products
+2026-08-17T11:10:44.676942,unpublish,Branded Merchandise & Packaging - Packaging,gid://shopify/Collection/683383751034,branded-merchandise-packaging-packaging,,ok,0 products
+2026-08-17T11:10:45.014401,unpublish,Drinks - Water & Flavoured Water,gid://shopify/Collection/683380343162,drinks-water-flavoured-water,,ok,0 products
+2026-08-17T11:10:45.363990,unpublish,Drinks - Energy & Sports Drinks,gid://shopify/Collection/683380441466,drinks-energy-sports-drinks,,ok,0 products
+2026-08-17T11:10:45.745758,unpublish,Industries,gid://shopify/Collection/683382112634,industries,,ok,0 products
+2026-08-17T11:10:46.116528,unpublish,Industries - Retail,gid://shopify/Collection/683382145402,industries-retail,,ok,0 products
+2026-08-17T11:10:46.443143,unpublish,Industries - Hospitality,gid://shopify/Collection/683382178170,industries-hospitality,,ok,0 products
+2026-08-17T11:10:46.791315,unpublish,Industries - Education,gid://shopify/Collection/683382276474,industries-education,,ok,0 products
+2026-08-17T11:10:47.147707,unpublish,Events - Appreciation & Workplace Events,gid://shopify/Collection/683382899066,events-appreciation-workplace-events,,ok,0 products
+2026-08-17T11:10:48.665858,unpublish,Sweets - Boiled & Hard,gid://shopify/Collection/683377885562,sweets-boiled-hard,,ok,0 products
+2026-08-17T11:10:49.020727,unpublish,"Sweets - Fudge, Nougat & Coconut Ice",gid://shopify/Collection/683377983866,sweets-fudge-nougat-coconut-ice,,ok,0 products
+2026-08-17T11:10:49.392361,unpublish,Sweets - Sherbet & Fizzy,gid://shopify/Collection/683378016634,sweets-sherbet-fizzy,,ok,0 products
+2026-08-17T11:10:49.770196,unpublish,Dietary - Vegetarian,gid://shopify/Collection/683378344314,dietary-vegetarian,,ok,0 products
+2026-08-17T11:10:50.105390,unpublish,Dietary - Gluten Free,gid://shopify/Collection/683378540922,dietary-gluten-free,,ok,0 products
+2026-08-17T11:10:50.509737,unpublish,Dietary - Dairy Free,gid://shopify/Collection/683378573690,dietary-dairy-free,,ok,0 products
+2026-08-17T11:10:50.896116,unpublish,"Biscuits & Cakes - Cake Bars, Slices & Flapjacks",gid://shopify/Collection/683378704762,biscuits-cakes-cake-bars-slices-flapjacks,,ok,0 products
+2026-08-17T11:10:51.270236,unpublish,Biscuits & Cakes - Cakes & Traybakes,gid://shopify/Collection/683378803066,biscuits-cakes-cakes-traybakes,,ok,0 products
+2026-08-17T11:10:51.618915,unpublish,Snacks - Pretzels,gid://shopify/Collection/683379065210,snacks-pretzels,,ok,0 products
+2026-08-17T11:10:51.997599,unpublish,Snacks - Rice Cakes & Corn Cakes,gid://shopify/Collection/683379294586,snacks-rice-cakes-corn-cakes,,ok,0 products
+2026-08-17T11:10:52.336011,unpublish,Drinks - Juices,gid://shopify/Collection/683380310394,drinks-juices,,ok,0 products
+2026-08-17T11:10:52.719631,unpublish,Seasonal - Chinese New Year,gid://shopify/Collection/683381129594,seasonal-chinese-new-year,,ok,0 products
+2026-08-17T11:10:53.094484,unpublish,Seasonal - Mother's Day,gid://shopify/Collection/683381260666,seasonal-mothers-day,,ok,0 products
+2026-08-17T11:10:53.449687,unpublish,Seasonal - Father's Day,gid://shopify/Collection/683381326202,seasonal-fathers-day,,ok,0 products
+2026-08-17T11:10:53.784030,unpublish,Seasonal - Diwali,gid://shopify/Collection/683381424506,seasonal-diwali,,ok,0 products
+2026-08-17T11:10:54.158564,unpublish,Seasonal - Hanukkah,gid://shopify/Collection/683381522810,seasonal-hanukkah,,ok,0 products
+2026-08-17T11:10:54.526682,unpublish,Industries - Offices & Services,gid://shopify/Collection/683382243706,industries-offices-services,,ok,0 products
+2026-08-17T11:10:54.927899,unpublish,Industries - Travel & Leisure,gid://shopify/Collection/683382473082,industries-travel-leisure,,ok,0 products
+2026-08-17T11:10:55.308380,unpublish,Industries - Media & Creative,gid://shopify/Collection/683382538618,industries-media-entertainment,,ok,0 products
+2026-08-17T11:10:55.700496,unpublish,Industries - Trade & Construction,gid://shopify/Collection/683382669690,industries-trade-construction,,ok,0 products
+2026-08-17T11:10:56.067748,unpublish,Events - Fun & Feel Good Days,gid://shopify/Collection/683382931834,events-fun-feel-good-days,,ok,0 products
+2026-08-17T11:11:42.328066,unpublish,Branded Merchandise & Packaging - Fulfillment Service,gid://shopify/Collection/683383816570,branded-merchandise-packaging-fulfillment-service,,ok,0 products
+2026-08-17T11:11:42.704669,unpublish,Industries - Health & Care,gid://shopify/Collection/683382342010,industries-health-care,,ok,0 products
+2026-08-17T11:11:43.074716,unpublish,Branded Merchandise & Packaging - Packaging,gid://shopify/Collection/683383751034,branded-merchandise-packaging-packaging,,ok,0 products
+2026-08-17T11:11:43.473560,unpublish,Drinks - Water & Flavoured Water,gid://shopify/Collection/683380343162,drinks-water-flavoured-water,,ok,0 products
+2026-08-17T11:11:43.861555,unpublish,Drinks - Energy & Sports Drinks,gid://shopify/Collection/683380441466,drinks-energy-sports-drinks,,ok,0 products
+2026-08-17T11:11:44.256734,unpublish,Industries,gid://shopify/Collection/683382112634,industries,,ok,0 products
+2026-08-17T11:11:44.643471,unpublish,Industries - Retail,gid://shopify/Collection/683382145402,industries-retail,,ok,0 products
+2026-08-17T11:11:44.976778,unpublish,Industries - Hospitality,gid://shopify/Collection/683382178170,industries-hospitality,,ok,0 products
+2026-08-17T11:11:45.366801,unpublish,Industries - Education,gid://shopify/Collection/683382276474,industries-education,,ok,0 products
+2026-08-17T11:11:45.743010,unpublish,Events - Appreciation & Workplace Events,gid://shopify/Collection/683382899066,events-appreciation-workplace-events,,ok,0 products
+2026-08-17T11:11:47.451055,unpublish,Sweets - Boiled & Hard,gid://shopify/Collection/683377885562,sweets-boiled-hard,,ok,0 products
+2026-08-17T11:11:47.795544,unpublish,"Sweets - Fudge, Nougat & Coconut Ice",gid://shopify/Collection/683377983866,sweets-fudge-nougat-coconut-ice,,ok,0 products
+2026-08-17T11:11:48.118211,unpublish,Sweets - Sherbet & Fizzy,gid://shopify/Collection/683378016634,sweets-sherbet-fizzy,,ok,0 products
+2026-08-17T11:11:48.480066,unpublish,Dietary - Vegetarian,gid://shopify/Collection/683378344314,dietary-vegetarian,,ok,0 products
+2026-08-17T11:11:48.841848,unpublish,Dietary - Gluten Free,gid://shopify/Collection/683378540922,dietary-gluten-free,,ok,0 products
+2026-08-17T11:11:49.202877,unpublish,Dietary - Dairy Free,gid://shopify/Collection/683378573690,dietary-dairy-free,,ok,0 products
+2026-08-17T11:11:49.567676,unpublish,"Biscuits & Cakes - Cake Bars, Slices & Flapjacks",gid://shopify/Collection/683378704762,biscuits-cakes-cake-bars-slices-flapjacks,,ok,0 products
+2026-08-17T11:11:49.946808,unpublish,Biscuits & Cakes - Cakes & Traybakes,gid://shopify/Collection/683378803066,biscuits-cakes-cakes-traybakes,,ok,0 products
+2026-08-17T11:11:50.338860,unpublish,Snacks - Pretzels,gid://shopify/Collection/683379065210,snacks-pretzels,,ok,0 products
+2026-08-17T11:11:50.676982,unpublish,Snacks - Rice Cakes & Corn Cakes,gid://shopify/Collection/683379294586,snacks-rice-cakes-corn-cakes,,ok,0 products
+2026-08-17T11:11:51.059395,unpublish,Drinks - Juices,gid://shopify/Collection/683380310394,drinks-juices,,ok,0 products
+2026-08-17T11:11:51.454155,unpublish,Seasonal - Chinese New Year,gid://shopify/Collection/683381129594,seasonal-chinese-new-year,,ok,0 products
+2026-08-17T11:11:51.818515,unpublish,Seasonal - Mother's Day,gid://shopify/Collection/683381260666,seasonal-mothers-day,,ok,0 products
+2026-08-17T11:11:52.148711,unpublish,Seasonal - Father's Day,gid://shopify/Collection/683381326202,seasonal-fathers-day,,ok,0 products
+2026-08-17T11:11:52.527820,unpublish,Seasonal - Diwali,gid://shopify/Collection/683381424506,seasonal-diwali,,ok,0 products
+2026-08-17T11:11:52.884826,unpublish,Seasonal - Hanukkah,gid://shopify/Collection/683381522810,seasonal-hanukkah,,ok,0 products
+2026-08-17T11:11:53.307243,unpublish,Industries - Offices & Services,gid://shopify/Collection/683382243706,industries-offices-services,,ok,0 products
+2026-08-17T11:11:53.665096,unpublish,Industries - Travel & Leisure,gid://shopify/Collection/683382473082,industries-travel-leisure,,ok,0 products
+2026-08-17T11:11:54.018682,unpublish,Industries - Media & Creative,gid://shopify/Collection/683382538618,industries-media-entertainment,,ok,0 products
+2026-08-17T11:11:54.382147,unpublish,Industries - Trade & Construction,gid://shopify/Collection/683382669690,industries-trade-construction,,ok,0 products
+2026-08-17T11:11:54.757055,unpublish,Events - Fun & Feel Good Days,gid://shopify/Collection/683382931834,events-fun-feel-good-days,,ok,0 products
+2026-08-17T11:12:10.298487,unpublish,Branded Merchandise & Packaging - Fulfillment Service,gid://shopify/Collection/683383816570,branded-merchandise-packaging-fulfillment-service,,ok,0 products
+2026-08-17T11:12:10.631406,unpublish,Industries - Health & Care,gid://shopify/Collection/683382342010,industries-health-care,,ok,0 products
+2026-08-17T11:12:10.973870,unpublish,Branded Merchandise & Packaging - Packaging,gid://shopify/Collection/683383751034,branded-merchandise-packaging-packaging,,ok,0 products
+2026-08-17T11:12:11.360082,unpublish,Drinks - Water & Flavoured Water,gid://shopify/Collection/683380343162,drinks-water-flavoured-water,,ok,0 products
+2026-08-17T11:12:11.691679,unpublish,Drinks - Energy & Sports Drinks,gid://shopify/Collection/683380441466,drinks-energy-sports-drinks,,ok,0 products
+2026-08-17T11:12:12.075015,unpublish,Industries,gid://shopify/Collection/683382112634,industries,,ok,0 products
+2026-08-17T11:12:12.445888,unpublish,Industries - Retail,gid://shopify/Collection/683382145402,industries-retail,,ok,0 products
+2026-08-17T11:12:12.829954,unpublish,Industries - Hospitality,gid://shopify/Collection/683382178170,industries-hospitality,,ok,0 products
+2026-08-17T11:12:13.189569,unpublish,Industries - Education,gid://shopify/Collection/683382276474,industries-education,,ok,0 products
+2026-08-17T11:12:13.544741,unpublish,Events - Appreciation & Workplace Events,gid://shopify/Collection/683382899066,events-appreciation-workplace-events,,ok,0 products
+2026-08-17T11:12:14.047891,unpublish,Food & Pantry - Ice & Freeze Pops,gid://shopify/Collection/683383652730,food-pantry-ice-freeze-pops,,ok,0 products
+2026-08-17T11:12:15.359926,unpublish,Sweets - Boiled & Hard,gid://shopify/Collection/683377885562,sweets-boiled-hard,,ok,0 products
+2026-08-17T11:12:15.718259,unpublish,"Sweets - Fudge, Nougat & Coconut Ice",gid://shopify/Collection/683377983866,sweets-fudge-nougat-coconut-ice,,ok,0 products
+2026-08-17T11:12:16.089146,unpublish,Sweets - Sherbet & Fizzy,gid://shopify/Collection/683378016634,sweets-sherbet-fizzy,,ok,0 products
+2026-08-17T11:12:16.504751,unpublish,Dietary - Vegetarian,gid://shopify/Collection/683378344314,dietary-vegetarian,,ok,0 products
+2026-08-17T11:12:16.873946,unpublish,Dietary - Gluten Free,gid://shopify/Collection/683378540922,dietary-gluten-free,,ok,0 products
+2026-08-17T11:12:17.226536,unpublish,Dietary - Dairy Free,gid://shopify/Collection/683378573690,dietary-dairy-free,,ok,0 products
+2026-08-17T11:12:17.579360,unpublish,"Biscuits & Cakes - Cake Bars, Slices & Flapjacks",gid://shopify/Collection/683378704762,biscuits-cakes-cake-bars-slices-flapjacks,,ok,0 products
+2026-08-17T11:12:17.975096,unpublish,Biscuits & Cakes - Cakes & Traybakes,gid://shopify/Collection/683378803066,biscuits-cakes-cakes-traybakes,,ok,0 products
+2026-08-17T11:12:18.352592,unpublish,Snacks - Pretzels,gid://shopify/Collection/683379065210,snacks-pretzels,,ok,0 products
+2026-08-17T11:12:18.726335,unpublish,Snacks - Rice Cakes & Corn Cakes,gid://shopify/Collection/683379294586,snacks-rice-cakes-corn-cakes,,ok,0 products
+2026-08-17T11:12:19.112229,unpublish,Drinks - Juices,gid://shopify/Collection/683380310394,drinks-juices,,ok,0 products
+2026-08-17T11:12:19.485347,unpublish,Seasonal - Chinese New Year,gid://shopify/Collection/683381129594,seasonal-chinese-new-year,,ok,0 products
+2026-08-17T11:12:19.884917,unpublish,Seasonal - Mother's Day,gid://shopify/Collection/683381260666,seasonal-mothers-day,,ok,0 products
+2026-08-17T11:12:20.279093,unpublish,Seasonal - Father's Day,gid://shopify/Collection/683381326202,seasonal-fathers-day,,ok,0 products
+2026-08-17T11:12:20.625043,unpublish,Seasonal - Diwali,gid://shopify/Collection/683381424506,seasonal-diwali,,ok,0 products
+2026-08-17T11:12:20.940128,unpublish,Seasonal - Hanukkah,gid://shopify/Collection/683381522810,seasonal-hanukkah,,ok,0 products
+2026-08-17T11:12:21.294506,unpublish,Industries - Offices & Services,gid://shopify/Collection/683382243706,industries-offices-services,,ok,0 products
+2026-08-17T11:12:21.659922,unpublish,Industries - Travel & Leisure,gid://shopify/Collection/683382473082,industries-travel-leisure,,ok,0 products
+2026-08-17T11:12:22.041673,unpublish,Industries - Media & Creative,gid://shopify/Collection/683382538618,industries-media-entertainment,,ok,0 products
+2026-08-17T11:12:22.387088,unpublish,Industries - Trade & Construction,gid://shopify/Collection/683382669690,industries-trade-construction,,ok,0 products
+2026-08-17T11:12:22.720524,unpublish,Events - Fun & Feel Good Days,gid://shopify/Collection/683382931834,events-fun-feel-good-days,,ok,0 products
+2026-08-17T11:12:23.191834,unpublish,Food & Pantry - Cereal & Porridge,gid://shopify/Collection/683383226746,food-pantry-cereal-porridge,,ok,0 products
+2026-08-17T11:12:23.679999,unpublish,Food & Pantry - Pasta & Noodles,gid://shopify/Collection/683383390586,food-pantry-pasta-noodles,,ok,0 products
+2026-08-17T11:12:24.240560,unpublish,Food & Pantry - Rice & Grains,gid://shopify/Collection/683383423354,food-pantry-rice-grains,,ok,0 products
+2026-08-17T11:12:24.719856,unpublish,Food & Pantry - Baking Kits,gid://shopify/Collection/683383521658,food-pantry-baking-kits,,ok,0 products
+2026-08-17T11:12:25.225873,unpublish,"Food & Pantry - Spreads, Jams & Condiments",gid://shopify/Collection/683383587194,food-pantry-spreads-jams-condiments,,ok,0 products
+2026-08-17T11:12:25.746770,unpublish,"Food & Pantry - Herbs, Spices & Seasonings",gid://shopify/Collection/683383619962,food-pantry-herbs-spices-seasonings,,ok,0 products

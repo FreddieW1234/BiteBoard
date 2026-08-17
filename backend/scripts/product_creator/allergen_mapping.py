@@ -126,7 +126,7 @@ BODY_ALLERGEN_LABELS = {
 
 DIETARY_SECTION_HEADING = "Dietary/Allergens"
 
-# Shopify native description (body_html) — Product Info section only (not custom.description SEO field).
+# Shopify native description (body_html) - Product Info section only (not custom.description SEO field).
 PRODUCT_INFO_METAFIELD_KEY = "productinfo"
 
 
@@ -202,7 +202,7 @@ def plain_text_to_shopify_h3_html(text: str) -> str:
     return "\n".join(parts)
 
 
-# Shopify native description (body_html) — tab headings only; tab content comes from metafields on the theme.
+# Shopify native description (body_html) - tab headings only; tab content comes from metafields on the theme.
 SHOPIFY_NATIVE_DESCRIPTION_HTML = (
     "<h3><span>Product Info</span><span></span></h3>\n"
     "<h3><span>Ingredients</span><span></span></h3>\n"

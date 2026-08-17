@@ -27,35 +27,35 @@ def safe_request(method, url, **kwargs):
 
 def main():
     """Main function for Price Manager"""
-    print("🚀 Price Manager - Simple Price Metafield Viewer", flush=True)
+    print("[go] Price Manager - Simple Price Metafield Viewer", flush=True)
     print("=" * 50, flush=True)
     
     if len(sys.argv) < 2:
-        print("❌ No command specified. Use: search <term> or metafields <product_id>", flush=True)
+        print("[error] No command specified. Use: search <term> or metafields <product_id>", flush=True)
         return
     
     command = sys.argv[1].lower()
     
     if command == "search":
         if len(sys.argv) < 3:
-            print("❌ Search term required. Use: search <term>", flush=True)
+            print("[error] Search term required. Use: search <term>", flush=True)
             return
         
         search_term = sys.argv[2]
-        print(f"🔍 Searching for products matching: {search_term}", flush=True)
-        print("✅ Search completed - check the UI for results", flush=True)
+        print(f"[scan] Searching for products matching: {search_term}", flush=True)
+        print("[ok] Search completed - check the UI for results", flush=True)
         
     elif command == "metafields":
         if len(sys.argv) < 3:
-            print("❌ Product ID required. Use: metafields <product_id>", flush=True)
+            print("[error] Product ID required. Use: metafields <product_id>", flush=True)
             return
         
         product_id = sys.argv[2]
-        print(f"📋 Fetching metafields for product ID: {product_id}", flush=True)
-        print("✅ Metafields fetch completed - check the UI for results", flush=True)
+        print(f"[list] Fetching metafields for product ID: {product_id}", flush=True)
+        print("[ok] Metafields fetch completed - check the UI for results", flush=True)
         
     else:
-        print(f"❌ Unknown command: {command}", flush=True)
+        print(f"[error] Unknown command: {command}", flush=True)
         print("Available commands: search, metafields", flush=True)
 
 if __name__ == "__main__":

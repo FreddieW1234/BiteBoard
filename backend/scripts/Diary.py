@@ -1,4 +1,4 @@
-"""Staff Diary — flat list of order lines with dispatch planning.
+"""Staff Diary - flat list of order lines with dispatch planning.
 
 Persistence prefers the Office API (durable) and falls back to a local
 SQLite store when the Office API diary endpoints are unavailable. This keeps

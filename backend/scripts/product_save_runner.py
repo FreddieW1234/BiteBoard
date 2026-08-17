@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Save runner — applies one queued product save in its own process.
+"""Save runner - applies one queued product save in its own process.
 
 Run as: ``python product_save_runner.py <job_id>``
 
@@ -50,7 +50,7 @@ def main(argv) -> int:
         return 1
 
     data = queue.get_job_data(job_id) or {}
-    print(f"▶️ Running save job {job_id} — {job.get('title')!r} (attempt {job.get('attempts')})", flush=True)
+    print(f"[run] Running save job {job_id} - {job.get('title')!r} (attempt {job.get('attempts')})", flush=True)
 
     try:
         from product_creator.Product_Creator import create_product  # type: ignore
@@ -60,7 +60,7 @@ def main(argv) -> int:
     try:
         result = create_product(data)
     except Exception as exc:
-        print("💥 create_product raised:", exc, flush=True)
+        print("[error] create_product raised:", exc, flush=True)
         traceback.print_exc()
         _emit({"ok": False, "success": False, "verify": [], "error": str(exc)})
         return 1
@@ -75,26 +75,26 @@ def main(argv) -> int:
     error = None
     if not success:
         error = (result or {}).get("error") if isinstance(result, dict) else "create_product failed"
-        print(f"❌ Save failed: {error}", flush=True)
+        print(f"[error] Save failed: {error}", flush=True)
         _emit({"ok": False, "success": False, "verify": [], "error": error})
         return 1
 
-    print(f"✅ Save applied to product {product_id}. Verifying against Shopify...", flush=True)
+    print(f"[ok] Save applied to product {product_id}. Verifying against Shopify...", flush=True)
 
     verify = []
     try:
         verify = queue.verify_product(data, product_id)
     except Exception as exc:
-        print("⚠️ Verification raised:", exc, flush=True)
+        print("[warn] Verification raised:", exc, flush=True)
         traceback.print_exc()
         verify = [{"field": "verify", "intended": "runs", "actual": str(exc), "ok": False}]
 
     ok = success and all(row.get("ok") for row in verify)
     if ok:
-        print("✅ Verification passed — Shopify matches the intended save.", flush=True)
+        print("[ok] Verification passed - Shopify matches the intended save.", flush=True)
     else:
         bad = [r for r in verify if not r.get("ok")]
-        print(f"⚠️ Verification mismatch on {len(bad)} field(s) (advisory — save still applied):", flush=True)
+        print(f"[warn] Verification mismatch on {len(bad)} field(s) (advisory - save still applied):", flush=True)
         for r in bad:
             print(f"   - {r.get('field')}: intended={r.get('intended')!r} actual={r.get('actual')!r}", flush=True)
 
