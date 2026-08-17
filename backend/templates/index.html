@@ -430,7 +430,7 @@
                 const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
                 let tabOrder = ['Products', 'Orders', 'Diary', 'Customers', 'Artwork_Updater', 'Files', 'Menu'];
                 if (!staffShowDevTabs) {
-                    tabOrder = tabOrder.filter(t => t !== 'Artwork_Updater' && t !== 'Files' && t !== 'Menu');
+                    tabOrder = tabOrder.filter(t => t !== 'Artwork_Updater' && t !== 'Files');
                 }
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 

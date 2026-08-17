@@ -16,11 +16,7 @@ STAFF_DEV_ONLY_PATH_PREFIXES = (
     "/app/Artwork_Updater",
     "/app/Files",
     "/app/Dev",
-    "/app/Menu",
-    "/app/Collections",
-    "/app/Category_Editor",
     "/api/dev/",
-    "/api/collections",
 )
 
 
