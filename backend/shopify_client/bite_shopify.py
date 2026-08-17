@@ -6,6 +6,13 @@ Used by the one-off migration script and by the Product Manager app, so the
 create/update logic lives in exactly one place.
 
 Reads STORE_DOMAIN / ACCESS_TOKEN / API_VERSION from config.py.
+
+MetafieldDefinitionUpdate caveat:
+  Several input fields (notably deprecated useAsCollectionCondition, and some
+  capability toggles) default to OFF when omitted. Any metafieldDefinitionUpdate
+  that is not deliberately changing a capability must echo the live value back
+  (see append_choice). Omitting smartCollectionCondition while smart collections
+  reference the definition yields CAPABILITY_CANNOT_BE_DISABLED.
 """
 
 import json
@@ -28,9 +35,13 @@ class Shopify:
         self.domain = str(domain or STORE_DOMAIN or "").replace(
             "https://", "").replace("http://", "").rstrip("/").strip()
         self.token = token or ACCESS_TOKEN
-        self.api_version = api_version or API_VERSION or "2024-10"
+        self.api_version = (api_version or API_VERSION or "").strip()
         if not self.domain or not self.token:
             raise ShopifyError("STORE_DOMAIN / ACCESS_TOKEN not configured")
+        if not self.api_version:
+            raise ShopifyError(
+                "API_VERSION not configured (set SHOPIFY_API_VERSION / config.API_VERSION)"
+            )
         self._cache = {}
 
     # ------------------------------------------------------------------ core
@@ -94,14 +105,28 @@ class Shopify:
 
     # --------------------------------------------------- metafield definitions
     def metafield_definition(self, namespace, key, owner_type="PRODUCT"):
-        """Returns {'id':..., 'choices':[...]} or None."""
+        """
+        Returns {'id', 'choices', 'smart_collection_condition'} or None.
+
+        smart_collection_condition is capabilities.smartCollectionCondition.enabled
+        (bool). Cached with the definition so append_choice can echo it without
+        a second round trip.
+        """
         ck = ("mfdef", namespace, key, owner_type)
         if ck in self._cache:
             return self._cache[ck]
         data = self.gql("""
           query($ns: String!, $key: String!, $owner: MetafieldOwnerType!) {
             metafieldDefinitions(first: 1, namespace: $ns, key: $key, ownerType: $owner) {
-              edges { node { id name key validations { name value } } }
+              edges {
+                node {
+                  id name key
+                  validations { name value }
+                  capabilities {
+                    smartCollectionCondition { enabled }
+                  }
+                }
+              }
             }
           }
         """, {"ns": namespace, "key": key, "owner": owner_type})
@@ -120,7 +145,12 @@ class Shopify:
                     parsed = []
                 if isinstance(parsed, list):
                     choices = [str(x) for x in parsed]
-        out = {"id": node["id"], "choices": choices}
+        caps = (node.get("capabilities") or {}).get("smartCollectionCondition") or {}
+        out = {
+            "id": node["id"],
+            "choices": choices,
+            "smart_collection_condition": bool(caps.get("enabled")),
+        }
         self._cache[ck] = out
         return out
 
@@ -131,6 +161,11 @@ class Shopify:
         For custom.subcategory_2: if the Shopify creation placeholder BLANK is
         present, replace it with the new value instead of appending (so the
         placeholder never occupies a real slot or shows in the product UI).
+
+        metafieldDefinitionUpdate: omitted capability fields can default to OFF.
+        Always echo capabilities.smartCollectionCondition.enabled from the live
+        definition — never force true (subcategory_2 must stay off). Prefer the
+        modern `capabilities` input; do not send deprecated useAsCollectionCondition.
         """
         definition = self.metafield_definition(namespace, key, owner_type)
         if definition is None:
@@ -162,6 +197,8 @@ class Shopify:
         if len(updated) > 128:
             raise ShopifyError(f"{namespace}.{key} would exceed 128 choices")
 
+        # Echo current smart-collection capability (see module note / tests).
+        sc_enabled = bool(definition.get("smart_collection_condition"))
         result = self.gql("""
           mutation($def: MetafieldDefinitionUpdateInput!) {
             metafieldDefinitionUpdate(definition: $def) {
@@ -170,7 +207,12 @@ class Shopify:
             }
           }
         """, {"def": {
-            "namespace": namespace, "key": key, "ownerType": owner_type,
+            "namespace": namespace,
+            "key": key,
+            "ownerType": owner_type,
+            "capabilities": {
+                "smartCollectionCondition": {"enabled": sc_enabled},
+            },
             "validations": [{"name": "choices", "value": json.dumps(updated)}],
         }})["metafieldDefinitionUpdate"]
         self._check(result, "metafieldDefinitionUpdate")
@@ -446,4 +488,7 @@ if __name__ == "__main__":
                     f"custom.{key}: PLACEHOLDER_ONLY (BLANK x{n}, no real choices)  {d['id']}"
                 )
             else:
-                print(f"custom.{key}: {d['id']}  ({len(real)} real / {n} listed)")
+                print(
+                    f"custom.{key}: {d['id']}  ({len(real)} real / {n} listed)  "
+                    f"smartCollectionCondition={d.get('smart_collection_condition')}"
+                )

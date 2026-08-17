@@ -37,7 +37,10 @@
         .main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px; }
         .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; margin: 0 0 8px 0; display: flex; align-items: center; gap: 10px; }
         .page-title i { color: #4f46e5; }
-        .page-desc { font-size: 0.875rem; color: #6b7280; margin: 0 0 16px 0; }
+        body.embed-mode .sidebar { display: none !important; }
+        body.embed-mode .app-layout { display: block; }
+        body.embed-mode .main-wrap { padding: 8px 12px 24px; }
+        body.embed-mode .page-title { display: none; }
         .cl-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
         .cl-search { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; }
         .cl-search i { color: #9ca3af; }
@@ -138,7 +141,7 @@
         }
     </style>
 </head>
-<body>
+<body class="{% if embed %}embed-mode{% endif %}">
     <div class="app-layout">
         <aside class="sidebar">
             <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
@@ -151,9 +154,8 @@
                     {% if staff_show_dev_tabs %}
                     <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
                     <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
-                    <a href="/app/Collections" class="app-tab active"><i class="fas fa-layer-group"></i><span>Collections</span></a>
-                    <a href="/app/Dev" class="app-tab"><i class="fas fa-code"></i><span>Dev</span></a>
-                    {% endif %}
+                                        <a href="/app/Menu" class="app-tab active"><i class="fas fa-sitemap"></i><span>Menu</span></a>
+{% endif %}
                 </div>
             </nav>
             <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
@@ -162,7 +164,6 @@
 
         <div class="main-wrap">
             <h1 class="page-title"><i class="fas fa-layer-group"></i> Collections</h1>
-            <p class="page-desc">All Shopify collections with product counts, rules, and search engine listing details. Click a row for SEO.</p>
             <div class="cl-toolbar">
                 <div class="cl-search">
                     <i class="fas fa-search"></i>

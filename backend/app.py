@@ -1682,6 +1682,18 @@ def load_tool(tool_name):
         response.headers['Expires'] = '0'
         return response
 
+    # Menu shell hosts Category Editor + Collections (Products-style toggle).
+    if tool_name == 'Menu':
+        return render_template('UI/Menu.html')
+    if tool_name == 'Category_Editor':
+        if request.args.get('embed') == '1':
+            return render_template('UI/Category_Editor.html', embed=True)
+        return redirect('/app/Menu')
+    if tool_name == 'Collections':
+        if request.args.get('embed') == '1':
+            return render_template('UI/Collections.html', embed=True)
+        return redirect('/app/Menu?view=collections')
+
     template_path = f'UI/{tool_name}.html'
     try:
         return render_template(template_path)

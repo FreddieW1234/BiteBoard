@@ -21,6 +21,12 @@ Throwaway name: **`zz-smoke-DELETEME`**, leave **In menu** checked (indexable tr
 5. Reorder + Save in Category Editor -> persisted on reload.
 6. Unpublish throwaway collection if possible; leave `zz-smoke-DELETEME` marked for later delete.
 
-## Choice mismatch blocking seed (found on dry-run)
+## metafieldDefinitionUpdate / append_choice
 
-Live Shopify has typo **`Baking Ktis`**; [`scripts/data/taxonomy.json`](scripts/data/taxonomy.json) has **`Baking Kits`**. Seed exits non-zero until one side is fixed. Unused live choices reported: `Baking Ktis`, `Food & Treat Events`.
+When updating a definition that is (or is not) used as a smart-collection
+condition, **echo** `capabilities.smartCollectionCondition.enabled` from the
+live definition. Omitting it can default the capability off and raise
+`CAPABILITY_CANNOT_BE_DISABLED` while collections still reference the field.
+Never force `enabled: true` (overflow `subcategory_2` must stay off).
+
+Regression: `python -m unittest shopify_client.test_append_choice -v` (from `backend/`).

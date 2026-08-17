@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu - BiteBoard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/theme.css?v=7" rel="stylesheet">
+    <script src="/static/theme.js?v=4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 2px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+
+        .main-wrap { flex: 1; min-width: 0; padding: 24px; display: flex; flex-direction: column; }
+        .page-title-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 0 0 16px 0; }
+        .page-title-row .page-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+        .menu-view-toggle { display: inline-flex; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px; padding: 3px; gap: 2px; flex-shrink: 0; }
+        .menu-view-toggle button { border: none; background: transparent; color: #4338ca; font-size: 0.82rem; font-weight: 600; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-family: inherit; }
+        .menu-view-toggle button:hover { background: rgba(255,255,255,0.55); }
+        .menu-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
+        .menu-frame-wrap { flex: 1; min-height: calc(100vh - 120px); }
+        .menu-frame-wrap[hidden] { display: none !important; }
+        .menu-frame-wrap iframe { width: 100%; min-height: calc(100vh - 120px); border: none; display: block; background: transparent; }
+        @media (max-width: 768px) {
+            .sidebar .brand-text, .sidebar .app-tab span, .sidebar .dashboard-tab span { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/app/Products" class="app-tab"><i class="fas fa-box-open"></i><span>Products</span></a>
+                    <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
+                    <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+                    <a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
+                    {% if staff_show_dev_tabs %}
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
+                    <a href="/app/Menu" class="app-tab active"><i class="fas fa-sitemap"></i><span>Menu</span></a>
+                    {% endif %}
+                </div>
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <div class="page-title-row">
+                <h1 class="page-title"><i class="fas fa-sitemap"></i> Menu</h1>
+                <div class="menu-view-toggle" role="group" aria-label="Menu view">
+                    <button type="button" data-view="categories" class="active" aria-pressed="true">Categories</button>
+                    <button type="button" data-view="collections" aria-pressed="false">Collections</button>
+                </div>
+            </div>
+
+            <div class="menu-frame-wrap" id="menu-view-categories">
+                <iframe id="menu-categories-frame" title="Category Editor" src="/app/Category_Editor?embed=1"></iframe>
+            </div>
+            <div class="menu-frame-wrap" id="menu-view-collections" hidden>
+                <iframe id="menu-collections-frame" title="Collections" data-src="/app/Collections?embed=1"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+(function () {
+    var DEFAULT_VIEW = 'categories';
+
+    function getParam(name) {
+        try {
+            return new URL(window.location.href).searchParams.get(name);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function setView(view, options) {
+        options = options || {};
+        view = view === 'collections' ? 'collections' : 'categories';
+
+        var catPanel = document.getElementById('menu-view-categories');
+        var colPanel = document.getElementById('menu-view-collections');
+        if (!catPanel || !colPanel) return;
+
+        catPanel.hidden = view !== 'categories';
+        colPanel.hidden = view !== 'collections';
+
+        document.querySelectorAll('.menu-view-toggle [data-view]').forEach(function (btn) {
+            var active = btn.getAttribute('data-view') === view;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        if (view === 'collections') {
+            var frame = document.getElementById('menu-collections-frame');
+            if (frame && !frame.getAttribute('src')) {
+                frame.src = frame.getAttribute('data-src') || '/app/Collections?embed=1';
+            }
+        }
+
+        if (!options.skipUrl) {
+            try {
+                var url = new URL(window.location.href);
+                url.pathname = '/app/Menu';
+                if (view === DEFAULT_VIEW) {
+                    url.searchParams.delete('view');
+                } else {
+                    url.searchParams.set('view', view);
+                }
+                history.replaceState({ menuView: view }, '', url.pathname + url.search);
+            } catch (_) { /* ignore */ }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.menu-view-toggle [data-view]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                setView(btn.getAttribute('data-view'));
+            });
+        });
+        var initial = getParam('view');
+        setView(initial === 'collections' ? 'collections' : DEFAULT_VIEW, { skipUrl: true });
+    });
+})();
+    </script>
+</body>
+</html>
