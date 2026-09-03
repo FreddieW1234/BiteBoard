@@ -1399,7 +1399,7 @@
             content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
             const slowTimer = setTimeout(() => {
                 const el = document.getElementById('ap-slow');
-                if (el) el.textContent = '(loading from office snapshot — can take up to a minute on cold start)';
+                if (el) el.textContent = '(loading from office snapshot…)';
             }, 8000);
             try {
                 const url = forceRefresh ? '/api/all-products?refresh=1' : '/api/all-products';
@@ -1415,7 +1415,16 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
+                const groups = data.groups || [];
+                const unassigned = data.unassigned || [];
+                const misaligned = data.misaligned || [];
+                const hasRows = groups.length || unassigned.length || misaligned.length;
+                if (data.building && !hasRows) {
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Rebuilding product catalog… <span id="ap-slow">refreshing automatically</span></div>`;
+                    setTimeout(function() { loadProducts(); }, 3000);
+                    return;
+                }
+                AP_DATA = { groups, unassigned, misaligned };
                 render(AP_DATA);
                 applySearch();
             } catch (err) {

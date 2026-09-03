@@ -1271,8 +1271,7 @@ def put_snapshot(name: str, payload, updated_by: str | None = None) -> dict:
     body: dict = {"payload": payload}
     if updated_by:
         body["updated_by"] = updated_by
-    # Large catalogs (full products list) need more headroom than the default.
-    resp = _request("PUT", url, json=body, timeout=_SNAPSHOT_BULK_READ_TIMEOUT)
+    resp = _request("PUT", url, json=body)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from snapshot store")
