@@ -7583,14 +7583,17 @@
         });
         
         function updateDropdownText(dropdown) {
+            if (!dropdown) return;
             const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
             const textElement = dropdown.querySelector('.dropdown-text');
             const key = dropdown.dataset.key;
-            textElement.textContent = key === 'custom_category' ? 'Select categories...'
-                : (key === 'filters' ? 'Select filters...'
-                : (key === 'categorysub' ? 'Select category & subcategory...'
-                : (key === 'recycle_info' ? 'Select recycle info...'
-                : 'Select subcategories...')));
+            if (textElement) {
+                textElement.textContent = key === 'custom_category' ? 'Select categories...'
+                    : (key === 'filters' ? 'Select filters...'
+                    : (key === 'categorysub' ? 'Select category & subcategory...'
+                    : (key === 'recycle_info' ? 'Select recycle info...'
+                    : 'Select subcategories...')));
+            }
             // Update bullet list of selected options below the dropdown
             const listEl = dropdown.querySelector('.dropdown-selected-list');
             if (listEl) {
@@ -8269,16 +8272,17 @@
 
         async function fetchProductDetailForEditor(productId, opts) {
             opts = opts || {};
-            // Prefetch may use the shared snapshot. Editor opens pass forceRefresh:true
-            // so the form is filled from a live Shopify read (?refresh=1).
-            const forceRefresh = !!opts.forceRefresh;
-            if (!forceRefresh) {
+            // Editor opens bypass the browser sessionStorage/memory cache and ask the
+            // server to skip its in-process tier (?refresh=1). That stays fast (shared
+            // snapshot) and must not block Shopify synchronously or All Products hangs.
+            const bypassClientCache = !!(opts.bypassClientCache || opts.forceRefresh);
+            if (!bypassClientCache) {
                 const cached = getCachedProductDetail(productId);
                 if (cached) return cached;
             } else {
                 invalidateProductDetailCache(productId);
             }
-            const qs = forceRefresh ? '?refresh=1' : '';
+            const qs = bypassClientCache ? '?refresh=1' : '';
             const resp = await fetch(
                 `/api/product/${encodeURIComponent(productId)}/prices${qs}`,
                 opts.signal ? { signal: opts.signal, credentials: 'same-origin' } : { credentials: 'same-origin' }
@@ -8403,14 +8407,11 @@
             const populateSignal = pcPopulateAbort.signal;
 
             // Wipe identity fields immediately so a warm iframe never keeps showing
-            // the previous product's name/code while the live fetch runs.
+            // the previous product's name/code while the fetch runs.
             const titleElEarly = document.getElementById('title');
             if (titleElEarly) titleElEarly.value = '';
             const productCodeElEarly = document.getElementById('product-code');
             if (productCodeElEarly) productCodeElEarly.value = '';
-            if (typeof clearMetafieldInputsBeforePopulate === 'function') {
-                clearMetafieldInputsBeforePopulate();
-            }
 
             if (!isDuplicate) {
                 isEditingProduct = true;
@@ -8428,13 +8429,16 @@
             }
             if (loadingEl) loadingEl.classList.add('visible');
             try {
+                if (typeof clearMetafieldInputsBeforePopulate === 'function') {
+                    clearMetafieldInputsBeforePopulate();
+                }
                 const _fetchTimeout = setTimeout(() => {
                     try { populateSignal.abort(); } catch (_) {}
                 }, 60000);
                 const _loadingTextEl = loadingEl ? loadingEl.querySelector('.product-loading-text') : null;
                 const _slowTimer = setTimeout(() => {
                     if (_loadingTextEl && populateGen === pcPopulateGen) {
-                        _loadingTextEl.textContent = 'Still loading — fetching live product from Shopify…';
+                        _loadingTextEl.textContent = 'Still loading — server may be waking up…';
                     }
                 }, 8000);
                 let data;
@@ -8444,7 +8448,7 @@
                     const [detail] = await Promise.all([
                         fetchProductDetailForEditor(productId, {
                             signal: populateSignal,
-                            forceRefresh: true,
+                            bypassClientCache: true,
                         }),
                         ensureMetafieldsUiReady(),
                     ]);

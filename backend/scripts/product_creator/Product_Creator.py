@@ -2646,28 +2646,22 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
     A served-but-stale item (older than PRODUCTS_SNAPSHOT_TTL) kicks one
     background rebuild; the caller gets an immediate (possibly stale) response.
 
-    refresh=True: fetch Shopify synchronously, update snapshot + memory, and
-    return live data. Use this when opening Product Manager so the form never
-    shows a stale title/SKU/metafields from a previous snapshot.
+    refresh=True: skip the in-process memory tier, re-read the office snapshot
+    (or Shopify on cold miss), and kick a background Shopify rebuild. This must
+    stay non-blocking so Product Manager / All Products stay responsive.
     """
     pid = str(product_id)
     now = time.time()
 
-    # Live path for the editor: never serve a cached/stale snapshot as truth.
-    if refresh:
-        data = _build_product_detail_from_shopify(product_id, shopify_domain)
-        if data and data.get("id"):
-            _write_product_detail_snapshot(product_id, data)
-            _store_product_detail(pid, data, now)
-        return data
-
-    # 1. Memory tier. Serve immediately whenever present so the office round-trip
-    # is never on the editor's critical path; refresh in the background if stale.
-    ent = _PRODUCT_DETAIL_CACHE.get(pid)
-    if ent:
-        if (now - ent["at"]) >= PRODUCTS_MEM_TTL:
-            _kick_product_detail_refresh(product_id, shopify_domain)
-        return ent["data"]
+    # 1. Memory tier (skipped when refresh=True so callers don't get a process-local stale copy).
+    if not refresh:
+        ent = _PRODUCT_DETAIL_CACHE.get(pid)
+        if ent:
+            if (now - ent["at"]) >= PRODUCTS_MEM_TTL:
+                _kick_product_detail_refresh(product_id, shopify_domain)
+            return ent["data"]
+    else:
+        _PRODUCT_DETAIL_CACHE.pop(pid, None)
 
     # 2. Shared office snapshot.
     if _office_snapshots_available():
@@ -2680,7 +2674,7 @@ def get_product_detail(product_id, shopify_domain=None, refresh=False):
             data = item["payload"]
             _store_product_detail(pid, data, now)
             age = _iso_age(item.get("updated_at"), now)
-            if age is None or age > PRODUCTS_SNAPSHOT_TTL:
+            if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_product_detail_refresh(product_id, shopify_domain)
             return data
 

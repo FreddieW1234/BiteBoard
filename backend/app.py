@@ -1217,9 +1217,9 @@ def _shopify_get_with_retry(url, headers, max_retries=2):
 def api_product_prices(product_id):
     """Product Manager / Price Manager detail payload.
 
-    Default: stale-while-revalidate from the office snapshot (fast list/prefetch).
-    Pass ?refresh=1 to fetch live from Shopify synchronously so the editor never
-    opens on a stale title, SKU, or metafields.
+    Default: stale-while-revalidate from the office snapshot (fast).
+    Pass ?refresh=1 to skip the in-process memory tier and kick a background
+    Shopify rebuild (still returns quickly from the shared snapshot when present).
     """
     try:
         pid = _parse_product_id(product_id)
