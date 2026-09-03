@@ -283,7 +283,7 @@
         <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
     </div>
 
-    <script src="/static/products_shell.js?v=38"></script>
+    <script src="/static/products_shell.js?v=39"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
 
@@ -1399,12 +1399,12 @@
             content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
             const slowTimer = setTimeout(() => {
                 const el = document.getElementById('ap-slow');
-                if (el) el.textContent = '(still waiting on the catalog snapshot…)';
+                if (el) el.textContent = '(fetching every product\u2019s details — this can take a couple of minutes)';
             }, 8000);
             try {
                 const ctrl = new AbortController();
-                const timeout = setTimeout(() => ctrl.abort(), 60000);
-                const resp = await fetch('/api/all-products' + (forceRefresh ? '?refresh=1' : ''), {
+                const timeout = setTimeout(() => ctrl.abort(), 180000);
+                const resp = await fetch('/api/all-products', {
                     signal: ctrl.signal,
                     credentials: 'same-origin',
                 });
@@ -1414,23 +1414,9 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                const groups = data.groups || [];
-                const unassigned = data.unassigned || [];
-                const misaligned = data.misaligned || [];
-                const hasRows = groups.length > 0 || unassigned.length > 0 || misaligned.length > 0;
-                if (data.building && !hasRows) {
-                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Building product catalog from Shopify…<br><span class="muted" style="font-size:0.85rem;">This can take a minute after a deploy. The page will refresh automatically.</span></div>`;
-                    clearTimeout(window._apBuildingTimer);
-                    window._apBuildingTimer = setTimeout(function () { loadProducts(); }, 4000);
-                    return;
-                }
-                clearTimeout(window._apBuildingTimer);
-                AP_DATA = { groups: groups, unassigned: unassigned, misaligned: misaligned };
+                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
                 render(AP_DATA);
                 applySearch();
-                if (window.ProductsShell && typeof window.ProductsShell.warmManagerFrame === 'function') {
-                    window.ProductsShell.warmManagerFrame();
-                }
             } catch (err) {
                 clearTimeout(slowTimer);
                 const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');

@@ -7,7 +7,7 @@
     var PREFETCH_TTL_MS = 5 * 60 * 1000;
     // Bump v= when Product_Creator.html changes so the warm manager iframe
     // does not keep serving a stale editor after deploy.
-    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=live-detail3';
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=stale-fix1';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
@@ -259,25 +259,21 @@
         getReturnView: getReturnView,
         syncManagerFrameUrl: syncManagerFrameUrl,
         prefetchProductForEditor: prefetchProductForEditor,
-        warmManagerFrame: warmManagerFrame,
     };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             initToggle();
             initFromUrl();
-            // Warm the manager iframe only when already on Manager, or after All
-            // Products finishes loading (Products.html calls warmManagerFrame).
-            // Starting it immediately contended with /api/all-products on cold boots.
-            if (getParam('view') === 'manager') {
-                setTimeout(warmManagerFrame, 500);
+            if (getParam('view') !== 'manager') {
+                setTimeout(warmManagerFrame, 1500);
             }
         });
     } else {
         initToggle();
         initFromUrl();
-        if (getParam('view') === 'manager') {
-            setTimeout(warmManagerFrame, 500);
+        if (getParam('view') !== 'manager') {
+            setTimeout(warmManagerFrame, 1500);
         }
     }
 })();

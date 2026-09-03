@@ -1251,6 +1251,8 @@ def print_label(
 # slow/unreachable office server fails fast (callers fall back to cache/Shopify)
 # instead of tying up a request thread for the full _TIMEOUT.
 _SNAPSHOT_READ_TIMEOUT = 8
+# Full product-overview payloads (~all products) need longer than the hot-path cap.
+_SNAPSHOT_BULK_READ_TIMEOUT = 30
 
 def _snapshots_base() -> str:
     return f"{OFFICE_API_URL.rstrip('/')}/snapshots"
@@ -1285,7 +1287,7 @@ def delete_snapshot(name: str) -> bool:
 
 
 def get_snapshot_items(
-    kind: str, *, include_payload: bool = False, since: str | None = None, timeout: float | None = None
+    kind: str, *, include_payload: bool = False, since: str | None = None
 ) -> list[dict]:
     """Items of one kind (oldest change first). Empty list if the kind has none."""
     url = f"{_snapshots_base()}/{_path(kind)}/items"
@@ -1294,12 +1296,8 @@ def get_snapshot_items(
         params["include_payload"] = "true"
     if since:
         params["since"] = since
-    # Full product-overview payloads are large; allow a longer read than the
-    # default 8s hot-path cap when the caller asks for include_payload.
-    read_timeout = timeout
-    if read_timeout is None:
-        read_timeout = 45 if include_payload else _SNAPSHOT_READ_TIMEOUT
-    resp = _request("GET", url, params=params or None, timeout=read_timeout)
+    timeout = _SNAPSHOT_BULK_READ_TIMEOUT if include_payload else _SNAPSHOT_READ_TIMEOUT
+    resp = _request("GET", url, params=params or None, timeout=timeout)
     result = _handle_response(resp, allow_404=True)
     if not isinstance(result, dict):
         return []
