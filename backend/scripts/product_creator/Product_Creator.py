@@ -2071,11 +2071,20 @@ def _office_snapshots_available() -> bool:
 def _load_products_flat_from_snapshot(*, allow_legacy_items=True):
     """Flat overview rows from the office snapshot, or None if unavailable/empty.
 
-    Prefer the single named catalog document (one HTTP call — near-instant).
-    Optionally fall back to the legacy per-item kind (slow; only for background
-    migration so page loads never wait on hundreds of item payloads).
+    Prefer the single named catalog when it is a complete full-catalog write.
+    Otherwise fall back to the per-item kind (the path that already worked).
     """
-    # 1) Fast path: one named document with the full flat list.
+    meta_count = None
+    try:
+        meta = office_api.get_snapshot(_SNAPSHOT_META_NAME)
+        if isinstance(meta, dict):
+            raw = (meta.get("payload") or {}).get("count")
+            if raw is not None:
+                meta_count = int(raw)
+    except Exception:
+        meta_count = None
+
+    # 1) Fast path: one named document — only trust a complete full-catalog write.
     try:
         doc = office_api.get_snapshot(
             _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
@@ -2083,16 +2092,24 @@ def _load_products_flat_from_snapshot(*, allow_legacy_items=True):
         if isinstance(doc, dict):
             payload = doc.get("payload") or {}
             flat = payload.get("products")
-            if isinstance(flat, list) and flat:
-                return [row for row in flat if isinstance(row, dict)]
+            complete = bool(payload.get("complete"))
+            if isinstance(flat, list) and flat and complete:
+                rows = [row for row in flat if isinstance(row, dict)]
+                # Reject truncated/corrupt blobs (e.g. a one-row patch write).
+                if meta_count is None or len(rows) >= max(1, int(meta_count * 0.85)):
+                    return rows
+                logger.warning(
+                    "Products: ignoring incomplete flat snapshot (%s rows vs meta %s)",
+                    len(rows),
+                    meta_count,
+                )
     except Exception as exc:
         logger.warning("Products: flat snapshot read failed (%s)", exc)
 
     if not allow_legacy_items:
         return None
 
-    # 2) Legacy fallback: every product as its own snapshot item (slow).
-    # Migrate into the named catalog so the next load is one document.
+    # 2) Working path: every product as its own snapshot item.
     try:
         items = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=True)
     except Exception as exc:
@@ -2102,12 +2119,14 @@ def _load_products_flat_from_snapshot(*, allow_legacy_items=True):
         return None
     flat = [it.get("payload") for it in items if isinstance(it.get("payload"), dict)]
     if flat:
+        # Migrate off-request-path would be nicer; writing here makes the *next*
+        # load instant and is the same data we already paid to download.
         _write_flat_catalog_snapshot(flat, updated_by="migrate-legacy")
     return flat or None
 
 
 def _write_flat_catalog_snapshot(flat, updated_by="render"):
-    """Write/replace the single-document All Products catalog."""
+    """Write/replace the single-document All Products catalog (full catalog only)."""
     if not _office_snapshots_available():
         return
     try:
@@ -2116,6 +2135,7 @@ def _write_flat_catalog_snapshot(flat, updated_by="render"):
             {
                 "products": list(flat or []),
                 "count": len(flat or []),
+                "complete": True,
                 "refreshed_at": time.time(),
             },
             updated_by=updated_by,
@@ -2125,15 +2145,25 @@ def _write_flat_catalog_snapshot(flat, updated_by="render"):
 
 
 def _patch_flat_catalog_row(row):
-    """Update one product inside the named flat catalog (best-effort)."""
+    """Update one product inside the named flat catalog (best-effort).
+
+    Never creates a new catalog from a single row — that would hide the full
+    per-item snapshot behind a 1-product blob.
+    """
     if not row or not _office_snapshots_available():
         return
     try:
         doc = office_api.get_snapshot(
             _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
         )
-        payload = (doc or {}).get("payload") if isinstance(doc, dict) else None
-        products = list((payload or {}).get("products") or [])
+        if not isinstance(doc, dict):
+            return
+        payload = doc.get("payload") or {}
+        if not payload.get("complete"):
+            return
+        products = list(payload.get("products") or [])
+        if not products:
+            return
         pid = row.get("id")
         products = [r for r in products if isinstance(r, dict) and r.get("id") != pid]
         products.append(row)
@@ -2142,6 +2172,7 @@ def _patch_flat_catalog_row(row):
             {
                 "products": products,
                 "count": len(products),
+                "complete": True,
                 "refreshed_at": time.time(),
             },
             updated_by="render",
@@ -2158,8 +2189,12 @@ def _remove_flat_catalog_row(product_id):
         doc = office_api.get_snapshot(
             _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
         )
-        payload = (doc or {}).get("payload") if isinstance(doc, dict) else None
-        products = list((payload or {}).get("products") or [])
+        if not isinstance(doc, dict):
+            return
+        payload = doc.get("payload") or {}
+        if not payload.get("complete"):
+            return
+        products = list(payload.get("products") or [])
         if not products:
             return
         pid = product_id
@@ -2182,6 +2217,7 @@ def _remove_flat_catalog_row(product_id):
             {
                 "products": kept,
                 "count": len(kept),
+                "complete": True,
                 "refreshed_at": time.time(),
             },
             updated_by="render",
@@ -2496,11 +2532,12 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     """
     All Products overview with stale-while-revalidate caching:
 
-      in-process tier (fast)  ->  named office catalog (one doc)  ->  building
+      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
 
-    Never blocks the HTTP request on a full Shopify catalog scan. A cold miss
-    returns an empty overview with building=True and kicks a background rebuild
-    that writes the named flat catalog for near-instant subsequent loads.
+    A served-but-stale snapshot (older than PRODUCTS_SNAPSHOT_TTL) or refresh=True
+    triggers exactly one background Shopify rebuild that writes back to the office;
+    the caller still gets an immediate response. Falls back to a direct Shopify
+    build if the office snapshot store is unavailable.
     """
     now = time.time()
 
@@ -2511,45 +2548,45 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
         if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
             _kick_products_refresh(shopify_domain)
-        out = dict(_PRODUCTS_OVERVIEW_CACHE)
-        out["building"] = False
-        return out
+        return _PRODUCTS_OVERVIEW_CACHE
 
-    # 2. Cold start / explicit refresh: one named catalog document only.
-    # Do not pull legacy per-item payloads here — that path is too slow for page load.
+    # 2. No in-process copy yet (cold start) or an explicit refresh: read the
+    # shared durable snapshot on the office server (named flat catalog if present,
+    # otherwise the existing per-item product snapshots).
     if _office_snapshots_available():
-        flat = _load_products_flat_from_snapshot(allow_legacy_items=False)
+        flat = _load_products_flat_from_snapshot(allow_legacy_items=True)
         if flat is not None:
             organized = _store_overview_cache(flat, now)
             age = _snapshot_age(now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_products_refresh(shopify_domain)
-            out = dict(organized)
-            out["building"] = False
-            return out
+            return organized
 
-        # Snapshot missing or unreadable: never block on Shopify.
+        # 3. Office reachable but no snapshot rows (or the read just failed/timed
+        # out). Never block the request thread on a full Shopify rebuild if we
+        # already have a prior in-process copy - serve it (stale is fine) and
+        # rebuild in the background. Only the very first cold start blocks.
         if _PRODUCTS_OVERVIEW_CACHE is not None:
             _kick_products_refresh(shopify_domain)
-            out = dict(_PRODUCTS_OVERVIEW_CACHE)
-            out["building"] = False
-            return out
+            return _PRODUCTS_OVERVIEW_CACHE
 
-        _kick_products_refresh(shopify_domain)
-        empty = organize_products_for_overview([])
-        empty["building"] = True
-        return empty
+        # True cold start: build once (blocking) and write back.
+        try:
+            flat = _build_products_overview_from_shopify(shopify_domain)
+        except Exception as exc:
+            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
+            flat = []
+        _write_products_snapshot(flat)
+        # Warm the family snapshots in the background so the editor never cold-scans.
+        try:
+            refresh_family_snapshots()
+        except Exception:
+            pass
+        return _store_overview_cache(flat, now)
 
-    # 3. Office unavailable: still avoid blocking the request on a full scan.
-    if _PRODUCTS_OVERVIEW_CACHE is not None:
-        _kick_products_refresh(shopify_domain)
-        out = dict(_PRODUCTS_OVERVIEW_CACHE)
-        out["building"] = False
-        return out
-    _kick_products_refresh(shopify_domain)
-    empty = organize_products_for_overview([])
-    empty["building"] = True
-    return empty
+    # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
+    flat = _build_products_overview_from_shopify(shopify_domain)
+    return _store_overview_cache(flat, now)
 
 
 # --------------------------------------------------------------------------- #
