@@ -55,6 +55,8 @@ _PRODUCTS_REFRESH_IN_PROGRESS = False
 
 _SNAPSHOT_KIND = "product"           # per-item snapshot kind
 _SNAPSHOT_META_NAME = "products_overview"  # named doc holding the freshness marker
+# Single-document catalog for All Products page loads (instant read vs N item GETs).
+_SNAPSHOT_FLAT_NAME = "products_overview_flat"
 
 def format_price(price):
     """Format price to 2 decimal places as string."""
@@ -2066,8 +2068,31 @@ def _office_snapshots_available() -> bool:
     return office_api is not None and bool(getattr(office_api, "OFFICE_API_URL", None))
 
 
-def _load_products_flat_from_snapshot():
-    """Flat overview rows from the office snapshot, or None if unavailable/empty."""
+def _load_products_flat_from_snapshot(*, allow_legacy_items=True):
+    """Flat overview rows from the office snapshot, or None if unavailable/empty.
+
+    Prefer the single named catalog document (one HTTP call — near-instant).
+    Optionally fall back to the legacy per-item kind (slow; only for background
+    migration so page loads never wait on hundreds of item payloads).
+    """
+    # 1) Fast path: one named document with the full flat list.
+    try:
+        doc = office_api.get_snapshot(
+            _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
+        )
+        if isinstance(doc, dict):
+            payload = doc.get("payload") or {}
+            flat = payload.get("products")
+            if isinstance(flat, list) and flat:
+                return [row for row in flat if isinstance(row, dict)]
+    except Exception as exc:
+        logger.warning("Products: flat snapshot read failed (%s)", exc)
+
+    if not allow_legacy_items:
+        return None
+
+    # 2) Legacy fallback: every product as its own snapshot item (slow).
+    # Migrate into the named catalog so the next load is one document.
     try:
         items = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=True)
     except Exception as exc:
@@ -2076,7 +2101,93 @@ def _load_products_flat_from_snapshot():
     if not items:
         return None
     flat = [it.get("payload") for it in items if isinstance(it.get("payload"), dict)]
+    if flat:
+        _write_flat_catalog_snapshot(flat, updated_by="migrate-legacy")
     return flat or None
+
+
+def _write_flat_catalog_snapshot(flat, updated_by="render"):
+    """Write/replace the single-document All Products catalog."""
+    if not _office_snapshots_available():
+        return
+    try:
+        office_api.put_snapshot(
+            _SNAPSHOT_FLAT_NAME,
+            {
+                "products": list(flat or []),
+                "count": len(flat or []),
+                "refreshed_at": time.time(),
+            },
+            updated_by=updated_by,
+        )
+    except Exception as exc:
+        logger.warning("Products: flat snapshot write failed (%s)", exc)
+
+
+def _patch_flat_catalog_row(row):
+    """Update one product inside the named flat catalog (best-effort)."""
+    if not row or not _office_snapshots_available():
+        return
+    try:
+        doc = office_api.get_snapshot(
+            _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
+        )
+        payload = (doc or {}).get("payload") if isinstance(doc, dict) else None
+        products = list((payload or {}).get("products") or [])
+        pid = row.get("id")
+        products = [r for r in products if isinstance(r, dict) and r.get("id") != pid]
+        products.append(row)
+        office_api.put_snapshot(
+            _SNAPSHOT_FLAT_NAME,
+            {
+                "products": products,
+                "count": len(products),
+                "refreshed_at": time.time(),
+            },
+            updated_by="render",
+        )
+    except Exception as exc:
+        logger.warning("Products: flat snapshot patch failed (%s)", exc)
+
+
+def _remove_flat_catalog_row(product_id):
+    """Drop one product from the named flat catalog (best-effort)."""
+    if product_id in (None, "") or not _office_snapshots_available():
+        return
+    try:
+        doc = office_api.get_snapshot(
+            _SNAPSHOT_FLAT_NAME, timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT
+        )
+        payload = (doc or {}).get("payload") if isinstance(doc, dict) else None
+        products = list((payload or {}).get("products") or [])
+        if not products:
+            return
+        pid = product_id
+        try:
+            pid_int = int(product_id)
+        except (TypeError, ValueError):
+            pid_int = None
+        kept = []
+        for r in products:
+            if not isinstance(r, dict):
+                continue
+            rid = r.get("id")
+            if rid == pid or (pid_int is not None and rid == pid_int) or str(rid) == str(pid):
+                continue
+            kept.append(r)
+        if len(kept) == len(products):
+            return
+        office_api.put_snapshot(
+            _SNAPSHOT_FLAT_NAME,
+            {
+                "products": kept,
+                "count": len(kept),
+                "refreshed_at": time.time(),
+            },
+            updated_by="render",
+        )
+    except Exception as exc:
+        logger.warning("Products: flat snapshot remove failed (%s)", exc)
 
 
 def _snapshot_age(now):
@@ -2104,6 +2215,8 @@ def _write_products_snapshot(flat, updated_by="render"):
         if pid is not None:
             items[str(pid)] = rec
     try:
+        # Named catalog first so All Products can load in one request.
+        _write_flat_catalog_snapshot(flat, updated_by=updated_by)
         office_api.bulk_put_snapshot_items(_SNAPSHOT_KIND, items, updated_by=updated_by)
         office_api.put_snapshot(
             _SNAPSHOT_META_NAME,
@@ -2136,7 +2249,8 @@ def _refresh_products_snapshot_bg(shopify_domain=None):
     try:
         now = time.time()
         if _office_snapshots_available():
-            flat = _load_products_flat_from_snapshot()
+            # Allow legacy per-item migration here (background only).
+            flat = _load_products_flat_from_snapshot(allow_legacy_items=True)
             if flat is not None:
                 _store_overview_cache(flat, now)
                 age = _snapshot_age(now)
@@ -2285,6 +2399,7 @@ def _sync_product_row_to_snapshot(row):
             office_api.put_snapshot_item(_SNAPSHOT_KIND, str(row.get("id")), row)
         except Exception as exc:
             logger.warning("Products: snapshot item write failed (%s)", exc)
+        _patch_flat_catalog_row(row)
     _upsert_flat_cache(row)
 
 
@@ -2381,12 +2496,11 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     """
     All Products overview with stale-while-revalidate caching:
 
-      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
+      in-process tier (fast)  ->  named office catalog (one doc)  ->  building
 
-    A served-but-stale snapshot (older than PRODUCTS_SNAPSHOT_TTL) or refresh=True
-    triggers exactly one background Shopify rebuild that writes back to the office;
-    the caller still gets an immediate response. Falls back to a direct Shopify
-    build if the office snapshot store is unavailable.
+    Never blocks the HTTP request on a full Shopify catalog scan. A cold miss
+    returns an empty overview with building=True and kicks a background rebuild
+    that writes the named flat catalog for near-instant subsequent loads.
     """
     now = time.time()
 
@@ -2397,45 +2511,45 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
         if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
             _kick_products_refresh(shopify_domain)
-        return _PRODUCTS_OVERVIEW_CACHE
+        out = dict(_PRODUCTS_OVERVIEW_CACHE)
+        out["building"] = False
+        return out
 
-    # 2. No in-process copy yet (cold start) or an explicit refresh: read the
-    # shared durable snapshot on the office server. This blocks the request only
-    # on the very first load after a restart.
+    # 2. Cold start / explicit refresh: one named catalog document only.
+    # Do not pull legacy per-item payloads here — that path is too slow for page load.
     if _office_snapshots_available():
-        flat = _load_products_flat_from_snapshot()
+        flat = _load_products_flat_from_snapshot(allow_legacy_items=False)
         if flat is not None:
             organized = _store_overview_cache(flat, now)
             age = _snapshot_age(now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_products_refresh(shopify_domain)
-            return organized
+            out = dict(organized)
+            out["building"] = False
+            return out
 
-        # 3. Office reachable but no snapshot rows (or the read just failed/timed
-        # out). Never block the request thread on a full Shopify rebuild if we
-        # already have a prior in-process copy - serve it (stale is fine) and
-        # rebuild in the background. Only the very first cold start blocks.
+        # Snapshot missing or unreadable: never block on Shopify.
         if _PRODUCTS_OVERVIEW_CACHE is not None:
             _kick_products_refresh(shopify_domain)
-            return _PRODUCTS_OVERVIEW_CACHE
+            out = dict(_PRODUCTS_OVERVIEW_CACHE)
+            out["building"] = False
+            return out
 
-        # True cold start: build once (blocking) and write back.
-        try:
-            flat = _build_products_overview_from_shopify(shopify_domain)
-        except Exception as exc:
-            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
-            flat = []
-        _write_products_snapshot(flat)
-        # Warm the family snapshots in the background so the editor never cold-scans.
-        try:
-            refresh_family_snapshots()
-        except Exception:
-            pass
-        return _store_overview_cache(flat, now)
+        _kick_products_refresh(shopify_domain)
+        empty = organize_products_for_overview([])
+        empty["building"] = True
+        return empty
 
-    # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
-    flat = _build_products_overview_from_shopify(shopify_domain)
-    return _store_overview_cache(flat, now)
+    # 3. Office unavailable: still avoid blocking the request on a full scan.
+    if _PRODUCTS_OVERVIEW_CACHE is not None:
+        _kick_products_refresh(shopify_domain)
+        out = dict(_PRODUCTS_OVERVIEW_CACHE)
+        out["building"] = False
+        return out
+    _kick_products_refresh(shopify_domain)
+    empty = organize_products_for_overview([])
+    empty["building"] = True
+    return empty
 
 
 # --------------------------------------------------------------------------- #
@@ -2625,6 +2739,10 @@ def delete_product(product_id, shopify_domain=None):
             office_api.delete_snapshot_item(_SNAPSHOT_KIND, str(pid))
         except Exception as exc:
             logger.warning("Delete product: overview snapshot clear failed for %s (%s)", pid, exc)
+        try:
+            _remove_flat_catalog_row(pid)
+        except Exception as exc:
+            logger.warning("Delete product: flat catalog clear failed for %s (%s)", pid, exc)
     try:
         invalidate_products_overview_cache()
     except Exception as exc:

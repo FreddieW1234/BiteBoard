@@ -1258,10 +1258,10 @@ def _snapshots_base() -> str:
     return f"{OFFICE_API_URL.rstrip('/')}/snapshots"
 
 
-def get_snapshot(name: str) -> dict | None:
+def get_snapshot(name: str, *, timeout: float | None = None) -> dict | None:
     """One named document: {name, payload, etag, updated_at, updated_by} or None if absent."""
     url = f"{_snapshots_base()}/{_path(name)}"
-    resp = _request("GET", url, timeout=_SNAPSHOT_READ_TIMEOUT)
+    resp = _request("GET", url, timeout=timeout if timeout is not None else _SNAPSHOT_READ_TIMEOUT)
     return _handle_response(resp, allow_404=True)
 
 
@@ -1271,7 +1271,8 @@ def put_snapshot(name: str, payload, updated_by: str | None = None) -> dict:
     body: dict = {"payload": payload}
     if updated_by:
         body["updated_by"] = updated_by
-    resp = _request("PUT", url, json=body)
+    # Large catalogs (full products list) need more headroom than the default.
+    resp = _request("PUT", url, json=body, timeout=_SNAPSHOT_BULK_READ_TIMEOUT)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from snapshot store")

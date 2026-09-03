@@ -1390,21 +1390,25 @@
         }
         window.removeAllProductsRow = removeAllProductsRow;
 
+        let _apBuildPolls = 0;
         async function loadProducts(forceRefresh) {
             const content = document.getElementById('ap-content');
             const gapsEl = document.getElementById('ap-pc-gaps');
             editingColumn = null;
             updateEditBar();
             if (gapsEl) { gapsEl.hidden = true; gapsEl.innerHTML = ''; }
-            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            if (!forceRefresh && _apBuildPolls === 0) {
+                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            }
             const slowTimer = setTimeout(() => {
                 const el = document.getElementById('ap-slow');
-                if (el) el.textContent = '(fetching every product\u2019s details — this can take a couple of minutes)';
+                if (el) el.textContent = '(building catalog from office cache — usually under a minute on first load)';
             }, 8000);
             try {
+                const url = forceRefresh ? '/api/all-products?refresh=1' : '/api/all-products';
                 const ctrl = new AbortController();
-                const timeout = setTimeout(() => ctrl.abort(), 180000);
-                const resp = await fetch('/api/all-products', {
+                const timeout = setTimeout(() => ctrl.abort(), 45000);
+                const resp = await fetch(url, {
                     signal: ctrl.signal,
                     credentials: 'same-origin',
                 });
@@ -1414,11 +1418,28 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
+                const groups = data.groups || [];
+                const unassigned = data.unassigned || [];
+                const misaligned = data.misaligned || [];
+                const hasRows = groups.length || unassigned.length || misaligned.length;
+                if (data.building && !hasRows) {
+                    _apBuildPolls += 1;
+                    if (_apBuildPolls > 40) {
+                        _apBuildPolls = 0;
+                        content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>Catalog is still building. Try again in a moment.<br><br><button type="button" class="btn-ghost" onclick="_apBuildPolls=0;loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+                        return;
+                    }
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Building product catalog… <span id="ap-slow">first load after deploy can take a minute</span></div>`;
+                    setTimeout(function() { loadProducts(); }, 2500);
+                    return;
+                }
+                _apBuildPolls = 0;
+                AP_DATA = { groups, unassigned, misaligned };
                 render(AP_DATA);
                 applySearch();
             } catch (err) {
                 clearTimeout(slowTimer);
+                _apBuildPolls = 0;
                 const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(msg)}<br><br><button type="button" class="btn-ghost" onclick="loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
             }
