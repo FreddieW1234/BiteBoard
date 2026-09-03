@@ -2377,16 +2377,24 @@ def product_ids_from_save_result(result, fallback_id=None):
     return ids
 
 
+def _empty_overview(*, building: bool = False) -> dict:
+    return {
+        "groups": [],
+        "unassigned": [],
+        "misaligned": [],
+        "building": bool(building),
+    }
+
+
 def get_all_products_overview(shopify_domain=None, refresh=False):
     """
     All Products overview with stale-while-revalidate caching:
 
-      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
+      in-process tier (fast)  ->  shared office snapshot  ->  background Shopify
 
-    A served-but-stale snapshot (older than PRODUCTS_SNAPSHOT_TTL) or refresh=True
-    triggers exactly one background Shopify rebuild that writes back to the office;
-    the caller still gets an immediate response. Falls back to a direct Shopify
-    build if the office snapshot store is unavailable.
+    Never blocks the request thread on a full Shopify catalog scan. On a true
+    cold start (no memory, no office snapshot) returns building=True and rebuilds
+    in the background so /api/all-products cannot time out the Products page.
     """
     now = time.time()
 
@@ -2397,11 +2405,12 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
         if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
             _kick_products_refresh(shopify_domain)
-        return _PRODUCTS_OVERVIEW_CACHE
+        out = dict(_PRODUCTS_OVERVIEW_CACHE)
+        out["building"] = False
+        return out
 
     # 2. No in-process copy yet (cold start) or an explicit refresh: read the
-    # shared durable snapshot on the office server. This blocks the request only
-    # on the very first load after a restart.
+    # shared durable snapshot on the office server.
     if _office_snapshots_available():
         flat = _load_products_flat_from_snapshot()
         if flat is not None:
@@ -2409,33 +2418,29 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
             age = _snapshot_age(now)
             if refresh or age is None or age > PRODUCTS_SNAPSHOT_TTL:
                 _kick_products_refresh(shopify_domain)
-            return organized
+            out = dict(organized)
+            out["building"] = False
+            return out
 
-        # 3. Office reachable but no snapshot rows (or the read just failed/timed
-        # out). Never block the request thread on a full Shopify rebuild if we
-        # already have a prior in-process copy - serve it (stale is fine) and
-        # rebuild in the background. Only the very first cold start blocks.
+        # 3. Office reachable but snapshot missing/failed. Prefer any prior
+        # in-process copy; otherwise return building and rebuild in background.
         if _PRODUCTS_OVERVIEW_CACHE is not None:
             _kick_products_refresh(shopify_domain)
-            return _PRODUCTS_OVERVIEW_CACHE
+            out = dict(_PRODUCTS_OVERVIEW_CACHE)
+            out["building"] = False
+            return out
 
-        # True cold start: build once (blocking) and write back.
-        try:
-            flat = _build_products_overview_from_shopify(shopify_domain)
-        except Exception as exc:
-            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
-            flat = []
-        _write_products_snapshot(flat)
-        # Warm the family snapshots in the background so the editor never cold-scans.
-        try:
-            refresh_family_snapshots()
-        except Exception:
-            pass
-        return _store_overview_cache(flat, now)
+        _kick_products_refresh(shopify_domain)
+        return _empty_overview(building=True)
 
-    # 4. Office snapshot store unavailable: direct Shopify, no snapshot.
-    flat = _build_products_overview_from_shopify(shopify_domain)
-    return _store_overview_cache(flat, now)
+    # 4. Office snapshot store unavailable: never block on Shopify here either.
+    if _PRODUCTS_OVERVIEW_CACHE is not None:
+        _kick_products_refresh(shopify_domain)
+        out = dict(_PRODUCTS_OVERVIEW_CACHE)
+        out["building"] = False
+        return out
+    _kick_products_refresh(shopify_domain)
+    return _empty_overview(building=True)
 
 
 # --------------------------------------------------------------------------- #

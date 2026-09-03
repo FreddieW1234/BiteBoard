@@ -8272,9 +8272,9 @@
 
         async function fetchProductDetailForEditor(productId, opts) {
             opts = opts || {};
-            // Editor opens bypass the browser sessionStorage/memory cache and ask the
-            // server to skip its in-process tier (?refresh=1). That stays fast (shared
-            // snapshot) and must not block Shopify synchronously or All Products hangs.
+            // Editor opens bypass the browser sessionStorage/memory cache so a warm
+            // iframe cannot re-show the previous product. Avoid ?refresh=1 here —
+            // that kicked per-product Shopify rebuilds and competed with All Products.
             const bypassClientCache = !!(opts.bypassClientCache || opts.forceRefresh);
             if (!bypassClientCache) {
                 const cached = getCachedProductDetail(productId);
@@ -8282,9 +8282,8 @@
             } else {
                 invalidateProductDetailCache(productId);
             }
-            const qs = bypassClientCache ? '?refresh=1' : '';
             const resp = await fetch(
-                `/api/product/${encodeURIComponent(productId)}/prices${qs}`,
+                `/api/product/${encodeURIComponent(productId)}/prices`,
                 opts.signal ? { signal: opts.signal, credentials: 'same-origin' } : { credentials: 'same-origin' }
             );
             const data = await resp.json().catch(function () { return {}; });
