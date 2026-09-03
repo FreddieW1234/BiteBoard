@@ -3758,6 +3758,8 @@
         let stagedArtworkTemplateFiles = [];
         let pcStagedRemoteEntries = [];
         let pcTemplatesLoadGen = 0;
+        let pcPopulateGen = 0;
+        let pcPopulateAbort = null;
         let pcCurrentTemplatesFileGlobalId = '';
         let stagedStockDesignFiles = [];
         let pcStockDesignRemoteFiles = []; // office-server versions for current product
@@ -8267,16 +8269,28 @@
 
         async function fetchProductDetailForEditor(productId, opts) {
             opts = opts || {};
-            if (!opts.forceRefresh) {
+            // Prefetch may use the shared snapshot. Editor opens pass forceRefresh:true
+            // so the form is filled from a live Shopify read (?refresh=1).
+            const forceRefresh = !!opts.forceRefresh;
+            if (!forceRefresh) {
                 const cached = getCachedProductDetail(productId);
                 if (cached) return cached;
+            } else {
+                invalidateProductDetailCache(productId);
             }
-            const resp = await fetch(`/api/product/${productId}/prices`, opts.signal ? { signal: opts.signal } : {});
+            const qs = forceRefresh ? '?refresh=1' : '';
+            const resp = await fetch(
+                `/api/product/${encodeURIComponent(productId)}/prices${qs}`,
+                opts.signal ? { signal: opts.signal, credentials: 'same-origin' } : { credentials: 'same-origin' }
+            );
             const data = await resp.json().catch(function () { return {}; });
             if (!resp.ok || !data || !data.id) {
                 let msg = (data && data.error) ? data.error : ('Request failed: ' + resp.status);
                 if (data && data.detail) msg += ' — ' + (typeof data.detail === 'string' ? data.detail.substring(0, 200) : '');
                 throw new Error(msg);
+            }
+            if (String(data.id) !== String(productId)) {
+                throw new Error('Product detail mismatch: expected ' + productId + ', got ' + data.id);
             }
             storeProductDetailCache(productId, data);
             return data;
@@ -8380,9 +8394,27 @@
             const isCreateFromParent = isDuplicate && !!(opts && (opts.createFromParent || opts.versionName !== undefined));
             const loadingEl = document.getElementById('product-loading-overlay');
 
+            // Cancel any in-flight populate so a slower previous open can't overwrite this one.
+            const populateGen = ++pcPopulateGen;
+            if (pcPopulateAbort) {
+                try { pcPopulateAbort.abort(); } catch (_) {}
+            }
+            pcPopulateAbort = new AbortController();
+            const populateSignal = pcPopulateAbort.signal;
+
+            // Wipe identity fields immediately so a warm iframe never keeps showing
+            // the previous product's name/code while the live fetch runs.
+            const titleElEarly = document.getElementById('title');
+            if (titleElEarly) titleElEarly.value = '';
+            const productCodeElEarly = document.getElementById('product-code');
+            if (productCodeElEarly) productCodeElEarly.value = '';
+            if (typeof clearMetafieldInputsBeforePopulate === 'function') {
+                clearMetafieldInputsBeforePopulate();
+            }
+
             if (!isDuplicate) {
                 isEditingProduct = true;
-                selectedProduct = { id: productId, title: title };
+                selectedProduct = { id: productId, title: title || '' };
                 const submitBtn = document.querySelector('#productForm button[type="submit"]');
                 if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Product';
                 showCreateForm();
@@ -8396,31 +8428,41 @@
             }
             if (loadingEl) loadingEl.classList.add('visible');
             try {
-                const _fetchCtrl = new AbortController();
-                const _fetchTimeout = setTimeout(() => _fetchCtrl.abort(), 60000);
+                const _fetchTimeout = setTimeout(() => {
+                    try { populateSignal.abort(); } catch (_) {}
+                }, 60000);
                 const _loadingTextEl = loadingEl ? loadingEl.querySelector('.product-loading-text') : null;
                 const _slowTimer = setTimeout(() => {
-                    if (_loadingTextEl) _loadingTextEl.textContent = 'Still loading — server may be waking up…';
+                    if (_loadingTextEl && populateGen === pcPopulateGen) {
+                        _loadingTextEl.textContent = 'Still loading — fetching live product from Shopify…';
+                    }
                 }, 8000);
-                let resp;
                 let data;
                 try {
                     // Wait for template metafield UI (incl. Alternative Spellings list)
                     // before filling values — warm iframe opens can race DOMContentLoaded.
                     const [detail] = await Promise.all([
-                        fetchProductDetailForEditor(productId, { signal: _fetchCtrl.signal }),
+                        fetchProductDetailForEditor(productId, {
+                            signal: populateSignal,
+                            forceRefresh: true,
+                        }),
                         ensureMetafieldsUiReady(),
                     ]);
                     data = detail;
                 } catch (fetchErr) {
                     clearTimeout(_fetchTimeout);
                     clearTimeout(_slowTimer);
+                    if (populateGen !== pcPopulateGen) return;
                     throw new Error(fetchErr.name === 'AbortError' ? 'Request timed out — the server took too long to respond. Try again.' : (fetchErr.message || 'Network error'));
                 }
                 clearTimeout(_fetchTimeout);
                 clearTimeout(_slowTimer);
+                if (populateGen !== pcPopulateGen) return;
                 if (_loadingTextEl) _loadingTextEl.textContent = 'Loading product…';
                 if (!data || !data.id) throw new Error('Failed to load product');
+                if (String(data.id) !== String(productId)) {
+                    throw new Error('Loaded product id does not match the requested product');
+                }
 
                 // Title: create-from-parent inherits the parent's title; a plain duplicate uses "Base (Copy)"
                 const titleEl = document.getElementById('title');
@@ -8431,6 +8473,9 @@
                     } else {
                         titleEl.value = isDuplicate ? (baseTitle + ' (Copy)') : baseTitle;
                     }
+                }
+                if (!isDuplicate && selectedProduct) {
+                    selectedProduct.title = baseTitle;
                 }
 
                 // Status (default to active if unknown)
@@ -8498,6 +8543,7 @@
 
                 // Ensure options are loaded, then set values
                 await ensureCategoryOptionsLoaded();
+                if (populateGen !== pcPopulateGen) return;
                 
                 // Find the metafield select elements by data-key attribute
                 const catSel = document.querySelector('select[data-key="custom_category"]');
@@ -8597,6 +8643,7 @@
                         // Durable copy — save must not wait on the async dropdown.
                         setParentChildHiddenValue(parentChildVal);
                         refreshChildDropdown(parentChildVal).then(() => {
+                            if (populateGen !== pcPopulateGen) return;
                             setChildTypeValue(parentChildVal);
                         });
                         if (!isDuplicate) {
@@ -8616,6 +8663,7 @@
                         if (parentOptionWrap) parentOptionWrap.style.display = '';
                         if (childOptionWrap) childOptionWrap.style.display = 'none';
                         refreshParentChildDropdown(parentChildVal).then(() => {
+                            if (populateGen !== pcPopulateGen) return;
                             setParentTypeValue(parentChildVal);
                         });
                     }
@@ -8647,6 +8695,7 @@
                 try {
                     await populateMetafieldValues(mfs, { skipCategorySub: isCreateFromParent });
                 } catch (e) { console.log('Populate metafield values failed', e); }
+                if (populateGen !== pcPopulateGen) return;
 
                 if (window.AllergenMapping && typeof data.body_html === 'string' && data.body_html.includes('<h3>')) {
                     try {
@@ -8834,6 +8883,7 @@
                     showCreateForm();
                 }
             } catch (e) {
+                if (populateGen !== pcPopulateGen) return;
                 console.log('Populate failed:', e);
                 if (typeof alert === 'function') alert('Could not load product: ' + (e && e.message ? e.message : String(e)));
                 if (isDuplicate) {
@@ -8842,7 +8892,7 @@
                 }
                 backToProductCreatorHome();
             } finally {
-                if (loadingEl) loadingEl.classList.remove('visible');
+                if (populateGen === pcPopulateGen && loadingEl) loadingEl.classList.remove('visible');
             }
         }
         window.pcPopulateFromProduct = pcPopulateFromProduct;

@@ -1215,10 +1215,11 @@ def _shopify_get_with_retry(url, headers, max_retries=2):
 
 @app.route('/api/product/<product_id>/prices')
 def api_product_prices(product_id):
-    """Special endpoint for Price Manager that returns all metafields including pricejson ones.
+    """Product Manager / Price Manager detail payload.
 
-    Served from the shared office snapshot (stale-while-revalidate) so opening a
-    product is instant; pass ?refresh=1 to force a background rebuild from Shopify.
+    Default: stale-while-revalidate from the office snapshot (fast list/prefetch).
+    Pass ?refresh=1 to fetch live from Shopify synchronously so the editor never
+    opens on a stale title, SKU, or metafields.
     """
     try:
         pid = _parse_product_id(product_id)
