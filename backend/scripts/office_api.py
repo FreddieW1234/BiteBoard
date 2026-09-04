@@ -1265,13 +1265,13 @@ def get_snapshot(name: str, *, timeout: float | None = None) -> dict | None:
     return _handle_response(resp, allow_404=True)
 
 
-def put_snapshot(name: str, payload, updated_by: str | None = None) -> dict:
+def put_snapshot(name: str, payload, updated_by: str | None = None, *, timeout: float | None = None) -> dict:
     """Create or replace a named document. Last write wins."""
     url = f"{_snapshots_base()}/{_path(name)}"
     body: dict = {"payload": payload}
     if updated_by:
         body["updated_by"] = updated_by
-    resp = _request("PUT", url, json=body)
+    resp = _request("PUT", url, json=body, timeout=timeout if timeout is not None else _TIMEOUT)
     result = _handle_response(resp)
     if not isinstance(result, dict):
         raise OfficeApiError("Unexpected response from snapshot store")

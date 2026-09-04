@@ -1390,16 +1390,22 @@
         }
         window.removeAllProductsRow = removeAllProductsRow;
 
+        let _apInflight = false;
+        let _apBuildPolls = 0;
         async function loadProducts(forceRefresh) {
+            if (_apInflight) return;
+            _apInflight = true;
             const content = document.getElementById('ap-content');
             const gapsEl = document.getElementById('ap-pc-gaps');
             editingColumn = null;
             updateEditBar();
             if (gapsEl) { gapsEl.hidden = true; gapsEl.innerHTML = ''; }
-            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            if (_apBuildPolls === 0) {
+                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            }
             const slowTimer = setTimeout(() => {
                 const el = document.getElementById('ap-slow');
-                if (el) el.textContent = '(loading from office snapshot…)';
+                if (el) el.textContent = '(loading office catalog…)';
             }, 8000);
             try {
                 const url = forceRefresh ? '/api/all-products?refresh=1' : '/api/all-products';
@@ -1420,17 +1426,27 @@
                 const misaligned = data.misaligned || [];
                 const hasRows = groups.length || unassigned.length || misaligned.length;
                 if (data.building && !hasRows) {
-                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Rebuilding product catalog… <span id="ap-slow">refreshing automatically</span></div>`;
+                    _apBuildPolls += 1;
+                    if (_apBuildPolls > 40) {
+                        _apBuildPolls = 0;
+                        content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>Catalog is still building. Try again in a moment.<br><br><button type="button" class="btn-ghost" onclick="_apBuildPolls=0;loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+                        return;
+                    }
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading product catalog… <span id="ap-slow">refreshing automatically</span></div>`;
                     setTimeout(function() { loadProducts(); }, 3000);
                     return;
                 }
+                _apBuildPolls = 0;
                 AP_DATA = { groups, unassigned, misaligned };
                 render(AP_DATA);
                 applySearch();
             } catch (err) {
                 clearTimeout(slowTimer);
+                _apBuildPolls = 0;
                 const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(msg)}<br><br><button type="button" class="btn-ghost" onclick="loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+            } finally {
+                _apInflight = false;
             }
         }
 
