@@ -52,8 +52,6 @@ _PRODUCTS_OVERVIEW_CACHE_AT = 0.0
 _PRODUCTS_FLAT_CACHE = None          # flat list of overview rows backing the cache
 _PRODUCTS_REFRESH_LOCK = threading.Lock()
 _PRODUCTS_REFRESH_IN_PROGRESS = False
-# Must cover a full office catalog payload read. 12s was aborting before data arrived.
-_OVERVIEW_REQUEST_TIMEOUT = 45
 _OVERVIEW_LAST = {
     "at": None,
     "source": None,
@@ -2090,19 +2088,10 @@ def _record_overview_last(*, source, rows=None, ms=None, error=None, building=Fa
     })
 
 
-def _load_products_flat_from_snapshot(*, timeout=None):
+def _load_products_flat_from_snapshot():
     """Flat overview rows from the office snapshot, or None if unavailable/empty."""
     try:
-        print("[retry] Products: reading office product snapshots...", flush=True)
-        t0 = time.time()
-        items = office_api.get_snapshot_items(
-            _SNAPSHOT_KIND, include_payload=True, timeout=timeout
-        )
-        print(
-            f"[ok] Products: office snapshot items={len(items or [])} "
-            f"in {int((time.time() - t0) * 1000)}ms",
-            flush=True,
-        )
+        items = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=True)
     except Exception as exc:
         logger.warning("Products: snapshot read failed (%s)", exc)
         print(f"[warn] Products: snapshot read failed: {exc}", flush=True)
@@ -2111,33 +2100,6 @@ def _load_products_flat_from_snapshot(*, timeout=None):
         return None
     flat = [it.get("payload") for it in items if isinstance(it.get("payload"), dict)]
     return flat or None
-
-
-def _load_products_flat_chunked():
-    """Fallback: index then per-item GET when the bulk payload read times out."""
-    try:
-        index = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=False)
-    except Exception as exc:
-        logger.warning("Products: snapshot index failed (%s)", exc)
-        return None
-    if not index:
-        return None
-    rows = []
-    for i, it in enumerate(index):
-        iid = (it or {}).get("item_id") or (it or {}).get("id")
-        if iid is None:
-            continue
-        try:
-            doc = office_api.get_snapshot_item(_SNAPSHOT_KIND, str(iid))
-        except Exception:
-            continue
-        payload = (doc or {}).get("payload") if isinstance(doc, dict) else None
-        if isinstance(payload, dict):
-            rows.append(payload)
-        if (i + 1) % 50 == 0:
-            print(f"[retry] Products: chunked snapshot {i + 1}/{len(index)}", flush=True)
-    print(f"[ok] Products: chunked snapshot loaded {len(rows)}/{len(index)}", flush=True)
-    return rows or None
 
 
 def _snapshot_age(now):
@@ -2164,12 +2126,8 @@ def _write_products_snapshot(flat, updated_by="render"):
         pid = rec.get("id")
         if pid is not None:
             items[str(pid)] = rec
-    if not items:
-        return
     try:
         office_api.bulk_put_snapshot_items(_SNAPSHOT_KIND, items, updated_by=updated_by)
-        # Keep this document small (timestamp + count only). Putting the full
-        # catalog here made page-load re-download every product twice.
         office_api.put_snapshot(
             _SNAPSHOT_META_NAME,
             {"refreshed_at": time.time(), "count": len(items)},
@@ -2202,28 +2160,21 @@ def _refresh_products_snapshot_bg(shopify_domain=None):
         now = time.time()
         if _office_snapshots_available():
             flat = _load_products_flat_from_snapshot()
-            if flat is None:
-                print("[retry] Products: bulk snapshot miss — trying per-item reads", flush=True)
-                flat = _load_products_flat_chunked()
             if flat is not None:
                 _store_overview_cache(flat, now)
-                _record_overview_last(source="office-bg", rows=len(flat), building=False)
                 age = _snapshot_age(now)
                 if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
-                    return
-        print("[retry] Products: background Shopify catalog rebuild", flush=True)
+                    return  # office snapshot is fresh enough - done cheaply
+                # Office snapshot is stale: rebuild it from Shopify.
         flat = _build_products_overview_from_shopify(shopify_domain)
         _write_products_snapshot(flat)
         _store_overview_cache(flat)
-        _record_overview_last(source="shopify-bg", rows=len(flat or []), building=False)
         try:
             refresh_family_snapshots()
         except Exception:
             pass
     except Exception as exc:
         logger.warning("Products: background refresh failed (%s)", exc)
-        print(f"[error] Products: background refresh failed: {exc}", flush=True)
-        _record_overview_last(source="error", error=exc, building=False)
     finally:
         with _PRODUCTS_REFRESH_LOCK:
             _PRODUCTS_REFRESH_IN_PROGRESS = False
@@ -2452,10 +2403,7 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     """
     All Products overview with stale-while-revalidate caching:
 
-      in-process tier (fast)  ->  office product snapshots  ->  building + background
-
-    Always reads the office catalog on a cold worker. Does not block the HTTP
-    request on a Shopify catalog scan.
+      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
     """
     now = time.time()
     t0 = time.perf_counter()
@@ -2463,65 +2411,38 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
     if not refresh and _PRODUCTS_OVERVIEW_CACHE is not None:
         if (now - _PRODUCTS_OVERVIEW_CACHE_AT) >= PRODUCTS_MEM_TTL:
             _kick_products_refresh(shopify_domain)
-        _record_overview_last(
-            source="memory",
-            rows=len(_PRODUCTS_FLAT_CACHE or []),
-            ms=int((time.perf_counter() - t0) * 1000),
-            building=False,
-        )
+        _record_overview_last(source="memory", rows=len(_PRODUCTS_FLAT_CACHE or []), ms=int((time.perf_counter() - t0) * 1000))
         return _PRODUCTS_OVERVIEW_CACHE
 
     if _office_snapshots_available():
-        print("[retry] Products: reading office catalog for All Products…", flush=True)
-        flat = _load_products_flat_from_snapshot(timeout=_OVERVIEW_REQUEST_TIMEOUT)
+        flat = _load_products_flat_from_snapshot()
         if flat is not None:
             organized = _store_overview_cache(flat, now)
             if refresh:
                 _kick_products_refresh(shopify_domain)
-            print(f"[ok] Products: serving {len(flat)} rows from office snapshot", flush=True)
-            _record_overview_last(
-                source="office",
-                rows=len(flat),
-                ms=int((time.perf_counter() - t0) * 1000),
-                building=False,
-            )
+            _record_overview_last(source="office", rows=len(flat), ms=int((time.perf_counter() - t0) * 1000))
             return organized
 
         if _PRODUCTS_OVERVIEW_CACHE is not None:
             _kick_products_refresh(shopify_domain)
-            _record_overview_last(
-                source="memory-stale",
-                rows=len(_PRODUCTS_FLAT_CACHE or []),
-                ms=int((time.perf_counter() - t0) * 1000),
-                building=False,
-            )
             return _PRODUCTS_OVERVIEW_CACHE
 
-        print("[warn] Products: office snapshot miss — background rebuild", flush=True)
-        _kick_products_refresh(shopify_domain)
-        empty = organize_products_for_overview([])
-        empty["building"] = True
-        _record_overview_last(
-            source="building",
-            ms=int((time.perf_counter() - t0) * 1000),
-            error="office snapshot miss; rebuilding in background",
-            building=True,
-        )
-        return empty
+        try:
+            flat = _build_products_overview_from_shopify(shopify_domain)
+        except Exception as exc:
+            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
+            flat = []
+        _write_products_snapshot(flat)
+        try:
+            refresh_family_snapshots()
+        except Exception:
+            pass
+        _record_overview_last(source="shopify", rows=len(flat or []), ms=int((time.perf_counter() - t0) * 1000))
+        return _store_overview_cache(flat, now)
 
-    if _PRODUCTS_OVERVIEW_CACHE is not None:
-        _kick_products_refresh(shopify_domain)
-        return _PRODUCTS_OVERVIEW_CACHE
-    _kick_products_refresh(shopify_domain)
-    empty = organize_products_for_overview([])
-    empty["building"] = True
-    _record_overview_last(
-        source="building",
-        ms=int((time.perf_counter() - t0) * 1000),
-        error="office not configured; rebuilding in background",
-        building=True,
-    )
-    return empty
+    flat = _build_products_overview_from_shopify(shopify_domain)
+    _record_overview_last(source="shopify", rows=len(flat or []), ms=int((time.perf_counter() - t0) * 1000))
+    return _store_overview_cache(flat, now)
 
 
 def products_load_health():

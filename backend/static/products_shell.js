@@ -266,14 +266,14 @@
             initToggle();
             initFromUrl();
             if (getParam('view') !== 'manager') {
-                setTimeout(warmManagerFrame, 12000);
+                setTimeout(warmManagerFrame, 1500);
             }
         });
     } else {
         initToggle();
         initFromUrl();
         if (getParam('view') !== 'manager') {
-            setTimeout(warmManagerFrame, 12000);
+            setTimeout(warmManagerFrame, 1500);
         }
     }
 })();

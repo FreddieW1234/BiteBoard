@@ -1297,7 +1297,7 @@ def get_snapshot_items(
     if since:
         params["since"] = since
     if timeout is None:
-        timeout = _SNAPSHOT_BULK_READ_TIMEOUT if include_payload else _SNAPSHOT_READ_TIMEOUT
+        timeout = _SNAPSHOT_READ_TIMEOUT
     resp = _request("GET", url, params=params or None, timeout=timeout)
     result = _handle_response(resp, allow_404=True)
     if not isinstance(result, dict):
