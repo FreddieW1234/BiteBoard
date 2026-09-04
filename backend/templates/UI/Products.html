@@ -1409,7 +1409,7 @@
             }, 4000);
             try {
                 const ctrl = new AbortController();
-                const timeout = setTimeout(() => ctrl.abort(), 25000);
+                const timeout = setTimeout(() => ctrl.abort(), 90000);
                 const resp = await fetch('/api/all-products', {
                     signal: ctrl.signal,
                     credentials: 'same-origin',
