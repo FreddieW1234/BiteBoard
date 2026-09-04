@@ -1252,7 +1252,7 @@ def print_label(
 # instead of tying up a request thread for the full _TIMEOUT.
 _SNAPSHOT_READ_TIMEOUT = 8
 # Full product-overview payloads (~all products) need longer than the hot-path cap.
-_SNAPSHOT_BULK_READ_TIMEOUT = 60
+_SNAPSHOT_BULK_READ_TIMEOUT = 45
 
 def _snapshots_base() -> str:
     return f"{OFFICE_API_URL.rstrip('/')}/snapshots"

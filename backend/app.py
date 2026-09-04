@@ -3000,6 +3000,7 @@ def api_all_products():
         result['success'] = True
         return jsonify(result)
     except Exception as e:
+        print(f"[error] /api/all-products failed: {type(e).__name__}: {e}", flush=True)
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
 
 
