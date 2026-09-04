@@ -84,6 +84,12 @@
         .dv-status.ok { color: #15803d; }
         .dv-status.err { color: #dc2626; }
         .dv-status.run { color: #b45309; }
+        .dv-health { font-size: 0.8rem; color: #374151; line-height: 1.55; }
+        .dv-health-grid { display: grid; grid-template-columns: 180px 1fr; gap: 4px 14px; }
+        .dv-health-grid dt { color: #6b7280; }
+        .dv-health-grid dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; word-break: break-word; }
+        .dv-health-ok { color: #15803d; font-weight: 600; }
+        .dv-health-bad { color: #dc2626; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -110,6 +116,21 @@
         <div class="main-wrap">
             <h1 class="page-title"><i class="fas fa-code"></i> Dev Files</h1>
             <p class="page-desc">Read-only view of the code deployed on this Render instance. This is not the Office server.</p>
+
+            <div class="dv-tools">
+                <p class="dv-tools-title"><i class="fas fa-heartbeat"></i> Server health</p>
+                <p class="dv-tools-desc">
+                    Live check of this Render worker, the office snapshot store, and the last
+                    All Products load. This does not download the full catalog.
+                </p>
+                <div class="dv-tools-row" style="margin-bottom:12px;">
+                    <button type="button" class="dv-btn" id="dv-health-refresh">
+                        <i class="fas fa-stethoscope"></i> Run healthcheck
+                    </button>
+                    <span class="dv-status" id="dv-health-status">Not run yet</span>
+                </div>
+                <div class="dv-health" id="dv-health-body">Click Run healthcheck.</div>
+            </div>
 
             <div class="dv-tools">
                 <p class="dv-tools-title"><i class="fas fa-database"></i> Products snapshot</p>
@@ -248,6 +269,48 @@
     document.getElementById('dv-up').addEventListener('click', function () { if (!atRoot) loadTree(parentPath); });
     document.getElementById('dv-refresh').addEventListener('click', function () { loadTree(currentPath); });
     document.getElementById('dv-filter').addEventListener('input', renderList);
+
+    function healthRow(label, value, cls) {
+        return '<dt>' + esc(label) + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(value == null || value === '' ? '—' : value) + '</dd>';
+    }
+
+    function runHealthcheck() {
+        var statusEl = document.getElementById('dv-health-status');
+        var body = document.getElementById('dv-health-body');
+        statusEl.className = 'dv-status run';
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+        fetch('/api/dev/products-health', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) throw new Error(d.error || 'Healthcheck failed');
+                var office = d.office || {};
+                var last = d.last_all_products || {};
+                var inflight = d.inflight || [];
+                var warmOk = d.mem_cache_warm ? 'dv-health-ok' : 'dv-health-bad';
+                var officeOk = office.items_index_error || office.meta_error ? 'dv-health-bad' : 'dv-health-ok';
+                body.innerHTML = '<dl class="dv-health-grid">' +
+                    healthRow('Office configured', d.office_configured ? 'yes' : 'no', d.office_configured ? 'dv-health-ok' : 'dv-health-bad') +
+                    healthRow('Office meta ping', (office.meta_ms != null ? office.meta_ms + ' ms' : '') + (office.meta_error ? '  ' + office.meta_error : ''), office.meta_error ? 'dv-health-bad' : '') +
+                    healthRow('Office product count', office.items_index_count != null ? office.items_index_count : office.meta_count, officeOk) +
+                    healthRow('Office index ping', office.items_index_ms != null ? office.items_index_ms + ' ms' : office.items_index_error, office.items_index_error ? 'dv-health-bad' : '') +
+                    healthRow('Mem cache', d.mem_cache_warm ? (d.mem_cache_rows + ' rows, ' + d.mem_cache_age_s + 's old') : 'cold', warmOk) +
+                    healthRow('Rebuild in progress', d.refresh_in_progress ? 'yes' : 'no') +
+                    healthRow('Last /api/all-products', (last.source || 'never') + (last.ms != null ? ' · ' + last.ms + ' ms' : '') + (last.rows != null ? ' · ' + last.rows + ' rows' : '')) +
+                    healthRow('Last load error', last.error || '') +
+                    healthRow('Force rebuild', (d.force_rebuild && d.force_rebuild.status) || 'idle') +
+                    healthRow('In-flight requests', inflight.length ? inflight.map(function (r) { return r.method + ' ' + r.path + ' (' + r.age_s + 's)'; }).join(' | ') : 'none') +
+                    '</dl>';
+                statusEl.className = 'dv-status ok';
+                statusEl.textContent = 'Checked ' + new Date().toLocaleTimeString();
+            })
+            .catch(function (err) {
+                body.innerHTML = '<span class="dv-health-bad">' + esc(err.message || 'Healthcheck failed') + '</span>';
+                statusEl.className = 'dv-status err';
+                statusEl.textContent = err.message || 'Failed';
+            });
+    }
+    document.getElementById('dv-health-refresh').addEventListener('click', runHealthcheck);
+    runHealthcheck();
 
     // ---- Force Shopify → office products overwrite ----
     var rebuildTimer = null;

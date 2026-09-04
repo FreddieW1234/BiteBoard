@@ -1390,20 +1390,26 @@
         }
         window.removeAllProductsRow = removeAllProductsRow;
 
+        let _apInflight = false;
+        let _apBuildPolls = 0;
         async function loadProducts(forceRefresh) {
+            if (_apInflight) return;
+            _apInflight = true;
             const content = document.getElementById('ap-content');
             const gapsEl = document.getElementById('ap-pc-gaps');
             editingColumn = null;
             updateEditBar();
             if (gapsEl) { gapsEl.hidden = true; gapsEl.innerHTML = ''; }
-            content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            if (_apBuildPolls === 0) {
+                content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading products… <span id="ap-slow"></span></div>`;
+            }
             const slowTimer = setTimeout(() => {
                 const el = document.getElementById('ap-slow');
-                if (el) el.textContent = '(fetching product list from office snapshot…)';
-            }, 8000);
+                if (el) el.textContent = '(office snapshot…)';
+            }, 4000);
             try {
                 const ctrl = new AbortController();
-                const timeout = setTimeout(() => ctrl.abort(), 180000);
+                const timeout = setTimeout(() => ctrl.abort(), 25000);
                 const resp = await fetch('/api/all-products', {
                     signal: ctrl.signal,
                     credentials: 'same-origin',
@@ -1414,13 +1420,32 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
+                const groups = data.groups || [];
+                const unassigned = data.unassigned || [];
+                const misaligned = data.misaligned || [];
+                const hasRows = groups.length || unassigned.length || misaligned.length;
+                if (data.building && !hasRows) {
+                    _apBuildPolls += 1;
+                    if (_apBuildPolls > 48) {
+                        _apBuildPolls = 0;
+                        content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>Still loading the catalog. Open Dev → Server health to see why, or try again.<br><br><button type="button" class="btn-ghost" onclick="_apBuildPolls=0;loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+                        return;
+                    }
+                    content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading product catalog… <span id="ap-slow">will appear as soon as the office snapshot is ready</span></div>`;
+                    setTimeout(function() { loadProducts(); }, 2500);
+                    return;
+                }
+                _apBuildPolls = 0;
+                AP_DATA = { groups, unassigned, misaligned };
                 render(AP_DATA);
                 applySearch();
             } catch (err) {
                 clearTimeout(slowTimer);
+                _apBuildPolls = 0;
                 const msg = err.name === 'AbortError' ? 'Request timed out — the server took too long to respond.' : (err.message || 'Failed to load products');
                 content.innerHTML = `<div class="state-msg error-msg"><i class="fas fa-triangle-exclamation"></i>${escapeHtml(msg)}<br><br><button type="button" class="btn-ghost" onclick="loadProducts()"><i class="fas fa-rotate"></i> Try again</button></div>`;
+            } finally {
+                _apInflight = false;
             }
         }
 

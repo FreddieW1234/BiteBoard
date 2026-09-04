@@ -169,6 +169,17 @@ def _dev_products_snapshot_status():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+def _dev_products_health():
+    """Fast office/cache/in-flight diagnostics for the Dev page."""
+    try:
+        from scripts.product_creator.Product_Creator import products_load_health  # type: ignore
+        data = products_load_health()
+        data["success"] = True
+        return jsonify(data)
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 def init_dev_browser(app):
     """Register the Dev browser page and its JSON endpoints.
 
@@ -187,5 +198,11 @@ def init_dev_browser(app):
         "/api/dev/products-snapshot-status",
         "dev_products_snapshot_status",
         _dev_products_snapshot_status,
+        methods=["GET"],
+    )
+    app.add_url_rule(
+        "/api/dev/products-health",
+        "dev_products_health",
+        _dev_products_health,
         methods=["GET"],
     )
