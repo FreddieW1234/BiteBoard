@@ -2091,7 +2091,17 @@ def _record_overview_last(*, source, rows=None, ms=None, error=None, building=Fa
 def _load_products_flat_from_snapshot():
     """Flat overview rows from the office snapshot, or None if unavailable/empty."""
     try:
-        items = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=True)
+        t0 = time.time()
+        items = office_api.get_snapshot_items(
+            _SNAPSHOT_KIND,
+            include_payload=True,
+            timeout=office_api._SNAPSHOT_BULK_READ_TIMEOUT,
+        )
+        print(
+            f"[ok] Products: office snapshot {len(items or [])} items "
+            f"in {int((time.time() - t0) * 1000)}ms",
+            flush=True,
+        )
     except Exception as exc:
         logger.warning("Products: snapshot read failed (%s)", exc)
         print(f"[warn] Products: snapshot read failed: {exc}", flush=True)
@@ -2400,11 +2410,7 @@ def product_ids_from_save_result(result, fallback_id=None):
 
 
 def get_all_products_overview(shopify_domain=None, refresh=False):
-    """
-    All Products overview with stale-while-revalidate caching:
-
-      in-process tier (fast)  ->  shared office snapshot  ->  Shopify (cold miss)
-    """
+    """in-process cache -> office product snapshots. Shopify only in the background."""
     now = time.time()
     t0 = time.perf_counter()
 
@@ -2418,8 +2424,6 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
         flat = _load_products_flat_from_snapshot()
         if flat is not None:
             organized = _store_overview_cache(flat, now)
-            if refresh:
-                _kick_products_refresh(shopify_domain)
             _record_overview_last(source="office", rows=len(flat), ms=int((time.perf_counter() - t0) * 1000))
             return organized
 
@@ -2427,22 +2431,58 @@ def get_all_products_overview(shopify_domain=None, refresh=False):
             _kick_products_refresh(shopify_domain)
             return _PRODUCTS_OVERVIEW_CACHE
 
-        try:
-            flat = _build_products_overview_from_shopify(shopify_domain)
-        except Exception as exc:
-            logger.warning("Products: Shopify build failed on cold miss (%s)", exc)
-            flat = []
-        _write_products_snapshot(flat)
-        try:
-            refresh_family_snapshots()
-        except Exception:
-            pass
-        _record_overview_last(source="shopify", rows=len(flat or []), ms=int((time.perf_counter() - t0) * 1000))
-        return _store_overview_cache(flat, now)
+        _kick_products_refresh(shopify_domain)
+        empty = organize_products_for_overview([])
+        empty["error"] = "Office catalog did not load. Retry in a moment — it is rebuilding in the background."
+        _record_overview_last(
+            source="office-miss",
+            ms=int((time.perf_counter() - t0) * 1000),
+            error=empty["error"],
+            building=True,
+        )
+        return empty
 
-    flat = _build_products_overview_from_shopify(shopify_domain)
-    _record_overview_last(source="shopify", rows=len(flat or []), ms=int((time.perf_counter() - t0) * 1000))
-    return _store_overview_cache(flat, now)
+    _kick_products_refresh(shopify_domain)
+    empty = organize_products_for_overview([])
+    empty["error"] = "Office snapshot store is not configured."
+    _record_overview_last(source="no-office", error=empty["error"], ms=int((time.perf_counter() - t0) * 1000))
+    return empty
+
+
+def overview_for_client(organized):
+    """Shallow-copy the overview without fields_full so the JSON response stays small."""
+    if not isinstance(organized, dict):
+        return organized
+
+    def strip_list(items):
+        out = []
+        for p in items or []:
+            if isinstance(p, dict):
+                row = dict(p)
+                row.pop("fields_full", None)
+                out.append(row)
+            else:
+                out.append(p)
+        return out
+
+    groups = []
+    for g in organized.get("groups") or []:
+        subgroups = []
+        for sg in (g or {}).get("subgroups") or []:
+            subgroups.append({
+                "subcategory": (sg or {}).get("subcategory"),
+                "products": strip_list((sg or {}).get("products")),
+            })
+        groups.append({"category": (g or {}).get("category"), "subgroups": subgroups})
+    out = {
+        "groups": groups,
+        "unassigned": strip_list(organized.get("unassigned")),
+        "misaligned": strip_list(organized.get("misaligned")),
+    }
+    for key, value in organized.items():
+        if key not in out:
+            out[key] = value
+    return out
 
 
 def products_load_health():

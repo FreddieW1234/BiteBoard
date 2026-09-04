@@ -1415,6 +1415,10 @@
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
                 AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
+                const hasRows = (AP_DATA.groups.length || AP_DATA.unassigned.length || AP_DATA.misaligned.length);
+                if (!hasRows && data.error) {
+                    throw new Error(data.error);
+                }
                 render(AP_DATA);
                 applySearch();
             } catch (err) {

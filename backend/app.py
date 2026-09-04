@@ -2994,9 +2994,9 @@ def api_products_parent_child_tree():
 def api_all_products():
     """Return every product organised by category -> subcategory (alphabetical) with SKU + title for the All Products page."""
     try:
-        from scripts.product_creator.Product_Creator import get_all_products_overview
+        from scripts.product_creator.Product_Creator import get_all_products_overview, overview_for_client
         refresh = (request.args.get('refresh') or '').lower() in ('1', 'true', 'yes')
-        result = get_all_products_overview(refresh=refresh)
+        result = overview_for_client(get_all_products_overview(refresh=refresh))
         result['success'] = True
         return jsonify(result)
     except Exception as e:
