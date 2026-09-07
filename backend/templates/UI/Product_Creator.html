@@ -4621,6 +4621,9 @@
             'customoption3name', 'customoption3options',
         ]);
 
+        // Always include these even when blank so Shopify deletes the old value.
+        const CLEAR_ON_BLANK_METAFIELD_KEYS = new Set(['diameter']);
+
         // Collect all metafield data from the form
         function collectMetafieldsData() {
             const metafieldsData = [];
@@ -4853,8 +4856,9 @@
                             }
                         }
                         
-                        // Only include metafields that have values
-                        if (value && (Array.isArray(value) ? value.length > 0 : value)) {
+                        // Skip empty fields unless they must be sent so Shopify can clear them.
+                        const hasValue = value && (Array.isArray(value) ? value.length > 0 : value);
+                        if (hasValue || CLEAR_ON_BLANK_METAFIELD_KEYS.has(key)) {
                             // Force list type for category and subcategory to mirror Field Finder
                             const forcedType = (key === 'custom_category' || (key && key.startsWith('subcategory'))) ? 'list.single_line_text_field' : metafieldType;
                             
