@@ -564,7 +564,7 @@ def _child_inherited_keys_to_skip(intended_data: dict) -> set:
             return {
                 "leadtime1", "leadtime2", "leadtime3",
                 "moq", "origination", "shelf_life", "unit_weight",
-                "case_quantity", "case_weight", "product_size",
+                "case_quantity", "case_weight", "product_size", "diameter",
             }
 
 

@@ -3174,7 +3174,7 @@ MANAGED_STOREFRONT_KEYS = (
 PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS = frozenset({
     "sku",
     "ingredients", "nutritional_info", "print_info", "recycle_info", "whats_inside", "productinfo",
-    "product_size", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
+    "product_size", "diameter", "moq", "origination", "shelf_life", "unit_weight", "case_quantity",
     "case_weight", "leadtime3", "leadtime1", "leadtime2", "commodity_code", "alternative_spellings",
     "vegan", "vegetarian", "halal", "coeliac", "kosher",
     "peanuts", "nuts", "sesame", "egg", "cereals", "soya", "milk",

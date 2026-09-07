@@ -845,6 +845,11 @@
             min-height: 60px;
         }
 
+        input.metafield-value:not(.product-size-field) {
+            min-height: 40px;
+            resize: none;
+        }
+
         .metafield-value:focus {
             outline: none;
             border-color: #4f46e5;
@@ -1546,6 +1551,7 @@
         .pc-create-from-parent .metafield-item[data-metafield-key="print_info"],
         .pc-create-from-parent .metafield-item[data-metafield-key="recycle_info"],
         .pc-create-from-parent .metafield-item[data-metafield-key="product_size"],
+        .pc-create-from-parent .metafield-item[data-metafield-key="diameter"],
         .pc-create-from-parent .metafield-item[data-metafield-key="moq"],
         .pc-create-from-parent .metafield-item[data-metafield-key="origination"],
         .pc-create-from-parent .metafield-item[data-metafield-key="shelf_life"],
@@ -4601,7 +4607,7 @@
         const CHILD_INHERITED_METAFIELD_KEYS = new Set([
             'sku',
             'ingredients', 'nutritional_info', 'print_info', 'recycle_info', 'whats_inside',
-            'product_size', 'moq', 'origination', 'shelf_life', 'unit_weight',
+            'product_size', 'diameter', 'moq', 'origination', 'shelf_life', 'unit_weight',
             'case_quantity', 'case_weight', 'leadtime3', 'leadtime1', 'leadtime2',
             'commodity_code', 'alternative_spellings',
             'vegan', 'vegetarian', 'halal', 'coeliac', 'kosher',
@@ -5907,6 +5913,15 @@
                             id: null
                         });
                     }
+                    if (!existingKeys.has('diameter')) {
+                        emptyMetafields.push({
+                            namespace: 'custom',
+                            key: 'diameter',
+                            type: 'single_line_text_field',
+                            value: '',
+                            id: null
+                        });
+                    }
                     // Subcategory_2, subcategory_3 etc. are overflow keys only; one UI dropdown covers all
                     
                     console.log('Displaying metafields with cleared values for new product');
@@ -5972,6 +5987,7 @@
                 'commodity_code': 'Commodity Code',
                 'alternative_spellings': 'Alternative Spellings',
                 'product_size': 'Product Size in mm (l*w*h)',
+                'diameter': 'Diameter',
                 'custom_category': 'Category',
                 'subcategory': 'Subcategory',
                 'categorysub': 'Category & Subcategory',
@@ -6129,6 +6145,16 @@
                     id: null,
                 }]);
             }
+            // Diameter sits after Product Size even when the metafield has no value yet.
+            if (!metafields.some(m => m && m.key === 'diameter' && (m.namespace || 'custom') === 'custom')) {
+                metafields = metafields.concat([{
+                    namespace: 'custom',
+                    key: 'diameter',
+                    type: 'single_line_text_field',
+                    value: '',
+                    id: null,
+                }]);
+            }
 
             metafields = (metafields || []).filter(m => m && m.key !== 'packingfee');
             if (window.AllergenMapping && typeof AllergenMapping.ensureDietaryMetafields === 'function') {
@@ -6150,6 +6176,7 @@
                 "recycle_info",
                 "whats_inside",
                 "product_size",
+                "diameter",
                 "sku",
                 "moq",
                 "origination",
@@ -6191,6 +6218,11 @@
                     if (cc >= 0) order.splice(cc + 1, 0, 'alternative_spellings');
                     else if (vg >= 0) order.splice(vg, 0, 'alternative_spellings');
                     else order.push('alternative_spellings');
+                }
+                if (!order.includes('diameter')) {
+                    const ps = order.indexOf('product_size');
+                    if (ps >= 0) order.splice(ps + 1, 0, 'diameter');
+                    else order.push('diameter');
                 }
                 
                         const byKey = new Map();
@@ -6266,6 +6298,7 @@
                 
                 // Special handling for product_size field - create 3 separate input fields
                 const isProductSize = metafield.key === 'product_size';
+                const isDiameter = metafield.key === 'diameter';
                 
                 // Check if this metafield has predefined options (list types OR single_line_text_field with choices)
                 // BUT emoji fields and long-text fields (ingredients, nutritional_info) always use textareas so autofill and multi-line save correctly
@@ -6284,7 +6317,7 @@
                 // For fields with multiple real options (but NOT emoji fields), create a dropdown; otherwise use textarea
                 let inputElement;
                 
-                console.log(`🔍 Processing ${metafield.key}: isProductSize=${isProductSize}, hasEmojiButtons=${hasEmojiButtons}, hasOptions=${hasOptions}`);
+                console.log(`🔍 Processing ${metafield.key}: isProductSize=${isProductSize}, isDiameter=${isDiameter}, hasEmojiButtons=${hasEmojiButtons}, hasOptions=${hasOptions}`);
                 
                 // Free-text list editor for Alternative Spellings (not a choices dropdown).
                 if (isFreeTextList) {
@@ -6305,6 +6338,8 @@
                             <input type="text" class="metafield-value product-size-field" data-key="${metafield.key || ''}" data-namespace="${metafield.namespace || 'custom'}" data-type="${metafield.type || 'single_line_text_field'}" data-part="height" placeholder="Height" value="${height}" style="flex: 1; padding: 8px;">
                         </div>
                     `;
+                } else if (isDiameter) {
+                    inputElement = `<input type="text" class="metafield-value" data-id="${metafield.id || 'null'}" data-namespace="${metafield.namespace || 'custom'}" data-key="${metafield.key || ''}" data-type="${metafield.type || 'single_line_text_field'}" value="${currentValue}" autocomplete="off">`;
                 } else if (metafield.key === 'categorysub') {
                     // Combined Category & Subcategory dropdown: categories are bold headings, subcategories are selectable
                     console.log(`🔧 Creating combined category & subcategory dropdown`);
