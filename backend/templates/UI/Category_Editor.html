@@ -82,15 +82,31 @@
         .inline-create-category { margin-top: 12px; }
 
         .sub-insert-gap {
-            position: relative; z-index: 2; height: 12px; margin: -2px 0;
+            position: relative; z-index: 2;
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 0 8px 36px;
+            box-sizing: border-box;
+        }
+        .sub-insert-plus {
+            flex-shrink: 0; width: 20px; height: 20px; padding: 0;
+            border: none; border-radius: 50%;
+            background: #4f46e5; color: #fff;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.65rem; cursor: pointer; opacity: 0;
+            box-shadow: 0 0 0 2px #f8f9fa;
+        }
+        .sub-insert-plus:hover { background: #4338ca; }
+        .sub-insert-line {
+            flex: 1; height: 2px; background: #4f46e5; border-radius: 1px; opacity: 0;
         }
         .sub-insert-gap .inline-create-input { display: none; }
-        .sub-insert-gap:hover,
-        .sub-insert-gap:focus-within {
-            height: auto; margin: 2px 0; z-index: 3;
+        .sub-insert-gap:hover .sub-insert-plus,
+        .sub-insert-gap:hover .sub-insert-line {
+            opacity: 1;
         }
-        .sub-insert-gap:hover .inline-create-input,
-        .sub-insert-gap:focus-within .inline-create-input { display: block; }
+        .sub-insert-gap.open .sub-insert-plus,
+        .sub-insert-gap.open .sub-insert-line { display: none; opacity: 0; }
+        .sub-insert-gap.open .inline-create-input { display: block; }
 
         .menu-name-input {
             flex: 1; min-width: 0; width: 100%; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.35);
@@ -337,6 +353,8 @@
                     });
                     html += `</div></div>
                     <div class="sub-insert-gap">
+                        <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
+                        <span class="sub-insert-line"></span>
                         <input type="text" class="inline-create-input" data-create="sub_subcategory"
                                data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
                                placeholder="Create sub-subcategory" autocomplete="off">
@@ -535,6 +553,16 @@
             list.addEventListener('dragend', finishDrag);
 
             list.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    const gap = e.target.closest('.sub-insert-gap');
+                    if (gap && list.contains(gap)) {
+                        const input = gap.querySelector('.inline-create-input');
+                        gap.classList.remove('open');
+                        if (input) { input.value = ''; input.blur(); }
+                        e.preventDefault();
+                    }
+                    return;
+                }
                 if (e.key !== 'Enter') return;
                 const input = e.target.closest('.inline-create-input');
                 if (!input || !list.contains(input)) return;
@@ -543,10 +571,19 @@
             });
 
             list.addEventListener('click', (e) => {
+                const plus = e.target.closest('.sub-insert-plus');
+                const line = e.target.closest('.sub-insert-line');
                 const gap = e.target.closest('.sub-insert-gap');
-                if (!gap || !list.contains(gap)) return;
+                if (!gap || !list.contains(gap) || gap.classList.contains('open')) return;
+                if (!plus && !line) return;
+                e.preventDefault();
+                e.stopPropagation();
+                list.querySelectorAll('.sub-insert-gap.open').forEach((g) => {
+                    if (g !== gap) g.classList.remove('open');
+                });
+                gap.classList.add('open');
                 const input = gap.querySelector('.inline-create-input');
-                if (input && e.target !== input) input.focus();
+                if (input) input.focus();
             });
         }
 
