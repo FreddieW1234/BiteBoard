@@ -644,11 +644,9 @@
             const children = (p && p.sub_subcategories) || [];
             const subs = (p && p.subcategories) || [];
             const cats = (p && p.categories) || [];
-            const labels = [];
-            children.forEach((c) => { if (c && !labels.includes(c)) labels.push(c); });
-            subs.forEach((s) => { if (s && !labels.includes(s)) labels.push(s); });
-            if (!labels.length) cats.forEach((c) => { if (c && !labels.includes(c)) labels.push(c); });
-            return labels.join(', ');
+            if (children.length) return children.join(', ');
+            if (subs.length) return subs.join(', ');
+            return cats.join(', ');
         }
 
         function categoryCellHtml(p) {
@@ -666,6 +664,8 @@
         let apCatChildCount = {};
         let apCatOpenPid = null;
         const apCatSaveTimers = {};
+        const apCatLatest = {};
+        const apCatSavedSig = {};
         let apCatWriteChain = Promise.resolve();
 
         function normalizeSubEntry(entry) {
@@ -751,7 +751,11 @@
             cb.id = id;
             cb.value = value;
             cb.setAttribute('data-category', category);
-            if (subcategory) cb.setAttribute('data-subcategory', subcategory);
+            cb.setAttribute('data-kind', child ? 'child' : 'sub');
+            if (subcategory) {
+                cb.setAttribute('data-subcategory', subcategory);
+                cb.setAttribute('data-parent-sub', subcategory);
+            }
             const lab = document.createElement('label');
             lab.htmlFor = id;
             lab.textContent = label;
@@ -827,7 +831,8 @@
                     if (check && (apCatChildCount[val] || 1) > 1 && cats.length) check = cats.includes(cat);
                     if (check && (apCatSubCount[parentSub] || 1) > 1 && cats.length) check = cats.includes(cat);
                 } else {
-                    check = subs.includes(val);
+                    // "All {sub}" / leaf sub — don't tick this when a child of it is selected
+                    check = !children.length && subs.includes(val);
                     if (check && (apCatSubCount[val] || 1) > 1 && cats.length) check = cats.includes(cat);
                 }
                 cb.checked = check;
@@ -840,12 +845,18 @@
             const subs = [];
             const children = [];
             if (!panel) return { categories: cats, subcategories: subs, sub_subcategories: children };
-            panel.querySelectorAll('input[type="checkbox"][data-category]:checked').forEach((cb) => {
+            panel.querySelectorAll('input[type="checkbox"][data-category]').forEach((cb) => {
+                if (!cb.checked) return;
                 const val = (cb.value || '').trim();
                 const cat = (cb.getAttribute('data-category') || '').trim();
-                const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
+                const kind = (cb.getAttribute('data-kind') || '').trim();
+                const parentSub = (
+                    cb.getAttribute('data-subcategory')
+                    || cb.getAttribute('data-parent-sub')
+                    || ''
+                ).trim();
                 if (cat) cats.push(cat);
-                if (parentSub) {
+                if (kind === 'child' || parentSub) {
                     if (val) children.push(val);
                     if (parentSub) subs.push(parentSub);
                 } else if (val) {
@@ -905,36 +916,54 @@
             if (search) search.focus();
         }
 
-        function applyApCatChange() {
+        function applyApCatChange(fromCb) {
             if (!apCatOpenPid) return;
             const p = findProductById(apCatOpenPid);
             if (!p) return;
             const sel = readApCatSelection();
+            if (fromCb && fromCb.checked && (fromCb.getAttribute('data-kind') === 'child')) {
+                const val = (fromCb.value || '').trim();
+                const cat = (fromCb.getAttribute('data-category') || '').trim();
+                const parentSub = (fromCb.getAttribute('data-subcategory') || fromCb.getAttribute('data-parent-sub') || '').trim();
+                if (val && !sel.sub_subcategories.includes(val)) sel.sub_subcategories.push(val);
+                if (parentSub && !sel.subcategories.includes(parentSub)) sel.subcategories.push(parentSub);
+                if (cat && !sel.categories.includes(cat)) sel.categories.push(cat);
+            }
             p.categories = sel.categories;
             p.subcategories = sel.subcategories;
             p.sub_subcategories = sel.sub_subcategories;
+            apCatLatest[String(apCatOpenPid)] = {
+                categories: sel.categories.slice(),
+                subcategories: sel.subcategories.slice(),
+                sub_subcategories: sel.sub_subcategories.slice(),
+            };
             updateApCatTrigger(apCatOpenPid, categorySummary(p));
             queueCategorySave(apCatOpenPid);
         }
 
         function queueCategorySave(pid) {
-            clearTimeout(apCatSaveTimers[pid]);
-            apCatSaveTimers[pid] = setTimeout(() => {
-                const p = findProductById(pid);
-                if (!p) return;
-                const snapshot = {
-                    categories: (p.categories || []).slice(),
-                    subcategories: (p.subcategories || []).slice(),
-                    sub_subcategories: (p.sub_subcategories || []).slice(),
-                };
-                apCatWriteChain = apCatWriteChain.then(() => saveCategoryNow(pid, snapshot)).catch(() => {});
-            }, 350);
+            const id = String(pid);
+            clearTimeout(apCatSaveTimers[id]);
+            apCatSaveTimers[id] = setTimeout(() => {
+                apCatWriteChain = apCatWriteChain
+                    .then(() => {
+                        const snapshot = apCatLatest[id];
+                        if (!snapshot) return;
+                        return saveCategoryNow(id, snapshot);
+                    })
+                    .catch(() => {});
+            }, 400);
         }
 
         async function saveCategoryNow(pid, snapshot) {
+            const sig = JSON.stringify(snapshot);
+            if (apCatSavedSig[String(pid)] === sig) return;
             const json = (arr) => (arr && arr.length ? JSON.stringify(arr) : '');
             const updates = [{
-                id: Number(pid),
+                id: pid,
+                categories: snapshot.categories || [],
+                subcategories: snapshot.subcategories || [],
+                sub_subcategories: snapshot.sub_subcategories || [],
                 metafields: [
                     { namespace: 'custom', key: 'custom_category', type: 'list.single_line_text_field', value: json(snapshot.categories) },
                     { namespace: 'custom', key: 'subcategory', type: 'list.single_line_text_field', value: json(snapshot.subcategories) },
@@ -952,6 +981,7 @@
                 updateApCatTrigger(pid, categorySummary(findProductById(pid) || snapshot), msg);
                 throw new Error(msg);
             }
+            apCatSavedSig[String(pid)] = sig;
             updateApCatTrigger(pid, categorySummary(findProductById(pid) || snapshot));
         }
 
@@ -1877,7 +1907,17 @@
             const catDd = document.getElementById('ap-cat-dd');
             if (catDd) {
                 catDd.addEventListener('change', function(e) {
-                    if (e.target && e.target.matches('input[type="checkbox"]')) applyApCatChange();
+                    if (e.target && e.target.matches('input[type="checkbox"]')) applyApCatChange(e.target);
+                });
+                catDd.addEventListener('click', function(e) {
+                    const opt = e.target.closest('.ap-cat-opt');
+                    if (!opt) return;
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+                    const cb = opt.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+                    e.preventDefault();
+                    cb.checked = !cb.checked;
+                    applyApCatChange(cb);
                 });
                 const search = catDd.querySelector('.ap-cat-dd-search');
                 if (search) {

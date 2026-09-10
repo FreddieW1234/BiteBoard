@@ -1750,6 +1750,94 @@ def _build_overview_product(pid, title, mf_map, graphql_node=None):
     }
 
 
+def update_product_taxonomy_choices(product_id, categories=None, subcategories=None, sub_subcategories=None):
+    """
+    Write category / subcategory / sub-sub via GraphQL metafieldsSet.
+
+    REST product metafields 404 on API 2025-07; this matches the product editor
+    overflow routing (subcategory_2 / sub_subcategory_2).
+    """
+    from shopify_client.bite_shopify import Shopify, ShopifyError, _product_gid
+    from .categories import get_subcategory_metafield_key, get_sub_subcategory_metafield_key
+
+    gid = _product_gid(product_id)
+    if not gid:
+        raise ValueError(f"Invalid product id: {product_id}")
+
+    cats = [str(v).strip() for v in (categories or []) if str(v).strip()]
+    subs = [str(v).strip() for v in (subcategories or []) if str(v).strip()]
+    children = [str(v).strip() for v in (sub_subcategories or []) if str(v).strip()]
+
+    by_sub = {}
+    for label in subs:
+        by_sub.setdefault(get_subcategory_metafield_key(label), []).append(label)
+    by_child = {}
+    for label in children:
+        by_child.setdefault(get_sub_subcategory_metafield_key(label), []).append(label)
+
+    pairs = [
+        ("custom_category", cats),
+        ("subcategory", by_sub.get("subcategory") or []),
+        ("subcategory_2", by_sub.get("subcategory_2") or []),
+        ("sub_subcategory", by_child.get("sub_subcategory") or []),
+        ("sub_subcategory_2", by_child.get("sub_subcategory_2") or []),
+    ]
+
+    shop = Shopify()
+    to_set = [
+        {
+            "ownerId": gid,
+            "namespace": "custom",
+            "key": key,
+            "type": "list.single_line_text_field",
+            "value": json.dumps(vals),
+        }
+        for key, vals in pairs
+        if vals
+    ]
+    to_delete = [
+        {"ownerId": gid, "namespace": "custom", "key": key}
+        for key, vals in pairs
+        if not vals
+    ]
+
+    if to_set:
+        result = shop.gql(
+            """
+          mutation($mf: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $mf) {
+              metafields { id key }
+              userErrors { field message code }
+            }
+          }
+        """,
+            {"mf": to_set},
+        )["metafieldsSet"]
+        shop._check(result, "metafieldsSet")
+
+    if to_delete:
+        result = shop.gql(
+            """
+          mutation($metafields: [MetafieldIdentifierInput!]!) {
+            metafieldsDelete(metafields: $metafields) {
+              deletedMetafields { key namespace }
+              userErrors { field message }
+            }
+          }
+        """,
+            {"metafields": to_delete},
+        )["metafieldsDelete"]
+        errs = [
+            e
+            for e in (result.get("userErrors") or [])
+            if "does not exist" not in str(e.get("message") or "").lower()
+        ]
+        if errs:
+            raise ShopifyError(f"metafieldsDelete: {errs}")
+
+    return {"success": True}
+
+
 def organize_products_for_overview(products):
     """
     Organise flat product overview records into groups / unassigned / misaligned
@@ -4275,6 +4363,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                 errors.append(f"Error deleting {namespace}.{key}: {e}")
                         else:
                             print(f"[info] No existing metafield found for {namespace}.{key} - nothing to delete", flush=True)
+                            success_count += 1
                         continue
                     # Has value: fall through to create/update
 

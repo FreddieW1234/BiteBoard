@@ -775,9 +775,59 @@ class Shopify:
             }
           }
         """, {"input": payload})["collectionCreate"]
-        return self._check(result, "collectionCreate")["collection"]
+        col = self._check(result, "collectionCreate")["collection"]
+        self.publish_to_all_channels(col["id"])
+        return col
 
     # ---------------------------------------------------------- publications
+    def all_publication_ids(self):
+        """Every sales-channel publication GID (Online Store, POS, Shop, …)."""
+        if "all_pubs" in self._cache:
+            return self._cache["all_pubs"]
+        out, cursor = [], None
+        while True:
+            data = self.gql(
+                """
+              query($cursor: String) {
+                publications(first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  edges { node { id } }
+                }
+              }
+            """,
+                {"cursor": cursor},
+            )
+            block = data["publications"]
+            for edge in block["edges"]:
+                pid = (edge.get("node") or {}).get("id")
+                if pid:
+                    out.append(pid)
+            if not block["pageInfo"]["hasNextPage"]:
+                break
+            cursor = block["pageInfo"]["endCursor"]
+            if not cursor:
+                break
+        self._cache["all_pubs"] = out
+        return out
+
+    def publish_to_all_channels(self, resource_id):
+        """Publish a collection or product to every sales channel."""
+        pubs = self.all_publication_ids()
+        if not pubs:
+            return None
+        result = self.gql(
+            """
+          mutation($id: ID!, $input: [PublicationInput!]!) {
+            publishablePublish(id: $id, input: $input) {
+              publishable { availablePublicationsCount { count } }
+              userErrors { field message }
+            }
+          }
+        """,
+            {"id": resource_id, "input": [{"publicationId": p} for p in pubs]},
+        )["publishablePublish"]
+        return self._check(result, "publishablePublish")
+
     def set_published(self, collection_id, published):
         pub = self.online_store_publication_id()
         if published:

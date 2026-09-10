@@ -205,8 +205,8 @@
                 <div class="app-tabs">
                     <a href="/app/Products" class="app-tab"><i class="fas fa-box-open"></i><span>Products</span></a>
                     <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
-                    <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
-                    <a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
+                                        <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+<a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
                                         <a href="/app/Menu" class="app-tab active"><i class="fas fa-sitemap"></i><span>Menu</span></a>
                     {% if staff_show_dev_tabs %}
                     <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
@@ -228,17 +228,17 @@
                 <h2><i class="fas fa-sitemap"></i> Categories</h2>
                 <div class="item-list" id="categoriesList">
                     <div class="empty-state muted">Loading…</div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
     <div class="meta-modal-backdrop" id="metaModal" onclick="if(event.target===this)closeMetaModal()">
         <div class="meta-modal" role="dialog" aria-modal="true" aria-labelledby="metaModalTitle">
             <div class="meta-modal-header">
                 <h2 id="metaModalTitle"><i class="fas fa-sliders"></i> Collection settings</h2>
                 <button type="button" class="btn btn-secondary" onclick="closeMetaModal()">Close</button>
-            </div>
+                </div>
             <div class="muted" id="metaKind"></div>
             <label>SEO title</label>
             <input type="text" id="metaSeoTitle">
@@ -248,7 +248,7 @@
             <div style="display:flex; gap:6px;">
                 <input type="text" id="metaHandle" style="flex:1;" disabled>
                 <button class="btn btn-secondary" type="button" id="unlockHandleBtn" onclick="toggleHandleUnlock()">Unlock</button>
-            </div>
+                </div>
             <div id="handleRenameRow" style="display:none; margin-top:8px;">
                 <input type="text" id="metaNewHandle" placeholder="new-handle">
                 <button class="btn btn-primary" style="margin-top:6px;" type="button" onclick="renameHandle()">Rename + redirect</button>
@@ -261,8 +261,8 @@
                 <button class="btn btn-secondary" type="button" onclick="closeMetaModal()">Cancel</button>
                 <button class="btn btn-success" type="button" onclick="saveMetadata()">
                     <i class="fas fa-check"></i> Save
-                </button>
-            </div>
+            </button>
+        </div>
             <p class="meta-hint" id="metaDeleteHint" style="margin-top:8px;"></p>
         </div>
     </div>
@@ -472,8 +472,8 @@
                                onchange="setDisplayLabel('${escapeHtml(catHandle)}', this.value)">
                         <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(catHandle)}')">
                             <i class="fas fa-sliders"></i>
-                        </button>
-                    </div>
+                                </button>
+                            </div>
                     <div class="subcategories-container" data-drop="sub">`;
                 subs.forEach((sub) => {
                     const sh = sub.handle || '';
@@ -511,7 +511,7 @@
                             <div class="sub-insert-hit">
                                 <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
                                 <span class="sub-insert-line"></span>
-                            </div>
+                                        </div>
                             <input type="text" class="inline-create-input" data-create="sub_subcategory"
                                    data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
                                    placeholder="Create sub-subcategory" autocomplete="off">
@@ -521,7 +521,7 @@
                 html += `<div class="inline-create-sub">
                         <input type="text" class="inline-create-input" data-create="subcategory"
                                data-category="${escapeHtml(catValue)}" placeholder="Create subcategory" autocomplete="off">
-                    </div>
+                                    </div>
                     </div></div>`;
             });
             html += `<div class="inline-create-category">
@@ -626,12 +626,12 @@
 
             list.addEventListener('dragstart', (e) => {
                 if (!dragState || !dragState.el.contains(e.target)) {
-                    e.preventDefault();
-                    return;
-                }
+                        e.preventDefault();
+                        return;
+                    }
                 const { kind, el } = dragState;
                 el.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', kind);
                 // Avoid ghosting inputs
                 try {
@@ -652,7 +652,7 @@
                 const { kind, el } = dragState;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-
+                
                 if (kind === 'category') {
                     const after = getDragAfterElement(list, e.clientY, '.category-group', el);
                     const createBox = list.querySelector(':scope > .inline-create-category');
@@ -690,7 +690,7 @@
                     }
                 }
             });
-
+            
             list.addEventListener('drop', (e) => {
                 if (!dragState) return;
                 e.preventDefault();
@@ -732,7 +732,7 @@
                 const gap = e.target.closest('.sub-insert-gap');
                 if (!gap || !list.contains(gap) || gap.classList.contains('open')) return;
                 if (!hit) return;
-                e.preventDefault();
+                        e.preventDefault();
                 e.stopPropagation();
                 list.querySelectorAll('.sub-insert-gap.open').forEach((g) => {
                     if (g !== gap) g.classList.remove('open');
@@ -841,8 +841,8 @@
             enqueueTaxonomyWrite(async () => {
                 if (cancelledHandles.has(handle)) {
                     cancelledHandles.delete(handle);
-                    return;
-                }
+                return;
+            }
                 try {
                     const data = await taxonomyFetch('/api/category-editor/category', {
                         method: 'POST',
@@ -856,8 +856,8 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
                         });
-                        return;
-                    }
+                return;
+            }
                     applyServerNode(findNodeDeep(handle)?.node, data.node);
                 } catch (err) {
                     const found = findNodeDeep(handle);
@@ -898,8 +898,8 @@
             enqueueTaxonomyWrite(async () => {
                 if (cancelledHandles.has(handle)) {
                     cancelledHandles.delete(handle);
-                    return;
-                }
+                        return;
+                    }
                 try {
                     const data = await taxonomyFetch('/api/category-editor/subcategory', {
                         method: 'POST',
@@ -1163,7 +1163,7 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            loadCategories();
+        loadCategories();
             fetch('/api/category-editor/ensure-defs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
