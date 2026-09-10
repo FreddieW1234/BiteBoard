@@ -65,8 +65,32 @@
         }
         .child-row { padding-left: 36px; border-left-color: #94a3b8; background: #fafafa; }
         .sub-block.dragging, .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
-        .sub-block { margin-bottom: 8px; width: 100%; }
+        .sub-block { margin-bottom: 4px; width: 100%; }
         .children-container { width: 100%; }
+
+        .inline-create-input {
+            width: 100%; padding: 10px 12px; border: 1px dashed #d1d5db; border-radius: 6px;
+            background: #fff; font-size: 0.875rem; font-family: inherit; color: #111827;
+        }
+        .inline-create-input:focus {
+            outline: none; border-color: #4f46e5; border-style: solid;
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+        }
+        .inline-create-input::placeholder { color: #9ca3af; font-weight: 500; }
+        .inline-create-input:disabled { opacity: 0.6; }
+        .inline-create-sub { margin-top: 6px; }
+        .inline-create-category { margin-top: 12px; }
+
+        .sub-insert-gap {
+            position: relative; z-index: 2; height: 12px; margin: -2px 0;
+        }
+        .sub-insert-gap .inline-create-input { display: none; }
+        .sub-insert-gap:hover,
+        .sub-insert-gap:focus-within {
+            height: auto; margin: 2px 0; z-index: 3;
+        }
+        .sub-insert-gap:hover .inline-create-input,
+        .sub-insert-gap:focus-within .inline-create-input { display: block; }
 
         .menu-name-input {
             flex: 1; min-width: 0; width: 100%; padding: 6px 10px; border: 1px solid rgba(255,255,255,0.35);
@@ -84,16 +108,6 @@
         .btn-icon:hover { background: rgba(0,0,0,0.08); }
         .category-header .btn-icon { color: #fff; }
 
-        .add-forms-bar {
-            flex-shrink: 0; margin-top: 8px; padding-top: 12px;
-            border-top: 1px solid #e5e7eb; background: #fff;
-        }
-        .add-item-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
-        .add-forms-bar .add-item-form:first-child { margin-top: 0; }
-        .add-item-input {
-            padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.875rem;
-            flex: 1; min-width: 140px;
-        }
         .meta-hint { font-size: 0.75rem; color: #9ca3af; margin-top: 4px; }
         .row-selected { outline: 2px solid #4f46e5; outline-offset: 1px; }
 
@@ -148,10 +162,6 @@
             border-radius: 0; padding: 0; flex: 1; min-height: 0;
         }
         body.embed-mode .category-section > h2 { display: none; }
-        body.embed-mode .add-forms-bar {
-            background: #f6f8fa; border-top: 1px solid #e5e7eb;
-            padding: 10px 0 4px; margin-top: 0;
-        }
         html:has(body.embed-mode) { height: 100%; }
     </style>
 </head>
@@ -186,23 +196,6 @@
                 <h2><i class="fas fa-sitemap"></i> Categories</h2>
                 <div class="item-list" id="categoriesList">
                     <div class="empty-state muted">Loading…</div>
-                </div>
-
-                <div class="add-forms-bar">
-                    <div class="add-item-form" id="addCategoryForm">
-                        <input type="text" class="add-item-input" id="categoryInput" placeholder="New category (choice value)">
-                        <button class="btn btn-primary" onclick="addCategory()"><i class="fas fa-plus"></i> Add category</button>
-                    </div>
-                    <div class="add-item-form">
-                        <select class="add-item-input" id="categorySelect" style="flex:0 0 180px;"></select>
-                        <input type="text" class="add-item-input" id="subcategoryInput" placeholder="New subcategory">
-                        <button class="btn btn-primary" id="addSubBtn" onclick="addSubcategory()"><i class="fas fa-plus"></i> Add subcategory</button>
-                    </div>
-                    <div class="add-item-form">
-                        <select class="add-item-input" id="parentSubSelect" style="flex:0 0 220px;"></select>
-                        <input type="text" class="add-item-input" id="childInput" placeholder="New sub-subcategory">
-                        <button class="btn btn-primary" id="addChildBtn" onclick="addSubSubcategory()"><i class="fas fa-plus"></i> Add sub-sub</button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -295,7 +288,6 @@
                     banner.style.display = 'none';
                 }
                 renderTree();
-                updateSelects();
             } catch (err) {
                 showError(err.message || String(err));
             }
@@ -303,13 +295,10 @@
 
         function renderTree() {
             const list = document.getElementById('categoriesList');
-            if (!taxonomyData.length) {
-                list.innerHTML = '<div class="muted">No taxonomy nodes</div>';
-                return;
-            }
             let html = '';
             taxonomyData.forEach((cat, ci) => {
                 const catHandle = cat.handle || '';
+                const catValue = cat.category || '';
                 const menu = displayName(cat, 'category');
                 const subs = cat.subcategories || [];
                 html += `<div class="category-group" data-kind="category" data-handle="${escapeHtml(catHandle)}" data-cat-index="${ci}">
@@ -323,8 +312,9 @@
                         </button>
                     </div>
                     <div class="subcategories-container" data-drop="sub">`;
-                subs.forEach((sub, si) => {
+                subs.forEach((sub) => {
                     const sh = sub.handle || '';
+                    const slabel = sub.label || '';
                     const smenu = displayName(sub, 'label');
                     const children = sub.children || [];
                     html += `<div class="sub-block" data-kind="subcategory" data-handle="${escapeHtml(sh)}" data-parent-cat="${escapeHtml(catHandle)}">
@@ -345,10 +335,22 @@
                             <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(hh)}')"><i class="fas fa-sliders"></i></button>
                         </div>`;
                     });
-                    html += `</div></div>`;
+                    html += `</div></div>
+                    <div class="sub-insert-gap">
+                        <input type="text" class="inline-create-input" data-create="sub_subcategory"
+                               data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
+                               placeholder="Create sub-subcategory" autocomplete="off">
+                    </div>`;
                 });
-                html += `</div></div>`;
+                html += `<div class="inline-create-sub">
+                        <input type="text" class="inline-create-input" data-create="subcategory"
+                               data-category="${escapeHtml(catValue)}" placeholder="Create subcategory" autocomplete="off">
+                    </div>
+                    </div></div>`;
             });
+            html += `<div class="inline-create-category">
+                <input type="text" class="inline-create-input" data-create="category" placeholder="Create category" autocomplete="off">
+            </div>`;
             list.innerHTML = html;
             setupDnD();
             if (selectedHandle) {
@@ -419,20 +421,6 @@
             }, 400);
         }
 
-        function updateSelects() {
-            const catSel = document.getElementById('categorySelect');
-            const parentSel = document.getElementById('parentSubSelect');
-            catSel.innerHTML = '<option value="">Category…</option>' +
-                taxonomyData.map(c => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)}</option>`).join('');
-            let opts = '<option value="">Parent subcategory…</option>';
-            taxonomyData.forEach(c => {
-                (c.subcategories || []).forEach(s => {
-                    opts += `<option value="${escapeHtml(c.category)}||${escapeHtml(s.label)}">${escapeHtml(c.category)} › ${escapeHtml(s.label)}</option>`;
-                });
-            });
-            parentSel.innerHTML = opts;
-        }
-
         /* ---------- Constrained DnD (delegated; one setup) ---------- */
         let dndWired = false;
         let dragState = null; // { kind: 'category'|'sub'|'child', el }
@@ -496,7 +484,9 @@
 
                 if (kind === 'category') {
                     const after = getDragAfterElement(list, e.clientY, '.category-group', el);
+                    const createBox = list.querySelector(':scope > .inline-create-category');
                     if (after) list.insertBefore(el, after);
+                    else if (createBox) list.insertBefore(el, createBox);
                     else list.appendChild(el);
                     return;
                 }
@@ -508,7 +498,9 @@
                     const container = over || el.closest('[data-drop="sub"]');
                     if (!container || !list.contains(container)) return;
                     const after = getDragAfterElement(container, e.clientY, '.sub-block', el);
+                    const createSub = container.querySelector(':scope > .inline-create-sub');
                     if (after) container.insertBefore(el, after);
+                    else if (createSub) container.insertBefore(el, createSub);
                     else container.appendChild(el);
                     return;
                 }
@@ -537,11 +529,25 @@
                 dragState = null;
                 syncOrderFromDOM();
                 renderTree();
-                updateSelects();
                 persistTaxonomyOrder();
             };
 
             list.addEventListener('dragend', finishDrag);
+
+            list.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                const input = e.target.closest('.inline-create-input');
+                if (!input || !list.contains(input)) return;
+                e.preventDefault();
+                submitInlineCreate(input);
+            });
+
+            list.addEventListener('click', (e) => {
+                const gap = e.target.closest('.sub-insert-gap');
+                if (!gap || !list.contains(gap)) return;
+                const input = gap.querySelector('.inline-create-input');
+                if (input && e.target !== input) input.focus();
+            });
         }
 
         function getDragAfterElement(container, y, selector, current) {
@@ -600,10 +606,28 @@
         }
 
         /* ---------- Creates ---------- */
-        async function addCategory() {
+        async function submitInlineCreate(input) {
+            if (!input || input.disabled) return;
+            const kind = input.getAttribute('data-create');
+            const label = (input.value || '').trim();
+            if (!label) return;
+            if (kind === 'category') return addCategory(label, input);
+            if (kind === 'subcategory') return addSubcategory(input.dataset.category || '', label, input);
+            if (kind === 'sub_subcategory') {
+                return addSubSubcategory(
+                    input.dataset.category || '',
+                    input.dataset.parentLabel || '',
+                    label,
+                    input,
+                );
+            }
+        }
+
+        async function addCategory(value, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
-            const value = document.getElementById('categoryInput').value.trim();
+            value = (value || '').trim();
             if (!value) return;
+            if (inputEl) inputEl.disabled = true;
             try {
                 const res = await fetch('/api/category-editor/category', {
                     method: 'POST',
@@ -613,20 +637,20 @@
                 const data = await res.json();
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
                 if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                document.getElementById('categoryInput').value = '';
+                if (inputEl) inputEl.value = '';
                 if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
                 showSuccess('Category created (unpublished).');
                 await loadCategories();
             } catch (err) { showError(err.message || String(err)); }
+            finally { if (inputEl) inputEl.disabled = false; }
         }
 
-        async function addSubcategory() {
+        async function addSubcategory(category, label, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
-            const category = document.getElementById('categorySelect').value;
-            const label = document.getElementById('subcategoryInput').value.trim();
-            if (!category || !label) { showError('Pick a category and enter a label'); return; }
-            const btn = document.getElementById('addSubBtn');
-            btn.disabled = true;
+            category = (category || '').trim();
+            label = (label || '').trim();
+            if (!category || !label) { showError('Enter a subcategory name'); return; }
+            if (inputEl) inputEl.disabled = true;
             try {
                 const res = await fetch('/api/category-editor/subcategory', {
                     method: 'POST',
@@ -636,37 +660,36 @@
                 const data = await res.json();
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
                 if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                document.getElementById('subcategoryInput').value = '';
+                if (inputEl) inputEl.value = '';
                 if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
                 showSuccess('Subcategory created (unpublished).');
                 await loadCategories();
             } catch (err) { showError(err.message || String(err)); }
-            finally { btn.disabled = false; }
+            finally { if (inputEl) inputEl.disabled = false; }
         }
 
-        async function addSubSubcategory() {
+        async function addSubSubcategory(category, parentLabel, label, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
-            const parent = document.getElementById('parentSubSelect').value;
-            const label = document.getElementById('childInput').value.trim();
-            if (!parent || !label) { showError('Pick a parent subcategory and enter a label'); return; }
-            const [category, parent_label] = parent.split('||');
-            const btn = document.getElementById('addChildBtn');
-            btn.disabled = true;
+            category = (category || '').trim();
+            parentLabel = (parentLabel || '').trim();
+            label = (label || '').trim();
+            if (!category || !parentLabel || !label) { showError('Enter a sub-subcategory name'); return; }
+            if (inputEl) inputEl.disabled = true;
             try {
                 const res = await fetch('/api/category-editor/sub-subcategory', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category, parent_label, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
+                    body: JSON.stringify({ category, parent_label: parentLabel, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
                 });
                 const data = await res.json();
                 if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
                 if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                document.getElementById('childInput').value = '';
+                if (inputEl) inputEl.value = '';
                 if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
                 showSuccess('Sub-subcategory created (unpublished, three rules).');
                 await loadCategories();
             } catch (err) { showError(err.message || String(err)); }
-            finally { btn.disabled = false; }
+            finally { if (inputEl) inputEl.disabled = false; }
         }
 
         let taxonomySaveInFlight = false;
@@ -736,7 +759,7 @@
                 const delHint = document.getElementById('metaDeleteHint');
                 delBtn.disabled = !canDeleteSelected;
                 if (canDeleteSelected) {
-                    delHint.textContent = 'Deletes this node, its Shopify collection, and the metafield choice.';
+                    delHint.textContent = '';
                 } else {
                     delHint.textContent = data.delete_blocked_reason
                         || 'Cannot delete while child nodes exist beneath this one.';

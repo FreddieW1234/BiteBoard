@@ -3004,6 +3004,31 @@ def api_all_products():
         return jsonify({'success': False, 'groups': [], 'unassigned': [], 'error': str(e)}), 500
 
 
+@app.route('/api/all-products/rebuild', methods=['POST'])
+def api_all_products_rebuild():
+    """Full Shopify catalog scan that overwrites the office products snapshot."""
+    try:
+        from scripts.product_creator.Product_Creator import start_force_rebuild_products_snapshot
+        started, state = start_force_rebuild_products_snapshot()
+        return jsonify({
+            'success': True,
+            'started': started,
+            'already_running': not started,
+            'state': state,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/all-products/rebuild-status', methods=['GET'])
+def api_all_products_rebuild_status():
+    try:
+        from scripts.product_creator.Product_Creator import force_rebuild_products_snapshot_status
+        return jsonify({'success': True, 'state': force_rebuild_products_snapshot_status()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/all-products/<int:product_id>', methods=['GET'])
 def api_all_products_one(product_id):
     """Fresh All Products row(s) for a single product after Product Manager save."""

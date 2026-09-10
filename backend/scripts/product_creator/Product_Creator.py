@@ -2212,9 +2212,9 @@ def invalidate_products_overview_cache():
     _PRODUCTS_FLAT_CACHE = None
 
 
-# Manual full Shopify -> office overwrite (Dev tab). Separate from the SWR
-# background refresh so a forced rebuild always hits Shopify even when the
-# office snapshot is still inside PRODUCTS_SNAPSHOT_TTL.
+# Manual full Shopify -> office overwrite (Products Refresh / Dev tab).
+# Separate from the SWR background refresh so a forced rebuild always hits
+# Shopify even when the office snapshot is still inside PRODUCTS_SNAPSHOT_TTL.
 _FORCE_REBUILD_LOCK = threading.Lock()
 _FORCE_REBUILD_STATE = {
     "status": "idle",       # idle | running | done | error
