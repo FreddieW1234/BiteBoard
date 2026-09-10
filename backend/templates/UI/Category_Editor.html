@@ -63,10 +63,15 @@
             display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 6px;
             background: #fff; border-radius: 6px; border-left: 3px solid #667eea; width: 100%;
         }
-        .child-row { padding-left: 36px; border-left-color: #94a3b8; background: #fafafa; }
+        .child-row { border-left-color: #94a3b8; background: #fafafa; }
         .sub-block.dragging, .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
         .sub-block { margin-bottom: 6px; width: 100%; }
         .children-container { width: 100%; }
+        .children-container.has-children {
+            width: calc(100% - 36px);
+            margin-left: 36px;
+        }
+        .inline-create-child { margin-bottom: 6px; }
 
         .inline-create-input {
             width: 100%; padding: 10px 12px; border: 1px dashed #d1d5db; border-radius: 6px;
@@ -297,6 +302,135 @@
             return dataSource === 'live' || dataSource === 'cached' || dataSource === 'taxonomy';
         }
 
+        let taxonomyWriteChain = Promise.resolve();
+        const cancelledHandles = new Set();
+        function enqueueTaxonomyWrite(task) {
+            taxonomyWriteChain = taxonomyWriteChain
+                .then(() => task())
+                .catch((err) => {
+                    showError(err.message || String(err));
+                });
+        }
+
+        async function taxonomyFetch(url, options) {
+            const res = await fetch(url, options);
+            let data = {};
+            try { data = await res.json(); } catch (_) { /* ignore */ }
+            if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+            if (res.status === 409) throw new Error(data.error || 'Conflict — reload and retry');
+            if (!res.ok || data.success === false) throw new Error(data.error || 'Request failed');
+            return data;
+        }
+
+        function handleize(text) {
+            const s = String(text || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return s || 'collection';
+        }
+        function uniqueHandle(base) {
+            let handle = base;
+            let n = 2;
+            while (findNodeDeep(handle)) handle = `${base}-${n++}`;
+            return handle;
+        }
+        function applyServerNode(local, server) {
+            if (!local || !server) return;
+            const children = local.children;
+            const subs = local.subcategories;
+            const displayLabel = local.display_label;
+            Object.assign(local, server);
+            if (children) local.children = children;
+            if (subs) local.subcategories = subs;
+            if (displayLabel && !local.display_label) local.display_label = displayLabel;
+            delete local._pending;
+        }
+        function stripPendingNode(node) {
+            if (!node || typeof node !== 'object') return node;
+            const { _pending, ...rest } = node;
+            if (Array.isArray(rest.subcategories)) {
+                rest.subcategories = rest.subcategories.filter((s) => !s._pending).map(stripPendingNode);
+            }
+            if (Array.isArray(rest.children)) {
+                rest.children = rest.children.filter((c) => !c._pending).map(stripPendingNode);
+            }
+            return rest;
+        }
+        function taxonomyForPersist() {
+            return taxonomyData.filter((c) => !c._pending).map(stripPendingNode);
+        }
+        function collapsedCategoryHandles() {
+            const list = document.getElementById('categoriesList');
+            const out = new Set();
+            if (!list) return out;
+            list.querySelectorAll(':scope > .category-group').forEach((g) => {
+                if (g.querySelector(':scope > .category-header.collapsed') && g.dataset.handle) {
+                    out.add(g.dataset.handle);
+                }
+            });
+            return out;
+        }
+        function focusCreateInput(kind, opts) {
+            requestAnimationFrame(() => {
+                const list = document.getElementById('categoriesList');
+                if (!list) return;
+                let input = null;
+                if (kind === 'category') {
+                    input = list.querySelector('[data-create="category"]');
+                } else if (kind === 'subcategory') {
+                    input = list.querySelector(`[data-create="subcategory"][data-category="${CSS.escape(opts.category || '')}"]`);
+                } else if (kind === 'sub_subcategory') {
+                    input = list.querySelector(`[data-create="sub_subcategory"][data-category="${CSS.escape(opts.category || '')}"][data-parent-label="${CSS.escape(opts.parentLabel || '')}"]`);
+                }
+                if (input) input.focus();
+            });
+        }
+        function removeNodeFromTaxonomy(found) {
+            if (!found || !found.node) return;
+            if (found.kind === 'category') {
+                taxonomyData = taxonomyData.filter((c) => c !== found.node && c.handle !== found.node.handle);
+            } else if (found.kind === 'subcategory' && found.cat) {
+                found.cat.subcategories = (found.cat.subcategories || []).filter(
+                    (s) => s !== found.node && s.handle !== found.node.handle,
+                );
+            } else if (found.kind === 'sub_subcategory' && found.sub) {
+                found.sub.children = (found.sub.children || []).filter(
+                    (c) => c !== found.node && c.handle !== found.node.handle,
+                );
+            }
+        }
+        function restoreRemovedNode(found) {
+            if (!found || !found.node) return;
+            const pos = Math.max(0, Number(found.node.position || 1) - 1);
+            if (found.kind === 'category') {
+                if (findNodeDeep(found.node.handle)) return;
+                taxonomyData.splice(Math.min(pos, taxonomyData.length), 0, found.node);
+            } else if (found.kind === 'subcategory' && found.cat) {
+                const list = found.cat.subcategories || [];
+                if (list.some((s) => s === found.node || s.handle === found.node.handle)) return;
+                list.splice(Math.min(pos, list.length), 0, found.node);
+                found.cat.subcategories = list;
+            } else if (found.kind === 'sub_subcategory' && found.sub) {
+                const list = found.sub.children || [];
+                if (list.some((c) => c === found.node || c.handle === found.node.handle)) return;
+                list.splice(Math.min(pos, list.length), 0, found.node);
+                found.sub.children = list;
+            }
+        }
+        function descendantCount(kind, node) {
+            if (!node) return 0;
+            if (kind === 'category') {
+                const subs = node.subcategories || [];
+                return subs.length + subs.reduce((n, s) => n + (s.children || []).length, 0);
+            }
+            if (kind === 'subcategory') return (node.children || []).length;
+            return 0;
+        }
+        function cancelPendingTree(node) {
+            if (!node) return;
+            if (node._pending && node.handle) cancelledHandles.add(node.handle);
+            (node.subcategories || []).forEach(cancelPendingTree);
+            (node.children || []).forEach(cancelPendingTree);
+        }
+
         async function loadCategories() {
             try {
                 const response = await fetch('/api/category-editor/categories');
@@ -323,6 +457,7 @@
 
         function renderTree() {
             const list = document.getElementById('categoriesList');
+            const collapsed = collapsedCategoryHandles();
             let html = '';
             taxonomyData.forEach((cat, ci) => {
                 const catHandle = cat.handle || '';
@@ -352,7 +487,7 @@
                                    onchange="setDisplayLabel('${escapeHtml(sh)}', this.value)">
                             <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(sh)}')"><i class="fas fa-sliders"></i></button>
                         </div>
-                        <div class="children-container" data-drop="child" data-parent-sub="${escapeHtml(sh)}">`;
+                        <div class="children-container${children.length ? ' has-children' : ''}" data-drop="child" data-parent-sub="${escapeHtml(sh)}">`;
                     children.forEach((ch) => {
                         const hh = ch.handle || '';
                         const cmenu = displayName(ch, 'label');
@@ -363,16 +498,25 @@
                             <button class="btn-icon" title="SEO & handle" onclick="event.stopPropagation(); openMetaModal('${escapeHtml(hh)}')"><i class="fas fa-sliders"></i></button>
                         </div>`;
                     });
-                    html += `</div></div>
-                    <div class="sub-insert-gap">
-                        <div class="sub-insert-hit">
-                            <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
-                            <span class="sub-insert-line"></span>
-                        </div>
-                        <input type="text" class="inline-create-input" data-create="sub_subcategory"
-                               data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
-                               placeholder="Create sub-subcategory" autocomplete="off">
-                    </div>`;
+                    if (children.length) {
+                        html += `<div class="inline-create-child">
+                            <input type="text" class="inline-create-input" data-create="sub_subcategory"
+                                   data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
+                                   placeholder="Create sub-subcategory" autocomplete="off">
+                        </div>`;
+                    }
+                    html += `</div></div>`;
+                    if (!children.length) {
+                        html += `<div class="sub-insert-gap">
+                            <div class="sub-insert-hit">
+                                <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
+                                <span class="sub-insert-line"></span>
+                            </div>
+                            <input type="text" class="inline-create-input" data-create="sub_subcategory"
+                                   data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
+                                   placeholder="Create sub-subcategory" autocomplete="off">
+                        </div>`;
+                    }
                 });
                 html += `<div class="inline-create-sub">
                         <input type="text" class="inline-create-input" data-create="subcategory"
@@ -385,6 +529,11 @@
             </div>`;
             list.innerHTML = html;
             setupDnD();
+            collapsed.forEach((h) => {
+                const group = list.querySelector(`.category-group[data-handle="${CSS.escape(h)}"]`);
+                const header = group && group.querySelector(':scope > .category-header');
+                if (header) header.classList.add('collapsed');
+            });
             if (selectedHandle) {
                 const el = list.querySelector(`[data-handle="${CSS.escape(selectedHandle)}"]`);
                 if (el) el.classList.add('row-selected');
@@ -422,34 +571,24 @@
         let displayLabelSaveTimer = null;
         function persistDisplayLabel(handle, displayLabel) {
             clearTimeout(displayLabelSaveTimer);
-            displayLabelSaveTimer = setTimeout(async () => {
+            displayLabelSaveTimer = setTimeout(() => {
                 if (!isTaxonomyMode()) return;
-                try {
-                    const body = {
-                        expected_updated_at: taxonomyUpdatedAt,
-                    };
+                enqueueTaxonomyWrite(async () => {
+                    const found = findNodeDeep(handle);
+                    if (!found || found.node._pending) return;
+                    const body = { expected_updated_at: taxonomyUpdatedAt };
                     if ((displayLabel || '').trim()) {
                         body.display_label = displayLabel.trim();
                     } else {
                         body.clear_display_label = true;
                         body.display_label = '';
                     }
-                    const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle) + '/metadata', {
+                    await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle) + '/metadata', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body),
                     });
-                    const data = await res.json();
-                    if (res.status === 409) {
-                        showError(data.error || 'Conflict — reload and retry menu name');
-                        if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                        return;
-                    }
-                    if (!res.ok || !data.success) throw new Error(data.error || 'Menu name save failed');
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                } catch (err) {
-                    showError(err.message || String(err));
-                }
+                });
             }, 400);
         }
 
@@ -544,7 +683,11 @@
                     if (!container || !list.contains(container)) return;
                     const after = getDragAfterElement(container, e.clientY, '.child-row', el);
                     if (after) container.insertBefore(el, after);
-                    else container.appendChild(el);
+                    else {
+                        const create = container.querySelector(':scope > .inline-create-child');
+                        if (create) container.insertBefore(el, create);
+                        else container.appendChild(el);
+                    }
                 }
             });
 
@@ -656,7 +799,7 @@
         }
 
         /* ---------- Creates ---------- */
-        async function submitInlineCreate(input) {
+        function submitInlineCreate(input) {
             if (!input || input.disabled) return;
             const kind = input.getAttribute('data-create');
             const label = (input.value || '').trim();
@@ -673,98 +816,194 @@
             }
         }
 
-        async function addCategory(value, inputEl) {
+        function addCategory(value, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
             value = (value || '').trim();
             if (!value) return;
-            if (inputEl) inputEl.disabled = true;
-            try {
-                const res = await fetch('/api/category-editor/category', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category: value, expected_updated_at: taxonomyUpdatedAt }),
-                });
-                const data = await res.json();
-                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                if (inputEl) inputEl.value = '';
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('Category created (unpublished).');
-                await loadCategories();
-            } catch (err) { showError(err.message || String(err)); }
-            finally { if (inputEl) inputEl.disabled = false; }
+            if (taxonomyData.some((c) => (c.category || '') === value)) {
+                showError(`category "${value}" already exists`);
+                return;
+            }
+            const handle = uniqueHandle(handleize(value));
+            const node = {
+                category: value,
+                handle,
+                position: taxonomyData.length + 1,
+                visible: false,
+                handle_locked: true,
+                subcategories: [],
+                _pending: true,
+            };
+            taxonomyData.push(node);
+            if (inputEl) inputEl.value = '';
+            renderTree();
+            focusCreateInput('category');
+            enqueueTaxonomyWrite(async () => {
+                if (cancelledHandles.has(handle)) {
+                    cancelledHandles.delete(handle);
+                    return;
+                }
+                try {
+                    const data = await taxonomyFetch('/api/category-editor/category', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ category: value, handle, expected_updated_at: taxonomyUpdatedAt }),
+                    });
+                    if (cancelledHandles.has(handle)) {
+                        cancelledHandles.delete(handle);
+                        await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle), {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
+                        });
+                        return;
+                    }
+                    applyServerNode(findNodeDeep(handle)?.node, data.node);
+                } catch (err) {
+                    const found = findNodeDeep(handle);
+                    if (found) {
+                        removeNodeFromTaxonomy(found);
+                        renderTree();
+                        focusCreateInput('category');
+                        throw err;
+                    }
+                }
+            });
         }
 
-        async function addSubcategory(category, label, inputEl) {
+        function addSubcategory(category, label, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
             category = (category || '').trim();
             label = (label || '').trim();
             if (!category || !label) { showError('Enter a subcategory name'); return; }
-            if (inputEl) inputEl.disabled = true;
-            try {
-                const res = await fetch('/api/category-editor/subcategory', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
-                });
-                const data = await res.json();
-                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                if (inputEl) inputEl.value = '';
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('Subcategory created (unpublished).');
-                await loadCategories();
-            } catch (err) { showError(err.message || String(err)); }
-            finally { if (inputEl) inputEl.disabled = false; }
+            const cat = taxonomyData.find((c) => (c.category || '') === category);
+            if (!cat) { showError(`category "${category}" not found`); return; }
+            const handle = uniqueHandle(handleize(`${category}-${label}`));
+            const node = {
+                label,
+                handle,
+                position: (cat.subcategories || []).length + 1,
+                indexable: true,
+                metafield_key: 'subcategory',
+                visible: false,
+                handle_locked: true,
+                children: [],
+                _pending: true,
+            };
+            cat.subcategories = cat.subcategories || [];
+            cat.subcategories.push(node);
+            if (inputEl) inputEl.value = '';
+            renderTree();
+            focusCreateInput('subcategory', { category });
+            enqueueTaxonomyWrite(async () => {
+                if (cancelledHandles.has(handle)) {
+                    cancelledHandles.delete(handle);
+                    return;
+                }
+                try {
+                    const data = await taxonomyFetch('/api/category-editor/subcategory', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            category, label, handle, indexable: true, expected_updated_at: taxonomyUpdatedAt,
+                        }),
+                    });
+                    if (cancelledHandles.has(handle)) {
+                        cancelledHandles.delete(handle);
+                        await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle), {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
+                        });
+                        return;
+                    }
+                    applyServerNode(findNodeDeep(handle)?.node, data.node);
+                } catch (err) {
+                    const found = findNodeDeep(handle);
+                    if (found) {
+                        removeNodeFromTaxonomy(found);
+                        renderTree();
+                        focusCreateInput('subcategory', { category });
+                        throw err;
+                    }
+                }
+            });
         }
 
-        async function addSubSubcategory(category, parentLabel, label, inputEl) {
+        function addSubSubcategory(category, parentLabel, label, inputEl) {
             if (!isTaxonomyMode()) { showError('Seed taxonomy first'); return; }
             category = (category || '').trim();
             parentLabel = (parentLabel || '').trim();
             label = (label || '').trim();
             if (!category || !parentLabel || !label) { showError('Enter a sub-subcategory name'); return; }
-            if (inputEl) inputEl.disabled = true;
-            try {
-                const res = await fetch('/api/category-editor/sub-subcategory', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category, parent_label: parentLabel, label, indexable: true, expected_updated_at: taxonomyUpdatedAt }),
-                });
-                const data = await res.json();
-                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Create failed');
-                if (inputEl) inputEl.value = '';
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('Sub-subcategory created (unpublished, three rules).');
-                await loadCategories();
-            } catch (err) { showError(err.message || String(err)); }
-            finally { if (inputEl) inputEl.disabled = false; }
-        }
-
-        let taxonomySaveInFlight = false;
-        async function persistTaxonomyOrder() {
-            if (!isTaxonomyMode() || taxonomySaveInFlight) return;
-            taxonomySaveInFlight = true;
-            try {
-                const res = await fetch('/api/category-editor/taxonomy', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ taxonomy: taxonomyData, expected_updated_at: taxonomyUpdatedAt }),
-                });
-                const data = await res.json();
-                if (res.status === 409) {
-                    showError((data.error || 'Conflict') + ' — reload and retry reorder.');
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+            const cat = taxonomyData.find((c) => (c.category || '') === category);
+            const parent = (cat?.subcategories || []).find((s) => (s.label || '') === parentLabel);
+            if (!parent) { showError('Parent subcategory not found'); return; }
+            const handle = uniqueHandle(handleize(`${category}-${parentLabel}-${label}`));
+            const node = {
+                label,
+                handle,
+                position: (parent.children || []).length + 1,
+                indexable: true,
+                metafield_key: 'sub_subcategory',
+                visible: false,
+                handle_locked: true,
+                _pending: true,
+            };
+            parent.children = parent.children || [];
+            parent.children.push(node);
+            if (inputEl) inputEl.value = '';
+            renderTree();
+            focusCreateInput('sub_subcategory', { category, parentLabel });
+            enqueueTaxonomyWrite(async () => {
+                if (cancelledHandles.has(handle)) {
+                    cancelledHandles.delete(handle);
                     return;
                 }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Reorder save failed');
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-            } catch (err) {
-                showError(err.message || String(err));
-            } finally {
-                taxonomySaveInFlight = false;
-            }
+                try {
+                    const data = await taxonomyFetch('/api/category-editor/sub-subcategory', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            category,
+                            parent_label: parentLabel,
+                            label,
+                            handle,
+                            indexable: true,
+                            expected_updated_at: taxonomyUpdatedAt,
+                        }),
+                    });
+                    if (cancelledHandles.has(handle)) {
+                        cancelledHandles.delete(handle);
+                        await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle), {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
+                        });
+                        return;
+                    }
+                    applyServerNode(findNodeDeep(handle)?.node, data.node);
+                } catch (err) {
+                    const found = findNodeDeep(handle);
+                    if (found) {
+                        removeNodeFromTaxonomy(found);
+                        renderTree();
+                        focusCreateInput('sub_subcategory', { category, parentLabel });
+                        throw err;
+                    }
+                }
+            });
+        }
+
+        function persistTaxonomyOrder() {
+            if (!isTaxonomyMode()) return;
+            enqueueTaxonomyWrite(async () => {
+                await taxonomyFetch('/api/category-editor/taxonomy', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taxonomy: taxonomyForPersist(), expected_updated_at: taxonomyUpdatedAt }),
+                });
+            });
         }
 
         /* ---------- Metadata modal ---------- */
@@ -788,11 +1027,26 @@
             const hit = document.querySelector(`[data-handle="${CSS.escape(handle)}"]`);
             if (hit) hit.classList.add('row-selected');
 
+            const local = findNodeDeep(handle);
+            if (local && local.node && local.node._pending) {
+                selectedKind = local.kind;
+                selectedChildCount = descendantCount(local.kind, local.node);
+                canDeleteSelected = true;
+                document.getElementById('metaKind').textContent = `${local.kind} · /${handle}`;
+                document.getElementById('metaHandle').value = handle;
+                document.getElementById('metaNewHandle').value = handle;
+                document.getElementById('metaSeoTitle').value = '';
+                document.getElementById('metaSeoDesc').value = '';
+                document.getElementById('metaDeleteBtn').disabled = false;
+                document.getElementById('metaDeleteHint').textContent = '';
+                document.getElementById('metaModal').classList.add('open');
+                return;
+            }
+
             try {
                 const res = await fetch('/api/category-editor/node/' + encodeURIComponent(handle));
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'Load failed');
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
 
                 const kind = data.kind || '';
                 selectedKind = kind;
@@ -847,28 +1101,22 @@
 
         async function saveMetadata() {
             if (!selectedHandle) return;
+            const handle = selectedHandle;
             const body = {
                 seo_title: document.getElementById('metaSeoTitle').value,
                 seo_description: document.getElementById('metaSeoDesc').value,
-                expected_updated_at: taxonomyUpdatedAt,
             };
-            try {
-                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle) + '/metadata', {
+            closeMetaModal();
+            enqueueTaxonomyWrite(async () => {
+                await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle) + '/metadata', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
+                    body: JSON.stringify({ ...body, expected_updated_at: taxonomyUpdatedAt }),
                 });
-                const data = await res.json();
-                if (res.status === 409) { showError(data.error || 'Conflict'); if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at; return; }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Save failed');
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                showSuccess('SEO saved.');
-                closeMetaModal();
-                await loadCategories();
-            } catch (err) { showError(err.message || String(err)); }
+            });
         }
 
-        async function deleteNode() {
+        function deleteNode() {
             if (!selectedHandle || !canDeleteSelected) return;
             const label = selectedKind || 'node';
             const nested = selectedChildCount || 0;
@@ -878,31 +1126,36 @@
             if (!confirm(msg)) {
                 return;
             }
-            const delBtn = document.getElementById('metaDeleteBtn');
-            delBtn.disabled = true;
-            try {
-                const res = await fetch('/api/category-editor/node/' + encodeURIComponent(selectedHandle), {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
-                });
-                const data = await res.json();
-                if (res.status === 409) {
-                    showError(data.error || 'Conflict');
-                    if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                    delBtn.disabled = !canDeleteSelected;
-                    return;
-                }
-                if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
-                if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
-                selectedHandle = null;
-                showSuccess(`Deleted ${label} /${data.handle || ''}`);
-                closeMetaModal();
-                await loadCategories();
-            } catch (err) {
-                showError(err.message || String(err));
-                delBtn.disabled = !canDeleteSelected;
+            const handle = selectedHandle;
+            const found = findNodeDeep(handle);
+            if (!found) return;
+            const snapshot = {
+                kind: found.kind,
+                cat: found.cat,
+                sub: found.sub,
+                node: found.node,
+            };
+            selectedHandle = null;
+            closeMetaModal();
+            cancelPendingTree(snapshot.node);
+            removeNodeFromTaxonomy(found);
+            renderTree();
+            if (snapshot.node._pending) {
+                return;
             }
+            enqueueTaxonomyWrite(async () => {
+                try {
+                    await taxonomyFetch('/api/category-editor/node/' + encodeURIComponent(handle), {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ expected_updated_at: taxonomyUpdatedAt }),
+                    });
+                } catch (err) {
+                    restoreRemovedNode(snapshot);
+                    renderTree();
+                    throw err;
+                }
+            });
         }
 
         document.addEventListener('keydown', (e) => {

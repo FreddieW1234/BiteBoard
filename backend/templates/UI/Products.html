@@ -171,6 +171,52 @@
         .ap-list-edit { display: flex; flex-direction: column; gap: 3px; max-height: 170px; overflow-y: auto; padding: 4px 2px; }
         .ap-list-edit label { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #374151; white-space: nowrap; cursor: pointer; }
         .ap-list-edit input[type="checkbox"] { width: 14px; height: 14px; accent-color: #4f46e5; cursor: pointer; flex-shrink: 0; }
+
+        .ap-cat-cell { min-width: 0; width: 100%; display: block; }
+        .ap-cat-trigger {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            width: 100%; min-height: 34px; padding: 6px 10px;
+            border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+            font-family: inherit; font-size: 0.82rem; color: #1f2937; text-align: left; cursor: pointer;
+        }
+        .ap-cat-trigger:hover { border-color: #4f46e5; }
+        .ap-cat-trigger.open { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+        .ap-cat-trigger.error { border-color: #dc2626; }
+        .ap-cat-trigger .ap-cat-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ap-cat-trigger .ap-cat-label.placeholder { color: #9ca3af; }
+        .ap-cat-trigger .ap-cat-arrow { color: #6b7280; font-size: 0.7rem; flex-shrink: 0; }
+        .ap-cat-dd {
+            position: fixed; z-index: 20000; display: flex; flex-direction: column;
+            width: 380px; height: 360px; min-height: 180px; max-height: 80vh;
+            background: #fff; border: 1px solid #ced4da; border-radius: 0 0 8px 8px;
+            box-shadow: 0 8px 24px rgba(15,23,42,0.16); overflow: hidden; resize: vertical;
+        }
+        .ap-cat-dd[hidden] { display: none !important; }
+        .ap-cat-dd-search-wrap { flex-shrink: 0; padding: 8px; border-bottom: 1px solid #eee; }
+        .ap-cat-dd-search {
+            width: 100%; padding: 8px 10px; border: 1px solid #ced4da; border-radius: 6px;
+            font-size: 0.9rem; box-sizing: border-box; font-family: inherit;
+        }
+        .ap-cat-dd-search:focus { outline: none; border-color: #4f46e5; }
+        .ap-cat-dd-list { overflow-y: auto; flex: 1; min-height: 0; }
+        .ap-cat-heading {
+            padding: 8px 12px 4px; font-weight: 700; font-size: 0.8rem; text-transform: uppercase;
+            letter-spacing: 0.03em; color: #1f2937; background: #f1f3f5; border-top: 1px solid #e9ecef;
+            position: sticky; top: 0; user-select: none;
+        }
+        .ap-cat-heading:first-child { border-top: none; }
+        .ap-cat-subhead {
+            padding: 6px 12px 2px 20px; font-weight: 600; font-size: 0.78rem; color: #4b5563;
+            background: #f8fafc; user-select: none;
+        }
+        .ap-cat-opt {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 20px; cursor: pointer;
+            font-size: 0.88rem; color: #374151;
+        }
+        .ap-cat-opt.child { padding-left: 36px; font-size: 0.84rem; }
+        .ap-cat-opt:hover { background: #f8f9fa; }
+        .ap-cat-opt input { margin: 0; accent-color: #4f46e5; cursor: pointer; }
+        .ap-cat-opt label { cursor: pointer; flex: 1; margin: 0; }
         .cell-locked { font-size: 0.86rem; color: #b0b4bb; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .cell-locked i { font-size: 0.7rem; }
 
@@ -284,6 +330,13 @@
         <div id="ap-hscroll-inner" class="ap-hscroll-inner"></div>
     </div>
 
+    <div id="ap-cat-dd" class="ap-cat-dd" hidden>
+        <div class="ap-cat-dd-search-wrap">
+            <input type="text" class="ap-cat-dd-search" placeholder="Search categories…" autocomplete="off" aria-label="Search categories">
+        </div>
+        <div class="ap-cat-dd-list"></div>
+    </div>
+
     <script src="/static/products_shell.js?v=39"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
@@ -292,8 +345,7 @@
         const COLUMN_DEFS = [
             { key: 'sku',              label: 'SKU',                          width: '120px',               always: true },
             { key: 'title',            label: 'Product',                      width: 'minmax(270px, 3fr)',  always: true },
-            { key: 'category',         label: 'Category',                     width: 'minmax(110px, 1fr)',  def: true },
-            { key: 'subcategory',      label: 'Subcategory',                  width: 'minmax(110px, 1fr)',  def: true },
+            { key: 'category',         label: 'Category',                     width: 'minmax(320px, 2fr)',  def: true },
             { key: 'has_prices',       label: 'Prices',                       width: '80px',                def: true },
             { key: 'description',      label: 'Description',                  width: 'minmax(200px, 2.5fr)' },
             { key: 'ingredients',      label: 'Ingredients',                  width: 'minmax(200px, 2.5fr)' },
@@ -345,8 +397,6 @@
 
         function editWidgetFor(key) {
             if (key === 'title') return 'title';
-            if (key === 'category') return 'multi-cat';
-            if (key === 'subcategory') return 'multi-sub';
             if (key === 'filters') return 'filters';
             if (EMOJI_EDIT_KEYS.has(key)) return 'emoji';
             if (LONG_TEXT_EDIT_KEYS.has(key)) return 'textarea';
@@ -357,7 +407,7 @@
         function isColumnEditable(key) { return editWidgetFor(key) !== null; }
 
         let editingColumn = null;
-        const apEditOpts = { category: null, subcategory: null, filters: null };
+        const apEditOpts = { filters: null };
         let apEditSaving = false;
 
         // --- Resizable (Excel-like) column widths ---------------------------------
@@ -382,6 +432,9 @@
                     Object.keys(widths).forEach(k => {
                         if (typeof stored[k] === 'number' && stored[k] >= 40) widths[k] = stored[k];
                     });
+                    if (typeof stored.subcategory === 'number' && (stored.category || 0) <= 140) {
+                        widths.category = parseDefaultWidth(COLUMN_DEFS.find(c => c.key === 'category').width);
+                    }
                 }
             } catch (e) {}
             return widths;
@@ -587,6 +640,321 @@
             return JSON.stringify(arr);
         }
 
+        function categorySummary(p) {
+            const children = (p && p.sub_subcategories) || [];
+            const subs = (p && p.subcategories) || [];
+            const cats = (p && p.categories) || [];
+            const labels = [];
+            children.forEach((c) => { if (c && !labels.includes(c)) labels.push(c); });
+            subs.forEach((s) => { if (s && !labels.includes(s)) labels.push(s); });
+            if (!labels.length) cats.forEach((c) => { if (c && !labels.includes(c)) labels.push(c); });
+            return labels.join(', ');
+        }
+
+        function categoryCellHtml(p) {
+            const summary = categorySummary(p);
+            if (p.is_child) {
+                return `<span class="cell-locked" title="Child product – edit on the parent"><i class="fas fa-lock"></i>${summary ? escapeHtml(summary) : '—'}</span>`;
+            }
+            const labelClass = summary ? 'ap-cat-label' : 'ap-cat-label placeholder';
+            const text = summary || 'Select category…';
+            return `<span class="ap-cat-cell"><button type="button" class="ap-cat-trigger" data-pid="${escapeHtml(p.id)}" title="${escapeHtml(summary)}"><span class="${labelClass}">${escapeHtml(text)}</span><i class="fas fa-chevron-down ap-cat-arrow"></i></button></span>`;
+        }
+
+        let apCategoryGroups = null;
+        let apCatSubCount = {};
+        let apCatChildCount = {};
+        let apCatOpenPid = null;
+        const apCatSaveTimers = {};
+        let apCatWriteChain = Promise.resolve();
+
+        function normalizeSubEntry(entry) {
+            if (entry == null) return null;
+            if (typeof entry === 'string') return { label: entry, children: [] };
+            const label = (entry.label || entry.name || '').trim();
+            if (!label) return null;
+            const children = Array.isArray(entry.children)
+                ? entry.children.map((c) => (typeof c === 'string' ? c : (c && c.label) || '')).map((s) => String(s).trim()).filter(Boolean)
+                : [];
+            return { label, children };
+        }
+
+        async function ensureCategoryGroups() {
+            if (apCategoryGroups) return apCategoryGroups;
+            try {
+                const r = await fetch('/api/category-groups', { credentials: 'same-origin' });
+                const d = await r.json();
+                apCategoryGroups = (d && d.success && Array.isArray(d.groups)) ? d.groups : [];
+            } catch (e) {
+                apCategoryGroups = [];
+            }
+            buildApCatDropdownOptions();
+            return apCategoryGroups;
+        }
+
+        function buildApCatDropdownOptions() {
+            const list = document.querySelector('#ap-cat-dd .ap-cat-dd-list');
+            if (!list) return;
+            list.innerHTML = '';
+            apCatSubCount = {};
+            apCatChildCount = {};
+            (apCategoryGroups || []).forEach((group, gIndex) => {
+                const category = group.category;
+                const heading = document.createElement('div');
+                heading.className = 'ap-cat-heading';
+                heading.textContent = category;
+                list.appendChild(heading);
+                (group.subcategories || []).forEach((raw, sIndex) => {
+                    const sub = normalizeSubEntry(raw);
+                    if (!sub) return;
+                    apCatSubCount[sub.label] = (apCatSubCount[sub.label] || 0) + 1;
+                    const children = sub.children || [];
+                    if (children.length) {
+                        const subHead = document.createElement('div');
+                        subHead.className = 'ap-cat-subhead';
+                        subHead.textContent = sub.label;
+                        list.appendChild(subHead);
+                        list.appendChild(apCatOption({
+                            id: `apcat_${gIndex}_${sIndex}_self`,
+                            value: sub.label,
+                            category,
+                            label: `All ${sub.label}`,
+                        }));
+                        children.forEach((childVal, cIndex) => {
+                            apCatChildCount[childVal] = (apCatChildCount[childVal] || 0) + 1;
+                            list.appendChild(apCatOption({
+                                id: `apcat_${gIndex}_${sIndex}_${cIndex}`,
+                                value: childVal,
+                                category,
+                                subcategory: sub.label,
+                                label: childVal,
+                                child: true,
+                            }));
+                        });
+                    } else {
+                        list.appendChild(apCatOption({
+                            id: `apcat_${gIndex}_${sIndex}`,
+                            value: sub.label,
+                            category,
+                            label: sub.label,
+                        }));
+                    }
+                });
+            });
+        }
+
+        function apCatOption({ id, value, category, subcategory, label, child }) {
+            const row = document.createElement('div');
+            row.className = 'ap-cat-opt' + (child ? ' child' : '');
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.id = id;
+            cb.value = value;
+            cb.setAttribute('data-category', category);
+            if (subcategory) cb.setAttribute('data-subcategory', subcategory);
+            const lab = document.createElement('label');
+            lab.htmlFor = id;
+            lab.textContent = label;
+            row.appendChild(cb);
+            row.appendChild(lab);
+            return row;
+        }
+
+        function filterApCatOptions(q) {
+            const list = document.querySelector('#ap-cat-dd .ap-cat-dd-list');
+            if (!list) return;
+            q = (q || '').trim().toLowerCase();
+            const children = Array.from(list.children);
+            let currentHeading = null;
+            let headingHasVisible = false;
+            let currentSubHeading = null;
+            let subHeadingHasVisible = false;
+            const finalizeSub = () => {
+                if (currentSubHeading) currentSubHeading.style.display = subHeadingHasVisible ? '' : 'none';
+            };
+            const finalizeHead = () => {
+                finalizeSub();
+                if (currentHeading) currentHeading.style.display = headingHasVisible ? '' : 'none';
+            };
+            children.forEach((child) => {
+                if (child.classList.contains('ap-cat-heading')) {
+                    finalizeHead();
+                    currentHeading = child;
+                    headingHasVisible = false;
+                    currentSubHeading = null;
+                    subHeadingHasVisible = false;
+                    return;
+                }
+                if (child.classList.contains('ap-cat-subhead')) {
+                    finalizeSub();
+                    currentSubHeading = child;
+                    subHeadingHasVisible = false;
+                    return;
+                }
+                if (child.classList.contains('ap-cat-opt')) {
+                    const text = (child.querySelector('label')?.textContent || '').toLowerCase();
+                    const show = !q || text.includes(q);
+                    child.style.display = show ? '' : 'none';
+                    if (show) {
+                        headingHasVisible = true;
+                        subHeadingHasVisible = true;
+                    }
+                }
+            });
+            finalizeHead();
+        }
+
+        function closeApCatDropdown() {
+            const panel = document.getElementById('ap-cat-dd');
+            if (panel) panel.hidden = true;
+            document.querySelectorAll('.ap-cat-trigger.open').forEach((b) => b.classList.remove('open'));
+            apCatOpenPid = null;
+        }
+
+        function applyApCatChecks(p) {
+            const panel = document.getElementById('ap-cat-dd');
+            if (!panel || !p) return;
+            const cats = p.categories || [];
+            const subs = p.subcategories || [];
+            const children = p.sub_subcategories || [];
+            panel.querySelectorAll('input[type="checkbox"][data-category]').forEach((cb) => {
+                const val = (cb.value || '').trim();
+                const cat = (cb.getAttribute('data-category') || '').trim();
+                const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
+                let check = false;
+                if (parentSub) {
+                    check = children.includes(val);
+                    if (check && (apCatChildCount[val] || 1) > 1 && cats.length) check = cats.includes(cat);
+                    if (check && (apCatSubCount[parentSub] || 1) > 1 && cats.length) check = cats.includes(cat);
+                } else {
+                    check = subs.includes(val);
+                    if (check && (apCatSubCount[val] || 1) > 1 && cats.length) check = cats.includes(cat);
+                }
+                cb.checked = check;
+            });
+        }
+
+        function readApCatSelection() {
+            const panel = document.getElementById('ap-cat-dd');
+            const cats = [];
+            const subs = [];
+            const children = [];
+            if (!panel) return { categories: cats, subcategories: subs, sub_subcategories: children };
+            panel.querySelectorAll('input[type="checkbox"][data-category]:checked').forEach((cb) => {
+                const val = (cb.value || '').trim();
+                const cat = (cb.getAttribute('data-category') || '').trim();
+                const parentSub = (cb.getAttribute('data-subcategory') || '').trim();
+                if (cat) cats.push(cat);
+                if (parentSub) {
+                    if (val) children.push(val);
+                    if (parentSub) subs.push(parentSub);
+                } else if (val) {
+                    subs.push(val);
+                }
+            });
+            return {
+                categories: [...new Set(cats)],
+                subcategories: [...new Set(subs)],
+                sub_subcategories: [...new Set(children)],
+            };
+        }
+
+        function findProductById(pid) {
+            const id = String(pid);
+            return flattenAllProducts(AP_DATA).find((p) => String(p.id) === id) || null;
+        }
+
+        function updateApCatTrigger(pid, summary, errorMsg) {
+            document.querySelectorAll(`.ap-cat-trigger[data-pid="${CSS.escape(String(pid))}"]`).forEach((btn) => {
+                const label = btn.querySelector('.ap-cat-label');
+                if (label) {
+                    label.textContent = summary || 'Select category…';
+                    label.classList.toggle('placeholder', !summary);
+                }
+                btn.title = errorMsg || summary || '';
+                btn.classList.toggle('error', !!errorMsg);
+            });
+        }
+
+        async function openApCatDropdown(btn) {
+            const pid = btn.getAttribute('data-pid');
+            if (!pid) return;
+            await ensureCategoryGroups();
+            const p = findProductById(pid);
+            if (!p) return;
+            const panel = document.getElementById('ap-cat-dd');
+            const search = panel.querySelector('.ap-cat-dd-search');
+            applyApCatChecks(p);
+            if (search) { search.value = ''; filterApCatOptions(''); }
+            document.querySelectorAll('.ap-cat-trigger.open').forEach((b) => b.classList.remove('open'));
+            btn.classList.add('open');
+            apCatOpenPid = pid;
+            panel.hidden = false;
+            const rect = btn.getBoundingClientRect();
+            const width = Math.max(rect.width, 360);
+            let left = rect.left;
+            if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+            let top = rect.bottom + 2;
+            const height = panel.offsetHeight || 360;
+            if (top + height > window.innerHeight - 8 && rect.top > height + 8) {
+                top = rect.top - height - 2;
+            }
+            panel.style.left = left + 'px';
+            panel.style.top = top + 'px';
+            panel.style.width = width + 'px';
+            if (search) search.focus();
+        }
+
+        function applyApCatChange() {
+            if (!apCatOpenPid) return;
+            const p = findProductById(apCatOpenPid);
+            if (!p) return;
+            const sel = readApCatSelection();
+            p.categories = sel.categories;
+            p.subcategories = sel.subcategories;
+            p.sub_subcategories = sel.sub_subcategories;
+            updateApCatTrigger(apCatOpenPid, categorySummary(p));
+            queueCategorySave(apCatOpenPid);
+        }
+
+        function queueCategorySave(pid) {
+            clearTimeout(apCatSaveTimers[pid]);
+            apCatSaveTimers[pid] = setTimeout(() => {
+                const p = findProductById(pid);
+                if (!p) return;
+                const snapshot = {
+                    categories: (p.categories || []).slice(),
+                    subcategories: (p.subcategories || []).slice(),
+                    sub_subcategories: (p.sub_subcategories || []).slice(),
+                };
+                apCatWriteChain = apCatWriteChain.then(() => saveCategoryNow(pid, snapshot)).catch(() => {});
+            }, 350);
+        }
+
+        async function saveCategoryNow(pid, snapshot) {
+            const json = (arr) => (arr && arr.length ? JSON.stringify(arr) : '');
+            const updates = [{
+                id: Number(pid),
+                metafields: [
+                    { namespace: 'custom', key: 'custom_category', type: 'list.single_line_text_field', value: json(snapshot.categories) },
+                    { namespace: 'custom', key: 'subcategory', type: 'list.single_line_text_field', value: json(snapshot.subcategories) },
+                    { namespace: 'custom', key: 'sub_subcategory', type: 'list.single_line_text_field', value: json(snapshot.sub_subcategories) },
+                ],
+            }];
+            const resp = await fetch('/api/bulk-update-field', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ column: 'category', updates }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || data.failed) {
+                const msg = (data.errors && data.errors[0]) || data.error || 'Category save failed';
+                updateApCatTrigger(pid, categorySummary(findProductById(pid) || snapshot), msg);
+                throw new Error(msg);
+            }
+            updateApCatTrigger(pid, categorySummary(findProductById(pid) || snapshot));
+        }
+
         function buildApListEditHtml(options, selectedValues) {
             const opts = (options || []).slice();
             const selected = (selectedValues || []).map(v => String(v).trim()).filter(Boolean);
@@ -603,8 +971,7 @@
         // The current (read-only) display string for a column, used for locked child cells.
         function displayValue(p, key) {
             if (key === 'title') return p.title || '';
-            if (key === 'category') return (p.categories || []).join(', ');
-            if (key === 'subcategory') return (p.subcategories || []).join(', ');
+            if (key === 'category') return categorySummary(p);
             if (key === 'filters') return (p.fields || {}).filters || '';
             return (p.fields || {})[key] || '';
         }
@@ -614,8 +981,6 @@
                 return p.fields_full[key];
             }
             if (key === 'filters') return JSON.stringify(normFilters(p.filter_values));
-            if (key === 'category') return normCatSubList(p.categories);
-            if (key === 'subcategory') return normCatSubList(p.subcategories);
             return displayValue(p, key);
         }
 
@@ -638,12 +1003,6 @@
                     <button type="button" class="ap-emoji-btn tick${cur === '✔️' ? ' selected' : ''}" data-val="✔️">✔️</button>
                     <button type="button" class="ap-emoji-btn cross${cur === '❌' ? ' selected' : ''}" data-val="❌">❌</button>
                 </span>`;
-            }
-            if (widget === 'multi-cat') {
-                return buildApListEditHtml(apEditOpts.category, p.categories);
-            }
-            if (widget === 'multi-sub') {
-                return buildApListEditHtml(apEditOpts.subcategory, p.subcategories);
             }
             if (widget === 'filters') {
                 const groups = apEditOpts.filters || [];
@@ -697,14 +1056,8 @@
                     const name = escapeHtml(p.title || 'Untitled product');
                     return `<span class="cell-title"><span class="product-name" title="${name}">${name}</span></span>`;
                 }
-                case 'category': {
-                    const v = (p.categories || []).join(', ');
-                    return v ? `<span class="cell" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` : `<span class="cell muted">—</span>`;
-                }
-                case 'subcategory': {
-                    const v = (p.subcategories || []).join(', ');
-                    return v ? `<span class="cell" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` : `<span class="cell muted">—</span>`;
-                }
+                case 'category':
+                    return categoryCellHtml(p);
                 case 'has_prices': {
                     return p.has_prices
                         ? `<span class="cell price-cell" title="Prices set"><i class="fas fa-circle-check" style="color:#16a34a"></i></span>`
@@ -720,7 +1073,7 @@
         function productRowHtml(p) {
             const cols = activeColumns().map(c => cellHtml(p, c.key)).join('');
             const fieldText = Object.values(p.fields || {}).join(' ');
-            const searchStr = ((p.title || '') + ' ' + (p.sku || '') + ' ' + (p.categories || []).join(' ') + ' ' + (p.subcategories || []).join(' ') + ' ' + fieldText).toLowerCase();
+            const searchStr = ((p.title || '') + ' ' + (p.sku || '') + ' ' + (p.categories || []).join(' ') + ' ' + (p.subcategories || []).join(' ') + ' ' + (p.sub_subcategories || []).join(' ') + ' ' + fieldText).toLowerCase();
             return `<div class="product-row" data-product-id="${escapeHtml(p.id)}" data-search="${escapeHtml(searchStr)}">
                 ${cols}
                 <span class="cell-action"><a class="edit-btn" href="/app/Products?view=manager&edit=${encodeURIComponent(p.id)}&return=all"><i class="fas fa-pen"></i> Edit</a></span>
@@ -1021,6 +1374,7 @@
         }
 
         function render(data) {
+            closeApCatDropdown();
             const content = document.getElementById('ap-content');
             const groups = data.groups || [];
             const unassigned = data.unassigned || [];
@@ -1116,23 +1470,12 @@
         // --- Bulk edit controller -----------------------------------------------
         async function ensureEditOptions(key) {
             try {
-                if (key === 'category' && apEditOpts.category === null) {
-                    const r = await fetch('/api/metafield-choices/custom.custom_category');
-                    const d = await r.json();
-                    apEditOpts.category = (d && d.choices) || [];
-                } else if (key === 'subcategory' && apEditOpts.subcategory === null) {
-                    const r = await fetch('/api/metafield-choices/custom.subcategory?all=1');
-                    const d = await r.json();
-                    apEditOpts.subcategory = (d && d.choices) || [];
-                } else if (key === 'filters' && apEditOpts.filters === null) {
+                if (key === 'filters' && apEditOpts.filters === null) {
                     const r = await fetch('/api/filter-groups');
                     const d = await r.json();
                     apEditOpts.filters = (d && d.groups) || [];
                 }
             } catch (e) {
-                // Fall back to empty option lists so editing still degrades gracefully
-                if (key === 'category' && apEditOpts.category === null) apEditOpts.category = [];
-                if (key === 'subcategory' && apEditOpts.subcategory === null) apEditOpts.subcategory = [];
                 if (key === 'filters' && apEditOpts.filters === null) apEditOpts.filters = [];
             }
         }
@@ -1175,14 +1518,6 @@
                 const sel = cell.querySelector('.ap-emoji-btn.selected');
                 return sel ? sel.getAttribute('data-val') : '';
             }
-            if (widget === 'multi-cat' || widget === 'multi-sub') {
-                const picked = [];
-                cell.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-                    const v = (cb.value || '').trim();
-                    if (v) picked.push(v);
-                });
-                return normCatSubList(picked);
-            }
             if (widget === 'filters') {
                 const groups = apEditOpts.filters || [];
                 const picked = {};
@@ -1208,21 +1543,6 @@
             const ns = 'custom';
             if (key === 'title') {
                 return { id: pid, title: newVal };
-            }
-            if (key === 'category' || key === 'subcategory') {
-                const mfKey = key === 'category' ? 'custom_category' : 'subcategory';
-                let arr = [];
-                try {
-                    const parsed = JSON.parse(newVal || '[]');
-                    arr = Array.isArray(parsed) ? parsed : (newVal ? [newVal] : []);
-                } catch (e) {
-                    arr = newVal ? [String(newVal).trim()] : [];
-                }
-                arr = arr.map(v => String(v).trim()).filter(Boolean);
-                return { id: pid, metafields: [{
-                    namespace: ns, key: mfKey, type: 'list.single_line_text_field',
-                    value: arr.length ? JSON.stringify(arr) : ''
-                }] };
             }
             if (key === 'filters') {
                 const picked = JSON.parse(newVal || '{}');
@@ -1403,6 +1723,7 @@
                 if (el) el.textContent = '(loading from office snapshot…)';
             }, 8000);
             try {
+                const groupsP = ensureCategoryGroups();
                 const ctrl = new AbortController();
                 const timeout = setTimeout(() => ctrl.abort(), 180000);
                 const resp = await fetch('/api/all-products', {
@@ -1411,6 +1732,7 @@
                 });
                 clearTimeout(timeout);
                 clearTimeout(slowTimer);
+                await groupsP;
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
@@ -1536,6 +1858,14 @@
             }, true);
             // Block opening a product that has a queued/running save (also enforced server-side).
             document.getElementById('ap-content').addEventListener('click', function(e) {
+                const trigger = e.target.closest('.ap-cat-trigger');
+                if (trigger) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (trigger.classList.contains('open')) closeApCatDropdown();
+                    else openApCatDropdown(trigger);
+                    return;
+                }
                 var row = e.target.closest('[data-product-id]');
                 if (!row || !window.ProductQueue) return;
                 if (e.target.closest('a.edit-btn') && window.ProductQueue.isLocked(row.getAttribute('data-product-id'))) {
@@ -1543,6 +1873,28 @@
                     e.stopPropagation();
                     alert('This product is being saved in the background and is locked until the save finishes. Check the Queue for progress.');
                 }
+            }, true);
+            const catDd = document.getElementById('ap-cat-dd');
+            if (catDd) {
+                catDd.addEventListener('change', function(e) {
+                    if (e.target && e.target.matches('input[type="checkbox"]')) applyApCatChange();
+                });
+                const search = catDd.querySelector('.ap-cat-dd-search');
+                if (search) {
+                    search.addEventListener('input', function() { filterApCatOptions(this.value); });
+                    search.addEventListener('click', function(e) { e.stopPropagation(); });
+                }
+            }
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('#ap-cat-dd') || e.target.closest('.ap-cat-trigger')) return;
+                closeApCatDropdown();
+            });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeApCatDropdown();
+            });
+            window.addEventListener('resize', closeApCatDropdown);
+            document.getElementById('ap-content').addEventListener('scroll', function(e) {
+                if (e.target && e.target.classList.contains('category-body')) closeApCatDropdown();
             }, true);
         });
     </script>

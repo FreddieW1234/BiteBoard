@@ -1356,6 +1356,22 @@ def get_all_children_by_family(shopify_domain=None):
     return family_to_children, parent_family_to_product
 
 
+def _collect_prefixed_lists(mf_map, primary: str, prefix: str) -> list:
+    """Merge a primary list metafield with overflow keys (e.g. subcategory_2)."""
+    seen = set()
+    out = []
+    keys = [primary]
+    for k in mf_map or {}:
+        if k and k != primary and str(k).startswith(prefix):
+            keys.append(k)
+    for k in keys:
+        for item in _parse_metafield_list((mf_map or {}).get(k)):
+            if item not in seen:
+                seen.add(item)
+                out.append(item)
+    return out
+
+
 def _parse_metafield_list(value):
     """
     Normalise a metafield value into a list of non-empty strings.
@@ -1713,7 +1729,8 @@ def _build_overview_product(pid, title, mf_map, graphql_node=None):
         mf_map = _merge_price_metafields_from_graphql_node(graphql_node, dict(mf_map or {}))
     sku = _sku_from_metafield(mf_map)
     cats = _parse_metafield_list(mf_map.get("custom_category"))
-    subs = _parse_metafield_list(mf_map.get("subcategory"))
+    subs = _collect_prefixed_lists(mf_map, "subcategory", "subcategory")
+    children = _collect_prefixed_lists(mf_map, "sub_subcategory", "sub_subcategory")
     has_prices = _product_has_prices(mf_map)
     fields = _build_field_values(mf_map)
     return {
@@ -1722,6 +1739,7 @@ def _build_overview_product(pid, title, mf_map, graphql_node=None):
         "sku": sku,
         "categories": cats,
         "subcategories": subs,
+        "sub_subcategories": children,
         "has_prices": has_prices,
         "fields": fields,
         "fields_full": _build_field_values_full(mf_map),
