@@ -1467,7 +1467,7 @@ def get_node_metadata(handle: str) -> dict:
         raise ShopifyError(f"unknown handle {handle!r}")
     col = shop.collection_by_handle(handle)
     detail = shop.collection_detail(col["id"]) if col else None
-    can_delete, blocked_reason, child_count = _delete_hierarchy_gate(kind, node)
+    descendants = _descendant_summary(kind, node)
     return {
         "success": True,
         "handle": handle,
@@ -1476,31 +1476,43 @@ def get_node_metadata(handle: str) -> dict:
         "parent_category": (cat or {}).get("category") if cat else None,
         "parent_subcategory": (sub or {}).get("label") if sub and kind == "sub_subcategory" else None,
         "collection": detail,
-        "can_delete": can_delete,
-        "delete_blocked_reason": blocked_reason,
-        "child_count": child_count,
+        "can_delete": True,
+        "delete_blocked_reason": None,
+        "child_count": descendants["total"],
+        "descendant_subcategories": descendants["subcategories"],
+        "descendant_sub_subcategories": descendants["sub_subcategories"],
         "taxonomy_updated_at": meta.get("updated_at"),
     }
 
 
-def _delete_hierarchy_gate(kind: str, node: dict) -> tuple[bool, str | None, int]:
-    """
-    Only allow delete when nothing sits beneath the node.
-    category → no subcategories; subcategory → no children; sub_sub → always ok.
-    """
+def _descendant_summary(kind: str, node: dict) -> dict:
+    """Counts of nodes sitting beneath this one (not including itself)."""
     if kind == "category":
-        n = len(node.get("subcategories") or [])
-        if n:
-            return False, f"Remove {n} subcategor{'y' if n == 1 else 'ies'} first", n
-        return True, None, 0
+        subs = list(node.get("subcategories") or [])
+        children = sum(len(s.get("children") or []) for s in subs)
+        return {"subcategories": len(subs), "sub_subcategories": children, "total": len(subs) + children}
     if kind == "subcategory":
         n = len(node.get("children") or [])
-        if n:
-            return False, f"Remove {n} sub-subcategor{'y' if n == 1 else 'ies'} first", n
-        return True, None, 0
-    if kind == "sub_subcategory":
-        return True, None, 0
-    return False, "unknown node kind", 0
+        return {"subcategories": 0, "sub_subcategories": n, "total": n}
+    return {"subcategories": 0, "sub_subcategories": 0, "total": 0}
+
+
+def _cascade_delete_targets(kind: str, node: dict) -> list[tuple[str, dict]]:
+    """(kind, node) deepest-first so nested collections/choices are removed first."""
+    out: list[tuple[str, dict]] = []
+    if kind == "category":
+        for sub in node.get("subcategories") or []:
+            for child in sub.get("children") or []:
+                out.append(("sub_subcategory", child))
+            out.append(("subcategory", sub))
+        out.append(("category", node))
+    elif kind == "subcategory":
+        for child in node.get("children") or []:
+            out.append(("sub_subcategory", child))
+        out.append(("subcategory", node))
+    else:
+        out.append(("sub_subcategory", node))
+    return out
 
 
 def _remove_choice_value(shop: Shopify, mf_key: str, value: str) -> dict:
@@ -1537,8 +1549,8 @@ def delete_node(
     expected_updated_at: str | None = None,
 ) -> dict:
     """
-    Delete a leaf taxonomy node + its Shopify collection + metafield choice.
-    Refuses when hierarchy has children beneath the node.
+    Delete a taxonomy node, everything nested beneath it, matching Shopify
+    collections, and metafield choices.
     """
     shop = _shop()
     handle = (handle or "").strip()
@@ -1557,23 +1569,26 @@ def delete_node(
         if node is None or kind is None:
             raise ShopifyError(f"unknown handle {handle!r}")
 
-        can_delete, blocked, child_count = _delete_hierarchy_gate(kind, node)
-        if not can_delete:
-            raise ShopifyError(blocked or "cannot delete: hierarchy not empty")
-
+        descendants = _descendant_summary(kind, node)
         identity = _node_identity(kind, node)
-        mf_key = _node_mf_key(kind, node)
+        targets = _cascade_delete_targets(kind, node)
 
-        col = shop.collection_by_handle(handle)
-        if col:
-            _delete_collection_by_id(shop, col["id"])
-            log.append({"action": "collection_deleted", "id": col["id"], "handle": handle})
-        else:
-            log.append({"action": "collection_missing", "handle": handle})
-
-        if identity:
-            choice_result = _remove_choice_value(shop, mf_key, identity)
-            log.append({"action": "choice_remove", **choice_result, "value": identity})
+        for i, (t_kind, t_node) in enumerate(targets):
+            t_handle = (t_node.get("handle") or "").strip()
+            t_identity = _node_identity(t_kind, t_node)
+            t_mf_key = _node_mf_key(t_kind, t_node)
+            if i:
+                time.sleep(0.2)
+            if t_handle:
+                col = shop.collection_by_handle(t_handle)
+                if col:
+                    _delete_collection_by_id(shop, col["id"])
+                    log.append({"action": "collection_deleted", "id": col["id"], "handle": t_handle})
+                else:
+                    log.append({"action": "collection_missing", "handle": t_handle})
+            if t_identity:
+                choice_result = _remove_choice_value(shop, t_mf_key, t_identity)
+                log.append({"action": "choice_remove", **choice_result, "value": t_identity})
 
         # Re-read taxonomy for RMW after Shopify mutations
         mf2 = shop.get_shop_metafield(NAMESPACE, TAXONOMY_KEY)
@@ -1619,7 +1634,7 @@ def delete_node(
             "handle": handle,
             "kind": kind2,
             "identity": identity,
-            "child_count": child_count,
+            "child_count": descendants["total"],
             "log": log,
             "taxonomy_updated_at": updated_at,
             "count": _count_nodes(stored),

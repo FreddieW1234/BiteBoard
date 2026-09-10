@@ -4412,7 +4412,7 @@ def api_get_node_metadata(handle):
 
 @app.route('/api/category-editor/node/<path:handle>', methods=['DELETE'])
 def api_delete_node(handle):
-    """Delete leaf category / sub / sub-sub + Shopify collection (hierarchy must be empty)."""
+    """Delete a category / sub / sub-sub and everything nested beneath it."""
     try:
         from shopify_client import taxonomy as taxmod
         data = request.get_json(silent=True) or {}

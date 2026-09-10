@@ -65,7 +65,7 @@
         }
         .child-row { padding-left: 36px; border-left-color: #94a3b8; background: #fafafa; }
         .sub-block.dragging, .subcategory-row.dragging, .child-row.dragging { opacity: 0.45; }
-        .sub-block { margin-bottom: 4px; width: 100%; }
+        .sub-block { margin-bottom: 6px; width: 100%; }
         .children-container { width: 100%; }
 
         .inline-create-input {
@@ -82,17 +82,27 @@
         .inline-create-category { margin-top: 12px; }
 
         .sub-insert-gap {
-            position: relative; z-index: 2;
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px 0 8px 36px;
-            box-sizing: border-box;
+            position: relative;
+            height: 0;
+            z-index: 4;
+            overflow: visible;
+        }
+        .sub-insert-hit {
+            position: absolute;
+            left: 36px;
+            right: 0;
+            top: -10px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .sub-insert-plus {
-            flex-shrink: 0; width: 20px; height: 20px; padding: 0;
+            flex-shrink: 0; width: 18px; height: 18px; padding: 0;
             border: none; border-radius: 50%;
             background: #4f46e5; color: #fff;
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 0.65rem; cursor: pointer; opacity: 0;
+            font-size: 0.6rem; cursor: pointer; opacity: 0;
             box-shadow: 0 0 0 2px #f8f9fa;
         }
         .sub-insert-plus:hover { background: #4338ca; }
@@ -101,11 +111,12 @@
         }
         .sub-insert-gap .inline-create-input { display: none; }
         .sub-insert-gap:hover .sub-insert-plus,
-        .sub-insert-gap:hover .sub-insert-line {
-            opacity: 1;
+        .sub-insert-gap:hover .sub-insert-line { opacity: 1; }
+        .sub-insert-gap.open {
+            height: auto;
+            padding: 6px 0 6px 36px;
         }
-        .sub-insert-gap.open .sub-insert-plus,
-        .sub-insert-gap.open .sub-insert-line { display: none; opacity: 0; }
+        .sub-insert-gap.open .sub-insert-hit { display: none; }
         .sub-insert-gap.open .inline-create-input { display: block; }
 
         .menu-name-input {
@@ -259,6 +270,7 @@
         let handleUnlocked = false;
         let canDeleteSelected = false;
         let selectedKind = null;
+        let selectedChildCount = 0;
 
         function escapeHtml(s) {
             return String(s == null ? '' : s)
@@ -353,8 +365,10 @@
                     });
                     html += `</div></div>
                     <div class="sub-insert-gap">
-                        <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
-                        <span class="sub-insert-line"></span>
+                        <div class="sub-insert-hit">
+                            <button type="button" class="sub-insert-plus" aria-label="Create sub-subcategory"><i class="fas fa-plus"></i></button>
+                            <span class="sub-insert-line"></span>
+                        </div>
                         <input type="text" class="inline-create-input" data-create="sub_subcategory"
                                data-category="${escapeHtml(catValue)}" data-parent-label="${escapeHtml(slabel)}"
                                placeholder="Create sub-subcategory" autocomplete="off">
@@ -571,11 +585,10 @@
             });
 
             list.addEventListener('click', (e) => {
-                const plus = e.target.closest('.sub-insert-plus');
-                const line = e.target.closest('.sub-insert-line');
+                const hit = e.target.closest('.sub-insert-hit');
                 const gap = e.target.closest('.sub-insert-gap');
                 if (!gap || !list.contains(gap) || gap.classList.contains('open')) return;
-                if (!plus && !line) return;
+                if (!hit) return;
                 e.preventDefault();
                 e.stopPropagation();
                 list.querySelectorAll('.sub-insert-gap.open').forEach((g) => {
@@ -766,6 +779,7 @@
             selectedHandle = handle;
             handleUnlocked = false;
             canDeleteSelected = false;
+            selectedChildCount = 0;
             selectedKind = null;
             document.getElementById('handleRenameRow').style.display = 'none';
             document.getElementById('metaHandle').disabled = true;
@@ -791,16 +805,12 @@
                 document.getElementById('metaSeoTitle').value = seo.title || '';
                 document.getElementById('metaSeoDesc').value = seo.description || '';
 
-                canDeleteSelected = !!data.can_delete;
+                canDeleteSelected = true;
+                selectedChildCount = Number(data.child_count || 0);
                 const delBtn = document.getElementById('metaDeleteBtn');
                 const delHint = document.getElementById('metaDeleteHint');
-                delBtn.disabled = !canDeleteSelected;
-                if (canDeleteSelected) {
-                    delHint.textContent = '';
-                } else {
-                    delHint.textContent = data.delete_blocked_reason
-                        || 'Cannot delete while child nodes exist beneath this one.';
-                }
+                delBtn.disabled = false;
+                delHint.textContent = '';
 
                 document.getElementById('metaModal').classList.add('open');
             } catch (err) {
@@ -861,7 +871,11 @@
         async function deleteNode() {
             if (!selectedHandle || !canDeleteSelected) return;
             const label = selectedKind || 'node';
-            if (!confirm(`Delete this ${label}, its collection, and metafield choice?\n/${selectedHandle}\n\nThis cannot be undone.`)) {
+            const nested = selectedChildCount || 0;
+            const msg = nested
+                ? `Delete this ${label} and everything beneath it?\n/${selectedHandle}\n\nThis will also delete ${nested} nested collection(s) and their metafield choices.\n\nThis cannot be undone.`
+                : `Delete this ${label} and its collection?\n/${selectedHandle}\n\nThis cannot be undone.`;
+            if (!confirm(msg)) {
                 return;
             }
             const delBtn = document.getElementById('metaDeleteBtn');
@@ -876,6 +890,7 @@
                 if (res.status === 409) {
                     showError(data.error || 'Conflict');
                     if (data.taxonomy_updated_at) taxonomyUpdatedAt = data.taxonomy_updated_at;
+                    delBtn.disabled = !canDeleteSelected;
                     return;
                 }
                 if (!res.ok || !data.success) throw new Error(data.error || 'Delete failed');
