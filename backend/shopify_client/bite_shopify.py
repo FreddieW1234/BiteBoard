@@ -30,6 +30,32 @@ class ShopifyError(RuntimeError):
     pass
 
 
+def _product_gid(product_id):
+    """Numeric REST id or gid://shopify/Product/... → GID string, or None."""
+    if product_id is None:
+        return None
+    s = str(product_id).strip()
+    if not s:
+        return None
+    if s.startswith("gid://"):
+        return s
+    try:
+        return f"gid://shopify/Product/{int(s)}"
+    except (TypeError, ValueError):
+        return None
+
+
+def _uniq_labels(values):
+    out, seen = [], set()
+    for raw in values or []:
+        v = str(raw).strip()
+        if not v or v in seen:
+            continue
+        seen.add(v)
+        out.append(v)
+    return out
+
+
 class Shopify:
     def __init__(self, domain=None, token=None, api_version=None):
         self.domain = str(domain or STORE_DOMAIN or "").replace(
@@ -517,6 +543,68 @@ class Shopify:
           }
         """, {"ns": namespace, "key": key})
         return data["shop"]["metafield"]
+
+    def product_taxonomy_choices(self, product_id):
+        """
+        Live custom.custom_category / subcategory / sub_subcategory (plus overflow
+        keys) for one product. product_id may be a numeric REST id or a GID.
+        """
+        gid = _product_gid(product_id)
+        if not gid:
+            return {
+                "found": False,
+                "status": None,
+                "categories": [],
+                "subcategories": [],
+                "sub_subcategories": [],
+            }
+        data = self.gql(
+            """
+          query($id: ID!) {
+            product(id: $id) {
+              id
+              status
+              customCategory: metafield(namespace: "custom", key: "custom_category") { type value }
+              subcategory: metafield(namespace: "custom", key: "subcategory") { type value }
+              subcategory2: metafield(namespace: "custom", key: "subcategory_2") { type value }
+              subSubcategory: metafield(namespace: "custom", key: "sub_subcategory") { type value }
+              subSubcategory2: metafield(namespace: "custom", key: "sub_subcategory_2") { type value }
+            }
+          }
+        """,
+            {"id": gid},
+        )
+        product = data.get("product")
+        if not product:
+            return {
+                "found": False,
+                "status": None,
+                "categories": [],
+                "subcategories": [],
+                "sub_subcategories": [],
+            }
+
+        def _vals(mf):
+            if not mf:
+                return []
+            return [
+                str(x).strip()
+                for x in self._parse_mf_list(mf.get("value"), mf.get("type"))
+                if str(x).strip()
+            ]
+
+        return {
+            "found": True,
+            "id": product.get("id") or gid,
+            "status": product.get("status"),
+            "categories": _uniq_labels(_vals(product.get("customCategory"))),
+            "subcategories": _uniq_labels(
+                _vals(product.get("subcategory")) + _vals(product.get("subcategory2"))
+            ),
+            "sub_subcategories": _uniq_labels(
+                _vals(product.get("subSubcategory")) + _vals(product.get("subSubcategory2"))
+            ),
+        }
 
     # ------------------------------------------------------------ collections
     def all_collections(self):

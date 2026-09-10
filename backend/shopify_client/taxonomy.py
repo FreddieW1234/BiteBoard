@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from shopify_client.bite_shopify import Shopify, ShopifyError
+from shopify_client.bite_shopify import Shopify, ShopifyError, _product_gid, _uniq_labels
 
 NAMESPACE = "custom"
 TAXONOMY_KEY = "taxonomy"
@@ -1863,6 +1863,142 @@ def reconcile_choices(
         "handles": handles,
         "results": results,
     }
+
+
+_TAXONOMY_WEBHOOK_MF_KEYS = {
+    ("custom", "custom_category"): "categories",
+    ("custom", "subcategory"): "subcategories",
+    ("custom", "subcategory_2"): "subcategories",
+    ("custom", "sub_subcategory"): "sub_subcategories",
+    ("custom", "sub_subcategory_2"): "sub_subcategories",
+}
+
+
+def product_gid_from_payload(payload: dict | None) -> str | None:
+    """REST numeric id / admin_graphql_api_id / GraphQL GID → product GID."""
+    if not isinstance(payload, dict):
+        return None
+    return _product_gid(payload.get("admin_graphql_api_id") or payload.get("id"))
+
+
+def _iter_webhook_metafields(payload: dict):
+    mfs = payload.get("metafields")
+    if mfs is None:
+        return
+    if isinstance(mfs, dict):
+        edges = mfs.get("edges")
+        if isinstance(edges, list):
+            for edge in edges:
+                node = (edge or {}).get("node") if isinstance(edge, dict) else None
+                if isinstance(node, dict):
+                    yield node
+        return
+    if isinstance(mfs, list):
+        for item in mfs:
+            if isinstance(item, dict):
+                yield item
+
+
+def choices_from_webhook_payload(payload: dict | None) -> dict:
+    """
+    Pull taxonomy list-metafield labels out of a product webhook body.
+
+    Admin notification webhooks usually omit metafields; has_taxonomy_keys is
+    then False so the caller should fetch live values.
+    """
+    out = {
+        "has_taxonomy_keys": False,
+        "categories": [],
+        "subcategories": [],
+        "sub_subcategories": [],
+    }
+    if not isinstance(payload, dict):
+        return out
+    buckets = {"categories": [], "subcategories": [], "sub_subcategories": []}
+    for mf in _iter_webhook_metafields(payload):
+        ns = (mf.get("namespace") or "custom").strip().lower()
+        key = (mf.get("key") or "").strip()
+        bucket = _TAXONOMY_WEBHOOK_MF_KEYS.get((ns, key))
+        if not bucket:
+            continue
+        out["has_taxonomy_keys"] = True
+        buckets[bucket].extend(Shopify._parse_mf_list(mf.get("value"), mf.get("type")))
+    out["categories"] = _uniq_labels(buckets["categories"])
+    out["subcategories"] = _uniq_labels(buckets["subcategories"])
+    out["sub_subcategories"] = _uniq_labels(buckets["sub_subcategories"])
+    return out
+
+
+def reconcile_product_webhook(payload: dict | None, *, write: bool = True) -> dict:
+    """
+    products/create + products/update: map taxonomy metafields to collection
+    handles and reconcile each. Noop handles skip taxonomy RMW (lock storm).
+    """
+    payload = payload if isinstance(payload, dict) else {}
+    parsed = choices_from_webhook_payload(payload)
+    fetched = False
+    status = str(payload.get("status") or "").strip().lower()
+    gid = product_gid_from_payload(payload)
+
+    if parsed["has_taxonomy_keys"]:
+        labels = {
+            "categories": parsed["categories"],
+            "subcategories": parsed["subcategories"],
+            "sub_subcategories": parsed["sub_subcategories"],
+        }
+    else:
+        if not gid:
+            return {
+                "success": True,
+                "ignored": True,
+                "reason": "no product id",
+                "handles": [],
+                "taxonomy_written": False,
+            }
+        live = _shop().product_taxonomy_choices(gid)
+        fetched = True
+        if not live.get("found"):
+            return {
+                "success": True,
+                "ignored": True,
+                "reason": "product not found",
+                "product_id": gid,
+                "handles": [],
+                "taxonomy_written": False,
+            }
+        labels = {
+            "categories": live.get("categories") or [],
+            "subcategories": live.get("subcategories") or [],
+            "sub_subcategories": live.get("sub_subcategories") or [],
+        }
+        if live.get("status"):
+            status = str(live.get("status") or "").strip().lower()
+        gid = live.get("id") or gid
+
+    if not (labels["categories"] or labels["subcategories"] or labels["sub_subcategories"]):
+        return {
+            "success": True,
+            "ignored": True,
+            "reason": "no taxonomy choices",
+            "product_id": gid,
+            "fetched_metafields": fetched,
+            "handles": [],
+            "taxonomy_written": False,
+        }
+
+    vis = reconcile_choices(
+        categories=labels["categories"],
+        subcategories=labels["subcategories"],
+        sub_subcategories=labels["sub_subcategories"],
+        write=write,
+        expect_published_product=(status == "active"),
+    )
+    results = vis.get("results") or []
+    vis["product_id"] = gid
+    vis["fetched_metafields"] = fetched
+    vis["choices"] = labels
+    vis["taxonomy_written"] = any(bool((r or {}).get("taxonomy_written")) for r in results)
+    return vis
 
 
 def apply_visibility_rule(

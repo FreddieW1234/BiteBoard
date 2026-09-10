@@ -77,23 +77,38 @@ failures or circuit-breaker abort.
 
 ## Webhooks
 
-- `POST /webhooks/shopify/collections`
-- Topics: `collections/create`, `collections/update` (`X-Shopify-Topic`)
+- `POST /webhooks/shopify/collections` — path kept because Admin already
+  registers both collection and product topics at this URL (renaming would
+  require re-creating the subscriptions).
+- Topics (`X-Shopify-Topic`):
+  - `collections/create`, `collections/update` — reconcile that collection by
+    `handle`
+  - `products/create`, `products/update` — read `custom.custom_category`,
+    `custom.subcategory` (+ `_2`), `custom.sub_subcategory` (+ `_2`), map
+    those labels to taxonomy handles, reconcile **each** matching collection.
+    Admin notification payloads usually omit metafields; the handler then
+    fetches them via `bite_shopify` using the product id.
 - HMAC: raw body + `SHOPIFY_WEBHOOK_SECRET` → SHA256 base64 vs
-  `X-Shopify-Hmac-Sha256` (401 on failure)
+  `X-Shopify-Hmac-Sha256` (401 on failure). That env var is the **store
+  webhook signing secret** from Settings → Notifications, not the app API
+  secret.
 - Public path (no staff login); secret required
 - **Noop short-circuit:** action `noop` → 200 **without** taxonomy metafield
-  RMW (avoids lock storms on bulk `collections/update` bursts)
+  RMW (avoids lock storms on bulk `collections/update` / product-edit bursts)
+
+`collections/update` does **not** fire when a smart collection's membership
+changes because a product was retagged — that is why `products/*` is required.
 
 Tony registers the webhooks in Shopify Admin and sets `SHOPIFY_WEBHOOK_SECRET`
 (same value in Render env / `render.yaml`).
 
 **Prerequisite for auto-publish after Category Editor creates nodes:**
 `SHOPIFY_WEBHOOK_SECRET` must be set and `collections/create` +
-`collections/update` registered. The Category Editor **Publish** button was
-removed; visibility is owned by these webhooks plus the nightly
-`reconcile_visibility` cron. Ops may still call
-`POST /api/category-editor/publish` or `scripts/reconcile_visibility.py --write`.
+`collections/update` + `products/create` + `products/update` registered at
+this path. The Category Editor **Publish** button was removed; visibility is
+owned by these webhooks plus the nightly `reconcile_visibility` cron. Ops may
+still call `POST /api/category-editor/publish` or
+`scripts/reconcile_visibility.py --write`.
 
 ## Nightly backstop
 

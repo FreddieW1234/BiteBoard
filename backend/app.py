@@ -4103,16 +4103,27 @@ def _verify_shopify_webhook_hmac(raw_body: bytes, hmac_header: str | None) -> bo
 @app.route("/webhooks/shopify/collections", methods=["POST"])
 def webhook_shopify_collections():
     """
-    collections/create + collections/update — reconcile one handle.
+    Shopify Admin notifications for collections/* and products/* share this URL
+    so Tony does not have to re-register when product retagging was added.
     HMAC required. Noop returns 200 without taxonomy metafield write.
     """
     raw = request.get_data() or b""
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256")
+    topic_hdr = (request.headers.get("X-Shopify-Topic") or "").strip()
+    shop_hdr = (request.headers.get("X-Shopify-Shop-Domain") or "").strip()
+    print(
+        f"[webhook] POST bytes={len(raw)} topic={topic_hdr or '-'} "
+        f"shop={shop_hdr or '-'} hmac={'set' if hmac_header else 'missing'} "
+        f"ua={(request.headers.get('User-Agent') or '-')[:80]}",
+        flush=True,
+    )
     if not _verify_shopify_webhook_hmac(raw, hmac_header):
         return jsonify({"success": False, "error": "Invalid HMAC"}), 401
 
-    topic = (request.headers.get("X-Shopify-Topic") or "").strip().lower()
-    if topic not in ("collections/create", "collections/update"):
+    topic = topic_hdr.strip().lower()
+    collection_topics = ("collections/create", "collections/update")
+    product_topics = ("products/create", "products/update")
+    if topic not in collection_topics and topic not in product_topics:
         return jsonify({"success": True, "ignored": True, "topic": topic}), 200
 
     try:
@@ -4120,21 +4131,37 @@ def webhook_shopify_collections():
     except Exception:
         return jsonify({"success": False, "error": "Invalid JSON"}), 400
 
-    handle = (payload.get("handle") or "").strip()
-    if not handle:
-        return jsonify({"success": True, "ignored": True, "reason": "no handle"}), 200
-
     try:
         from shopify_client import taxonomy as taxmod
 
-        result = taxmod.reconcile_handle(handle, write=True)
+        if topic in collection_topics:
+            handle = (payload.get("handle") or "").strip()
+            if not handle:
+                return jsonify({"success": True, "ignored": True, "reason": "no handle"}), 200
+            result = taxmod.reconcile_handle(handle, write=True)
+            return jsonify(
+                {
+                    "success": True,
+                    "topic": topic,
+                    "handle": handle,
+                    "action": result.get("action"),
+                    "count": result.get("count"),
+                    "taxonomy_written": bool(result.get("taxonomy_written")),
+                }
+            ), 200
+
+        result = taxmod.reconcile_product_webhook(payload, write=True)
+        results = result.get("results") or []
         return jsonify(
             {
                 "success": True,
                 "topic": topic,
-                "handle": handle,
-                "action": result.get("action"),
-                "count": result.get("count"),
+                "ignored": bool(result.get("ignored")),
+                "reason": result.get("reason"),
+                "product_id": result.get("product_id"),
+                "fetched_metafields": bool(result.get("fetched_metafields")),
+                "handles": result.get("handles") or [],
+                "actions": [(r or {}).get("action") for r in results],
                 "taxonomy_written": bool(result.get("taxonomy_written")),
             }
         ), 200

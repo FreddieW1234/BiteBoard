@@ -122,7 +122,9 @@ def is_staff_public_path(path: str) -> bool:
     public = {"/staff/login", "/api/health", "/test", "/healthz", "/maint-exit"}
     if path in public:
         return True
-    # Shopify collection webhooks (HMAC-verified in the route).
+    # Shopify collection + product webhooks (HMAC-verified in the route).
+    # Path kept as /webhooks/shopify/collections — Admin subscriptions already
+    # point here for both collections/* and products/*.
     if path == "/webhooks/shopify/collections":
         return True
     # Nightly reconcile (Bearer CRON_SECRET verified in the route).
