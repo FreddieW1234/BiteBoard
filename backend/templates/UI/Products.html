@@ -44,6 +44,16 @@
         .products-view-toggle button { border: none; background: transparent; color: #4338ca; font-size: 0.82rem; font-weight: 600; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-family: inherit; }
         .products-view-toggle button:hover { background: rgba(255,255,255,0.55); }
         .products-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
+        .ap-save-status {
+            display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
+            color: #4338ca; font-size: 0.82rem; font-weight: 600;
+        }
+        .ap-save-status[hidden] { display: none !important; }
+        .ap-save-spinner {
+            width: 14px; height: 14px; flex-shrink: 0;
+            border: 2px solid #c7d2fe; border-top-color: #4f46e5; border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
         #products-view-manager { min-height: calc(100vh - 120px); }
         #products-view-manager[hidden] { display: none !important; }
         #products-view-all[hidden] { display: none !important; }
@@ -278,6 +288,10 @@
         <div class="main-wrap">
             <div class="page-title-row">
                 <h1 class="page-title"><i class="fas fa-box-open"></i> Products</h1>
+                <span id="ap-save-spinner" class="ap-save-status" hidden aria-live="polite">
+                    <span class="ap-save-spinner" aria-hidden="true"></span>
+                    Saving
+                </span>
                 <div class="products-view-toggle" role="group" aria-label="Products view">
                     <button type="button" data-view="all" class="active" aria-pressed="true">All</button>
                     <button type="button" data-view="manager" aria-pressed="false">Manager</button>
@@ -664,6 +678,40 @@
         const apCatLatest = {};
         const apCatSavedSig = {};
         let apCatWriteChain = Promise.resolve();
+        let apCatSavePending = 0;
+        let apCatAllowLeave = false;
+        const apCatLeaveMsg = 'All Products is still saving. If you leave now, queued changes may be lost.';
+
+        function setApCatSaving() {
+            const spinner = document.getElementById('ap-save-spinner');
+            if (spinner) spinner.hidden = apCatSavePending <= 0;
+        }
+
+        window.addEventListener('beforeunload', function (e) {
+            if (apCatSavePending <= 0 || apCatAllowLeave) return;
+            e.preventDefault();
+            e.returnValue = apCatLeaveMsg;
+        });
+
+        document.addEventListener('click', function (e) {
+            if (apCatSavePending <= 0 || apCatAllowLeave) return;
+            const a = e.target.closest && e.target.closest('a[href]');
+            if (!a) return;
+            if (a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            if (a.classList.contains('edit-btn')) return;
+            const href = a.getAttribute('href') || '';
+            if (!href || href.charAt(0) === '#') return;
+            try {
+                const next = new URL(a.href, window.location.href);
+                if (next.origin === window.location.origin && next.pathname.replace(/\/$/, '') === '/app/Products') return;
+            } catch (_) { /* treat as leaving */ }
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.confirm(apCatLeaveMsg)) {
+                apCatAllowLeave = true;
+                window.location.href = a.href;
+            }
+        }, true);
 
         function normalizeSubEntry(entry) {
             if (entry == null) return null;
@@ -940,15 +988,24 @@
 
         function queueCategorySave(pid) {
             const id = String(pid);
+            if (!apCatSaveTimers[id]) {
+                apCatSavePending += 1;
+                setApCatSaving();
+            }
             clearTimeout(apCatSaveTimers[id]);
             apCatSaveTimers[id] = setTimeout(() => {
+                delete apCatSaveTimers[id];
                 apCatWriteChain = apCatWriteChain
                     .then(() => {
                         const snapshot = apCatLatest[id];
                         if (!snapshot) return;
                         return saveCategoryNow(id, snapshot);
                     })
-                    .catch(() => {});
+                    .catch(() => {})
+                    .finally(() => {
+                        apCatSavePending = Math.max(0, apCatSavePending - 1);
+                        setApCatSaving();
+                    });
             }, 400);
         }
 
