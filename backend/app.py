@@ -147,9 +147,9 @@ def portal_auth_gate():
     if is_staff_public_path(path) or is_client_path(path):
         return None
     if not is_staff_authenticated():
-    if path.startswith("/api/"):
-        return jsonify({"success": False, "error": "Staff login required"}), 401
-    return redirect(url_for("staff_login", next=path))
+        if path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Staff login required"}), 401
+        return redirect(url_for("staff_login", next=path))
     # Files / Dev / Artwork Updater - only the dedicated "dev" staff account.
     if is_staff_dev_only_path(path) and not staff_can_access_dev_tools():
         if path.startswith("/api/"):
@@ -758,8 +758,8 @@ def _build_shopify_files_cache():
             _SHOPIFY_FILES_CACHE["at"] = time.time()
         try:
             print(f"[files] Loaded {len(files)} files (cached {SHOPIFY_FILES_MEM_TTL}s)", flush=True)
-            except (OSError, ValueError):
-                pass
+        except (OSError, ValueError):
+            pass
         return files
     finally:
         with _SHOPIFY_FILES_LOCK:
@@ -804,7 +804,7 @@ def api_shopify_files():
 
         # Cold miss: build in the background; clients can refresh/poll.
         threading.Thread(target=_build_shopify_files_cache, daemon=True).start()
-            return jsonify([])
+        return jsonify([])
     except Exception as e:
         with _SHOPIFY_FILES_LOCK:
             _SHOPIFY_FILES_BUILDING = False
@@ -854,12 +854,12 @@ def api_upload_file():
             # Upload the file to Shopify using the temporary file path
             print(f"[retry] Starting Shopify upload for: {file.filename}")
             result = upload_file_to_shopify(temp_file_path, file.filename)
-            
+
             if isinstance(result, dict) and result.get('success'):
                 print(f"[ok] Upload successful: {file.filename}")
                 _invalidate_shopify_files_cache()
                 return jsonify({
-                    'success': True, 
+                    'success': True,
                     'filename': result.get('filename') or file.filename,
                     'message': 'File uploaded successfully to Shopify',
                     'id': result.get('id'),
@@ -1309,7 +1309,7 @@ def api_metafield_create():
         
         if not all([product_id, namespace, key]):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         if key == "unit_weight":
             from scripts.product_creator.Product_Creator import normalize_unit_weight_value  # type: ignore
             value = normalize_unit_weight_value(value)
@@ -2405,63 +2405,63 @@ def _parse_product_form(req):
     """
     # Multipart form data (with or without files).
     if req.content_type and req.content_type.startswith('multipart/form-data'):
-            data = {}
+        data = {}
         for key, value in req.form.items():
-                if key.startswith('media_'):
+            if key.startswith('media_'):
                 continue  # Media files live in req.files
             if key in ['metafields', 'charge_vat', 'colour_images', 'categories', 'subcategories', 'storefront_options', 'is_calendar', 'clear_parent_child']:
-                    try:
-                        if key == 'metafields':
+                try:
+                    if key == 'metafields':
                         data[key] = json.loads(value) if (value and value.strip()) else []
                     elif key in ('charge_vat', 'is_calendar', 'clear_parent_child'):
-                            data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
-                        elif key == 'colour_images':
+                        data[key] = value.lower() in ['true', '1', 'yes'] if isinstance(value, str) else bool(value)
+                    elif key == 'colour_images':
                         data[key] = json.loads(value) if (value and value.strip()) else {}
-                        elif key in ('categories', 'subcategories'):
-                            if value and value.strip():
-                                parsed = json.loads(value)
-                                data[key] = parsed if isinstance(parsed, list) else [parsed]
-                            else:
-                                data[key] = []
+                    elif key in ('categories', 'subcategories'):
+                        if value and value.strip():
+                            parsed = json.loads(value)
+                            data[key] = parsed if isinstance(parsed, list) else [parsed]
+                        else:
+                            data[key] = []
                     elif key == 'storefront_options':
                         if value and value.strip():
                             parsed = json.loads(value)
                             data[key] = parsed if isinstance(parsed, dict) else {}
                         else:
                             data[key] = {}
-                        else:
-                            data[key] = value
-                    except (json.JSONDecodeError, ValueError) as e:
-                    print(f"[warn] Failed to parse {key}: {e}", flush=True)
+                    else:
                         data[key] = value
-                else:
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"[warn] Failed to parse {key}: {e}", flush=True)
                     data[key] = value
-            
+            else:
+                data[key] = value
+
         # Media files (new format, with fallback to media_${index}).
-            media_files = []
+        media_files = []
         if 'media_files' in req.files:
             for file in req.files.getlist('media_files'):
-                    if file and file.filename:
+                if file and file.filename:
                     media_files.append({'filename': file.filename, 'content': file.read(), 'content_type': file.content_type})
-                        print(f"[API] Added media file: {file.filename} ({file.content_type})")
-            else:
+                    print(f"[API] Added media file: {file.filename} ({file.content_type})")
+        else:
             media_count = int(req.form.get('media_count', 0))
-                for i in range(media_count):
-                    file_key = f'media_{i}'
+            for i in range(media_count):
+                file_key = f'media_{i}'
                 if file_key in req.files:
                     file = req.files[file_key]
-                        if file and file.filename:
+                    if file and file.filename:
                         media_files.append({'filename': file.filename, 'content': file.read(), 'content_type': file.content_type})
-            data['media_files'] = media_files
-            
+        data['media_files'] = media_files
+
         # Selected Shopify media IDs to keep. Only set when the editor sent a
         # media state (media_order present) - an omitted key means "leave images
         # alone", while media_order=[] with no ids means "delete all".
         shopify_media_ids = req.form.getlist('shopify_media_ids')
-            if shopify_media_ids:
+        if shopify_media_ids:
             data['shopify_media_ids'] = [int(i) if i.isdigit() else i for i in shopify_media_ids]
         elif 'media_order' in req.form:
-                data['shopify_media_ids'] = []
+            data['shopify_media_ids'] = []
 
         data['media_explicitly_cleared'] = req.form.get('media_explicitly_cleared', 'false').lower() in ('true', '1', 'yes')
         data['main_image_to_children'] = req.form.get('main_image_to_children', 'false').lower() in ('true', '1', 'yes')
@@ -2484,21 +2484,21 @@ def _parse_product_form(req):
                 data['media_order'] = []
 
         media_urls_str = req.form.get('media_urls', '')
-            if media_urls_str and media_urls_str.strip():
-                try:
+        if media_urls_str and media_urls_str.strip():
+            try:
                 parsed = json.loads(media_urls_str)
                 data['media_urls'] = parsed if isinstance(parsed, list) else []
-                except (json.JSONDecodeError, ValueError):
-                    data['media_urls'] = []
-            else:
+            except (json.JSONDecodeError, ValueError):
                 data['media_urls'] = []
+        else:
+            data['media_urls'] = []
         return data, None
 
     # JSON body (backward compatibility).
     if req.is_json:
         data = req.get_json()
-            if data is None:
-                data = {}
+        if data is None:
+            data = {}
         data.setdefault('media_files', [])
         return data, None
 
@@ -2516,14 +2516,14 @@ def api_create_product():
             return jsonify(payload), status
 
         from scripts.product_creator.Product_Creator import create_product, validate_product_data
-        
+
         validation = validate_product_data(data)
         if not validation["valid"]:
             return jsonify({
                 'success': False,
                 'error': f"Validation failed: {', '.join(validation['errors'])}"
             }), 400
-        
+
         result = create_product(data)
 
         # Immediate Shopify -> office cross-check for every product this save
@@ -2541,7 +2541,7 @@ def api_create_product():
             print(f"[API] product snapshot sync skipped: {_sync_err}", flush=True)
 
         return jsonify(result)
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -4271,7 +4271,7 @@ def cron_reconcile_visibility():
                 "error": report.get("error"),
             }
         ), 200 if report.get("success", True) else 500
-            except Exception as e:
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -4293,7 +4293,7 @@ def api_get_categories():
         if tax and source in ("live", "cached"):
             categories = [c.get("category") for c in tax if c.get("category")]
             subcategories = []
-        category_mapping = {}
+            category_mapping = {}
             for c in tax:
                 name = c.get("category") or ""
                 subs = [s.get("label") for s in (c.get("subcategories") or []) if s.get("label")]
@@ -4526,7 +4526,7 @@ def api_apply_rename_choice(handle):
             confirm=bool(data.get("confirm")),
         )
         return jsonify(result)
-        except Exception as e:
+    except Exception as e:
         return _taxonomy_error_response(e)
 
 
@@ -4562,7 +4562,7 @@ def api_save_taxonomy():
             expected_updated_at=data.get("expected_updated_at"),
         )
         return jsonify(result)
-        except Exception as e:
+    except Exception as e:
         return _taxonomy_error_response(e)
 
 
