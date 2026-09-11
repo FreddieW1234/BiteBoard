@@ -4460,6 +4460,16 @@ def api_delete_node(handle):
         return _taxonomy_error_response(e)
 
 
+@app.route('/api/category-editor/reconcile-stale-products', methods=['POST'])
+def api_reconcile_stale_products():
+    """One-shot: blank product category metafields not present in live taxonomy."""
+    try:
+        from shopify_client import taxonomy as taxmod
+        return jsonify(taxmod.reconcile_stale_product_taxonomy())
+    except Exception as e:
+        return _taxonomy_error_response(e)
+
+
 @app.route('/api/category-editor/node/<path:handle>/metadata', methods=['PUT'])
 def api_update_node_metadata(handle):
     try:

@@ -1280,6 +1280,10 @@ def apply_rename_choice(
                 refresh_category_choice_cache()
             except Exception:
                 pass
+            try:
+                _sync_all_products_snapshot([p.get("id") for p in products])
+            except Exception:
+                pass
 
             return {
                 "success": True,
@@ -1497,6 +1501,100 @@ def _descendant_summary(kind: str, node: dict) -> dict:
     return {"subcategories": 0, "sub_subcategories": 0, "total": 0}
 
 
+_KIND_PRODUCT_MF_KEYS = {
+    "category": ("custom_category",),
+    "subcategory": ("subcategory", "subcategory_2"),
+    "sub_subcategory": ("sub_subcategory", "sub_subcategory_2"),
+}
+
+
+def _blank_products_for_deleted_nodes(
+    shop: Shopify, targets: list[tuple[str, dict]]
+) -> dict:
+    """Clear category / sub / sub-sub metafields on products assigned to deleted nodes.
+
+    Leaves those products unassigned on All Products so they can be recategorised.
+    """
+    by_key: dict[str, set[str]] = {}
+    for t_kind, t_node in targets:
+        identity = _node_identity(t_kind, t_node)
+        if not identity:
+            continue
+        keys = _KIND_PRODUCT_MF_KEYS.get(t_kind) or (_node_mf_key(t_kind, t_node),)
+        for key in keys:
+            by_key.setdefault(key, set()).add(identity)
+
+    product_ids: list[str] = []
+    seen: set[str] = set()
+    for key, values in by_key.items():
+        for p in shop.products_with_any_choice_values(
+            "custom", key, values, limit=5000
+        ):
+            pid = p.get("id")
+            if not pid:
+                continue
+            token = str(pid)
+            if token in seen:
+                continue
+            seen.add(token)
+            product_ids.append(token)
+
+    cleared = 0
+    errors: list[dict] = []
+    if product_ids:
+        from scripts.product_creator.Product_Creator import (
+            update_product_taxonomy_choices,
+        )
+
+        for i, pid in enumerate(product_ids):
+            if i:
+                time.sleep(0.15)
+            try:
+                update_product_taxonomy_choices(
+                    pid,
+                    categories=[],
+                    subcategories=[],
+                    sub_subcategories=[],
+                )
+                cleared += 1
+            except Exception as exc:
+                errors.append({"product_id": pid, "error": str(exc)})
+    return {
+        "products_found": len(product_ids),
+        "products_cleared": cleared,
+        "product_ids": product_ids,
+        "errors": errors,
+    }
+
+
+def _numeric_product_ids(raw_ids) -> list[int]:
+    out: list[int] = []
+    seen: set[int] = set()
+    for raw in raw_ids or []:
+        s = str(raw or "").strip()
+        if s.startswith("gid://"):
+            s = s.rsplit("/", 1)[-1]
+        try:
+            n = int(s)
+        except (TypeError, ValueError):
+            continue
+        if n in seen:
+            continue
+        seen.add(n)
+        out.append(n)
+    return out
+
+
+def _sync_all_products_snapshot(product_ids) -> None:
+    """Write live Shopify taxonomy onto All Products rows (bypasses snapshot TTL)."""
+    ids = _numeric_product_ids(product_ids)
+    if not ids:
+        return
+    from scripts.product_creator.Product_Creator import sync_products_after_save
+
+    sync_products_after_save(ids)
+
+
 def _cascade_delete_targets(kind: str, node: dict) -> list[tuple[str, dict]]:
     """(kind, node) deepest-first so nested collections/choices are removed first."""
     out: list[tuple[str, dict]] = []
@@ -1550,7 +1648,9 @@ def delete_node(
 ) -> dict:
     """
     Delete a taxonomy node, everything nested beneath it, matching Shopify
-    collections, and metafield choices.
+    collections, and metafield choices. Products assigned to those nodes have
+    category / subcategory / sub-sub metafields cleared so they land in
+    All Products → Unassigned.
     """
     shop = _shop()
     handle = (handle or "").strip()
@@ -1572,6 +1672,9 @@ def delete_node(
         descendants = _descendant_summary(kind, node)
         identity = _node_identity(kind, node)
         targets = _cascade_delete_targets(kind, node)
+
+        blank = _blank_products_for_deleted_nodes(shop, targets)
+        log.append({"action": "products_blanked", **blank})
 
         for i, (t_kind, t_node) in enumerate(targets):
             t_handle = (t_node.get("handle") or "").strip()
@@ -1628,6 +1731,10 @@ def delete_node(
             refresh_category_choice_cache()
         except Exception:
             pass
+        try:
+            _sync_all_products_snapshot(blank.get("product_ids") or [])
+        except Exception:
+            pass
 
         return {
             "success": True,
@@ -1635,10 +1742,93 @@ def delete_node(
             "kind": kind2,
             "identity": identity,
             "child_count": descendants["total"],
+            "products_cleared": blank.get("products_cleared", 0),
             "log": log,
             "taxonomy_updated_at": updated_at,
             "count": _count_nodes(stored),
         }
+
+
+def _taxonomy_identity_sets(tax: list) -> tuple[set[str], set[str], set[str]]:
+    cats: set[str] = set()
+    subs: set[str] = set()
+    children: set[str] = set()
+    for c in tax or []:
+        name = str(c.get("category") or "").strip()
+        if name:
+            cats.add(name)
+        for s in c.get("subcategories") or []:
+            sl = str(s.get("label") or "").strip()
+            if sl:
+                subs.add(sl)
+            for ch in s.get("children") or []:
+                cl = str(ch.get("label") or "").strip()
+                if cl:
+                    children.add(cl)
+    return cats, subs, children
+
+
+def reconcile_stale_product_taxonomy() -> dict:
+    """
+    One-shot: blank category metafields on products whose values are no longer
+    in shop.custom.taxonomy. Those products land in All Products → Unassigned.
+    """
+    shop = _shop()
+    meta = load_taxonomy_meta(force=True, require=True)
+    live_cats, live_subs, live_children = _taxonomy_identity_sets(meta.get("taxonomy") or [])
+    stale_ids: list[str] = []
+    scanned = 0
+    for p in shop.iter_product_taxonomy_assignments():
+        scanned += 1
+        pid = p.get("id")
+        if not pid:
+            continue
+        cats = p.get("categories") or []
+        subs = p.get("subcategories") or []
+        children = p.get("sub_subcategories") or []
+        if not cats and not subs and not children:
+            continue
+        stale = (
+            any(v not in live_cats for v in cats)
+            or any(v not in live_subs for v in subs)
+            or any(v not in live_children for v in children)
+        )
+        if stale:
+            stale_ids.append(str(pid))
+
+    cleared = 0
+    errors: list[dict] = []
+    if stale_ids:
+        from scripts.product_creator.Product_Creator import (
+            update_product_taxonomy_choices,
+        )
+
+        for i, pid in enumerate(stale_ids):
+            if i:
+                time.sleep(0.15)
+            try:
+                update_product_taxonomy_choices(
+                    pid,
+                    categories=[],
+                    subcategories=[],
+                    sub_subcategories=[],
+                )
+                cleared += 1
+            except Exception as exc:
+                errors.append({"product_id": pid, "error": str(exc)})
+
+    try:
+        _sync_all_products_snapshot(stale_ids)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "scanned": scanned,
+        "stale": len(stale_ids),
+        "cleared": cleared,
+        "errors": errors[:20],
+    }
 
 
 def publish_now(handle: str, *, expected_updated_at: str | None = None) -> dict:

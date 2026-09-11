@@ -438,9 +438,17 @@ class Shopify:
         Scan products whose list/single metafield contains `value`.
         Returns list of {id, title, metafield_id, mf_type, all_values}.
         """
+        return self.products_with_any_choice_values(
+            namespace, key, [value], limit=limit
+        )
+
+    def products_with_any_choice_values(self, namespace, key, values, *, limit=5000):
+        """Scan products whose metafield list intersects `values`."""
+        needles = {str(v).strip() for v in (values or []) if str(v).strip()}
+        if not needles:
+            return []
         out = []
         cursor = None
-        needle = str(value).strip()
         while True:
             data = self.gql(
                 """
@@ -463,7 +471,7 @@ class Shopify:
                 node = edge["node"]
                 mf = node.get("metafield") or {}
                 vals = self._parse_mf_list(mf.get("value"), mf.get("type"))
-                if needle not in vals:
+                if needles.isdisjoint(str(v).strip() for v in vals):
                     continue
                 out.append(
                     {
@@ -605,6 +613,58 @@ class Shopify:
                 _vals(product.get("subSubcategory")) + _vals(product.get("subSubcategory2"))
             ),
         }
+
+    def iter_product_taxonomy_assignments(self):
+        """Yield {id, categories, subcategories, sub_subcategories} for every product."""
+        cursor = None
+
+        def _vals(mf):
+            if not mf:
+                return []
+            return [
+                str(x).strip()
+                for x in self._parse_mf_list(mf.get("value"), mf.get("type"))
+                if str(x).strip()
+            ]
+
+        while True:
+            data = self.gql(
+                """
+              query($cursor: String) {
+                products(first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  edges {
+                    node {
+                      id
+                      customCategory: metafield(namespace: "custom", key: "custom_category") { type value }
+                      subcategory: metafield(namespace: "custom", key: "subcategory") { type value }
+                      subcategory2: metafield(namespace: "custom", key: "subcategory_2") { type value }
+                      subSubcategory: metafield(namespace: "custom", key: "sub_subcategory") { type value }
+                      subSubcategory2: metafield(namespace: "custom", key: "sub_subcategory_2") { type value }
+                    }
+                  }
+                }
+              }
+            """,
+                {"cursor": cursor},
+            )
+            block = data["products"]
+            for edge in block["edges"]:
+                node = edge.get("node") or {}
+                yield {
+                    "id": node.get("id"),
+                    "categories": _uniq_labels(_vals(node.get("customCategory"))),
+                    "subcategories": _uniq_labels(
+                        _vals(node.get("subcategory")) + _vals(node.get("subcategory2"))
+                    ),
+                    "sub_subcategories": _uniq_labels(
+                        _vals(node.get("subSubcategory"))
+                        + _vals(node.get("subSubcategory2"))
+                    ),
+                }
+            if not block["pageInfo"]["hasNextPage"]:
+                break
+            cursor = block["pageInfo"]["endCursor"]
 
     # ------------------------------------------------------------ collections
     def all_collections(self):

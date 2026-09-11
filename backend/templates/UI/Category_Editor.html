@@ -316,6 +316,13 @@
                 }
             } catch (_) { /* ignore */ }
         }
+        if (window === window.top) {
+            window.addEventListener('beforeunload', (e) => {
+                if (taxonomyWritePending <= 0) return;
+                e.preventDefault();
+                e.returnValue = 'Menu is still saving. If you leave now, queued changes may be lost.';
+            });
+        }
         function enqueueTaxonomyWrite(task) {
             taxonomyWritePending += 1;
             notifyTaxonomyQueue();
@@ -1150,8 +1157,8 @@
             const label = selectedKind || 'node';
             const nested = selectedChildCount || 0;
             const msg = nested
-                ? `Delete this ${label} and everything beneath it?\n/${selectedHandle}\n\nThis will also delete ${nested} nested collection(s) and their metafield choices.\n\nThis cannot be undone.`
-                : `Delete this ${label} and its collection?\n/${selectedHandle}\n\nThis cannot be undone.`;
+                ? `Delete this ${label} and everything beneath it?\n/${selectedHandle}\n\nThis will also delete ${nested} nested collection(s) and their metafield choices.\nProducts in them will be uncategorised (All Products → bottom).\n\nThis cannot be undone.`
+                : `Delete this ${label} and its collection?\n/${selectedHandle}\n\nProducts in it will be uncategorised (All Products → bottom).\n\nThis cannot be undone.`;
             if (!confirm(msg)) {
                 return;
             }

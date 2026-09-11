@@ -1838,15 +1838,38 @@ def update_product_taxonomy_choices(product_id, categories=None, subcategories=N
     return {"success": True}
 
 
+def _overview_category_mapping():
+    """Live taxonomy cat -> [sub labels] for All Products grouping."""
+    try:
+        from .categories import get_category_subcategory_groups
+        groups = get_category_subcategory_groups() or []
+        mapping = {}
+        for g in groups:
+            cat = str((g or {}).get("category") or "").strip()
+            if not cat:
+                continue
+            mapping[cat] = [
+                str((s or {}).get("label") or "").strip()
+                for s in ((g or {}).get("subcategories") or [])
+                if str((s or {}).get("label") or "").strip()
+            ]
+        if mapping:
+            return mapping
+    except Exception:
+        pass
+    try:
+        from .categories import CATEGORY_MAPPING
+        return CATEGORY_MAPPING or {}
+    except Exception:
+        return {}
+
+
 def organize_products_for_overview(products):
     """
     Organise flat product overview records into groups / unassigned / misaligned
     (same structure as get_all_products_overview).
     """
-    try:
-        from .categories import CATEGORY_MAPPING
-    except Exception:
-        CATEGORY_MAPPING = {}
+    CATEGORY_MAPPING = _overview_category_mapping()
 
     products = list(products or [])
     placement = {}
