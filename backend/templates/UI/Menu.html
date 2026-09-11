@@ -56,13 +56,6 @@
             animation: menu-spin 0.7s linear infinite;
         }
         @keyframes menu-spin { to { transform: rotate(360deg); } }
-        .menu-reconcile-btn {
-            border: 1px solid #c7d2fe; background: #fff; color: #4338ca;
-            font-size: 0.82rem; font-weight: 600; padding: 7px 14px; border-radius: 999px;
-            cursor: pointer; font-family: inherit; flex-shrink: 0;
-        }
-        .menu-reconcile-btn:hover { background: #eef2ff; }
-        .menu-reconcile-btn:disabled { opacity: 0.55; cursor: not-allowed; }
         .menu-frame-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .menu-frame-wrap[hidden] { display: none !important; }
         .menu-frame-wrap iframe { width: 100%; flex: 1; height: 100%; min-height: 0; border: none; display: block; background: transparent; }
@@ -95,7 +88,6 @@
         <div class="main-wrap">
             <div class="page-title-row">
                 <h1 class="page-title"><i class="fas fa-sitemap"></i> Menu</h1>
-                <button type="button" id="menu-reconcile-btn" class="menu-reconcile-btn">Reconcile products</button>
                 <span id="menu-save-spinner" class="menu-save-status" hidden aria-live="polite">
                     <span class="menu-save-spinner" aria-hidden="true"></span>
                     Saving
@@ -177,11 +169,10 @@
         var spinner = document.getElementById('menu-save-spinner');
         var menuSaving = false;
         var allowLeave = false;
-        var reconcileInFlight = false;
         var leaveMsg = 'Menu is still saving. If you leave now, queued changes may be lost.';
 
         function setMenuSaving(busy) {
-            menuSaving = !!busy || reconcileInFlight;
+            menuSaving = !!busy;
             if (spinner) spinner.hidden = !menuSaving;
         }
 
@@ -220,45 +211,6 @@
             if (!d || d.source !== 'category-editor' || d.type !== 'taxonomy-queue') return;
             setMenuSaving(Number(d.pending) > 0);
         });
-
-        var reconcileBtn = document.getElementById('menu-reconcile-btn');
-        if (reconcileBtn) {
-            reconcileBtn.addEventListener('click', function () {
-                if (reconcileInFlight || reconcileBtn.disabled) return;
-                if (!window.confirm(
-                    'Clear category metafields on products whose values are no longer in the menu?\n\nThose products will move to Unassigned at the bottom of All Products. This can take a minute.'
-                )) return;
-                reconcileInFlight = true;
-                reconcileBtn.disabled = true;
-                setMenuSaving(true);
-                fetch('/api/category-editor/reconcile-stale-products', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: '{}',
-                }).then(function (res) {
-                    return res.json().then(function (data) {
-                        return { ok: res.ok, data: data };
-                    });
-                }).then(function (result) {
-                    var data = result.data || {};
-                    if (!result.ok || data.success === false) {
-                        throw new Error(data.error || 'Reconcile failed');
-                    }
-                    alert(
-                        'Reconcile finished.\nScanned ' + (data.scanned || 0) +
-                        ' products.\nCleared ' + (data.cleared || 0) +
-                        ' with stale categories.'
-                    );
-                }).catch(function (err) {
-                    alert(err.message || String(err));
-                }).then(function () {
-                    reconcileInFlight = false;
-                    reconcileBtn.disabled = false;
-                    setMenuSaving(false);
-                });
-            });
-        }
     });
 })();
     </script>
