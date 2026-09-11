@@ -2076,11 +2076,12 @@ def _build_products_overview_from_shopify(shopify_domain=None):
     products = []  # list of {id, title, sku, categories: [], subcategories: []}
     cursor = None
     use_rest_fallback = False
+    scan_complete = False
 
     while True:
         query = """
         query GetAllProductsOverview($cursor: String) {
-          products(first: 13, after: $cursor) {
+          products(first: 50, after: $cursor, query: "status:active OR status:draft") {
             edges {
               node {
                 legacyResourceId
@@ -2137,9 +2138,11 @@ def _build_products_overview_from_shopify(shopify_domain=None):
                 mf_map = _merge_price_metafields_from_graphql_node(node, mf_map)
                 products.append(_build_overview_product(pid, title, mf_map))
             if not page_info.get("hasNextPage"):
+                scan_complete = True
                 break
             cursor = page_info.get("endCursor")
             if not cursor:
+                scan_complete = True
                 break
             # Pace requests against Shopify's GraphQL cost bucket
             try:
@@ -2157,13 +2160,15 @@ def _build_products_overview_from_shopify(shopify_domain=None):
 
     if use_rest_fallback:
         base_url = f"https://{domain}/admin/api/{API_VERSION}"
-        url = f"{base_url}/products.json?limit=250&fields=id,title,variants"
+        url = f"{base_url}/products.json?limit=250&status=any&fields=id,title,status,variants"
         seen = 0
         max_products = 2000
+        rest_complete = True
         while url and seen < max_products:
             try:
                 r = requests.get(url, headers=headers, timeout=30)
                 if r.status_code != 200:
+                    rest_complete = False
                     break
                 data = r.json()
                 rest_products = data.get("products") or []
@@ -2172,7 +2177,10 @@ def _build_products_overview_from_shopify(shopify_domain=None):
                 for p in rest_products:
                     seen += 1
                     if seen > max_products:
+                        rest_complete = False
                         break
+                    if (p.get("status") or "").lower() == "archived":
+                        continue
                     pid = p.get("id")
                     if not pid:
                         continue
@@ -2197,9 +2205,11 @@ def _build_products_overview_from_shopify(shopify_domain=None):
                         url = part[part.find("<") + 1:part.find(">")].strip()
                         break
             except Exception:
+                rest_complete = False
                 break
+        scan_complete = rest_complete and seen <= max_products and not url
 
-    return products
+    return products, scan_complete
 
 
 def _office_snapshots_available() -> bool:
@@ -2256,7 +2266,36 @@ def _snapshot_age(now):
         return None
 
 
-def _write_products_snapshot(flat, updated_by="render"):
+def _prune_stale_product_snapshots(keep_ids):
+    """Delete office product/detail rows that are no longer in the live catalog."""
+    if not _office_snapshots_available():
+        return 0
+    keep = {str(i) for i in (keep_ids or []) if i is not None and str(i).strip()}
+    try:
+        existing = office_api.get_snapshot_items(_SNAPSHOT_KIND, include_payload=False)
+    except Exception as exc:
+        logger.warning("Products: snapshot prune index failed (%s)", exc)
+        return 0
+    removed = 0
+    for it in existing or []:
+        iid = str((it or {}).get("item_id") or (it or {}).get("id") or "").strip()
+        if not iid or iid in keep:
+            continue
+        try:
+            if office_api.delete_snapshot_item(_SNAPSHOT_KIND, iid):
+                removed += 1
+        except Exception as exc:
+            logger.warning("Products: snapshot prune failed for %s (%s)", iid, exc)
+        try:
+            office_api.delete_snapshot_item(_SNAPSHOT_DETAIL_KIND, iid)
+        except Exception:
+            pass
+    if removed:
+        print(f"[ok] Products: pruned {removed} snapshot row(s) no longer in Shopify", flush=True)
+    return removed
+
+
+def _write_products_snapshot(flat, updated_by="render", prune=False):
     """Upsert every flat row as a per-item snapshot and stamp the freshness marker."""
     if not _office_snapshots_available():
         return
@@ -2267,6 +2306,8 @@ def _write_products_snapshot(flat, updated_by="render"):
             items[str(pid)] = rec
     try:
         office_api.bulk_put_snapshot_items(_SNAPSHOT_KIND, items, updated_by=updated_by)
+        if prune:
+            _prune_stale_product_snapshots(items.keys())
         office_api.put_snapshot(
             _SNAPSHOT_META_NAME,
             {"refreshed_at": time.time(), "count": len(items)},
@@ -2305,8 +2346,8 @@ def _refresh_products_snapshot_bg(shopify_domain=None):
                 if age is not None and age <= PRODUCTS_SNAPSHOT_TTL:
                     return  # office snapshot is fresh enough - done cheaply
                 # Office snapshot is stale: rebuild it from Shopify.
-        flat = _build_products_overview_from_shopify(shopify_domain)
-        _write_products_snapshot(flat)
+        flat, complete = _build_products_overview_from_shopify(shopify_domain)
+        _write_products_snapshot(flat, prune=complete)
         _store_overview_cache(flat)
         try:
             refresh_family_snapshots()
@@ -2365,8 +2406,12 @@ def _force_rebuild_products_snapshot_bg(shopify_domain=None, started_at=None):
     started = started_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
     try:
         print("[retry] Force rebuild: scanning all Shopify products...", flush=True)
-        flat = _build_products_overview_from_shopify(shopify_domain)
-        _write_products_snapshot(flat, updated_by="force-rebuild")
+        flat, complete = _build_products_overview_from_shopify(shopify_domain)
+        if not complete:
+            raise RuntimeError(
+                "Shopify catalog scan stopped before the last page; snapshot was not overwritten"
+            )
+        _write_products_snapshot(flat, updated_by="force-rebuild", prune=True)
         _store_overview_cache(flat)
         try:
             refresh_family_snapshots(force=True)
