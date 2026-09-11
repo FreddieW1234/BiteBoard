@@ -303,12 +303,30 @@
         }
 
         let taxonomyWriteChain = Promise.resolve();
+        let taxonomyWritePending = 0;
         const cancelledHandles = new Set();
+        function notifyTaxonomyQueue() {
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        source: 'category-editor',
+                        type: 'taxonomy-queue',
+                        pending: taxonomyWritePending,
+                    }, window.location.origin);
+                }
+            } catch (_) { /* ignore */ }
+        }
         function enqueueTaxonomyWrite(task) {
+            taxonomyWritePending += 1;
+            notifyTaxonomyQueue();
             taxonomyWriteChain = taxonomyWriteChain
                 .then(() => task())
                 .catch((err) => {
                     showError(err.message || String(err));
+                })
+                .finally(() => {
+                    taxonomyWritePending = Math.max(0, taxonomyWritePending - 1);
+                    notifyTaxonomyQueue();
                 });
         }
 

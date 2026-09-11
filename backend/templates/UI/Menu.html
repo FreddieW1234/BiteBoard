@@ -45,6 +45,13 @@
         .menu-view-toggle button { border: none; background: transparent; color: #4338ca; font-size: 0.82rem; font-weight: 600; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background-color 0.15s, color 0.15s; font-family: inherit; }
         .menu-view-toggle button:hover { background: rgba(255,255,255,0.55); }
         .menu-view-toggle button.active { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.25); }
+        .menu-save-spinner {
+            width: 16px; height: 16px; flex-shrink: 0;
+            border: 2px solid #c7d2fe; border-top-color: #4f46e5; border-radius: 50%;
+            animation: menu-spin 0.7s linear infinite;
+        }
+        .menu-save-spinner[hidden] { display: none !important; }
+        @keyframes menu-spin { to { transform: rotate(360deg); } }
         .menu-frame-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .menu-frame-wrap[hidden] { display: none !important; }
         .menu-frame-wrap iframe { width: 100%; flex: 1; height: 100%; min-height: 0; border: none; display: block; background: transparent; }
@@ -81,6 +88,7 @@
                     <button type="button" data-view="categories" class="active" aria-pressed="true">Categories</button>
                     <button type="button" data-view="collections" aria-pressed="false">Collections</button>
                 </div>
+                <span id="menu-save-spinner" class="menu-save-spinner" hidden title="Saving menu…" aria-live="polite" aria-label="Saving menu"></span>
             </div>
 
             <div class="menu-frame-wrap" id="menu-view-categories">
@@ -150,6 +158,21 @@
         });
         var initial = getParam('view');
         setView(initial === 'collections' ? 'collections' : DEFAULT_VIEW, { skipUrl: true });
+
+        var spinner = document.getElementById('menu-save-spinner');
+        function setMenuSaving(busy) {
+            if (spinner) spinner.hidden = !busy;
+        }
+        var catFrame = document.getElementById('menu-categories-frame');
+        if (catFrame) {
+            catFrame.addEventListener('load', function () { setMenuSaving(false); });
+        }
+        window.addEventListener('message', function (e) {
+            if (e.origin !== window.location.origin) return;
+            var d = e.data;
+            if (!d || d.source !== 'category-editor' || d.type !== 'taxonomy-queue') return;
+            setMenuSaving(Number(d.pending) > 0);
+        });
     });
 })();
     </script>
