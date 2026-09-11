@@ -1750,6 +1750,18 @@ def _build_overview_product(pid, title, mf_map, graphql_node=None):
     }
 
 
+_FEE_WORD_RE = re.compile(r"\bfee\b", re.IGNORECASE)
+
+
+def _is_fee_overview_product(product):
+    """True for fee SKUs (Origination Fee, Mailer Fee, …), not Coffee/Toffee titles."""
+    if not isinstance(product, dict):
+        return False
+    if _FEE_WORD_RE.search(str(product.get("title") or "")):
+        return True
+    return bool(_FEE_WORD_RE.search(str(product.get("sku") or "")))
+
+
 def update_product_taxonomy_choices(product_id, categories=None, subcategories=None, sub_subcategories=None):
     """
     Write category / subcategory / sub-sub via GraphQL metafieldsSet.
@@ -1871,7 +1883,7 @@ def organize_products_for_overview(products):
     """
     CATEGORY_MAPPING = _overview_category_mapping()
 
-    products = list(products or [])
+    products = [p for p in (products or []) if not _is_fee_overview_product(p)]
     placement = {}
     placed_ids = set()
 
@@ -2136,7 +2148,9 @@ def _build_products_overview_from_shopify(shopify_domain=None):
                     if k:
                         mf_map[k] = mf_node.get("value")
                 mf_map = _merge_price_metafields_from_graphql_node(node, mf_map)
-                products.append(_build_overview_product(pid, title, mf_map))
+                rec = _build_overview_product(pid, title, mf_map)
+                if not _is_fee_overview_product(rec):
+                    products.append(rec)
             if not page_info.get("hasNextPage"):
                 scan_complete = True
                 break
@@ -2197,7 +2211,9 @@ def _build_products_overview_from_shopify(shopify_domain=None):
                                     mf_map[k] = mf.get("value")
                     except Exception:
                         pass
-                    products.append(_build_overview_product(int(pid), title, mf_map))
+                    rec = _build_overview_product(int(pid), title, mf_map)
+                    if not _is_fee_overview_product(rec):
+                        products.append(rec)
                 link = r.headers.get("Link") or ""
                 url = None
                 for part in link.split(","):

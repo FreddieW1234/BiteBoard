@@ -1126,6 +1126,25 @@
             return `<div class="ap-col-header">${labels}<span class="col-label col-action"></span></div>`;
         }
 
+        function isFeeProduct(p) {
+            return /\bfee\b/i.test(String((p && p.title) || '')) || /\bfee\b/i.test(String((p && p.sku) || ''));
+        }
+
+        function stripFeeProducts(data) {
+            if (!data) return data;
+            const keep = (list) => (list || []).filter(p => !isFeeProduct(p));
+            data.groups = (data.groups || []).map(g => ({
+                category: g.category,
+                subgroups: (g.subgroups || []).map(sg => ({
+                    subcategory: sg.subcategory,
+                    products: keep(sg.products),
+                })).filter(sg => (sg.products || []).length > 0),
+            })).filter(g => (g.subgroups || []).length > 0);
+            data.unassigned = keep(data.unassigned);
+            data.misaligned = keep(data.misaligned);
+            return data;
+        }
+
         function totalProductCount(data) {
             const ids = new Set();
             (data.groups || []).forEach(g => (g.subgroups || []).forEach(sg => (sg.products || []).forEach(p => ids.add(p.id))));
@@ -1722,6 +1741,7 @@
                 if (!resp.ok || !data.success || !data.slice) return;
                 removeProductFromOverview(AP_DATA, id);
                 mergeOverviewSlice(AP_DATA, data.slice);
+                stripFeeProducts(AP_DATA);
                 render(AP_DATA);
                 applySearch();
             } catch (e) {
@@ -1764,7 +1784,7 @@
                 if (!resp.ok || data.success === false) {
                     throw new Error((data && data.error) ? data.error : ('Request failed: ' + resp.status));
                 }
-                AP_DATA = { groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] };
+                AP_DATA = stripFeeProducts({ groups: data.groups || [], unassigned: data.unassigned || [], misaligned: data.misaligned || [] });
                 const hasRows = (AP_DATA.groups.length || AP_DATA.unassigned.length || AP_DATA.misaligned.length);
                 if (!hasRows && data.error) {
                     throw new Error(data.error);
