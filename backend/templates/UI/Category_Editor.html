@@ -727,6 +727,17 @@
                 submitInlineCreate(input);
             });
 
+            list.addEventListener('focusout', (e) => {
+                const input = e.target.closest('.inline-create-input');
+                if (!input || !list.contains(input)) return;
+                if ((input.value || '').trim()) {
+                    submitInlineCreate(input);
+                    return;
+                }
+                const gap = input.closest('.sub-insert-gap');
+                if (gap) gap.classList.remove('open');
+            });
+
             list.addEventListener('click', (e) => {
                 const hit = e.target.closest('.sub-insert-hit');
                 const gap = e.target.closest('.sub-insert-gap');
