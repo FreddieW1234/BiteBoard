@@ -651,9 +651,6 @@
 
         function categoryCellHtml(p) {
             const summary = categorySummary(p);
-            if (p.is_child) {
-                return `<span class="cell-locked" title="Child product – edit on the parent"><i class="fas fa-lock"></i>${summary ? escapeHtml(summary) : '—'}</span>`;
-            }
             const labelClass = summary ? 'ap-cat-label' : 'ap-cat-label placeholder';
             const text = summary || 'Select category…';
             return `<span class="ap-cat-cell"><button type="button" class="ap-cat-trigger" data-pid="${escapeHtml(p.id)}" title="${escapeHtml(summary)}"><span class="${labelClass}">${escapeHtml(text)}</span><i class="fas fa-chevron-down ap-cat-arrow"></i></button></span>`;
