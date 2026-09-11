@@ -1513,6 +1513,7 @@ def api_bulk_update_field():
         from scripts.product_creator.Product_Creator import (
             create_metafields,
             update_product_taxonomy_choices,
+            apply_overview_taxonomy,
             _parse_metafield_list,
         )
 
@@ -1523,6 +1524,7 @@ def api_bulk_update_field():
         failed = 0
         errors = []
         touched_ids = set()
+        taxonomy_ids = set()
 
         def _normalize_id(pid):
             if isinstance(pid, str) and pid.startswith("gid://"):
@@ -1594,6 +1596,11 @@ def api_bulk_update_field():
                         subcategories=subs,
                         sub_subcategories=children,
                     )
+                    try:
+                        apply_overview_taxonomy(pid, cats, subs, children)
+                    except Exception as snap_exc:
+                        print(f"[warn] bulk-update-field snapshot pid={pid}: {snap_exc}", flush=True)
+                    taxonomy_ids.add(pid)
                     saved += 1
                     continue
                 if not metafields:
@@ -1616,12 +1623,17 @@ def api_bulk_update_field():
             try:
                 from scripts.product_creator.Product_Creator import (
                     invalidate_product_detail_cache,
-                    _kick_products_refresh,
+                    sync_product_snapshot,
                 )
                 for tid in touched_ids:
                     invalidate_product_detail_cache(tid)
-                # One background overview rebuild so the All Products list converges.
-                _kick_products_refresh()
+                for tid in touched_ids:
+                    if tid in taxonomy_ids:
+                        continue
+                    try:
+                        sync_product_snapshot(tid, refresh_families=False)
+                    except Exception:
+                        pass
             except Exception:
                 pass
         return jsonify({

@@ -1037,6 +1037,9 @@
             }
             apCatSavedSig[String(pid)] = sig;
             updateApCatTrigger(pid, categorySummary(findProductById(pid) || snapshot));
+            if (typeof refreshAllProductsRow === 'function') {
+                await refreshAllProductsRow(pid);
+            }
         }
 
         function buildApListEditHtml(options, selectedValues) {

@@ -1538,6 +1538,26 @@ def _merge_price_metafields_from_graphql_node(node, mf_map):
     return mf_map
 
 
+def _merge_taxonomy_metafields_from_graphql_node(node, mf_map):
+    """Prefer keyed metafield lookups so taxonomy is not lost if the custom page is truncated."""
+    for alias, key in (
+        ("customCategory", "custom_category"),
+        ("subcategory", "subcategory"),
+        ("subcategory2", "subcategory_2"),
+        ("subSubcategory", "sub_subcategory"),
+        ("subSubcategory2", "sub_subcategory_2"),
+    ):
+        mf = node.get(alias)
+        if mf is None:
+            continue
+        val = mf.get("value")
+        if val:
+            mf_map[key] = val
+        else:
+            mf_map.pop(key, None)
+    return mf_map
+
+
 # All Products bulk column edit: full metafield text (not truncated) for textarea editing.
 ALL_PRODUCTS_LONG_TEXT_KEYS = frozenset({
     "description", "productinfo", "ingredients", "nutritional_info",
@@ -1992,6 +2012,11 @@ def fetch_product_overview_by_id(product_id, shopify_domain=None):
         title
         pricejsonTr: metafield(namespace: "custom", key: "pricejsontr") { value }
         pricejsonEr: metafield(namespace: "custom", key: "pricejsoner") { value }
+        customCategory: metafield(namespace: "custom", key: "custom_category") { value }
+        subcategory: metafield(namespace: "custom", key: "subcategory") { value }
+        subcategory2: metafield(namespace: "custom", key: "subcategory_2") { value }
+        subSubcategory: metafield(namespace: "custom", key: "sub_subcategory") { value }
+        subSubcategory2: metafield(namespace: "custom", key: "sub_subcategory_2") { value }
         metafields(first: 50, namespace: "custom") { edges { node { key value } } }
       }
     }
@@ -2015,6 +2040,7 @@ def fetch_product_overview_by_id(product_id, shopify_domain=None):
                         if k:
                             mf_map[k] = mf_node.get("value")
                     title = (node.get("title") or "").strip()
+                    mf_map = _merge_taxonomy_metafields_from_graphql_node(node, mf_map)
                     return _build_overview_product(pid, title, mf_map, graphql_node=node)
     except Exception:
         pass
@@ -2508,6 +2534,45 @@ def _sync_product_row_to_snapshot(row):
         except Exception as exc:
             logger.warning("Products: snapshot item write failed (%s)", exc)
     _upsert_flat_cache(row)
+
+
+def apply_overview_taxonomy(product_id, categories=None, subcategories=None, sub_subcategories=None):
+    """Write category / sub / sub-sub onto the All Products snapshot without a full rebuild."""
+    try:
+        pid = int(product_id)
+    except (TypeError, ValueError):
+        return
+    cats = [str(v).strip() for v in (categories or []) if str(v).strip()]
+    subs = [str(v).strip() for v in (subcategories or []) if str(v).strip()]
+    children = [str(v).strip() for v in (sub_subcategories or []) if str(v).strip()]
+
+    row = None
+    if _PRODUCTS_FLAT_CACHE:
+        for rec in _PRODUCTS_FLAT_CACHE:
+            if rec.get("id") == pid:
+                row = dict(rec)
+                break
+    if row is None and _office_snapshots_available():
+        try:
+            item = office_api.get_snapshot_item(_SNAPSHOT_KIND, str(pid))
+            payload = (item or {}).get("payload") if isinstance(item, dict) else None
+            if isinstance(payload, dict):
+                row = dict(payload)
+        except Exception as exc:
+            logger.warning("Products: taxonomy snapshot read failed for %s (%s)", pid, exc)
+    if row is None:
+        try:
+            row = fetch_product_overview_by_id(pid)
+        except Exception as exc:
+            logger.warning("Products: taxonomy snapshot fetch failed for %s (%s)", pid, exc)
+            row = None
+    if not isinstance(row, dict):
+        row = {"id": pid, "title": f"Product {pid}", "sku": "", "fields": {}}
+    row["id"] = pid
+    row["categories"] = cats
+    row["subcategories"] = subs
+    row["sub_subcategories"] = children
+    _sync_product_row_to_snapshot(row)
 
 
 def sync_product_snapshot(product_id, shopify_domain=None, refresh_families=True):
