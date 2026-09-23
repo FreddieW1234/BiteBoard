@@ -4092,6 +4092,17 @@ def api_customer_type_assigned_notify(customer_id):
     })
 
 
+@app.route('/api/customers/<customer_id>', methods=['DELETE'])
+def api_customer_delete(customer_id):
+    """Remove a Shopify customer from the staff Customers page."""
+    try:
+        from scripts.Customers import delete_customer  # type: ignore
+        result = delete_customer(customer_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/customers/<customer_id>', methods=['PUT'])
 def api_customer_update(customer_id):
     """Save customer email, type tag, and custom_fields metafields."""

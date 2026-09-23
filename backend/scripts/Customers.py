@@ -305,6 +305,60 @@ def customer_exists_by_email(email: str) -> bool:
         return False
 
 
+CUSTOMER_DELETE_MUTATION = """
+mutation CustomerDelete($id: ID!) {
+  customerDelete(input: {id: $id}) {
+    deletedCustomerId
+    userErrors { field message }
+  }
+}
+"""
+
+
+def delete_customer(customer_id) -> dict:
+    """Remove a Shopify customer and unlink them from any company record."""
+    cid = str(customer_id or "").strip()
+    if not cid:
+        raise ValueError("Customer id is required")
+    try:
+        pid = int(cid)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid customer id")
+
+    linked_company_id = ""
+    try:
+        existing = _fetch_single_customer(pid)
+        linked_company_id = str((existing or {}).get("linked_company_id") or "").strip()
+    except Exception:
+        existing = None
+
+    if linked_company_id:
+        try:
+            from scripts.Companies import remove_company_member  # type: ignore
+            remove_company_member(linked_company_id, cid)
+        except Exception as exc:
+            print(
+                f"[warn] Could not unlink customer {cid} from company {linked_company_id}: {exc}",
+                flush=True,
+            )
+
+    gid = f"gid://shopify/Customer/{pid}"
+    data = _graphql_request(CUSTOMER_DELETE_MUTATION, {"id": gid})
+    result = data.get("customerDelete") or {}
+    errors = result.get("userErrors") or []
+    if errors:
+        raise RuntimeError(
+            "; ".join(e.get("message", "") for e in errors if e.get("message"))
+            or "Could not remove customer"
+        )
+    deleted = result.get("deletedCustomerId")
+    if not deleted:
+        raise RuntimeError("Shopify did not confirm the customer was removed")
+
+    invalidate_customers_cache()
+    return {"success": True, "customer_id": cid}
+
+
 def create_customer(payload: dict) -> dict:
     """Create a Shopify customer tagged Pending with custom_fields metafields."""
     import re

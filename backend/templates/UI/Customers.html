@@ -390,6 +390,9 @@
         .cu-edit-select.pending { border-color: #fcd34d; background: #fef3c7; color: #92400e; font-weight: 600; }
         .cu-edit-select.pending:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); }
         .cu-edit-actions { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+        .cu-delete-customer-btn { color: #b91c1c; margin-left: auto; }
+        .cu-delete-customer-btn:hover { color: #991b1b; background: #fef2f2; }
+        .cu-delete-customer-btn:disabled { opacity: 0.45; cursor: not-allowed; color: #b91c1c; background: #fff; }
         .btn-primary {
             background: #4f46e5;
             color: #fff;
@@ -1299,11 +1302,61 @@
                             <div class="cu-edit-actions">
                                 <button type="submit" class="btn-primary cu-save-btn"><i class="fas fa-check"></i> Save changes</button>
                                 <button type="button" class="btn-ghost cu-edit-cancel">Cancel</button>
+                                <button type="button" class="btn-ghost cu-delete-customer-btn" data-customer-id="${escapeHtml(c.id)}" data-customer-name="${escapeHtml(c.name || '')}"${Number(c.orders_count) > 0 ? ' disabled title="Shopify cannot delete customers who have placed orders"' : ''}>
+                                    <i class="fas fa-user-minus"></i> Remove customer
+                                </button>
                             </div>
                         </form>
                     </div>
                 </td>
             </tr>`;
+        }
+
+        function removeCustomerFromList(customerId) {
+            const before = CU_DATA.customers || [];
+            CU_DATA.customers = before.filter(c => String(c.id) !== String(customerId));
+            const removed = before.length - CU_DATA.customers.length;
+            if (removed) {
+                CU_DATA.total = Math.max(0, (Number(CU_DATA.total) || before.length) - removed);
+            }
+            if (String(CU_EXPANDED_ID) === String(customerId)) CU_EXPANDED_ID = null;
+            recalcConflictCount();
+            render();
+        }
+
+        async function removeCustomer(customerId, name) {
+            const idx = (CU_DATA.customers || []).findIndex(c => String(c.id) === String(customerId));
+            const customer = idx >= 0 ? CU_DATA.customers[idx] : null;
+            if (customer && Number(customer.orders_count) > 0) {
+                alert('Shopify cannot delete customers who have placed orders.');
+                return;
+            }
+            const label = (name || 'this customer').trim() || 'this customer';
+            if (!window.confirm(
+                'Remove ' + label + ' from Shopify?\n\nThis cannot be undone. Customers who have placed orders cannot be deleted.'
+            )) return;
+            const btn = document.querySelector('.cu-delete-customer-btn[data-customer-id="' + CSS.escape(String(customerId)) + '"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Removing…';
+            }
+            try {
+                const resp = await fetch('/api/customers/' + encodeURIComponent(customerId), {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || data.success === false) {
+                    throw new Error((data && data.error) ? data.error : 'Could not remove customer');
+                }
+                removeCustomerFromList(customerId);
+            } catch (err) {
+                alert(err.message || err);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-user-minus"></i> Remove customer';
+                }
+            }
         }
 
         async function saveCustomerDetails(customerId, formEl) {
@@ -2066,6 +2119,13 @@
                 if (ordersBtn) {
                     e.stopPropagation();
                     openCustomerOrdersModal(ordersBtn.dataset.customerId, ordersBtn.dataset.customerName);
+                    return;
+                }
+                const deleteBtn = e.target.closest('.cu-delete-customer-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    if (deleteBtn.disabled) return;
+                    removeCustomer(deleteBtn.dataset.customerId, deleteBtn.dataset.customerName);
                     return;
                 }
                 const cancelBtn = e.target.closest('.cu-edit-cancel');
