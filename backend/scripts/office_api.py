@@ -1426,3 +1426,47 @@ def delete_stock_design_file(product_id: str | int, filename: str, *, permanent:
     resp = _request("DELETE", url)
     result = _handle_response(resp)
     return result if isinstance(result, dict) else {"ok": True}
+
+
+# --------------------------------------------------------------------------- #
+# Customer feed API keys  (office: api_keys_addon.py, DB_DIR/api_keys.db)
+# --------------------------------------------------------------------------- #
+
+def _api_keys_url(*suffix: str) -> str:
+    base = f"{OFFICE_API_URL.rstrip('/')}/api-keys"
+    path = "/".join(quote(part, safe="") for part in suffix if part)
+    return f"{base}/{path}" if path else base
+
+
+def list_api_keys() -> list[dict]:
+    """``GET /api-keys`` - every feed key record (hash + prefix, never the key)."""
+    resp = _request("GET", _api_keys_url(), timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    if not isinstance(result, dict) or not isinstance(result.get("keys"), list):
+        raise OfficeApiError("Unexpected response from API key list")
+    return result["keys"]
+
+
+def create_api_key(record: dict) -> dict:
+    """``POST /api-keys`` - store a new key record (hash only)."""
+    resp = _request("POST", _api_keys_url(), json=record, timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    if not isinstance(result, dict) or not isinstance(result.get("key"), dict):
+        raise OfficeApiError("Unexpected response from API key create")
+    return result["key"]
+
+
+def revoke_api_key(key_id: str) -> dict:
+    """``POST /api-keys/{id}/revoke`` - idempotent."""
+    resp = _request("POST", _api_keys_url(key_id, "revoke"), timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    if not isinstance(result, dict) or not isinstance(result.get("key"), dict):
+        raise OfficeApiError("Unexpected response from API key revoke")
+    return result["key"]
+
+
+def record_api_key_usage(usage: list[dict]) -> dict:
+    """``POST /api-keys/usage`` - batch of {id, count_delta, last_used_at, last_used_ip}."""
+    resp = _request("POST", _api_keys_url("usage"), json={"usage": usage}, timeout=_COMPANIES_TIMEOUT)
+    result = _handle_response(resp)
+    return result if isinstance(result, dict) else {"ok": True}

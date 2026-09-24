@@ -185,6 +185,10 @@ OFFICE_PRINT_SERVER_KEY = os.environ.get("OFFICE_PRINT_SERVER_KEY") or ""
 SHOPIFY_WEBHOOK_SECRET = os.environ.get("SHOPIFY_WEBHOOK_SECRET") or ""
 CRON_SECRET = os.environ.get("CRON_SECRET") or ""
 
+# Customer product feed. When set, requests on this host may only reach
+# /api/v1/* (the staff portal is not served there). e.g. api.bitepromotions.co.uk
+FEED_API_HOST = (os.environ.get("FEED_API_HOST") or "").strip().lower()
+
 # Common headers for API requests
 SHOPIFY_HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN or "",

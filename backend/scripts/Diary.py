@@ -152,9 +152,16 @@ def save_diary_entry(payload: dict) -> dict:
                 shipment_type=shipment_type if shipment_type is not None else None,
             )
         except Exception as exc:
-            logger.warning("Diary: Office API save failed, continuing with local store (%s)", exc)
+            # Fail loudly: local SQLite is wiped on every Render deploy / spin-down,
+            # so a local-only save would report success and then vanish.
+            logger.error("Diary: Office API save failed for %s / %s: %s", order_name, item_id, exc)
+            return {
+                "success": False,
+                "error": f"Diary not saved - office server unavailable ({exc}). Try again.",
+            }
 
-    # Always write local SQLite so shipping stamps survive Office gaps / reload.
+    # Local SQLite mirrors a successful office save (merged on read in case the
+    # office omits the shipping fields). Only used alone when no office is configured.
     try:
         entry = upsert_entry(
             order_name,
