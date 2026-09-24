@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import secrets
 import threading
 import time
@@ -205,6 +206,21 @@ def start_background() -> None:
             return
         _BG_STARTED = True
     threading.Thread(target=_background_loop, name="feed-keys", daemon=True).start()
+
+
+def _after_fork_in_child() -> None:
+    """If gunicorn forks the worker from a master that imported the app, the
+    usage flush loop stayed behind in the master. Start this process's own."""
+    global _LOCK, _BG_STARTED
+    _LOCK = threading.Lock()
+    was_started = _BG_STARTED
+    _BG_STARTED = False
+    if was_started:
+        start_background()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_after_fork_in_child)
 
 
 # --------------------------------------------------------------------------- #

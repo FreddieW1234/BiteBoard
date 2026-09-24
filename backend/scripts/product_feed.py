@@ -345,20 +345,60 @@ def _load_disk_cache() -> dict | None:
     return None
 
 
+def _build_thread_alive() -> bool:
+    tid = _BUILD_THREAD_ID
+    return tid is not None and any(t.ident == tid for t in threading.enumerate())
+
+
+def _build_is_stale() -> bool:
+    """A build flagged as running whose thread is not in this process (see fork note)."""
+    tid = _BUILD_THREAD_ID
+    return _BUILD_STARTED_AT is not None and tid is not None and not _build_thread_alive()
+
+
+def _reset_build_state() -> None:
+    """Forget a build whose thread does not exist in this process."""
+    global _BUILD_LOCK, _BUILD_STARTED_AT, _BUILD_THREAD_ID
+    _BUILD_LOCK = threading.Lock()
+    _BUILD_STARTED_AT = None
+    _BUILD_THREAD_ID = None
+    _PROGRESS.clear()
+
+
+def _after_fork_in_child() -> None:
+    """Gunicorn may import the app in its master and fork the worker from it.
+
+    Threads do not survive a fork, but module state does - so the worker would
+    inherit "a build is running" plus a held lock, with no thread behind them,
+    and never build. Reset and start this process's own warm-up.
+    """
+    global _LOCK
+    _LOCK = threading.Lock()
+    _reset_build_state()
+    if _SNAPSHOT is None:
+        threading.Thread(target=warm_on_boot, name="feed-warm", daemon=True).start()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_after_fork_in_child)
+
+
 def rebuild_snapshot() -> tuple[bool, str]:
     """Build and install a fresh snapshot. Returns (built, message). Never overlaps."""
     global _LAST_BUILD_ERROR, _BUILD_STARTED_AT, _BUILD_THREAD_ID
-    if not _BUILD_LOCK.acquire(blocking=False):
+    if _build_is_stale():
+        _reset_build_state()
+    lock = _BUILD_LOCK  # release the lock we took, even if a reset swaps it
+    if not lock.acquire(blocking=False):
         return False, "A snapshot build is already running"
     try:
-        _BUILD_STARTED_AT = time.time()
-        _BUILD_THREAD_ID = threading.get_ident()
         _PROGRESS.clear()
+        # Thread id first: a reader must never see "started" without it.
+        _BUILD_THREAD_ID = threading.get_ident()
+        _BUILD_STARTED_AT = time.time()
         snapshot = build_catalogue_snapshot()
         _install(snapshot)
         _LAST_BUILD_ERROR = None
-        _write_disk_cache(snapshot)
-        return True, f"{len(snapshot['products'])} products"
     except Exception as exc:
         _LAST_BUILD_ERROR = f"{_iso_now()} {exc}"
         print(f"[error] feed: snapshot build failed: {exc}", flush=True)
@@ -366,7 +406,10 @@ def rebuild_snapshot() -> tuple[bool, str]:
     finally:
         _BUILD_STARTED_AT = None
         _BUILD_THREAD_ID = None
-        _BUILD_LOCK.release()
+        lock.release()
+    # Served from memory already; the warm-start copy is not part of the build.
+    _write_disk_cache(snapshot)
+    return True, f"{len(snapshot['products'])} products"
 
 
 def rebuild_snapshot_async() -> None:
@@ -386,6 +429,8 @@ def warm_on_boot() -> None:
 def snapshot_status() -> dict:
     with _LOCK:
         snap = _SNAPSHOT
+    if _build_is_stale():
+        _reset_build_state()
     started = _BUILD_STARTED_AT
     status = {
         "generated_at": snap.get("generated_at") if snap else None,
@@ -397,7 +442,7 @@ def snapshot_status() -> dict:
         elapsed = int(time.time() - started)
         status["progress"] = {"elapsed_s": elapsed, **_PROGRESS}
         # A build this slow is stuck somewhere - show staff exactly where.
-        frame = sys._current_frames().get(_BUILD_THREAD_ID) if _BUILD_THREAD_ID else None
+        frame = sys._current_frames().get(_BUILD_THREAD_ID) if _build_thread_alive() else None
         if elapsed >= 30 and frame is not None:
             status["progress"]["stack"] = [
                 ln.strip() for ln in traceback.format_stack(frame)[-6:]
@@ -420,8 +465,12 @@ def render_view(customer_type: str) -> dict | None:
         raise ValueError(f"Unknown customer type {customer_type!r}")
     with _LOCK:
         snap = _SNAPSHOT
-        if snap is None:
-            return None
+    if snap is None:
+        # Nothing in this process yet: make sure a build is actually running.
+        if _BUILD_STARTED_AT is None or _build_is_stale():
+            rebuild_snapshot_async()
+        return None
+    with _LOCK:
         cache_key = (snap["generated_at"], customer_type)
         cached = _VIEWS.get(cache_key)
     if cached is not None:
