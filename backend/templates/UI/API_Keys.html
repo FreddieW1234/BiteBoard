@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feed API Keys - BiteBoard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/theme.css?v=7" rel="stylesheet">
+    <script src="/static/theme.js?v=4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span, .sidebar.collapsed .dashboard-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab, .sidebar.collapsed .dashboard-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span, .sidebar.collapsed:hover .dashboard-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab, .sidebar.collapsed:hover .dashboard-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 2px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .dashboard-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; transition: background-color 0.15s; width: 100%; justify-content: center; }
+        .dashboard-tab:hover { background: #4338ca; }
+        .main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px; gap: 16px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+        .card h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; }
+        .muted { color: #6b7280; font-size: 0.8rem; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: 4px; }
+        .field label { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+        .field input, .field select { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 0.875rem; min-width: 200px; background: #fff; }
+        .btn { border: 1px solid #4f46e5; background: #4f46e5; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
+        .btn:hover { background: #4338ca; }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .btn-ghost { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
+        .btn-ghost:hover { background: #f9fafb; }
+        .btn-danger { border: 1px solid #fecaca; background: #fff; color: #b91c1c; border-radius: 6px; padding: 5px 10px; font-size: 0.8rem; cursor: pointer; }
+        .btn-danger:hover { background: #fef2f2; }
+        .new-key { display: none; margin-top: 14px; padding: 12px; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 8px; }
+        .new-key code { display: block; font-size: 0.95rem; padding: 8px; margin: 8px 0; background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; word-break: break-all; user-select: all; }
+        .msg { font-size: 0.85rem; margin-top: 10px; }
+        .msg.err { color: #b91c1c; }
+        .msg.warn { color: #92400e; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+        th { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+        td code { font-size: 0.8rem; }
+        .pill { font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; }
+        .pill.active { background: #dcfce7; color: #166534; }
+        .pill.revoked { background: #fee2e2; color: #991b1b; }
+        .pill.expired { background: #f3f4f6; color: #4b5563; }
+        .table-wrap { overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/app/Products" class="app-tab"><i class="fas fa-box-open"></i><span>Products</span></a>
+                    <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
+                    <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+                    <a href="/app/Customers" class="app-tab active"><i class="fas fa-users"></i><span>Customers</span></a>
+                    <a href="/app/Menu" class="app-tab"><i class="fas fa-sitemap"></i><span>Menu</span></a>
+                </div>
+            </nav>
+            <div class="sidebar-footer"><a href="/" class="dashboard-tab"><i class="fas fa-home"></i><span>Dashboard</span></a></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-key"></i> Feed API keys</h1>
+
+            <div class="card">
+                <h2>Catalogue snapshot</h2>
+                <div class="row">
+                    <span id="snap-status" class="muted">Loading…</span>
+                    <button type="button" class="btn-ghost" id="snap-rebuild"><i class="fas fa-rotate"></i> Rebuild now</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Generate a key</h2>
+                <div class="row">
+                    <div class="field">
+                        <label for="gen-search">Customer (trade / end-customer only)</label>
+                        <input type="text" id="gen-search" placeholder="Filter by name, email or company…" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label for="gen-customer">&nbsp;</label>
+                        <select id="gen-customer"><option value="">Loading customers…</option></select>
+                    </div>
+                    <div class="field">
+                        <label for="gen-label">Label</label>
+                        <input type="text" id="gen-label" placeholder="e.g. Acme Promo Ltd website">
+                    </div>
+                    <div class="field">
+                        <label for="gen-expires">Expires (optional)</label>
+                        <input type="date" id="gen-expires">
+                    </div>
+                    <button type="button" class="btn" id="gen-btn">Generate</button>
+                </div>
+                <div class="msg" id="gen-msg"></div>
+                <div class="new-key" id="new-key">
+                    <strong>Copy this key now - it will not be shown again.</strong>
+                    <code id="new-key-value"></code>
+                    <span class="muted" id="new-key-note"></span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Keys</h2>
+                <div class="msg" id="list-msg"></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Label</th><th>Key</th><th>Customer</th><th>Created</th><th>Last used</th><th>Requests</th><th>Status</th><th></th></tr></thead>
+                        <tbody id="keys-body"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    let customers = [];
+    const customerById = {};
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmt(ts) {
+        if (!ts) return '—';
+        const d = new Date(ts);
+        return isNaN(d) ? esc(ts) : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    function priceType(c) {
+        const tags = (c.matched_tags || []).map((t) => String(t).toLowerCase());
+        const hits = ['trade', 'end-customer'].filter((t) => tags.includes(t));
+        return hits.length === 1 ? hits[0] : null;
+    }
+    function customerLabel(c) {
+        const parts = [c.name || c.email || c.id];
+        if (c.company_name) parts.push(c.company_name);
+        return parts.join(' — ') + ' (' + priceType(c) + ')';
+    }
+
+    function renderCustomerOptions() {
+        const q = $('gen-search').value.trim().toLowerCase();
+        const list = customers.filter((c) => !q || [c.name, c.email, c.company_name].join(' ').toLowerCase().includes(q));
+        $('gen-customer').innerHTML = list.length
+            ? '<option value="">Select a customer…</option>' + list.map((c) => `<option value="${esc(c.id)}">${esc(customerLabel(c))}</option>`).join('')
+            : '<option value="">No matching customers</option>';
+    }
+
+    async function loadCustomers(attempt) {
+        try {
+            const r = await fetch('/api/customers');
+            const data = await r.json();
+            const all = data.customers || [];
+            if (!all.length && data.building && (attempt || 0) < 10) {
+                setTimeout(() => loadCustomers((attempt || 0) + 1), 3000);
+                return;
+            }
+            all.forEach((c) => { customerById[String(c.id)] = c; });
+            customers = all.filter(priceType).sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email)));
+            renderCustomerOptions();
+            renderKeys(lastKeys);
+        } catch (e) {
+            $('gen-customer').innerHTML = '<option value="">Could not load customers</option>';
+        }
+    }
+
+    function renderSnapshot(s) {
+        if (!s) return;
+        let text = s.generated_at ? `Built ${fmt(s.generated_at)} · ${s.product_count} products` : 'No snapshot in memory';
+        if (s.building) text += ' · rebuilding…';
+        if (s.last_error) text += ' · last build failed: ' + s.last_error;
+        $('snap-status').textContent = text;
+    }
+
+    let lastKeys = [];
+    function renderKeys(keys) {
+        lastKeys = keys || [];
+        if (!lastKeys.length) {
+            $('keys-body').innerHTML = '<tr><td colspan="8" class="muted">No keys yet.</td></tr>';
+            return;
+        }
+        $('keys-body').innerHTML = lastKeys.map((k) => {
+            const c = customerById[k.shopify_customer_id];
+            const who = c ? esc(c.name || c.email) : esc(k.shopify_customer_id);
+            const action = k.status === 'active'
+                ? `<button type="button" class="btn-danger" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button>` : '';
+            return `<tr>
+                <td>${esc(k.label)}</td>
+                <td><code>${esc(k.prefix)}</code></td>
+                <td>${who}</td>
+                <td>${fmt(k.created_at)}${k.created_by ? ' · ' + esc(k.created_by) : ''}</td>
+                <td>${fmt(k.last_used_at)}${k.last_used_ip ? '<br><span class="muted">' + esc(k.last_used_ip) + '</span>' : ''}</td>
+                <td>${esc(k.request_count)}</td>
+                <td><span class="pill ${esc(k.status)}">${esc(k.status)}</span>${k.expires_at && k.status === 'active' ? '<br><span class="muted">until ' + fmt(k.expires_at) + '</span>' : ''}</td>
+                <td>${action}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function loadKeys() {
+        $('list-msg').textContent = '';
+        try {
+            const r = await fetch('/api/feed-keys');
+            const data = await r.json();
+            renderSnapshot(data.snapshot);
+            if (!data.success) {
+                $('list-msg').className = 'msg err';
+                $('list-msg').textContent = data.error || 'Could not load keys';
+            }
+            renderKeys(data.keys);
+        } catch (e) {
+            $('list-msg').className = 'msg err';
+            $('list-msg').textContent = 'Could not load keys';
+        }
+    }
+
+    $('gen-search').addEventListener('input', renderCustomerOptions);
+    $('gen-customer').addEventListener('change', () => {
+        const c = customerById[$('gen-customer').value];
+        if (c && !$('gen-label').value.trim()) $('gen-label').value = c.company_name || c.name || '';
+    });
+
+    $('gen-btn').addEventListener('click', async () => {
+        const msg = $('gen-msg');
+        msg.className = 'msg';
+        msg.textContent = '';
+        $('new-key').style.display = 'none';
+        const body = {
+            shopify_customer_id: $('gen-customer').value,
+            label: $('gen-label').value.trim(),
+            expires_at: $('gen-expires').value,
+        };
+        if (!body.shopify_customer_id || !body.label) {
+            msg.className = 'msg err';
+            msg.textContent = 'Pick a customer and give the key a label.';
+            return;
+        }
+        $('gen-btn').disabled = true;
+        try {
+            const r = await fetch('/api/feed-keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await r.json();
+            if (!data.success) {
+                msg.className = 'msg err';
+                msg.textContent = data.error || 'Key not created';
+                return;
+            }
+            $('new-key-value').textContent = data.key;
+            $('new-key-note').textContent = `Serves ${data.price_list} pricing while the customer keeps that tag. Customers should pull once a day and cache - never call the feed from their page loads.`;
+            $('new-key').style.display = 'block';
+            $('gen-label').value = '';
+            $('gen-expires').value = '';
+            loadKeys();
+        } catch (e) {
+            msg.className = 'msg err';
+            msg.textContent = 'Key not created';
+        } finally {
+            $('gen-btn').disabled = false;
+        }
+    });
+
+    $('keys-body').addEventListener('click', async (ev) => {
+        const btn = ev.target.closest('[data-revoke]');
+        if (!btn) return;
+        if (!confirm(`Revoke "${btn.dataset.label}"? Their feed stops working immediately.`)) return;
+        btn.disabled = true;
+        const msg = $('list-msg');
+        try {
+            const r = await fetch(`/api/feed-keys/${encodeURIComponent(btn.dataset.revoke)}/revoke`, { method: 'POST' });
+            const data = await r.json();
+            if (!data.success) {
+                msg.className = 'msg err';
+                msg.textContent = data.error || 'Revoke failed';
+                btn.disabled = false;
+                return;
+            }
+            msg.className = data.warning ? 'msg warn' : 'msg';
+            msg.textContent = data.warning || 'Key revoked.';
+            await loadKeys();
+            if (data.warning) { msg.className = 'msg warn'; msg.textContent = data.warning; }
+        } catch (e) {
+            msg.className = 'msg err';
+            msg.textContent = 'Revoke failed';
+            btn.disabled = false;
+        }
+    });
+
+    $('snap-rebuild').addEventListener('click', async () => {
+        const r = await fetch('/api/feed-snapshot/rebuild', { method: 'POST' });
+        const data = await r.json();
+        renderSnapshot(data.snapshot);
+        setTimeout(loadKeys, 15000);
+    });
+
+    loadKeys();
+    loadCustomers(0);
+})();
+</script>
+</body>
+</html>

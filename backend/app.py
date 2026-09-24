@@ -16,7 +16,7 @@ import threading
 from datetime import datetime
 import json
 
-from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, PORTAL_PAGE_URL  # type: ignore
+from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN, FLASK_SECRET_KEY, FLASK_SESSION_SECURE, STOREFRONT_URL, MAX_UPLOAD_MB, PORTAL_PAGE_URL, FEED_API_HOST  # type: ignore
 from portal_auth import (  # type: ignore
     authenticate_staff,
     is_staff_authenticated,
@@ -112,6 +112,18 @@ try:
 except Exception as _warm_imp_err:
     print(f"[warn] Customers cache warm not scheduled: {_warm_imp_err}", flush=True)
 
+# Customer product feed: load keys from the office server and rebuild the
+# catalogue snapshot off the request path. A cold instance answers the feed
+# with 503 + Retry-After until the snapshot is ready.
+try:
+    from scripts import feed_keys as _feed_keys  # type: ignore
+    from scripts import product_feed as _product_feed  # type: ignore
+
+    _feed_keys.start_background()
+    threading.Thread(target=_product_feed.warm_on_boot, name="feed-warm", daemon=True).start()
+except Exception as _feed_err:
+    print(f"[warn] Customer feed warm-up not started: {_feed_err}", flush=True)
+
 
 @app.errorhandler(413)
 def request_entity_too_large(_e):
@@ -140,6 +152,11 @@ def api_internal_error(_e):
 @app.before_request
 def portal_auth_gate():
     path = request.path or ""
+    # The feed host serves the customer API and nothing else.
+    if FEED_API_HOST and (request.host or "").split(":")[0].lower() == FEED_API_HOST:
+        if not path.startswith("/api/v1/"):
+            return jsonify({"error": "Not found"}), 404
+        return None
     if path.startswith("/static/"):
         return None
     if request.method == "OPTIONS":
@@ -4296,6 +4313,216 @@ def cron_reconcile_visibility():
         ), 200 if report.get("success", True) else 500
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --------------------------------------------------------------------------- #
+# Customer product feed  (scripts/product_feed.py, scripts/feed_keys.py)
+# A daily-pulled feed, not a live API: one gunicorn worker serves everything.
+# --------------------------------------------------------------------------- #
+
+_FEED_RETRY_AFTER_COLD = 60
+
+
+@app.route("/api/cron/rebuild-feed", methods=["POST"])
+def cron_rebuild_feed():
+    """Nightly feed snapshot. Authorization: Bearer <CRON_SECRET>."""
+    from config import CRON_SECRET
+    import hmac as hmac_mod
+    from scripts import product_feed
+
+    expected = (CRON_SECRET or "").strip()
+    auth = (request.headers.get("Authorization") or "").strip()
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not expected or not token or not hmac_mod.compare_digest(token, expected):
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    built, message = product_feed.rebuild_snapshot()
+    status = product_feed.snapshot_status()
+    if built:
+        return jsonify({"success": True, "message": message, **status}), 200
+    if status.get("building"):
+        return jsonify({"success": True, "message": message, **status}), 202
+    return jsonify({"success": False, "error": message, **status}), 500
+
+
+def _feed_client_ip() -> str:
+    fwd = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return fwd or (request.remote_addr or "")
+
+
+def _feed_log(endpoint: str, prefix: str, status: int, nbytes: int, started: float) -> None:
+    # Prefix only - never the key.
+    print(
+        f"[feed-api] key={prefix or '-'} endpoint={endpoint} status={status} "
+        f"bytes={nbytes} ms={int((time.time() - started) * 1000)} ip={_feed_client_ip()}",
+        flush=True,
+    )
+
+
+def _feed_authenticate(endpoint: str, started: float):
+    """(key_record, customer_type, None) on success, else (None, None, error_response)."""
+    from scripts import feed_keys, product_feed
+
+    def fail(status, body, prefix="", headers=None):
+        resp = make_response(jsonify(body), status)
+        for k, v in (headers or {}).items():
+            resp.headers[k] = v
+        _feed_log(endpoint, prefix, status, 0, started)
+        return None, None, resp
+
+    auth = (request.headers.get("Authorization") or "").strip()
+    raw_key = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    prefix = feed_keys.key_prefix_of(raw_key)
+
+    if not feed_keys.ensure_loaded():
+        return fail(503, {"error": "Service starting, retry shortly"}, prefix,
+                    {"Retry-After": str(_FEED_RETRY_AFTER_COLD)})
+
+    # Same 401 body whether the key is unknown, revoked, expired or its customer
+    # no longer has a pricing tag.
+    unauthorized = {"error": "Unauthorized"}
+    rec = feed_keys.verify_key(raw_key)
+    if rec is None:
+        return fail(401, unauthorized, prefix, {"WWW-Authenticate": "Bearer"})
+
+    retry = feed_keys.check_rate_limit(rec["id"])
+    if retry:
+        return fail(429, {"error": "Rate limit exceeded"}, prefix, {"Retry-After": str(retry)})
+
+    try:
+        customer_type = product_feed.resolve_customer_type(rec.get("shopify_customer_id"))
+    except Exception as exc:
+        print(f"[warn] feed: customer tag lookup failed: {exc}", flush=True)
+        return fail(503, {"error": "Temporarily unavailable"}, prefix, {"Retry-After": "300"})
+    if customer_type is None:
+        return fail(401, unauthorized, prefix, {"WWW-Authenticate": "Bearer"})
+
+    feed_keys.record_use(rec["id"], _feed_client_ip())
+    return rec, customer_type, None
+
+
+@app.route("/api/v1/ping", methods=["GET"])
+def feed_api_ping():
+    """Check a key without pulling the catalogue."""
+    from scripts import feed_keys, product_feed
+
+    started = time.time()
+    rec, customer_type, error = _feed_authenticate("ping", started)
+    if error is not None:
+        return error
+    body = {
+        "ok": True,
+        "price_list": customer_type,
+        "generated_at": product_feed.get_snapshot_generated_at(),
+    }
+    resp = jsonify(body)
+    resp.headers["Cache-Control"] = "no-store"
+    _feed_log("ping", rec.get("key_prefix") or "", 200, len(resp.get_data()), started)
+    return resp
+
+
+@app.route("/api/v1/feed", methods=["GET"])
+def feed_api_feed():
+    """Catalogue with the caller's price list only. gzip + ETag/If-None-Match."""
+    from scripts import product_feed
+
+    started = time.time()
+    rec, customer_type, error = _feed_authenticate("feed", started)
+    if error is not None:
+        return error
+    prefix = rec.get("key_prefix") or ""
+
+    view = product_feed.render_view(customer_type)
+    if view is None:
+        resp = make_response(jsonify({"error": "Catalogue is being prepared, retry shortly"}), 503)
+        resp.headers["Retry-After"] = str(_FEED_RETRY_AFTER_COLD)
+        _feed_log("feed", prefix, 503, 0, started)
+        return resp
+
+    if view["etag"] in (request.headers.get("If-None-Match") or ""):
+        resp = make_response("", 304)
+        resp.headers["ETag"] = view["etag"]
+        resp.headers["Cache-Control"] = "private, no-cache"
+        _feed_log("feed", prefix, 304, 0, started)
+        return resp
+
+    use_gzip = "gzip" in (request.headers.get("Accept-Encoding") or "").lower()
+    payload = view["gzip"] if use_gzip else view["body"]
+    resp = make_response(payload, 200)
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
+    if use_gzip:
+        resp.headers["Content-Encoding"] = "gzip"
+    resp.headers["Vary"] = "Accept-Encoding"
+    resp.headers["ETag"] = view["etag"]
+    resp.headers["Cache-Control"] = "private, no-cache"
+    _feed_log("feed", prefix, 200, len(payload), started)
+    return resp
+
+
+@app.route("/api/feed-keys", methods=["GET", "POST"])
+def api_feed_keys():
+    """Staff: list keys (+ snapshot status) / generate a key (shown once)."""
+    from scripts import feed_keys, product_feed
+
+    if request.method == "GET":
+        try:
+            keys = feed_keys.list_keys_for_staff(refresh=True)
+            return jsonify({"success": True, "keys": keys, "snapshot": product_feed.snapshot_status()})
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Office server unavailable: {e}",
+                            "keys": [], "snapshot": product_feed.snapshot_status()}), 502
+
+    data = request.get_json(silent=True) or {}
+    label = (data.get("label") or "").strip()
+    customer_id = str(data.get("shopify_customer_id") or "").strip()
+    expires = (data.get("expires_at") or "").strip()
+    if not label or not customer_id.isdigit():
+        return jsonify({"success": False, "error": "Label and customer are required"}), 400
+    expires_at = None
+    if expires:
+        try:
+            expires_at = datetime.strptime(expires, "%Y-%m-%d").strftime("%Y-%m-%dT23:59:59Z")
+        except ValueError:
+            return jsonify({"success": False, "error": "Expiry must be YYYY-MM-DD"}), 400
+    try:
+        customer_type = product_feed.resolve_customer_type(customer_id)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not read customer from Shopify: {e}"}), 502
+    if customer_type is None:
+        return jsonify({"success": False,
+                        "error": "Customer must be tagged trade or end-customer (not pending, not both)"}), 400
+    try:
+        raw_key, record = feed_keys.generate_key(
+            label=label, shopify_customer_id=customer_id,
+            created_by=get_staff_username(), expires_at=expires_at,
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Office server unavailable, key not created: {e}"}), 502
+    return jsonify({"success": True, "key": raw_key, "record": record, "price_list": customer_type})
+
+
+@app.route("/api/feed-keys/<key_id>/revoke", methods=["POST"])
+def api_feed_key_revoke(key_id):
+    from scripts import feed_keys
+
+    record, office_error = feed_keys.revoke_key(key_id)
+    if record is None:
+        return jsonify({"success": False, "error": "Key not found"}), 404
+    if office_error:
+        return jsonify({
+            "success": True, "record": record,
+            "warning": "Revoked now, but the office server did not save it - click Revoke again "
+                       "before the next deploy or it will come back.",
+        })
+    return jsonify({"success": True, "record": record})
+
+
+@app.route("/api/feed-snapshot/rebuild", methods=["POST"])
+def api_feed_snapshot_rebuild():
+    from scripts import product_feed
+
+    product_feed.rebuild_snapshot_async()
+    return jsonify({"success": True, "snapshot": product_feed.snapshot_status()})
 
 
 @app.route('/api/category-editor/categories', methods=['GET'])

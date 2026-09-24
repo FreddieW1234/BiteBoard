@@ -94,6 +94,9 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      # Customer feed host, e.g. api.bitepromotions.co.uk - only /api/v1/* is served there.
+      - key: FEED_API_HOST
+        sync: false
 
   # Nightly Phase 7 visibility backstop — 03:00 UTC (04:00 BST in summer).
   # HTTP-POSTs the web service so webhook/reconcile share one code path.
@@ -113,3 +116,22 @@ services:
       - key: RECONCILE_VISIBILITY_URL
         sync: false
 
+
+  # Nightly customer product-feed snapshot - 03:15 UTC, after the reconcile so
+  # publish/visibility changes are settled. Same CRON_SECRET as the web service;
+  # REBUILD_FEED_URL = https://<web-service>/api/cron/rebuild-feed
+  # On the free plan the snapshot only lives until the next idle spin-down, so
+  # a cold customer pull still gets 503 + Retry-After while it rebuilds.
+  - type: cron
+    name: rebuild-feed-nightly
+    runtime: native
+    plan: free
+    region: oregon
+    schedule: "15 3 * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS --max-time 280 -X POST "$REBUILD_FEED_URL" -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "{}"'
+    envVars:
+      - key: CRON_SECRET
+        sync: false
+      - key: REBUILD_FEED_URL
+        sync: false

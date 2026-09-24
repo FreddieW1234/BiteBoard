@@ -130,6 +130,12 @@ def is_staff_public_path(path: str) -> bool:
     # Nightly reconcile (Bearer CRON_SECRET verified in the route).
     if path == "/api/cron/reconcile-visibility":
         return True
+    # Nightly customer-feed snapshot (Bearer CRON_SECRET verified in the route).
+    if path == "/api/cron/rebuild-feed":
+        return True
+    # Customer product feed (Bearer feed key verified in the route).
+    if path in ("/api/v1/feed", "/api/v1/ping"):
+        return True
     # Storefront stock-designs: product page checks /exists and downloads /latest
     # without a portal staff session. Staff list/upload/delete stay protected.
     if path.startswith("/api/stock-designs/") and (
