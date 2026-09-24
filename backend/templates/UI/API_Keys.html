@@ -65,6 +65,7 @@
         .pill.revoked { background: #fee2e2; color: #991b1b; }
         .pill.expired { background: #f3f4f6; color: #4b5563; }
         .table-wrap { overflow-x: auto; }
+        .snap-stack { margin-top: 10px; padding: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.75rem; white-space: pre-wrap; color: #374151; }
         .cust-field { position: relative; }
         .cust-field input { min-width: 320px; }
         .cust-field input.picked { border-color: #4f46e5; background: #eef2ff; }
@@ -101,6 +102,7 @@
                     <span id="snap-status" class="muted">Loading…</span>
                     <button type="button" class="btn-ghost" id="snap-rebuild"><i class="fas fa-rotate"></i> Rebuild now</button>
                 </div>
+                <pre class="snap-stack" id="snap-stack" hidden></pre>
             </div>
 
             <div class="card">
@@ -161,10 +163,19 @@
         const hits = ['trade', 'end-customer'].filter((t) => tags.includes(t));
         return hits.length === 1 ? hits[0] : null;
     }
+    // "END USER" is a placeholder company on end-customer accounts, not a name.
+    function realCompany(c) {
+        const co = String(c.company_name || '').trim();
+        return /^end[\s-]*users?$/i.test(co) ? '' : co;
+    }
+    // One format everywhere: "Name — Company", or just "Name" with no real company.
+    function customerName(c) {
+        const who = c.name || c.email || String(c.id);
+        const co = realCompany(c);
+        return co ? `${who} — ${co}` : who;
+    }
     function customerLabel(c) {
-        const parts = [c.name || c.email || c.id];
-        if (c.company_name) parts.push(c.company_name);
-        return parts.join(' — ') + ' (' + priceType(c) + ')';
+        return `${customerName(c)} (${priceType(c)})`;
     }
 
     let pickedId = '';
@@ -188,7 +199,7 @@
         }).slice(0, 20);
         box.innerHTML = matches.length
             ? matches.map((c, i) => `<div class="cust-opt${i === hi ? ' hi' : ''}" role="option" data-i="${i}">
-                  <span>${esc(c.name || c.email)}${c.company_name ? ' — ' + esc(c.company_name) : ''}</span>
+                  <span>${esc(customerName(c))}</span>
                   <span class="muted">${esc(priceType(c))}</span></div>`).join('')
             : '<div class="cust-empty">No trade or end-customer matches</div>';
         box.hidden = false;
@@ -201,7 +212,8 @@
         input.value = customerLabel(c);
         input.classList.add('picked');
         closeResults();
-        if (!$('gen-label').value.trim()) $('gen-label').value = c.company_name || c.name || '';
+        // Label = company when there is one, otherwise the person's name.
+        if (!$('gen-label').value.trim()) $('gen-label').value = realCompany(c) || c.name || c.email || '';
     }
 
     async function loadCustomers(attempt) {
@@ -225,9 +237,26 @@
     function renderSnapshot(s) {
         if (!s) return;
         let text = s.generated_at ? `Built ${fmt(s.generated_at)} · ${s.product_count} products` : 'No snapshot in memory';
-        if (s.building) text += ' · rebuilding…';
+        const p = s.progress;
+        if (s.building) {
+            text += ' · rebuilding…';
+            if (p) text += ` ${p.elapsed_s}s, page ${p.pages || 0}, ${p.products || 0} products` + (p.throttled ? `, throttled ${p.throttled}×` : '');
+        }
         if (s.last_error) text += ' · last build failed: ' + s.last_error;
         $('snap-status').textContent = text;
+        $('snap-stack').textContent = p && p.stack ? 'Stuck at:\n' + p.stack.join('\n') : '';
+        $('snap-stack').hidden = !(p && p.stack);
+        clearTimeout(snapTimer);
+        if (s.building) snapTimer = setTimeout(pollSnapshot, 5000);
+    }
+
+    let snapTimer = null;
+    async function pollSnapshot() {
+        try {
+            const data = await fetch('/api/feed-keys').then((r) => r.json());
+            renderSnapshot(data.snapshot);
+            if (!data.snapshot.building) renderKeys(data.keys);
+        } catch (e) { /* next manual refresh will retry */ }
     }
 
     let lastKeys = [];
@@ -239,7 +268,7 @@
         }
         $('keys-body').innerHTML = lastKeys.map((k) => {
             const c = customerById[k.shopify_customer_id];
-            const who = c ? esc(c.name || c.email) : esc(k.shopify_customer_id);
+            const who = c ? esc(customerName(c)) : esc(k.shopify_customer_id);
             const action = k.status === 'active'
                 ? `<button type="button" class="btn-danger" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button>` : '';
             return `<tr>
@@ -365,7 +394,7 @@
         const r = await fetch('/api/feed-snapshot/rebuild', { method: 'POST' });
         const data = await r.json();
         renderSnapshot(data.snapshot);
-        setTimeout(loadKeys, 15000);
+        setTimeout(pollSnapshot, 1500);
     });
 
     loadKeys();

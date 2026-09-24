@@ -18,8 +18,10 @@ import gzip
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,6 +43,10 @@ _VIEWS: dict[tuple[str, str], dict] = {}   # (generated_at, customer_type) -> re
 _LAST_BUILD_ERROR: str | None = None
 _BUILD_STARTED_AT: float | None = None
 _CUSTOMER_TYPES: dict[str, tuple[float, str | None]] = {}
+_BUILD_DEADLINE_SECONDS = 240
+_BUILD_THREAD_ID: int | None = None
+# Live progress of the current build, shown to staff (Render logs are not).
+_PROGRESS: dict = {}
 
 # Aliased single-metafield lookups are cheap in query cost and are never
 # truncated the way a metafields(first: N) page can be.
@@ -114,8 +120,9 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
     headers = {"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"}
     for _attempt in range(8):
         resp = requests.post(url, json={"query": query, "variables": variables or {}},
-                             headers=headers, timeout=60)
+                             headers=headers, timeout=(10, 60))
         if resp.status_code == 429:
+            _PROGRESS["throttled"] = _PROGRESS.get("throttled", 0) + 1
             time.sleep(2)
             continue
         resp.raise_for_status()
@@ -123,6 +130,7 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
         errors = payload.get("errors") or []
         if errors:
             if "THROTTLED" in str(errors).upper():
+                _PROGRESS["throttled"] = _PROGRESS.get("throttled", 0) + 1
                 time.sleep(2)
                 continue
             raise RuntimeError(str(errors)[:500])
@@ -280,14 +288,22 @@ def build_catalogue_snapshot() -> dict:
     started = time.time()
     products = []
     cursor = None
+    _PROGRESS.update(pages=0, products=0, throttled=0)
     while True:
+        if time.time() - started > _BUILD_DEADLINE_SECONDS:
+            raise TimeoutError(
+                f"gave up after {_BUILD_DEADLINE_SECONDS}s "
+                f"({_PROGRESS.get('pages')} pages, {len(products)} products so far)"
+            )
         data = _graphql(_PRODUCTS_QUERY, {"cursor": cursor})
+        _PROGRESS["pages"] += 1
         conn = data.get("products") or {}
         for edge in conn.get("edges") or []:
             node = edge.get("node") or {}
             if not node.get("onlineStoreUrl"):
                 continue  # not published to the Online Store
             products.append(_product_from_node(node))
+        _PROGRESS["products"] = len(products)
         page = conn.get("pageInfo") or {}
         if not page.get("hasNextPage"):
             break
@@ -331,11 +347,13 @@ def _load_disk_cache() -> dict | None:
 
 def rebuild_snapshot() -> tuple[bool, str]:
     """Build and install a fresh snapshot. Returns (built, message). Never overlaps."""
-    global _LAST_BUILD_ERROR, _BUILD_STARTED_AT
+    global _LAST_BUILD_ERROR, _BUILD_STARTED_AT, _BUILD_THREAD_ID
     if not _BUILD_LOCK.acquire(blocking=False):
         return False, "A snapshot build is already running"
     try:
         _BUILD_STARTED_AT = time.time()
+        _BUILD_THREAD_ID = threading.get_ident()
+        _PROGRESS.clear()
         snapshot = build_catalogue_snapshot()
         _install(snapshot)
         _LAST_BUILD_ERROR = None
@@ -347,6 +365,7 @@ def rebuild_snapshot() -> tuple[bool, str]:
         return False, str(exc)
     finally:
         _BUILD_STARTED_AT = None
+        _BUILD_THREAD_ID = None
         _BUILD_LOCK.release()
 
 
@@ -367,12 +386,23 @@ def warm_on_boot() -> None:
 def snapshot_status() -> dict:
     with _LOCK:
         snap = _SNAPSHOT
-    return {
+    started = _BUILD_STARTED_AT
+    status = {
         "generated_at": snap.get("generated_at") if snap else None,
         "product_count": len(snap.get("products") or []) if snap else 0,
-        "building": _BUILD_STARTED_AT is not None,
+        "building": started is not None,
         "last_error": _LAST_BUILD_ERROR,
     }
+    if started is not None:
+        elapsed = int(time.time() - started)
+        status["progress"] = {"elapsed_s": elapsed, **_PROGRESS}
+        # A build this slow is stuck somewhere - show staff exactly where.
+        frame = sys._current_frames().get(_BUILD_THREAD_ID) if _BUILD_THREAD_ID else None
+        if elapsed >= 30 and frame is not None:
+            status["progress"]["stack"] = [
+                ln.strip() for ln in traceback.format_stack(frame)[-6:]
+            ]
+    return status
 
 
 def get_snapshot_generated_at() -> str | None:
