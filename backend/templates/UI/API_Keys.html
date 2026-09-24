@@ -65,6 +65,14 @@
         .pill.revoked { background: #fee2e2; color: #991b1b; }
         .pill.expired { background: #f3f4f6; color: #4b5563; }
         .table-wrap { overflow-x: auto; }
+        .cust-field { position: relative; }
+        .cust-field input { min-width: 320px; }
+        .cust-field input.picked { border-color: #4f46e5; background: #eef2ff; }
+        .cust-results { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin-top: 4px; max-height: 280px; overflow-y: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+        .cust-opt { padding: 8px 10px; cursor: pointer; font-size: 0.85rem; display: flex; justify-content: space-between; gap: 10px; }
+        .cust-opt:hover, .cust-opt.hi { background: #f3f4f6; }
+        .cust-opt .muted { white-space: nowrap; }
+        .cust-empty { padding: 8px 10px; font-size: 0.85rem; color: #6b7280; }
     </style>
 </head>
 <body>
@@ -98,13 +106,10 @@
             <div class="card">
                 <h2>Generate a key</h2>
                 <div class="row">
-                    <div class="field">
+                    <div class="field cust-field">
                         <label for="gen-search">Customer (trade / end-customer only)</label>
-                        <input type="text" id="gen-search" placeholder="Filter by name, email or company…" autocomplete="off">
-                    </div>
-                    <div class="field">
-                        <label for="gen-customer">&nbsp;</label>
-                        <select id="gen-customer"><option value="">Loading customers…</option></select>
+                        <input type="text" id="gen-search" placeholder="Loading customers…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="gen-results">
+                        <div class="cust-results" id="gen-results" role="listbox" hidden></div>
                     </div>
                     <div class="field">
                         <label for="gen-label">Label</label>
@@ -162,12 +167,41 @@
         return parts.join(' — ') + ' (' + priceType(c) + ')';
     }
 
+    let pickedId = '';
+    let matches = [];
+    let hi = -1;
+
+    function closeResults() {
+        $('gen-results').hidden = true;
+        $('gen-search').setAttribute('aria-expanded', 'false');
+        hi = -1;
+    }
+
     function renderCustomerOptions() {
+        const box = $('gen-results');
         const q = $('gen-search').value.trim().toLowerCase();
-        const list = customers.filter((c) => !q || [c.name, c.email, c.company_name].join(' ').toLowerCase().includes(q));
-        $('gen-customer').innerHTML = list.length
-            ? '<option value="">Select a customer…</option>' + list.map((c) => `<option value="${esc(c.id)}">${esc(customerLabel(c))}</option>`).join('')
-            : '<option value="">No matching customers</option>';
+        if (!q) { closeResults(); return; }
+        const words = q.split(/\s+/);
+        matches = customers.filter((c) => {
+            const hay = [c.name, c.email, c.company_name].join(' ').toLowerCase();
+            return words.every((w) => hay.includes(w));
+        }).slice(0, 20);
+        box.innerHTML = matches.length
+            ? matches.map((c, i) => `<div class="cust-opt${i === hi ? ' hi' : ''}" role="option" data-i="${i}">
+                  <span>${esc(c.name || c.email)}${c.company_name ? ' — ' + esc(c.company_name) : ''}</span>
+                  <span class="muted">${esc(priceType(c))}</span></div>`).join('')
+            : '<div class="cust-empty">No trade or end-customer matches</div>';
+        box.hidden = false;
+        $('gen-search').setAttribute('aria-expanded', 'true');
+    }
+
+    function pickCustomer(c) {
+        pickedId = String(c.id);
+        const input = $('gen-search');
+        input.value = customerLabel(c);
+        input.classList.add('picked');
+        closeResults();
+        if (!$('gen-label').value.trim()) $('gen-label').value = c.company_name || c.name || '';
     }
 
     async function loadCustomers(attempt) {
@@ -181,10 +215,10 @@
             }
             all.forEach((c) => { customerById[String(c.id)] = c; });
             customers = all.filter(priceType).sort((a, b) => String(a.name || a.email).localeCompare(String(b.name || b.email)));
-            renderCustomerOptions();
+            $('gen-search').placeholder = 'Search by name, email or company…';
             renderKeys(lastKeys);
         } catch (e) {
-            $('gen-customer').innerHTML = '<option value="">Could not load customers</option>';
+            $('gen-search').placeholder = 'Could not load customers - refresh the page';
         }
     }
 
@@ -238,11 +272,30 @@
         }
     }
 
-    $('gen-search').addEventListener('input', renderCustomerOptions);
-    $('gen-customer').addEventListener('change', () => {
-        const c = customerById[$('gen-customer').value];
-        if (c && !$('gen-label').value.trim()) $('gen-label').value = c.company_name || c.name || '';
+    $('gen-search').addEventListener('input', () => {
+        pickedId = '';
+        $('gen-search').classList.remove('picked');
+        hi = -1;
+        renderCustomerOptions();
     });
+    $('gen-search').addEventListener('keydown', (ev) => {
+        if ($('gen-results').hidden || !matches.length) return;
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            hi = (hi + (ev.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length;
+            renderCustomerOptions();
+        } else if (ev.key === 'Enter') {
+            ev.preventDefault();
+            pickCustomer(matches[hi >= 0 ? hi : 0]);
+        } else if (ev.key === 'Escape') {
+            closeResults();
+        }
+    });
+    $('gen-results').addEventListener('mousedown', (ev) => {
+        const opt = ev.target.closest('[data-i]');
+        if (opt) { ev.preventDefault(); pickCustomer(matches[Number(opt.dataset.i)]); }
+    });
+    $('gen-search').addEventListener('blur', () => setTimeout(closeResults, 100));
 
     $('gen-btn').addEventListener('click', async () => {
         const msg = $('gen-msg');
@@ -250,13 +303,13 @@
         msg.textContent = '';
         $('new-key').style.display = 'none';
         const body = {
-            shopify_customer_id: $('gen-customer').value,
+            shopify_customer_id: pickedId,
             label: $('gen-label').value.trim(),
             expires_at: $('gen-expires').value,
         };
         if (!body.shopify_customer_id || !body.label) {
             msg.className = 'msg err';
-            msg.textContent = 'Pick a customer and give the key a label.';
+            msg.textContent = 'Search for a customer, pick one from the list, and give the key a label.';
             return;
         }
         $('gen-btn').disabled = true;
