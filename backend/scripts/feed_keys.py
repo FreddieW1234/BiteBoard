@@ -243,7 +243,14 @@ def _public(rec: dict) -> dict:
         "expires_at": rec.get("expires_at"),
         "request_count": int(rec.get("request_count") or 0) + int(pending.get("count_delta") or 0),
         "status": "revoked" if rec.get("revoked_at") else ("active" if _is_active(rec) else "expired"),
+        "fields": list(groups_of(rec)),
     }
+
+
+def groups_of(rec: dict) -> tuple[str, ...]:
+    """The field groups this key receives (defaults for keys that never chose)."""
+    from scripts.product_feed import normalise_groups  # type: ignore
+    return normalise_groups(rec.get("fields"))
 
 
 def list_keys_for_staff(*, refresh: bool = True) -> list[dict]:
@@ -256,7 +263,7 @@ def list_keys_for_staff(*, refresh: bool = True) -> list[dict]:
 
 
 def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None,
-                 expires_at: str | None = None) -> tuple[str, dict]:
+                 expires_at: str | None = None, fields: list[str] | None = None) -> tuple[str, dict]:
     """Create a key on the office server. Returns (raw_key, public record).
 
     The raw key exists only in this return value - it is never stored or logged.
@@ -270,11 +277,30 @@ def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None
         "key_prefix": key_prefix_of(raw_key),
         "created_by": created_by,
         "expires_at": expires_at,
+        "fields": list(fields) if fields is not None else None,
     }
     stored = _office().create_api_key(record)
+    from scripts.product_feed import normalise_groups, DEFAULT_GROUPS  # type: ignore
+    if (fields is not None and stored.get("fields") is None
+            and normalise_groups(fields) != DEFAULT_GROUPS):
+        # Office server predates field choices - it dropped them. Don't hand
+        # out a key that silently gets the defaults instead.
+        _office().revoke_api_key(stored["id"])
+        raise RuntimeError("Office server needs the updated api_keys_addon.py before keys can have field choices")
     with _LOCK:
         _KEYS[stored["id"]] = dict(stored)
     return raw_key, _public(stored)
+
+
+def set_fields(key_id: str, fields: list[str]) -> dict | None:
+    """Persist a key's field groups, then apply them. Returns the public record."""
+    with _LOCK:
+        if key_id not in _KEYS:
+            return None
+    stored = _office().set_api_key_fields(key_id, fields)
+    with _LOCK:
+        _KEYS[key_id] = {**_KEYS.get(key_id, {}), **stored}
+        return _public(dict(_KEYS[key_id]))
 
 
 def revoke_key(key_id: str) -> tuple[dict | None, str | None]:

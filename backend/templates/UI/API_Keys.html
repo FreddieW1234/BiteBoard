@@ -74,6 +74,16 @@
         .cust-opt:hover, .cust-opt.hi { background: #f3f4f6; }
         .cust-opt .muted { white-space: nowrap; }
         .cust-empty { padding: 8px 10px; font-size: 0.85rem; color: #6b7280; }
+        .field-picker { margin-top: 14px; }
+        .field-picker-label { display: block; font-size: 0.75rem; color: #6b7280; font-weight: 500; margin-bottom: 6px; }
+        .field-groups { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+        .field-groups label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+        .field-groups label[title] { text-decoration: underline dotted #d1d5db; text-underline-offset: 3px; }
+        .fields-cell { white-space: normal; min-width: 180px; max-width: 280px; font-size: 0.8rem; color: #374151; }
+        .btn-link { border: none; background: none; color: #4f46e5; font-size: 0.8rem; cursor: pointer; padding: 0; margin-left: 4px; }
+        .btn-link:hover { text-decoration: underline; }
+        tr.fields-edit td { background: #f9fafb; white-space: normal; }
+        .fields-edit-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
     </style>
 </head>
 <body>
@@ -123,6 +133,10 @@
                     </div>
                     <button type="button" class="btn" id="gen-btn">Generate</button>
                 </div>
+                <div class="field-picker">
+                    <span class="field-picker-label">Data this key receives <span class="muted">(id, SKU, title and URL are always included)</span></span>
+                    <div class="field-groups" id="gen-fields"><span class="muted">Loading…</span></div>
+                </div>
                 <div class="msg" id="gen-msg"></div>
                 <div class="new-key" id="new-key">
                     <strong>Copy this key now - it will not be shown again.</strong>
@@ -136,8 +150,8 @@
                 <div class="msg" id="list-msg"></div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Label</th><th>Key</th><th>Customer</th><th>Created</th><th>Last used</th><th>Requests</th><th>Status</th><th></th></tr></thead>
-                        <tbody id="keys-body"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+                        <thead><tr><th>Label</th><th>Key</th><th>Customer</th><th>Data</th><th>Created</th><th>Last used</th><th>Requests</th><th>Status</th><th></th></tr></thead>
+                        <tbody id="keys-body"><tr><td colspan="9" class="muted">Loading…</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -259,11 +273,42 @@
         } catch (e) { /* next manual refresh will retry */ }
     }
 
+    const GROUP_LABELS = {
+        prices: 'Prices', description: 'Description', categories: 'Categories', images: 'Images',
+        ordering: 'MOQ & lead times', physical: 'Size & weight', options: 'Colours & options',
+        dietary: 'Dietary', allergens: 'Allergens', ingredients: 'Ingredients & nutrition',
+        product_info: "What's inside & print",
+    };
+    let fieldGroups = [];
+    let editingId = null;
+
+    function groupLabel(name) { return GROUP_LABELS[name] || name; }
+
+    function fieldCheckboxes(selected, idPrefix) {
+        return fieldGroups.map((g) => `<label title="${esc(g.fields.join(', '))}">
+            <input type="checkbox" value="${esc(g.name)}" id="${idPrefix}-${esc(g.name)}"${selected.includes(g.name) ? ' checked' : ''}>
+            ${esc(groupLabel(g.name))}</label>`).join('');
+    }
+    function checkedIn(container) {
+        return [...container.querySelectorAll('input[type=checkbox]:checked')].map((i) => i.value);
+    }
+    function renderGenFields() {
+        if (!fieldGroups.length) return;
+        const current = $('gen-fields').querySelector('input') ? checkedIn($('gen-fields'))
+            : fieldGroups.filter((g) => g.default).map((g) => g.name);
+        $('gen-fields').innerHTML = fieldCheckboxes(current, 'gen');
+    }
+    function fieldsSummary(fields) {
+        if (!fields || !fields.length) return '<span class="muted">IDs only</span>';
+        if (fieldGroups.length && fields.length === fieldGroups.length) return 'Everything';
+        return fields.map((f) => esc(groupLabel(f))).join(', ');
+    }
+
     let lastKeys = [];
     function renderKeys(keys) {
         lastKeys = keys || [];
         if (!lastKeys.length) {
-            $('keys-body').innerHTML = '<tr><td colspan="8" class="muted">No keys yet.</td></tr>';
+            $('keys-body').innerHTML = '<tr><td colspan="9" class="muted">No keys yet.</td></tr>';
             return;
         }
         $('keys-body').innerHTML = lastKeys.map((k) => {
@@ -271,16 +316,25 @@
             const who = c ? esc(customerName(c)) : esc(k.shopify_customer_id);
             const action = k.status === 'active'
                 ? `<button type="button" class="btn-danger" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button>` : '';
+            const edit = k.status === 'active' ? `<button type="button" class="btn-link" data-edit="${esc(k.id)}">Edit</button>` : '';
+            const editor = editingId === k.id ? `<tr class="fields-edit"><td colspan="9">
+                <div class="field-groups" id="edit-fields">${fieldCheckboxes(k.fields || [], 'edit')}</div>
+                <div class="fields-edit-actions">
+                    <button type="button" class="btn" data-save="${esc(k.id)}">Save</button>
+                    <button type="button" class="btn-ghost" data-cancel="1">Cancel</button>
+                    <span class="muted">Applies to their next pull. Identity fields are always sent.</span>
+                </div></td></tr>` : '';
             return `<tr>
                 <td>${esc(k.label)}</td>
                 <td><code>${esc(k.prefix)}</code></td>
                 <td>${who}</td>
+                <td class="fields-cell">${fieldsSummary(k.fields)}${edit}</td>
                 <td>${fmt(k.created_at)}${k.created_by ? ' · ' + esc(k.created_by) : ''}</td>
                 <td>${fmt(k.last_used_at)}${k.last_used_ip ? '<br><span class="muted">' + esc(k.last_used_ip) + '</span>' : ''}</td>
                 <td>${esc(k.request_count)}</td>
                 <td><span class="pill ${esc(k.status)}">${esc(k.status)}</span>${k.expires_at && k.status === 'active' ? '<br><span class="muted">until ' + fmt(k.expires_at) + '</span>' : ''}</td>
                 <td>${action}</td>
-            </tr>`;
+            </tr>${editor}`;
         }).join('');
     }
 
@@ -290,6 +344,7 @@
             const r = await fetch('/api/feed-keys');
             const data = await r.json();
             renderSnapshot(data.snapshot);
+            if (data.field_groups) { fieldGroups = data.field_groups; renderGenFields(); }
             if (!data.success) {
                 $('list-msg').className = 'msg err';
                 $('list-msg').textContent = data.error || 'Could not load keys';
@@ -336,6 +391,7 @@
             label: $('gen-label').value.trim(),
             expires_at: $('gen-expires').value,
         };
+        if (fieldGroups.length) body.fields = checkedIn($('gen-fields'));
         if (!body.shopify_customer_id || !body.label) {
             msg.className = 'msg err';
             msg.textContent = 'Search for a customer, pick one from the list, and give the key a label.';
@@ -365,6 +421,32 @@
     });
 
     $('keys-body').addEventListener('click', async (ev) => {
+        const editBtn = ev.target.closest('[data-edit]');
+        if (editBtn) { editingId = editBtn.dataset.edit; renderKeys(lastKeys); return; }
+        if (ev.target.closest('[data-cancel]')) { editingId = null; renderKeys(lastKeys); return; }
+        const saveBtn = ev.target.closest('[data-save]');
+        if (saveBtn) {
+            const msg = $('list-msg');
+            saveBtn.disabled = true;
+            try {
+                const r = await fetch(`/api/feed-keys/${encodeURIComponent(saveBtn.dataset.save)}/fields`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fields: checkedIn($('edit-fields')) }),
+                });
+                const data = await r.json();
+                if (!data.success) throw new Error(data.error || 'Not saved');
+                editingId = null;
+                lastKeys = lastKeys.map((k) => (k.id === data.record.id ? data.record : k));
+                renderKeys(lastKeys);
+                msg.className = 'msg';
+                msg.textContent = `Saved - "${data.record.label}" gets the new fields on its next pull.`;
+            } catch (e) {
+                msg.className = 'msg err';
+                msg.textContent = e.message || 'Not saved';
+                saveBtn.disabled = false;
+            }
+            return;
+        }
         const btn = ev.target.closest('[data-revoke]');
         if (!btn) return;
         if (!confirm(`Revoke "${btn.dataset.label}"? Their feed stops working immediately.`)) return;

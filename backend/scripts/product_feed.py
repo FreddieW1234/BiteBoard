@@ -77,9 +77,51 @@ _METAFIELD_ALIASES = {
     "mf_customoption2options": "customoption2options",
     "mf_customoption3name": "customoption3name",
     "mf_customoption3options": "customoption3options",
+    "mf_case_weight": "case_weight",
+    "mf_commodity_code": "commodity_code",
+    "mf_shelf_life": "shelf_life",
+    "mf_ingredients": "ingredients",
+    "mf_nutritional_info": "nutritional_info",
+    "mf_whats_inside": "whats_inside",
+    "mf_print_info": "print_info",
+    "mf_recycle_info": "recycle_info",
 }
+DIETARY_KEYS = ("vegan", "vegetarian", "halal", "coeliac", "kosher")
+ALLERGEN_KEYS = (
+    "celery", "cereals", "crustaceans", "egg", "fish", "lupin", "milk", "molluscs",
+    "mustard", "nuts", "peanuts", "sesame", "soya", "sulphurdioxide",
+)
+for _k in DIETARY_KEYS + ALLERGEN_KEYS:
+    _METAFIELD_ALIASES[f"mf_{_k}"] = _k
 
-_PAGE_SIZE = 25
+# What a key can choose to receive. Identity fields are always sent so every
+# product can be matched; everything else is opt-in per key.
+ALWAYS_FIELDS = ("id", "handle", "sku", "title", "url")
+FIELD_GROUPS = {
+    "prices": ("prices_include_vat", "price_breaks", "origination"),
+    "description": ("description", "product_type"),
+    "categories": ("categories", "subcategories", "sub_subcategories"),
+    "images": ("images",),
+    "ordering": ("moq", "case_quantity", "lead_times"),
+    "physical": ("unit_weight_g", "product_size", "case_weight_g", "commodity_code"),
+    "options": ("options",),
+    "dietary": ("dietary",),
+    "allergens": ("allergens",),
+    "ingredients": ("ingredients", "nutritional_info", "shelf_life"),
+    "product_info": ("whats_inside", "print_info", "recycle_info"),
+}
+# Keys created before field choices existed get exactly what they got then.
+DEFAULT_GROUPS = ("prices", "description", "categories", "images", "ordering", "physical", "options")
+
+
+def normalise_groups(groups) -> tuple[str, ...]:
+    """Known group names, sorted; None/invalid -> defaults."""
+    if not isinstance(groups, (list, tuple)):
+        return DEFAULT_GROUPS
+    return tuple(sorted({g for g in groups if g in FIELD_GROUPS}))
+
+# ~65 query-cost points per product; 12 per page stays under Shopify's 1000 cap.
+_PAGE_SIZE = 12
 _PRODUCTS_QUERY = """
 query FeedProducts($cursor: String) {
   products(first: %d, after: $cursor, query: "status:active") {
@@ -271,6 +313,18 @@ def _product_from_node(node: dict) -> dict:
         "product_size": _text(mf.get("product_size")),
         "origination": _num(mf.get("origination")),
         "options": _options(mf),
+        "case_weight_g": _num(mf.get("case_weight")),
+        "commodity_code": _text(mf.get("commodity_code")),
+        # Stored as free text in Shopify (e.g. "✔️ Vegan", allergen statements);
+        # passed through as-is rather than guessed at.
+        "dietary": {k: _text(mf.get(k)) for k in DIETARY_KEYS if _text(mf.get(k))},
+        "allergens": {k: _text(mf.get(k)) for k in ALLERGEN_KEYS if _text(mf.get(k))},
+        "ingredients": _text(mf.get("ingredients")),
+        "nutritional_info": _text(mf.get("nutritional_info")),
+        "shelf_life": _text(mf.get("shelf_life")),
+        "whats_inside": _text(mf.get("whats_inside")),
+        "print_info": _text(mf.get("print_info")),
+        "recycle_info": _text(mf.get("recycle_info")),
         # Both lists live only in the snapshot; views expose exactly one.
         "_prices": {
             "trade": parse_price_breaks(mf.get("pricejsontr")),
@@ -459,8 +513,13 @@ def get_snapshot_generated_at() -> str | None:
 # Per-caller view
 # --------------------------------------------------------------------------- #
 
-def render_view(customer_type: str) -> dict | None:
-    """Body (+gzip, ETag) for one price list. None if no snapshot is loaded yet."""
+def render_view(customer_type: str, groups=None) -> dict | None:
+    """Body (+gzip, ETag) for one price list and set of field groups.
+
+    None if no snapshot is loaded yet. The product list is always the caller's
+    priced products, whether or not the prices themselves are sent.
+    """
+    groups = normalise_groups(groups)
     if customer_type not in PRICE_KEY_BY_TYPE:
         raise ValueError(f"Unknown customer type {customer_type!r}")
     with _LOCK:
@@ -471,23 +530,23 @@ def render_view(customer_type: str) -> dict | None:
             rebuild_snapshot_async()
         return None
     with _LOCK:
-        cache_key = (snap["generated_at"], customer_type)
+        cache_key = (snap["generated_at"], customer_type, groups)
         cached = _VIEWS.get(cache_key)
     if cached is not None:
         return cached
 
+    wanted = list(ALWAYS_FIELDS) + [f for g in groups for f in FIELD_GROUPS[g]]
     products = []
     for p in snap["products"]:
         breaks = p["_prices"].get(customer_type) or []
         if not breaks:
             continue  # omit, never zero
-        out = {k: v for k, v in p.items() if not k.startswith("_")}
-        out["prices_include_vat"] = False
-        out["price_breaks"] = breaks
-        products.append(out)
+        full = dict(p, prices_include_vat=False, price_breaks=breaks)
+        products.append({f: full.get(f) for f in wanted})
     body = json.dumps(
         {
             "generated_at": snap["generated_at"],
+            "fields": ["identity", *groups],
             "currency": snap.get("currency", "GBP"),
             # All prices are ex-VAT. Shown as inc-VAT they would undercharge by 20%.
             "prices_include_vat": False,

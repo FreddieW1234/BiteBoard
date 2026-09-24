@@ -4413,6 +4413,7 @@ def feed_api_ping():
     body = {
         "ok": True,
         "price_list": customer_type,
+        "fields": ["identity", *feed_keys.groups_of(rec)],
         "generated_at": product_feed.get_snapshot_generated_at(),
     }
     resp = jsonify(body)
@@ -4424,7 +4425,7 @@ def feed_api_ping():
 @app.route("/api/v1/feed", methods=["GET"])
 def feed_api_feed():
     """Catalogue with the caller's price list only. gzip + ETag/If-None-Match."""
-    from scripts import product_feed
+    from scripts import feed_keys, product_feed
 
     started = time.time()
     rec, customer_type, error = _feed_authenticate("feed", started)
@@ -4432,7 +4433,7 @@ def feed_api_feed():
         return error
     prefix = rec.get("key_prefix") or ""
 
-    view = product_feed.render_view(customer_type)
+    view = product_feed.render_view(customer_type, feed_keys.groups_of(rec))
     if view is None:
         resp = make_response(jsonify({"error": "Catalogue is being prepared, retry shortly"}), 503)
         resp.headers["Retry-After"] = str(_FEED_RETRY_AFTER_COLD)
@@ -4467,7 +4468,8 @@ def api_feed_keys():
     if request.method == "GET":
         try:
             keys = feed_keys.list_keys_for_staff(refresh=True)
-            return jsonify({"success": True, "keys": keys, "snapshot": product_feed.snapshot_status()})
+            return jsonify({"success": True, "keys": keys, "snapshot": product_feed.snapshot_status(),
+                            "field_groups": _feed_field_groups()})
         except Exception as e:
             return jsonify({"success": False, "error": f"Office server unavailable: {e}",
                             "keys": [], "snapshot": product_feed.snapshot_status()}), 502
@@ -4491,14 +4493,57 @@ def api_feed_keys():
     if customer_type is None:
         return jsonify({"success": False,
                         "error": "Customer must be tagged trade or end-customer (not pending, not both)"}), 400
+    fields = data.get("fields")
+    if fields is not None:
+        fields = _clean_feed_fields(fields)
+        if fields is None:
+            return jsonify({"success": False, "error": "Unknown field group"}), 400
     try:
         raw_key, record = feed_keys.generate_key(
             label=label, shopify_customer_id=customer_id,
-            created_by=get_staff_username(), expires_at=expires_at,
+            created_by=get_staff_username(), expires_at=expires_at, fields=fields,
         )
     except Exception as e:
         return jsonify({"success": False, "error": f"Office server unavailable, key not created: {e}"}), 502
     return jsonify({"success": True, "key": raw_key, "record": record, "price_list": customer_type})
+
+
+def _feed_field_groups() -> list[dict]:
+    """Field groups for the staff UI, in display order."""
+    from scripts import product_feed
+
+    return [
+        {"name": name, "fields": list(fields), "default": name in product_feed.DEFAULT_GROUPS}
+        for name, fields in product_feed.FIELD_GROUPS.items()
+    ]
+
+
+def _clean_feed_fields(fields):
+    """Validated list of group names, or None if anything is unknown."""
+    from scripts import product_feed
+
+    if not isinstance(fields, list) or not all(isinstance(f, str) for f in fields):
+        return None
+    if any(f not in product_feed.FIELD_GROUPS for f in fields):
+        return None
+    return sorted(set(fields))
+
+
+@app.route("/api/feed-keys/<key_id>/fields", methods=["PUT"])
+def api_feed_key_fields(key_id):
+    """Staff: change which field groups a key receives. Applies immediately."""
+    from scripts import feed_keys
+
+    fields = _clean_feed_fields((request.get_json(silent=True) or {}).get("fields"))
+    if fields is None:
+        return jsonify({"success": False, "error": "Unknown field group"}), 400
+    try:
+        record = feed_keys.set_fields(key_id, fields)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Not saved: {e}"}), 502
+    if record is None:
+        return jsonify({"success": False, "error": "Key not found"}), 404
+    return jsonify({"success": True, "record": record})
 
 
 @app.route("/api/feed-keys/<key_id>/revoke", methods=["POST"])

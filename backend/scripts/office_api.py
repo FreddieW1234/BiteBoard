@@ -1470,3 +1470,16 @@ def record_api_key_usage(usage: list[dict]) -> dict:
     resp = _request("POST", _api_keys_url("usage"), json={"usage": usage}, timeout=_COMPANIES_TIMEOUT)
     result = _handle_response(resp)
     return result if isinstance(result, dict) else {"ok": True}
+
+
+def set_api_key_fields(key_id: str, fields: list[str]) -> dict:
+    """``PUT /api-keys/{id}/fields`` - replace a key's feed field groups."""
+    resp = _request("PUT", _api_keys_url(key_id, "fields"), json={"fields": fields},
+                    timeout=_COMPANIES_TIMEOUT)
+    # FastAPI's own 404 for an unknown route is exactly {"detail":"Not Found"}.
+    if resp.status_code == 404 and '"Not Found"' in (resp.text or ""):
+        raise OfficeApiError("Office server needs the updated api_keys_addon.py (restart it after copying)")
+    result = _handle_response(resp)
+    if not isinstance(result, dict) or not isinstance(result.get("key"), dict):
+        raise OfficeApiError("Unexpected response from API key fields update")
+    return result["key"]

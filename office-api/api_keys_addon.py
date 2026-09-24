@@ -16,6 +16,7 @@ Endpoints (all require X-API-Key):
                                      verifies feed requests against its copy)
     POST  /api-keys                  create - body has the hash, not the key
     POST  /api-keys/{key_id}/revoke  set revoked_at (idempotent)
+    PUT   /api-keys/{key_id}/fields  replace the key's feed field groups
     POST  /api-keys/usage            batch usage flush from the portal
 
 Register near the bottom of the office API:
@@ -26,6 +27,7 @@ Register near the bottom of the office API:
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -37,11 +39,12 @@ from pydantic import BaseModel
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 _PREFIX_RE = re.compile(r"^[0-9a-f]{8}$")
+_FIELD_RE = re.compile(r"^[a-z_]{1,32}$")
 
 _COLUMNS = (
     "id", "label", "shopify_customer_id", "key_hash", "key_prefix",
     "created_at", "created_by", "last_used_at", "last_used_ip",
-    "revoked_at", "expires_at", "request_count",
+    "revoked_at", "expires_at", "request_count", "fields",
 )
 
 
@@ -76,11 +79,30 @@ def init_api_keys_db(db_dir: Path) -> None:
             )
             """
         )
+        # Feed field groups (JSON list). NULL = the portal's defaults.
+        try:
+            conn.execute("ALTER TABLE api_keys ADD COLUMN fields TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
 
 
 def _row(row: sqlite3.Row) -> dict:
-    return {col: row[col] for col in _COLUMNS}
+    out = {col: row[col] for col in _COLUMNS}
+    try:
+        out["fields"] = json.loads(out["fields"]) if out["fields"] else None
+    except ValueError:
+        out["fields"] = None
+    return out
+
+
+def _fields_json(fields: list[str] | None) -> str | None:
+    if fields is None:
+        return None
+    clean = sorted({f.strip() for f in fields if isinstance(f, str) and f.strip()})
+    if len(clean) > 40 or not all(_FIELD_RE.match(f) for f in clean):
+        raise HTTPException(400, "fields must be a list of short lowercase group names.")
+    return json.dumps(clean)
 
 
 class ApiKeyCreate(BaseModel):
@@ -91,6 +113,11 @@ class ApiKeyCreate(BaseModel):
     key_prefix: str
     created_by: str | None = None
     expires_at: str | None = None
+    fields: list[str] | None = None
+
+
+class ApiKeyFields(BaseModel):
+    fields: list[str]
 
 
 class ApiKeyUsageItem(BaseModel):
@@ -130,11 +157,11 @@ def register_api_key_routes(app, *, db_dir: Path, lock, require_key_dep) -> None
                 conn.execute(
                     """
                     INSERT INTO api_keys (id, label, shopify_customer_id, key_hash,
-                        key_prefix, created_at, created_by, expires_at, request_count)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                        key_prefix, created_at, created_by, expires_at, request_count, fields)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                     """,
                     (body.id, label, customer_id, body.key_hash, body.key_prefix,
-                     _iso_now(), body.created_by, body.expires_at),
+                     _iso_now(), body.created_by, body.expires_at, _fields_json(body.fields)),
                 )
             except sqlite3.IntegrityError:
                 raise HTTPException(409, "Key id or hash already exists.")
@@ -151,6 +178,19 @@ def register_api_key_routes(app, *, db_dir: Path, lock, require_key_dep) -> None
                 "UPDATE api_keys SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?",
                 (_iso_now(), key_id),
             )
+            conn.commit()
+            row = conn.execute("SELECT * FROM api_keys WHERE id = ?", (key_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Key not found.")
+        return {"ok": True, "key": _row(row)}
+
+    @app.put("/api-keys/{key_id}/fields", dependencies=[Depends(require_key_dep)])
+    def set_api_key_fields(key_id: str, body: ApiKeyFields):
+        if not _KEY_ID_RE.match(key_id):
+            raise HTTPException(400, "Invalid key id.")
+        value = _fields_json(body.fields)
+        with lock, _connect(db_dir) as conn:
+            conn.execute("UPDATE api_keys SET fields = ? WHERE id = ?", (value, key_id))
             conn.commit()
             row = conn.execute("SELECT * FROM api_keys WHERE id = ?", (key_id,)).fetchone()
         if row is None:

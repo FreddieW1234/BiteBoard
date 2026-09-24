@@ -9,6 +9,20 @@ result, and serve your website from your own copy. **Never call this API while
 a visitor is loading a page.** Our catalogue changes at most daily, and the feed
 is limited to 60 requests per key per hour.
 
+## Setup
+
+Set two environment variables on the server that runs your nightly job:
+
+```
+BITE_API_URL=https://api.bitepromotions.co.uk
+BITE_API_KEY=bite_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Keep the URL in configuration rather than in your code, so a future address
+change is a config edit. Your job then calls `$BITE_API_URL/api/v1/feed` with
+the key, and keeps the last `ETag` it received (in a file or your database, not
+an environment variable) to send back as `If-None-Match`.
+
 ## Authentication
 
 Every request needs your key in the `Authorization` header:
@@ -85,6 +99,17 @@ if nothing has changed you get `304 Not Modified` and no body.
   product so this can't be missed.
 - A product without prices for your account is left out of the feed. It never
   appears with a price of 0.
+- Which fields you receive is set per key by Bite Promotions. `fields` at the
+  top of the response (and in `/ping`) lists the groups your key gets. `id`,
+  `handle`, `sku`, `title` and `url` are always included. Other groups:
+  `prices`, `description`, `categories`, `images`, `ordering` (MOQ, case
+  quantity, lead times), `physical` (weight, size, case weight, commodity code),
+  `options`, `dietary`, `allergens`, `ingredients` (ingredients, nutrition,
+  shelf life) and `product_info` (what's inside, print and recycling info).
+- `dietary` and `allergens` are objects of the text we hold for each product,
+  e.g. `{"vegan": "✔️ Vegan"}`, `{"milk": "Milk present as an ingredient."}`.
+  They are passed through exactly as stored. Always check allergen information
+  against the product itself before relying on it.
 - A product can sit in more than one category, so the category fields are lists.
 - `working_days` is usually a number, but may be text such as
   `"Contact Bite Promotions for a specific leadtime"`.
