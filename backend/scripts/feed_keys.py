@@ -248,9 +248,9 @@ def _public(rec: dict) -> dict:
 
 
 def groups_of(rec: dict) -> tuple[str, ...]:
-    """The field groups this key receives (defaults for keys that never chose)."""
-    from scripts.product_feed import normalise_groups  # type: ignore
-    return normalise_groups(rec.get("fields"))
+    """Every key receives every field group."""
+    from scripts.product_feed import FIELD_GROUPS  # type: ignore
+    return tuple(FIELD_GROUPS)
 
 
 def list_keys_for_staff(*, refresh: bool = True) -> list[dict]:

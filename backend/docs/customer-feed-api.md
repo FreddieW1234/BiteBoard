@@ -99,13 +99,10 @@ if nothing has changed you get `304 Not Modified` and no body.
   product so this can't be missed.
 - A product without prices for your account is left out of the feed. It never
   appears with a price of 0.
-- Which fields you receive is set per key by Bite Promotions. `fields` at the
-  top of the response (and in `/ping`) lists the groups your key gets. `id`,
-  `handle`, `sku`, `title` and `url` are always included. Other groups:
-  `prices`, `description`, `categories`, `images`, `ordering` (MOQ, case
-  quantity, lead times), `physical` (weight, size, case weight, commodity code),
-  `options`, `dietary`, `allergens`, `ingredients` (ingredients, nutrition,
-  shelf life) and `product_info` (what's inside, print and recycling info).
+- Every product includes `id`, `handle`, `sku`, `title`, `url`, prices,
+  description, categories, images, ordering (MOQ, case quantity, lead times),
+  size and weight, options, dietary, allergens, ingredients (ingredients,
+  nutrition, shelf life) and product info (what's inside, print and recycling info).
 - `product_size` is length * width * height in millimetres, e.g.
   `"78mm * 72mm * 27mm"`. Some products only have two dimensions. `shelf_life`
   is e.g. `"12 months"`, or occasionally text such as `"For best before see sachet"`.
