@@ -4410,6 +4410,7 @@ def feed_api_ping():
     rec, customer_type, error = _feed_authenticate("ping", started)
     if error is not None:
         return error
+    product_feed.ensure_building()
     body = {
         "ok": True,
         "price_list": customer_type,

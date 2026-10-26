@@ -44,6 +44,7 @@ _LAST_BUILD_ERROR: str | None = None
 _BUILD_STARTED_AT: float | None = None
 _CUSTOMER_TYPES: dict[str, tuple[float, str | None]] = {}
 _BUILD_DEADLINE_SECONDS = 240
+_RETRY_AFTER_FAILURE_SECONDS = 120
 _BUILD_THREAD_ID: int | None = None
 # Live progress of the current build, shown to staff (Render logs are not).
 _PROGRESS: dict = {}
@@ -456,6 +457,11 @@ def rebuild_snapshot() -> tuple[bool, str]:
     except Exception as exc:
         _LAST_BUILD_ERROR = f"{_iso_now()} {exc}"
         print(f"[error] feed: snapshot build failed: {exc}", flush=True)
+        if _SNAPSHOT is None:
+            # Nothing to serve at all - don't wait for a request to try again.
+            retry = threading.Timer(_RETRY_AFTER_FAILURE_SECONDS, rebuild_snapshot_async)
+            retry.daemon = True
+            retry.start()
         return False, str(exc)
     finally:
         _BUILD_STARTED_AT = None
@@ -504,6 +510,12 @@ def snapshot_status() -> dict:
     return status
 
 
+def ensure_building() -> None:
+    """No snapshot in this process: make sure a build is actually running."""
+    if _SNAPSHOT is None and (_BUILD_STARTED_AT is None or _build_is_stale()):
+        rebuild_snapshot_async()
+
+
 def get_snapshot_generated_at() -> str | None:
     with _LOCK:
         return _SNAPSHOT.get("generated_at") if _SNAPSHOT else None
@@ -525,9 +537,7 @@ def render_view(customer_type: str, groups=None) -> dict | None:
     with _LOCK:
         snap = _SNAPSHOT
     if snap is None:
-        # Nothing in this process yet: make sure a build is actually running.
-        if _BUILD_STARTED_AT is None or _build_is_stale():
-            rebuild_snapshot_async()
+        ensure_building()
         return None
     with _LOCK:
         cache_key = (snap["generated_at"], customer_type, groups)
