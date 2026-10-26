@@ -127,7 +127,7 @@
                 </div>
                 <div class="msg" id="gen-msg"></div>
                 <div class="new-key" id="new-key">
-                    <strong>Copy this key now - it will not be shown again.</strong>
+                    <strong>Here is the new key. You can copy it again later from the Keys table.</strong>
                     <code id="new-key-value"></code>
                     <span class="muted" id="new-key-note"></span>
                 </div>
@@ -275,7 +275,8 @@
                 ? `<button type="button" class="btn-danger" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button>` : '';
             return `<tr>
                 <td>${esc(k.label)}</td>
-                <td><code>${esc(k.prefix)}</code></td>
+                <td><code>${esc(k.prefix)}</code>${k.status === 'active' && k.can_copy
+                    ? ` <button type="button" class="btn-link" data-copy="${esc(k.id)}">Copy</button>` : ''}</td>
                 <td>${who}</td>
                 <td>${fmt(k.created_at)}${k.created_by ? ' · ' + esc(k.created_by) : ''}</td>
                 <td>${fmt(k.last_used_at)}${k.last_used_ip ? '<br><span class="muted">' + esc(k.last_used_ip) + '</span>' : ''}</td>
@@ -367,6 +368,28 @@
     });
 
     $('keys-body').addEventListener('click', async (ev) => {
+        const copyBtn = ev.target.closest('[data-copy]');
+        if (copyBtn) {
+            const msg = $('list-msg');
+            try {
+                const r = await fetch(`/api/feed-keys/${encodeURIComponent(copyBtn.dataset.copy)}/copy`, { method: 'POST' });
+                const data = await r.json();
+                if (!data.success) throw new Error(data.error || 'Could not get the key');
+                try {
+                    await navigator.clipboard.writeText(data.key);
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+                    msg.className = 'msg';
+                    msg.textContent = '';
+                } catch (clipErr) {
+                    window.prompt('Copy this key:', data.key);
+                }
+            } catch (e) {
+                msg.className = 'msg err';
+                msg.textContent = e.message || 'Could not get the key';
+            }
+            return;
+        }
         const btn = ev.target.closest('[data-revoke]');
         if (!btn) return;
         if (!confirm(`Revoke "${btn.dataset.label}"? Their feed stops working immediately.`)) return;

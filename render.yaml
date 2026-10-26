@@ -97,6 +97,11 @@ services:
       # Customer feed host, e.g. api.bitepromotions.co.uk - only /api/v1/* is served there.
       - key: FEED_API_HOST
         sync: false
+      # Random 32+ chars. Seals feed keys so staff can copy them again; the office
+      # server stores only the sealed form. Changing it stops old keys being copyable
+      # (they still work).
+      - key: FEED_KEY_SECRET
+        sync: false
 
   # Nightly Phase 7 visibility backstop — 03:00 UTC (04:00 BST in summer).
   # HTTP-POSTs the web service so webhook/reconcile share one code path.

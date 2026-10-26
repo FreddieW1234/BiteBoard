@@ -4563,6 +4563,24 @@ def api_feed_key_revoke(key_id):
     return jsonify({"success": True, "record": record})
 
 
+@app.route("/api/feed-keys/<key_id>/copy", methods=["POST"])
+def api_feed_key_copy(key_id):
+    """Staff only: the full key, so it can be copied again."""
+    from scripts import feed_keys
+
+    raw = feed_keys.reveal_key(key_id)
+    if raw is None:
+        return jsonify({
+            "success": False,
+            "error": "This key can't be shown again - it was made before keys were stored "
+                     "for copying. Generate a new one and revoke this one.",
+        }), 404
+    print(f"[feed-api] key copied id={key_id} by={get_staff_username()}", flush=True)
+    resp = jsonify({"success": True, "key": raw})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/api/feed-snapshot/rebuild", methods=["POST"])
 def api_feed_snapshot_rebuild():
     from scripts import product_feed

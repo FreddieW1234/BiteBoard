@@ -5,13 +5,16 @@ is ephemeral and the free instance restarts on every deploy and idle spin-down.
 This module holds an in-memory copy so a feed request never waits on the office
 server, and so revocation takes effect the moment staff click Revoke.
 
-Key format: ``bite_live_<32 hex>``. Only SHA-256(key) is stored anywhere. The
+Key format: ``bite_live_<32 hex>``. Verification uses SHA-256(key). So staff
+can copy a key again, the office also stores it sealed with FEED_KEY_SECRET,
+which only Render holds - the office database alone can't reveal a key. The
 displayed prefix is the first 8 hex chars AFTER ``bite_live_`` (the literal
 prefix is identical for every key, so it would identify nothing).
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import logging
@@ -54,6 +57,74 @@ def key_prefix_of(raw_key: str) -> str:
 
 def display_prefix(prefix: str) -> str:
     return f"{KEY_LITERAL}{prefix}…"
+
+
+# --------------------------------------------------------------------------- #
+# Sealing keys so staff can copy them again. Stdlib only: HMAC-SHA256 in
+# counter mode for the keystream, then HMAC-SHA256 over nonce+ciphertext.
+# --------------------------------------------------------------------------- #
+
+def _seal_secret() -> bytes | None:
+    secret = (os.environ.get("FEED_KEY_SECRET") or "").strip()
+    return secret.encode("utf-8") if len(secret) >= 16 else None
+
+
+def _subkeys(secret: bytes) -> tuple[bytes, bytes]:
+    return (hmac.new(secret, b"feed-key-enc", hashlib.sha256).digest(),
+            hmac.new(secret, b"feed-key-mac", hashlib.sha256).digest())
+
+
+def _keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
+    out = b""
+    counter = 0
+    while len(out) < length:
+        out += hmac.new(enc_key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
+        counter += 1
+    return out[:length]
+
+
+def seal_key(raw_key: str) -> str | None:
+    """Encrypted copy of the key for the office DB; None if no secret is set."""
+    secret = _seal_secret()
+    if secret is None:
+        return None
+    enc_key, mac_key = _subkeys(secret)
+    nonce = secrets.token_bytes(16)
+    plain = raw_key.encode("utf-8")
+    ct = bytes(a ^ b for a, b in zip(plain, _keystream(enc_key, nonce, len(plain))))
+    tag = hmac.new(mac_key, nonce + ct, hashlib.sha256).digest()
+    return "v1." + base64.urlsafe_b64encode(nonce + ct + tag).decode("ascii").rstrip("=")
+
+
+def unseal_key(sealed: str | None) -> str | None:
+    secret = _seal_secret()
+    if not secret or not sealed or not sealed.startswith("v1."):
+        return None
+    try:
+        body = sealed[3:]
+        blob = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4))
+    except (ValueError, TypeError):
+        return None
+    if len(blob) < 16 + 1 + 32:
+        return None
+    nonce, ct, tag = blob[:16], blob[16:-32], blob[-32:]
+    enc_key, mac_key = _subkeys(secret)
+    if not hmac.compare_digest(tag, hmac.new(mac_key, nonce + ct, hashlib.sha256).digest()):
+        return None  # wrong secret or tampered
+    try:
+        return bytes(a ^ b for a, b in zip(ct, _keystream(enc_key, nonce, len(ct)))).decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def reveal_key(key_id: str) -> str | None:
+    """The raw key for staff to copy, or None if it was never sealed."""
+    with _LOCK:
+        rec = dict(_KEYS.get(key_id) or {})
+    raw = unseal_key(rec.get("key_sealed"))
+    if raw is None or not hmac.compare_digest(hash_key(raw), rec.get("key_hash") or ""):
+        return None
+    return raw
 
 
 def _office():
@@ -242,6 +313,7 @@ def _public(rec: dict) -> dict:
         "revoked_at": rec.get("revoked_at"),
         "expires_at": rec.get("expires_at"),
         "request_count": int(rec.get("request_count") or 0) + int(pending.get("count_delta") or 0),
+        "can_copy": bool(rec.get("key_sealed")) and _seal_secret() is not None,
         "status": "revoked" if rec.get("revoked_at") else ("active" if _is_active(rec) else "expired"),
         "fields": list(groups_of(rec)),
     }
@@ -266,7 +338,7 @@ def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None
                  expires_at: str | None = None, fields: list[str] | None = None) -> tuple[str, dict]:
     """Create a key on the office server. Returns (raw_key, public record).
 
-    The raw key exists only in this return value - it is never stored or logged.
+    The raw key is never logged; it is stored only sealed (see ``seal_key``).
     """
     raw_key = f"{KEY_LITERAL}{secrets.token_hex(16)}"
     record = {
@@ -275,6 +347,7 @@ def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None
         "shopify_customer_id": str(shopify_customer_id),
         "key_hash": hash_key(raw_key),
         "key_prefix": key_prefix_of(raw_key),
+        "key_sealed": seal_key(raw_key),
         "created_by": created_by,
         "expires_at": expires_at,
         "fields": list(fields) if fields is not None else None,

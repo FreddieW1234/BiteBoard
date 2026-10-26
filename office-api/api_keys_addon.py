@@ -40,11 +40,14 @@ _KEY_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 _PREFIX_RE = re.compile(r"^[0-9a-f]{8}$")
 _FIELD_RE = re.compile(r"^[a-z_]{1,32}$")
+# The key encrypted by the portal (its secret never comes here), so staff can
+# copy it again. Opaque to this server.
+_SEALED_RE = re.compile(r"^v1\.[A-Za-z0-9_-]{20,400}$")
 
 _COLUMNS = (
     "id", "label", "shopify_customer_id", "key_hash", "key_prefix",
     "created_at", "created_by", "last_used_at", "last_used_ip",
-    "revoked_at", "expires_at", "request_count", "fields",
+    "revoked_at", "expires_at", "request_count", "fields", "key_sealed",
 )
 
 
@@ -84,6 +87,10 @@ def init_api_keys_db(db_dir: Path) -> None:
             conn.execute("ALTER TABLE api_keys ADD COLUMN fields TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+        try:
+            conn.execute("ALTER TABLE api_keys ADD COLUMN key_sealed TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
 
 
@@ -114,6 +121,7 @@ class ApiKeyCreate(BaseModel):
     created_by: str | None = None
     expires_at: str | None = None
     fields: list[str] | None = None
+    key_sealed: str | None = None
 
 
 class ApiKeyFields(BaseModel):
@@ -148,6 +156,8 @@ def register_api_key_routes(app, *, db_dir: Path, lock, require_key_dep) -> None
             raise HTTPException(400, "key_hash must be a SHA-256 hex digest.")
         if not _PREFIX_RE.match(body.key_prefix):
             raise HTTPException(400, "key_prefix must be 8 hex characters.")
+        if body.key_sealed is not None and not _SEALED_RE.match(body.key_sealed):
+            raise HTTPException(400, "key_sealed is not in the expected format.")
         label = (body.label or "").strip()
         customer_id = (body.shopify_customer_id or "").strip()
         if not label or not customer_id.isdigit():
@@ -157,11 +167,13 @@ def register_api_key_routes(app, *, db_dir: Path, lock, require_key_dep) -> None
                 conn.execute(
                     """
                     INSERT INTO api_keys (id, label, shopify_customer_id, key_hash,
-                        key_prefix, created_at, created_by, expires_at, request_count, fields)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                        key_prefix, created_at, created_by, expires_at, request_count, fields,
+                        key_sealed)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
                     """,
                     (body.id, label, customer_id, body.key_hash, body.key_prefix,
-                     _iso_now(), body.created_by, body.expires_at, _fields_json(body.fields)),
+                     _iso_now(), body.created_by, body.expires_at, _fields_json(body.fields),
+                     body.key_sealed),
                 )
             except sqlite3.IntegrityError:
                 raise HTTPException(409, "Key id or hash already exists.")
