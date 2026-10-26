@@ -77,7 +77,7 @@ if nothing has changed you get `304 Not Modified` and no body.
         { "min_qty": 5000, "max_qty": 10000, "working_days": 15 }
       ],
       "unit_weight_g": 12,
-      "product_size": "80 x 40mm",
+      "product_size": "80mm * 40mm * 10mm",
       "origination": 50,
       "options": {
         "colours": { "product": [{ "name": "Gold", "code": "g" }] },
@@ -106,10 +106,19 @@ if nothing has changed you get `304 Not Modified` and no body.
   quantity, lead times), `physical` (weight, size, case weight, commodity code),
   `options`, `dietary`, `allergens`, `ingredients` (ingredients, nutrition,
   shelf life) and `product_info` (what's inside, print and recycling info).
-- `dietary` and `allergens` are objects of the text we hold for each product,
-  e.g. `{"vegan": "✔️ Vegan"}`, `{"milk": "Milk present as an ingredient."}`.
-  They are passed through exactly as stored. Always check allergen information
-  against the product itself before relying on it.
+- `product_size` is length * width * height in millimetres, e.g.
+  `"78mm * 72mm * 27mm"`. Some products only have two dimensions. `shelf_life`
+  is e.g. `"12 months"`, or occasionally text such as `"For best before see sachet"`.
+- `dietary` says which diets a product is suitable for, as `true` / `false`, e.g.
+  `{"vegan": false, "vegetarian": true, "halal": true}`. A diet not listed means
+  we hold no information for it.
+- `allergens` is a list in the order shown on our product pages, one row per
+  allergen we hold a statement for:
+  `[{"allergen": "Milk", "statement": "Milk present as an ingredient."}, …]`.
+  Allergens are Celery, Cereals containing gluten, Crustaceans, Egg, Fish,
+  Lupin, Milk, Molluscs, Mustard, Tree nuts, Peanuts, Sesame, Soya, and
+  Sulphur dioxide and sulphites. Always check allergen information against the
+  product itself before relying on it.
 - A product can sit in more than one category, so the category fields are lists.
 - `working_days` is usually a number, but may be text such as
   `"Contact Bite Promotions for a specific leadtime"`.

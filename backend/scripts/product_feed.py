@@ -32,6 +32,8 @@ from config import STORE_DOMAIN, API_VERSION, ACCESS_TOKEN  # type: ignore
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _CACHE_PATH = _BASE_DIR / "data" / "feed_snapshot.json"
 _DISK_MAX_AGE_SECONDS = 26 * 3600
+# Bump when the per-product shape changes so an old cached snapshot is rebuilt.
+_SNAPSHOT_FORMAT = 2
 _CUSTOMER_TAG_TTL = 300
 
 PRICE_KEY_BY_TYPE = {"trade": "pricejsontr", "end-customer": "pricejsoner"}
@@ -221,6 +223,82 @@ def _text_list(*raws) -> list[str]:
     return out
 
 
+def _product_size(raw):
+    """Stored as ``l*w*h`` in plain mm (``75*70*``); shown as ``75mm * 70mm``."""
+    s = _text(raw)
+    if not isinstance(s, str):
+        return s
+    parts = [x.strip() for x in s.split("*") if x.strip()]
+    if not parts or any(_num(x) is None for x in parts):
+        return s  # free text: pass through untouched
+    return " * ".join(f"{_num(x)}mm" for x in parts)
+
+
+def _shelf_life(raw):
+    """Stored in months as a bare number; free text passes through."""
+    s = _text(raw)
+    n = _num(s)
+    if n is None:
+        return s
+    return f"{n} month" if n == 1 else f"{n} months"
+
+
+# Same labels and order as the product page's allergen table.
+ALLERGEN_LABELS = {
+    "celery": "Celery",
+    "cereals": "Cereals containing gluten",
+    "crustaceans": "Crustaceans",
+    "egg": "Egg",
+    "fish": "Fish",
+    "lupin": "Lupin",
+    "milk": "Milk",
+    "molluscs": "Molluscs",
+    "mustard": "Mustard",
+    "nuts": "Tree nuts",
+    "peanuts": "Peanuts",
+    "sesame": "Sesame",
+    "soya": "Soya",
+    "sulphurdioxide": "Sulphur dioxide and sulphites",
+}
+
+
+def _allergens(mf: dict) -> list[dict]:
+    """``[{"allergen": "Milk", "statement": "Milk present as an ingredient."}]``.
+
+    Older products store a bare tick/cross; those become the standard
+    contains / free-from sentence, as the product creator reads them.
+    """
+    try:
+        from scripts.product_creator.allergen_mapping import ALLERGEN_SENTENCES
+    except Exception:  # pragma: no cover - import path differs when run as a script
+        from product_creator.allergen_mapping import ALLERGEN_SENTENCES  # type: ignore
+    out = []
+    for key in ALLERGEN_KEYS:
+        val = _text(mf.get(key))
+        if not isinstance(val, str):
+            continue
+        if val in ("✔️", "✔", "✅"):
+            val = ALLERGEN_SENTENCES[key]["contains"]
+        elif val == "❌":
+            val = ALLERGEN_SENTENCES[key]["free_from"]
+        out.append({"allergen": ALLERGEN_LABELS[key], "statement": val})
+    return out
+
+
+def _dietary(mf: dict) -> dict:
+    """Stored as a tick/cross, sometimes followed by a word (``"❌ Vegan"``)."""
+    out = {}
+    for key in DIETARY_KEYS:
+        val = _text(mf.get(key))
+        if not isinstance(val, str):
+            continue
+        if val.startswith(("✔", "✅")):
+            out[key] = True
+        elif val.startswith("❌"):
+            out[key] = False
+    return out
+
+
 def parse_price_breaks(raw) -> list[dict]:
     """Price-table JSON -> [{min, max, price}] with positive prices only, sorted."""
     if not raw:
@@ -311,18 +389,16 @@ def _product_from_node(node: dict) -> dict:
         "case_quantity": _num(mf.get("case_quantity")),
         "lead_times": lead_times,
         "unit_weight_g": _num(mf.get("unit_weight")),
-        "product_size": _text(mf.get("product_size")),
+        "product_size": _product_size(mf.get("product_size")),
         "origination": _num(mf.get("origination")),
         "options": _options(mf),
         "case_weight_g": _num(mf.get("case_weight")),
         "commodity_code": _text(mf.get("commodity_code")),
-        # Stored as free text in Shopify (e.g. "✔️ Vegan", allergen statements);
-        # passed through as-is rather than guessed at.
-        "dietary": {k: _text(mf.get(k)) for k in DIETARY_KEYS if _text(mf.get(k))},
-        "allergens": {k: _text(mf.get(k)) for k in ALLERGEN_KEYS if _text(mf.get(k))},
+        "dietary": _dietary(mf),
+        "allergens": _allergens(mf),
         "ingredients": _text(mf.get("ingredients")),
         "nutritional_info": _text(mf.get("nutritional_info")),
-        "shelf_life": _text(mf.get("shelf_life")),
+        "shelf_life": _shelf_life(mf.get("shelf_life")),
         "whats_inside": _text(mf.get("whats_inside")),
         "print_info": _text(mf.get("print_info")),
         "recycle_info": _text(mf.get("recycle_info")),
@@ -364,7 +440,8 @@ def build_catalogue_snapshot() -> dict:
             break
         cursor = page.get("endCursor")
     products.sort(key=lambda p: (p.get("sku") or "", p.get("title") or ""))
-    snapshot = {"generated_at": _iso_now(), "currency": "GBP", "products": products}
+    snapshot = {"generated_at": _iso_now(), "currency": "GBP", "format": _SNAPSHOT_FORMAT,
+                "products": products}
     print(f"[feed] snapshot built: {len(products)} products in {time.time() - started:.1f}s", flush=True)
     return snapshot
 
@@ -393,7 +470,8 @@ def _load_disk_cache() -> dict | None:
         if time.time() - _CACHE_PATH.stat().st_mtime > _DISK_MAX_AGE_SECONDS:
             return None
         data = json.loads(_CACHE_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and isinstance(data.get("products"), list):
+        if (isinstance(data, dict) and isinstance(data.get("products"), list)
+                and data.get("format") == _SNAPSHOT_FORMAT):
             return data
     except Exception as exc:
         print(f"[warn] feed: disk cache unreadable: {exc}", flush=True)
