@@ -4,10 +4,13 @@ For trade customers who want our catalogue on their own website.
 
 ## This is a daily feed, not a live API
 
-Pull the feed **once a day** from a scheduled job on your server, store the
-result, and serve your website from your own copy. **Never call this API while
-a visitor is loading a page.** Our catalogue changes at most daily, and the feed
-is limited to 60 requests per key per hour.
+Pull the feed **once a day** from a scheduled job on your server (for example a
+nightly cron task), save the products into your own database, and have your
+website show products from that copy. **Your website's pages should never call
+this API themselves.** If a page called it every time it was viewed, a busy day
+would use up the limit of 60 requests per key per hour and your product pages
+would stop loading. Our catalogue only changes once a day, so a daily pull is
+always up to date.
 
 ## Setup
 
