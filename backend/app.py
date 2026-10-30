@@ -154,7 +154,8 @@ def portal_auth_gate():
     path = request.path or ""
     # The feed host serves the customer API and nothing else.
     if FEED_API_HOST and (request.host or "").split(":")[0].lower() == FEED_API_HOST:
-        if not path.startswith("/api/v1/"):
+        # Render's health check also arrives on this host - let it through.
+        if not path.startswith("/api/v1/") and path != "/healthz":
             return jsonify({"error": "Not found"}), 404
         return None
     if path.startswith("/static/"):
