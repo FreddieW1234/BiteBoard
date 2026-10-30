@@ -4405,11 +4405,15 @@ def _feed_authenticate(endpoint: str, started: float):
     if retry:
         return fail(429, {"error": "Rate limit exceeded"}, prefix, {"Retry-After": str(retry)})
 
-    try:
-        customer_type = product_feed.resolve_customer_type(rec.get("shopify_customer_id"))
-    except Exception as exc:
-        print(f"[warn] feed: customer tag lookup failed: {exc}", flush=True)
-        return fail(503, {"error": "Temporarily unavailable"}, prefix, {"Retry-After": "300"})
+    standalone = rec.get("price_list")
+    if standalone in product_feed.PRICE_KEY_BY_TYPE:
+        customer_type = standalone
+    else:
+        try:
+            customer_type = product_feed.resolve_customer_type(rec.get("shopify_customer_id"))
+        except Exception as exc:
+            print(f"[warn] feed: customer tag lookup failed: {exc}", flush=True)
+            return fail(503, {"error": "Temporarily unavailable"}, prefix, {"Retry-After": "300"})
     if customer_type is None:
         return fail(401, unauthorized, prefix, {"WWW-Authenticate": "Bearer"})
 
@@ -4495,21 +4499,32 @@ def api_feed_keys():
     label = (data.get("label") or "").strip()
     customer_id = str(data.get("shopify_customer_id") or "").strip()
     expires = (data.get("expires_at") or "").strip()
-    if not label or not customer_id.isdigit():
-        return jsonify({"success": False, "error": "Label and customer are required"}), 400
+    # A standalone key is not tied to a customer; its price list is chosen here.
+    price_list = (data.get("price_list") or "").strip() or None
+    if price_list is not None and price_list not in product_feed.PRICE_KEY_BY_TYPE:
+        return jsonify({"success": False, "error": "Price list must be trade or end-customer"}), 400
+    if not label:
+        return jsonify({"success": False, "error": "Give the key a name"}), 400
+    if price_list is None and not customer_id.isdigit():
+        return jsonify({"success": False, "error": "Pick a customer, or choose a price list for a key without one"}), 400
+    if price_list is not None:
+        customer_id = ""
     expires_at = None
     if expires:
         try:
             expires_at = datetime.strptime(expires, "%Y-%m-%d").strftime("%Y-%m-%dT23:59:59Z")
         except ValueError:
             return jsonify({"success": False, "error": "Expiry must be YYYY-MM-DD"}), 400
-    try:
-        customer_type = product_feed.resolve_customer_type(customer_id)
-    except Exception as e:
-        return jsonify({"success": False, "error": f"Could not read customer from Shopify: {e}"}), 502
-    if customer_type is None:
-        return jsonify({"success": False,
-                        "error": "Customer must be tagged trade or end-customer (not pending, not both)"}), 400
+    if price_list is not None:
+        customer_type = price_list
+    else:
+        try:
+            customer_type = product_feed.resolve_customer_type(customer_id)
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Could not read customer from Shopify: {e}"}), 502
+        if customer_type is None:
+            return jsonify({"success": False,
+                            "error": "Customer must be tagged trade or end-customer (not pending, not both)"}), 400
     fields = data.get("fields")
     if fields is not None:
         fields = _clean_feed_fields(fields)
@@ -4519,6 +4534,7 @@ def api_feed_keys():
         raw_key, record = feed_keys.generate_key(
             label=label, shopify_customer_id=customer_id,
             created_by=get_staff_username(), expires_at=expires_at, fields=fields,
+            price_list=price_list,
         )
     except Exception as e:
         return jsonify({"success": False, "error": f"Office server unavailable, key not created: {e}"}), 502

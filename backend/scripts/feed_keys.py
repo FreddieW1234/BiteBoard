@@ -305,6 +305,7 @@ def _public(rec: dict) -> dict:
         "id": rec["id"],
         "label": rec.get("label") or "",
         "shopify_customer_id": str(rec.get("shopify_customer_id") or ""),
+        "price_list": rec.get("price_list") or None,
         "prefix": display_prefix(rec.get("key_prefix") or ""),
         "created_at": rec.get("created_at"),
         "created_by": rec.get("created_by"),
@@ -335,7 +336,8 @@ def list_keys_for_staff(*, refresh: bool = True) -> list[dict]:
 
 
 def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None,
-                 expires_at: str | None = None, fields: list[str] | None = None) -> tuple[str, dict]:
+                 expires_at: str | None = None, fields: list[str] | None = None,
+                 price_list: str | None = None) -> tuple[str, dict]:
     """Create a key on the office server. Returns (raw_key, public record).
 
     The raw key is never logged; it is stored only sealed (see ``seal_key``).
@@ -352,7 +354,15 @@ def generate_key(*, label: str, shopify_customer_id: str, created_by: str | None
         "expires_at": expires_at,
         "fields": list(fields) if fields is not None else None,
     }
+    if price_list:
+        record["price_list"] = price_list
     stored = _office().create_api_key(record)
+    if price_list and stored.get("price_list") != price_list:
+        # Office server predates standalone keys and dropped the price list -
+        # the key would serve nothing. Don't hand it out.
+        _office().revoke_api_key(stored["id"])
+        raise RuntimeError("Office server needs the updated api_keys_addon.py (restart it after copying) "
+                           "before keys can be made without a customer")
     from scripts.product_feed import normalise_groups, DEFAULT_GROUPS  # type: ignore
     if (fields is not None and stored.get("fields") is None
             and normalise_groups(fields) != DEFAULT_GROUPS):

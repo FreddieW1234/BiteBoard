@@ -48,7 +48,10 @@ _COLUMNS = (
     "id", "label", "shopify_customer_id", "key_hash", "key_prefix",
     "created_at", "created_by", "last_used_at", "last_used_ip",
     "revoked_at", "expires_at", "request_count", "fields", "key_sealed",
+    "price_list",
 )
+# Standalone keys (no customer) carry their own price list.
+_PRICE_LISTS = ("trade", "end-customer")
 
 
 def _iso_now() -> str:
@@ -91,6 +94,10 @@ def init_api_keys_db(db_dir: Path) -> None:
             conn.execute("ALTER TABLE api_keys ADD COLUMN key_sealed TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+        try:
+            conn.execute("ALTER TABLE api_keys ADD COLUMN price_list TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
 
 
@@ -122,6 +129,7 @@ class ApiKeyCreate(BaseModel):
     expires_at: str | None = None
     fields: list[str] | None = None
     key_sealed: str | None = None
+    price_list: str | None = None
 
 
 class ApiKeyFields(BaseModel):
@@ -160,20 +168,27 @@ def register_api_key_routes(app, *, db_dir: Path, lock, require_key_dep) -> None
             raise HTTPException(400, "key_sealed is not in the expected format.")
         label = (body.label or "").strip()
         customer_id = (body.shopify_customer_id or "").strip()
-        if not label or not customer_id.isdigit():
-            raise HTTPException(400, "label and a numeric shopify_customer_id are required.")
+        price_list = (body.price_list or "").strip() or None
+        if price_list is not None and price_list not in _PRICE_LISTS:
+            raise HTTPException(400, "price_list must be trade or end-customer.")
+        if not label:
+            raise HTTPException(400, "label is required.")
+        if price_list is None and not customer_id.isdigit():
+            raise HTTPException(400, "A numeric shopify_customer_id or a price_list is required.")
+        if customer_id and not customer_id.isdigit():
+            raise HTTPException(400, "shopify_customer_id must be numeric.")
         with lock, _connect(db_dir) as conn:
             try:
                 conn.execute(
                     """
                     INSERT INTO api_keys (id, label, shopify_customer_id, key_hash,
                         key_prefix, created_at, created_by, expires_at, request_count, fields,
-                        key_sealed)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                        key_sealed, price_list)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
                     """,
                     (body.id, label, customer_id, body.key_hash, body.key_prefix,
                      _iso_now(), body.created_by, body.expires_at, _fields_json(body.fields),
-                     body.key_sealed),
+                     body.key_sealed, price_list),
                 )
             except sqlite3.IntegrityError:
                 raise HTTPException(409, "Key id or hash already exists.")

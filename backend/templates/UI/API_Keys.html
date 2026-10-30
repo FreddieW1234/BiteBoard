@@ -41,6 +41,8 @@
         .card h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; }
         .muted { color: #6b7280; font-size: 0.8rem; }
         .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .standalone-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #374151; margin-bottom: 10px; cursor: pointer; }
+        .field[hidden] { display: none; }
         .field { display: flex; flex-direction: column; gap: 4px; }
         .field label { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
         .field input, .field select { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 0.875rem; min-width: 200px; background: #fff; }
@@ -109,8 +111,16 @@
 
             <div class="card">
                 <h2>Generate a key</h2>
+                <label class="standalone-toggle"><input type="checkbox" id="gen-standalone"> Not linked to a customer (name it yourself and pick a price list)</label>
                 <div class="row">
-                    <div class="field cust-field">
+                    <div class="field" id="gen-pricelist-wrap" hidden>
+                        <label for="gen-pricelist">Price list</label>
+                        <select id="gen-pricelist">
+                            <option value="trade">Trade prices</option>
+                            <option value="end-customer">End customer prices</option>
+                        </select>
+                    </div>
+                    <div class="field cust-field" id="gen-customer-wrap">
                         <label for="gen-search">Customer (trade / end-customer only)</label>
                         <input type="text" id="gen-search" placeholder="Loading customers…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="gen-results">
                         <div class="cust-results" id="gen-results" role="listbox" hidden></div>
@@ -270,7 +280,9 @@
         }
         $('keys-body').innerHTML = lastKeys.map((k) => {
             const c = customerById[k.shopify_customer_id];
-            const who = c ? esc(customerName(c)) : esc(k.shopify_customer_id);
+            const who = k.price_list
+                ? `<span class="muted">No customer</span> · ${k.price_list === 'trade' ? 'Trade' : 'End customer'} prices`
+                : (c ? esc(customerName(c)) : esc(k.shopify_customer_id));
             const action = k.status === 'active'
                 ? `<button type="button" class="btn-danger" data-revoke="${esc(k.id)}" data-label="${esc(k.label)}">Revoke</button>` : '';
             return `<tr>
@@ -329,19 +341,30 @@
     });
     $('gen-search').addEventListener('blur', () => setTimeout(closeResults, 100));
 
+    $('gen-standalone').addEventListener('change', () => {
+        const on = $('gen-standalone').checked;
+        $('gen-customer-wrap').hidden = on;
+        $('gen-pricelist-wrap').hidden = !on;
+        $('gen-label').placeholder = on ? 'e.g. Website test, Partner feed' : 'e.g. Acme Promo Ltd website';
+    });
+
     $('gen-btn').addEventListener('click', async () => {
         const msg = $('gen-msg');
         msg.className = 'msg';
         msg.textContent = '';
         $('new-key').style.display = 'none';
+        const standalone = $('gen-standalone').checked;
         const body = {
-            shopify_customer_id: pickedId,
+            shopify_customer_id: standalone ? '' : pickedId,
             label: $('gen-label').value.trim(),
             expires_at: $('gen-expires').value,
         };
-        if (!body.shopify_customer_id || !body.label) {
+        if (standalone) body.price_list = $('gen-pricelist').value;
+        if (!body.label || (!standalone && !body.shopify_customer_id)) {
             msg.className = 'msg err';
-            msg.textContent = 'Search for a customer, pick one from the list, and give the key a label.';
+            msg.textContent = standalone
+                ? 'Give the key a name.'
+                : 'Search for a customer, pick one from the list, and give the key a label.';
             return;
         }
         $('gen-btn').disabled = true;
@@ -354,7 +377,9 @@
                 return;
             }
             $('new-key-value').textContent = data.key;
-            $('new-key-note').textContent = `Serves ${data.price_list} pricing while the customer keeps that tag. Customers should pull once a day and cache - never call the feed from their page loads.`;
+            $('new-key-note').textContent = standalone
+                ? `Serves ${data.price_list} pricing. Pull once a day and cache - never call the feed from page loads.`
+                : `Serves ${data.price_list} pricing while the customer keeps that tag. Customers should pull once a day and cache - never call the feed from their page loads.`;
             $('new-key').style.display = 'block';
             $('gen-label').value = '';
             $('gen-expires').value = '';
