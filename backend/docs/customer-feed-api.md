@@ -66,6 +66,7 @@ if nothing has changed you get `304 Not Modified` and no body.
       "description": "…",
       "product_type": "Chocolate",
       "url": "https://bitepromotions.co.uk/products/personalised-mini-chocolate-bar",
+      "updated_at": "2026-09-20T14:02:11Z",
       "categories": ["Chocolate"],
       "subcategories": ["Bars"],
       "sub_subcategories": [],
@@ -78,10 +79,17 @@ if nothing has changed you get `304 Not Modified` and no body.
       ],
       "unit_weight_g": 12,
       "product_size": "80mm * 40mm * 10mm",
+      "diameter_mm": null,
+      "artwork_guidelines_url": "https://cdn.shopify.com/…/Artwork_Guidelines.pdf",
+      "artwork_templates_url": "https://cdn.shopify.com/…/CHOC-MINI-001_artwork_templates.zip",
+      "stock_designs_url": null,
+      "filters": { "size": ["Mini"] },
+      "search_terms": [],
       "origination": 50,
       "options": {
         "colours": { "product": [{ "name": "Gold", "code": "g" }] },
-        "custom": [{ "name": "Wrapper", "choices": ["Matt", "Gloss"] }]
+        "custom": [{ "name": "Wrapper", "choices": ["Matt", "Gloss"] }],
+        "choices": { "print": ["Outside Only", "Outside + Inside"] }
       },
       "prices_include_vat": false,
       "price_breaks": [
@@ -99,10 +107,21 @@ if nothing has changed you get `304 Not Modified` and no body.
   product so this can't be missed.
 - A product without prices for your account is left out of the feed. It never
   appears with a price of 0.
-- Every product includes `id`, `handle`, `sku`, `title`, `url`, prices,
-  description, categories, images, ordering (MOQ, case quantity, lead times),
-  size and weight, options, dietary, allergens, ingredients (ingredients,
-  nutrition, shelf life) and product info (what's inside, print and recycling info).
+- Every product includes `id`, `handle`, `sku`, `title`, `url`, `updated_at`,
+  prices, description, categories, images, ordering (MOQ, case quantity, lead
+  times), size and weight (including `diameter_mm` and `packing_info`), options,
+  filters (`brand`, `eco`, `packaging`, `size`) and `search_terms`, dietary,
+  allergens, ingredients (ingredients, nutrition, shelf life), product info
+  (`product_info`, what's inside, print and recycling info) and artwork files.
+- Use `id` or `handle` to identify a product - a few products share a `sku`.
+- `artwork_guidelines_url` (PDF), `artwork_templates_url` (ZIP of templates)
+  and `stock_designs_url` are direct download links, or `null` if the product
+  has none. You may link to them or copy the files to your own hosting.
+- `options.choices` lists extra choices the product offers, e.g. `print`
+  (outside only / outside + inside), `foil`, `mailer`, `mailer_packing`,
+  `packaging`.
+- `lead_times` has a third, smaller band (1-1,499 units) on products that
+  have one.
 - `product_size` is length * width * height in millimetres, e.g.
   `"78mm * 72mm * 27mm"`. Some products only have two dimensions. `shelf_life`
   is e.g. `"12 months"`, or occasionally text such as `"For best before see sachet"`.

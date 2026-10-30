@@ -33,7 +33,7 @@ _BASE_DIR = Path(__file__).resolve().parent.parent
 _CACHE_PATH = _BASE_DIR / "data" / "feed_snapshot.json"
 _DISK_MAX_AGE_SECONDS = 26 * 3600
 # Bump when the per-product shape changes so an old cached snapshot is rebuilt.
-_SNAPSHOT_FORMAT = 2
+_SNAPSHOT_FORMAT = 3
 _CUSTOMER_TAG_TTL = 300
 
 PRICE_KEY_BY_TYPE = {"trade": "pricejsontr", "end-customer": "pricejsoner"}
@@ -88,6 +88,26 @@ _METAFIELD_ALIASES = {
     "mf_whats_inside": "whats_inside",
     "mf_print_info": "print_info",
     "mf_recycle_info": "recycle_info",
+    "mf_leadtime3": "leadtime3",
+    "mf_diameter": "diameter",
+    "mf_packing_info": "packing_info",
+    "mf_productinfo": "productinfo",
+    "mf_alternative_spellings": "alternative_spellings",
+    "mf_brand": "brand",
+    "mf_eco": "eco",
+    "mf_packaging": "packaging",
+    "mf_size": "size",
+    "mf_print": "print",
+    "mf_foil": "foil",
+    "mf_mailer": "mailer",
+    "mf_mailerpacking": "mailerpacking",
+    "mf_packaging_if_applicable": "packaging_if_applicable",
+}
+# File metafields (PDF/ZIP on Shopify's CDN) - fetched with their public URL.
+_FILE_ALIASES = {
+    "file_artworkguidelines": "artworkguidelines",
+    "file_artworktemplates": "artworktemplates",
+    "file_stockdesigns": "stockdesigns",
 }
 DIETARY_KEYS = ("vegan", "vegetarian", "halal", "coeliac", "kosher")
 ALLERGEN_KEYS = (
@@ -99,19 +119,22 @@ for _k in DIETARY_KEYS + ALLERGEN_KEYS:
 
 # What a key can choose to receive. Identity fields are always sent so every
 # product can be matched; everything else is opt-in per key.
-ALWAYS_FIELDS = ("id", "handle", "sku", "title", "url")
+ALWAYS_FIELDS = ("id", "handle", "sku", "title", "url", "updated_at")
 FIELD_GROUPS = {
     "prices": ("prices_include_vat", "price_breaks", "origination"),
     "description": ("description", "product_type"),
     "categories": ("categories", "subcategories", "sub_subcategories"),
     "images": ("images",),
     "ordering": ("moq", "case_quantity", "lead_times"),
-    "physical": ("unit_weight_g", "product_size", "case_weight_g", "commodity_code"),
+    "physical": ("unit_weight_g", "product_size", "diameter_mm", "case_weight_g",
+                 "commodity_code", "packing_info"),
     "options": ("options",),
+    "filters": ("filters", "search_terms"),
+    "artwork": ("artwork_guidelines_url", "artwork_templates_url", "stock_designs_url"),
     "dietary": ("dietary",),
     "allergens": ("allergens",),
     "ingredients": ("ingredients", "nutritional_info", "shelf_life"),
-    "product_info": ("whats_inside", "print_info", "recycle_info"),
+    "product_info": ("product_info", "whats_inside", "print_info", "recycle_info"),
 }
 # Keys created before field choices existed get exactly what they got then.
 DEFAULT_GROUPS = ("prices", "description", "categories", "images", "ordering", "physical", "options")
@@ -135,6 +158,7 @@ query FeedProducts($cursor: String) {
         title
         description
         productType
+        updatedAt
         onlineStoreUrl
         images(first: 10) { edges { node { url } } }
         %s
@@ -148,6 +172,10 @@ query FeedProducts($cursor: String) {
     "\n        ".join(
         f'{alias}: metafield(namespace: "custom", key: "{key}") {{ value }}'
         for alias, key in _METAFIELD_ALIASES.items()
+    ) + "\n        " + "\n        ".join(
+        f'{alias}: metafield(namespace: "custom", key: "{key}") '
+        '{ reference { ... on GenericFile { url } ... on MediaImage { image { url } } } }'
+        for alias, key in _FILE_ALIASES.items()
     ),
 )
 
@@ -218,7 +246,7 @@ def _text_list(*raws) -> list[str]:
             data = [raw]
         for item in data if isinstance(data, list) else [data]:
             s = str(item).strip()
-            if s and s not in out:
+            if s and s != "-" and s not in out:
                 out.append(s)
     return out
 
@@ -361,7 +389,29 @@ def _options(mf: dict) -> dict:
         choices = _parse_choices(mf.get(f"customoption{n}options"))
         if name and choices:
             custom.append({"name": name, "choices": choices})
-    return {"colours": colours, "custom": custom}
+    # Yes/No style choices the product page offers (print sides, foil, mailer...).
+    choices = {}
+    for key, name in (("print", "print"), ("foil", "foil"), ("mailer", "mailer"),
+                      ("mailerpacking", "mailer_packing"),
+                      ("packaging_if_applicable", "packaging")):
+        vals = _text_list(mf.get(key))
+        if vals:
+            choices[name] = vals
+    return {"colours": colours, "custom": custom, "choices": choices}
+
+
+def _file_url(node: dict, alias: str):
+    ref = ((node.get(alias) or {}).get("reference")) or {}
+    return ref.get("url") or ((ref.get("image") or {}).get("url"))
+
+
+def _filters(mf: dict) -> dict:
+    out = {}
+    for key in ("brand", "eco", "packaging", "size"):
+        vals = _text_list(mf.get(key))
+        if vals:
+            out[key] = vals
+    return out
 
 
 def _product_from_node(node: dict) -> dict:
@@ -371,7 +421,12 @@ def _product_from_node(node: dict) -> dict:
         for e in ((node.get("images") or {}).get("edges") or [])
     ]
     lead_times = []
-    for key, lo, hi in (("leadtime1", 1, 4999), ("leadtime2", 5000, 10000)):
+    # leadtime3 (under 1,500 units) is only set on some products; when it is,
+    # leadtime1 covers 1,500-4,999 instead of 1-4,999.
+    bands = ((("leadtime3", 1, 1499), ("leadtime1", 1500, 4999), ("leadtime2", 5000, 10000))
+             if _text(mf.get("leadtime3")) else
+             (("leadtime1", 1, 4999), ("leadtime2", 5000, 10000)))
+    for key, lo, hi in bands:
         raw = _text(mf.get(key))
         if raw:
             lead_times.append({"min_qty": lo, "max_qty": hi,
@@ -384,6 +439,7 @@ def _product_from_node(node: dict) -> dict:
         "description": _text(mf.get("description")) or _text(node.get("description")),
         "product_type": _text(node.get("productType")),
         "url": node.get("onlineStoreUrl"),
+        "updated_at": node.get("updatedAt"),
         "categories": _text_list(mf.get("custom_category")),
         "subcategories": _text_list(mf.get("subcategory"), mf.get("subcategory_2")),
         "sub_subcategories": _text_list(mf.get("sub_subcategory"), mf.get("sub_subcategory_2")),
@@ -393,6 +449,14 @@ def _product_from_node(node: dict) -> dict:
         "lead_times": lead_times,
         "unit_weight_g": _num(mf.get("unit_weight")),
         "product_size": _product_size(mf.get("product_size")),
+        "diameter_mm": _num(mf.get("diameter")),
+        "packing_info": _text(mf.get("packing_info")),
+        "filters": _filters(mf),
+        "search_terms": _text_list(mf.get("alternative_spellings")),
+        "artwork_guidelines_url": _file_url(node, "file_artworkguidelines"),
+        "artwork_templates_url": _file_url(node, "file_artworktemplates"),
+        "stock_designs_url": _file_url(node, "file_stockdesigns"),
+        "product_info": _text(mf.get("productinfo")),
         "origination": _num(mf.get("origination")),
         "options": _options(mf),
         "case_weight_g": _num(mf.get("case_weight")),
