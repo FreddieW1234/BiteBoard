@@ -228,6 +228,26 @@
         #sageCodeModal .sage-preview code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; }
         #sageCodeModal .sage-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+        /* SEO section */
+        .seo-heading { margin: 0 0 14px 0; color: #4f46e5; font-size: 1.2rem; }
+        .seo-preview { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; background: #fff;
+            font-family: Arial, sans-serif; }
+        .seo-preview-site { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .seo-preview-logo { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #e2e8f0; display: flex;
+            align-items: center; justify-content: center; font-weight: 700; color: #111; }
+        .seo-preview-name { font-size: 14px; color: #202124; }
+        .seo-preview-crumb { font-size: 12px; color: #4d5156; word-break: break-all; }
+        .seo-preview-title { font-size: 20px; color: #1a0dab; line-height: 1.3; margin-bottom: 4px; }
+        .seo-preview-desc { font-size: 14px; color: #4d5156; line-height: 1.5; }
+        .seo-preview-desc.empty { color: #b45309; font-style: italic; }
+        .seo-count { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+        .seo-count.over { color: #b91c1c; }
+        .seo-handle-wrap { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; overflow: hidden; }
+        .seo-handle-wrap span { padding: 0 0 0 12px; color: #64748b; }
+        .seo-handle-wrap input { flex: 1; border: none; outline: none; padding: 10px 12px 10px 0; font-size: 0.95rem; background: transparent; }
+        .seo-handle-wrap:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .seo-handle-warn { font-size: 0.8rem; color: #b45309; margin-top: 4px; }
+
         /* Image alt text: Configure button under each image + popup for all of them */
         .media-alt-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
             padding: 7px 8px; border: none; border-top: 1px solid #e0e0e0; background: #fff; color: #4338ca;
@@ -3112,6 +3132,45 @@
                     </div>
                 </div>
 
+                <!-- SEO Section -->
+                <div class="collapsible-section" id="seo-section" style="display: none;">
+                    <div class="section-content" id="seo-content">
+                        <h4 class="seo-heading"><i class="fas fa-search"></i> Search engine listing (SEO)</h4>
+                        <div class="seo-preview" aria-label="Search result preview">
+                            <div class="seo-preview-site">
+                                <span class="seo-preview-logo">b</span>
+                                <div>
+                                    <div class="seo-preview-name">Bite Promotions</div>
+                                    <div class="seo-preview-crumb" id="seoPreviewCrumb">https://bitepromotions.co.uk › products</div>
+                                </div>
+                            </div>
+                            <div class="seo-preview-title" id="seoPreviewTitle"></div>
+                            <div class="seo-preview-desc" id="seoPreviewDesc"></div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label" for="seo-title">Page title</label>
+                            <input type="text" id="seo-title" class="form-input" maxlength="255" placeholder="Defaults to the product title">
+                            <div class="seo-count" id="seoTitleCount"></div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label" for="seo-description">Meta description</label>
+                            <textarea id="seo-description" class="form-textarea" rows="3" maxlength="320" placeholder="A sentence or two that sells the product in search results"></textarea>
+                            <div class="seo-count" id="seoDescCount"></div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label" for="seo-handle">URL handle</label>
+                            <div class="seo-handle-wrap">
+                                <span>products/</span>
+                                <input type="text" id="seo-handle" maxlength="255" placeholder="made from the title when left blank">
+                            </div>
+                            <div class="seo-count" id="seoHandleUrl"></div>
+                            <div class="seo-handle-warn" id="seoHandleWarn" style="display:none;">
+                                <i class="fas fa-info-circle"></i> The old URL will redirect to the new one when you save.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
                 <!-- Action Buttons -->
                 <div class="action-buttons" style="display: none;">
@@ -3188,6 +3247,7 @@
             if (titleEl) titleEl.value = '';
             const productCodeEl = document.getElementById('product-code');
             if (productCodeEl) productCodeEl.value = '';
+            setSeoFields({}, '');
             document.querySelectorAll('.different-product-codes-cb').forEach(cb => { cb.checked = false; });
             if (typeof syncDifferentProductCodesUi === 'function') syncDifferentProductCodesUi();
             const statusEl = document.getElementById('status');
@@ -7188,6 +7248,9 @@
             console.log('🔍 Native Shopify description (body_html) saved blank');
             
             productData.status = formData.get('status') || 'active';
+            productData.seo_title = (document.getElementById('seo-title')?.value || '').trim();
+            productData.seo_description = (document.getElementById('seo-description')?.value || '').trim();
+            productData.seo_handle = seoSlug(document.getElementById('seo-handle')?.value || '');
             productData.tags = getVatTag();
             productData.charge_vat = document.getElementById('chargeVatYes').checked;
             productData.is_calendar = isCalendarProduct();
@@ -8742,6 +8805,10 @@
                     selectedProduct.title = baseTitle;
                 }
 
+                // SEO: a copy starts blank (its own URL and wording); an edit loads what's saved.
+                if (isDuplicate) setSeoFields({}, '');
+                else setSeoFields(seoFieldsFromProduct(data), data.handle || '');
+
                 // Status (default to active if unknown)
                 const statusEl = document.getElementById('status');
                 if (statusEl) {
@@ -9979,6 +10046,79 @@
         }
 
         // Note: updateMediaPreview is defined later with full Shopify media support
+
+        // ------------------------------------------------------------------
+        // SEO: page title, meta description and URL handle, with a live
+        // search-result preview. Saved by the backend after the main product.
+        // ------------------------------------------------------------------
+        let seoOriginalHandle = '';
+
+        function seoSlug(value) {
+            return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        }
+
+        function setSeoFields(values, originalHandle) {
+            values = values || {};
+            const t = document.getElementById('seo-title');
+            const d = document.getElementById('seo-description');
+            const h = document.getElementById('seo-handle');
+            if (t) t.value = values.title || '';
+            if (d) d.value = values.description || '';
+            if (h) h.value = values.handle || '';
+            seoOriginalHandle = originalHandle || '';
+            updateSeoPreview();
+        }
+
+        function seoFieldsFromProduct(data) {
+            const mfs = Array.isArray(data && data.metafields) ? data.metafields : [];
+            const pick = key => {
+                const m = mfs.find(x => x && x.namespace === 'global' && x.key === key);
+                return m ? String(m.value || '') : '';
+            };
+            return { title: pick('title_tag'), description: pick('description_tag'), handle: (data && data.handle) || '' };
+        }
+
+        function updateSeoPreview() {
+            const t = document.getElementById('seo-title');
+            if (!t) return;
+            const d = document.getElementById('seo-description');
+            const h = document.getElementById('seo-handle');
+            const productTitle = (document.getElementById('title')?.value || '').trim();
+            const title = t.value.trim() || productTitle || 'Product title';
+            const desc = d.value.trim();
+            const handle = seoSlug(h.value) || seoSlug(productTitle) || 'product';
+            const url = `https://bitepromotions.co.uk/products/${handle}`;
+            t.placeholder = productTitle ? `Defaults to "${productTitle}"` : 'Defaults to the product title';
+
+            document.getElementById('seoPreviewTitle').textContent = title;
+            const descEl = document.getElementById('seoPreviewDesc');
+            descEl.textContent = desc || 'No meta description - search engines will pick text from the page.';
+            descEl.classList.toggle('empty', !desc);
+            document.getElementById('seoPreviewCrumb').textContent = `https://bitepromotions.co.uk › products › ${handle}`;
+
+            const tc = document.getElementById('seoTitleCount');
+            tc.textContent = `${t.value.trim().length} of 70 characters used`;
+            tc.classList.toggle('over', t.value.trim().length > 70);
+            const dc = document.getElementById('seoDescCount');
+            dc.textContent = `${desc.length} of 160 characters used`;
+            dc.classList.toggle('over', desc.length > 160);
+            document.getElementById('seoHandleUrl').textContent = url;
+            const typed = seoSlug(h.value);
+            document.getElementById('seoHandleWarn').style.display =
+                (seoOriginalHandle && typed && typed !== seoOriginalHandle) ? 'block' : 'none';
+        }
+
+        document.addEventListener('input', (e) => {
+            const id = e.target && e.target.id;
+            if (id === 'seo-title' || id === 'seo-description' || id === 'seo-handle' || id === 'title') updateSeoPreview();
+        });
+        document.addEventListener('change', (e) => {
+            // Tidy the handle into URL form when the user leaves the box.
+            if (e.target && e.target.id === 'seo-handle') {
+                e.target.value = seoSlug(e.target.value);
+                updateSeoPreview();
+            }
+        });
 
         // ------------------------------------------------------------------
         // Image alt text. Existing images keep it on their media item (.alt);

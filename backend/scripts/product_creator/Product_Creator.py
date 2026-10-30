@@ -4794,6 +4794,62 @@ def sync_product_tab_body_from_metafields(product_id, shopify_domain=None):
         return {"success": False, "error": str(exc)}
 
 
+_SEO_UPDATE = """
+mutation ProductSeo($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product { handle seo { title description } }
+    userErrors { field message }
+  }
+}
+"""
+
+
+def seo_handle(value):
+    """Shopify-style URL handle: lowercase letters, digits and single hyphens."""
+    s = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower())
+    return s.strip("-")[:255]
+
+
+def apply_product_seo(product_id, product_data, current_handle=None, shopify_domain=None):
+    """Save the editor's SEO fields. A changed handle gets a redirect from the old URL."""
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    seo = {
+        "title": " ".join(str(product_data.get("seo_title") or "").split())[:255],
+        "description": " ".join(str(product_data.get("seo_description") or "").split())[:320],
+    }
+    update = {"id": f"gid://shopify/Product/{product_id}", "seo": seo}
+    handle = seo_handle(product_data.get("seo_handle"))
+    if handle and handle != (current_handle or ""):
+        update["handle"] = handle
+        update["redirectNewHandle"] = bool(current_handle)
+    try:
+        for attempt in range(3):
+            r = requests.post(
+                f"https://{domain}/admin/api/{API_VERSION}/graphql.json",
+                headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
+                json={"query": _SEO_UPDATE, "variables": {"product": update}},
+                timeout=30,
+            )
+            if r.status_code == 429 and attempt < 2:
+                time.sleep(2)
+                continue
+            break
+        body = r.json() if r.ok else {}
+        if not r.ok or body.get("errors"):
+            print(f"[warn] SEO: save failed ({r.status_code}) {str(body.get('errors') or r.text)[:300]}", flush=True)
+            return {"success": False}
+        res = (body.get("data") or {}).get("productUpdate") or {}
+        if res.get("userErrors"):
+            print(f"[warn] SEO: {res['userErrors']}", flush=True)
+            return {"success": False, "errors": res["userErrors"]}
+        saved = res.get("product") or {}
+        print(f"[ok] SEO saved: handle={saved.get('handle')!r}, title={seo['title'][:60]!r}", flush=True)
+        return {"success": True, "handle": saved.get("handle")}
+    except Exception as e:
+        print(f"[warn] SEO: error saving: {e}", flush=True)
+        return {"success": False}
+
+
 def create_product(product_data):
     """
     Create a new product in Shopify using the Admin API, or update existing product if product_id is provided
@@ -5197,6 +5253,15 @@ def create_product(product_data):
             print(f"🔗 Handle: {product.get('handle')}", flush=True)
             print(f"🏷️ Tags: {tags}", flush=True)
             
+            # Step 1b: SEO (page title, meta description, URL handle)
+            if "seo_title" in product_data or "seo_description" in product_data or "seo_handle" in product_data:
+                seo_result = apply_product_seo(
+                    product_id, product_data, current_handle=product.get("handle"),
+                    shopify_domain=actual_shopify_domain,
+                )
+                if seo_result.get("handle"):
+                    product["handle"] = seo_result["handle"]
+
             # Log the domain we'll use for subsequent API calls
             if actual_shopify_domain:
                 print(f"🌐 Using Shopify domain: {actual_shopify_domain} for subsequent API calls", flush=True)
