@@ -244,6 +244,40 @@ def _total_cases(line: dict) -> str:
     return ""
 
 
+# Line-item property label for each option, in the order add-ons are joined.
+SAGE_OPTION_PROPERTIES = (
+    ("print", "Print"),
+    ("foil", "Foil"),
+    ("mailer", "Mailer"),
+    ("mailerpacking", "Mailer Packing"),
+)
+
+
+def sage_product_code(line: dict) -> str:
+    """Base code plus the Sage add-on for each option the customer picked.
+
+    Add-ons are set per product in the product editor (Configure Sage codes),
+    e.g. Print "Outside + Inside" -> ".3" turns M11601 into M11601.3.
+    """
+    base = (line.get("sku") or "").strip()
+    addons = line.get("sage_code_addons") or {}
+    if not base or not addons:
+        return base
+    picked = {}
+    for prop in line.get("properties") or []:
+        key = (prop.get("key") or "").strip().lower()
+        val = str(prop.get("value") or "").strip()
+        if ":" in val:  # folded colour display "Red:R"
+            val = val.split(":", 1)[0].strip()
+        picked[key] = val
+    code = base
+    for opt, label in SAGE_OPTION_PROPERTIES:
+        choice = picked.get(label.lower())
+        if choice:
+            code += (addons.get(opt) or {}).get(choice, "")
+    return code
+
+
 def _money(value) -> float | None:
     try:
         return float(str(value if value is not None else "").replace(",", "").replace("£", "").strip())
@@ -343,7 +377,7 @@ def build_production_note(
         "double_checked_by": "",
         "date_of_order": _format_order_date(order.get("processed_at") or ""),
         "company_name": (order.get("company") or "").strip(),
-        "product_code": (line.get("sku") or "").strip(),
+        "product_code": sage_product_code(line),
         "total_units_ordered": qty_text,
         "case_quantity": _case_quantity_display(line),
         "origination_fee": _origination_fee(line, order),

@@ -68,6 +68,7 @@ LINE_ITEM_FIELDS = """
                 product {
                   caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
                   originationFee: metafield(namespace: "custom", key: "origination") { value }
+                  sageCodeAddons: metafield(namespace: "custom", key: "sage_code_addons") { value }
                 }
                 inventoryItem {
                   measurement {
@@ -445,6 +446,23 @@ def _line_item_weight_kg(li: dict) -> float:
     return value / 1000.0
 
 
+def _parse_sage_code_addons(raw: str) -> dict:
+    """custom.sage_code_addons: {"print": {"Outside + Inside": ".3"}, "foil": {"Yes": ".1"}}."""
+    try:
+        data = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {}
+    for opt, choices in data.items():
+        if isinstance(choices, dict):
+            clean = {str(k): str(v).strip() for k, v in choices.items() if str(v or "").strip()}
+            if clean:
+                out[str(opt)] = clean
+    return out
+
+
 def format_line_item(li: dict) -> dict:
     li_money = (li.get("originalTotalSet") or {}).get("shopMoney") or {}
     unit_money = (li.get("originalUnitPriceSet") or {}).get("shopMoney") or {}
@@ -498,6 +516,9 @@ def format_line_item(li: dict) -> dict:
         "case_quantity": case_quantity,
         "origination": origination,
         "variant_id": str(variant.get("legacyResourceId") or ""),
+        "sage_code_addons": _parse_sage_code_addons(
+            ((product.get("sageCodeAddons") or {}).get("value") or "")
+        ),
     }
     if is_fee:
         item = _format_fee_item(item, properties)

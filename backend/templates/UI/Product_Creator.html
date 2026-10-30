@@ -205,6 +205,29 @@
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             margin-bottom: 20px;
         }
+        .sage-config-btn { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px;
+            font-size: 0.78rem; font-weight: 500; color: #4f46e5; background: #eef2ff; border: 1px solid #c7d2fe;
+            border-radius: 6px; cursor: pointer; }
+        .sage-config-btn:hover { background: #e0e7ff; }
+        .sage-config-btn[hidden] { display: none; }
+        #sageCodeModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10000;
+            align-items: center; justify-content: center; }
+        #sageCodeModal.open { display: flex; }
+        #sageCodeModal .sage-modal-box { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+            width: 92%; max-width: 480px; max-height: 85vh; overflow-y: auto; }
+        #sageCodeModal h3 { margin: 0 0 6px 0; font-size: 1.2rem; }
+        #sageCodeModal .sage-modal-help { margin: 0 0 16px 0; color: #64748b; font-size: 0.88rem; line-height: 1.45; }
+        #sageCodeModal .sage-option-group { margin-bottom: 14px; }
+        #sageCodeModal .sage-option-group h4 { margin: 0 0 6px 0; font-size: 0.9rem; color: #1f2937; }
+        #sageCodeModal .sage-choice-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+        #sageCodeModal .sage-choice-row label { font-size: 0.9rem; color: #374151; }
+        #sageCodeModal .sage-choice-row input { width: 110px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.88rem; }
+        #sageCodeModal .sage-preview { margin: 4px 0 16px 0; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0;
+            border-radius: 8px; font-size: 0.82rem; color: #334155; }
+        #sageCodeModal .sage-preview code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; }
+        #sageCodeModal .sage-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
         #product-loading-overlay {
             display: none;
             position: fixed;
@@ -2488,6 +2511,18 @@
                 </div>
 
                 <!-- Add Parent/Child type instructions modal -->
+                <div id="sageCodeModal" onclick="if (event.target === this) closeSageCodeModal()">
+                    <div class="sage-modal-box" role="dialog" aria-modal="true" aria-labelledby="sageCodeModalTitle">
+                        <h3 id="sageCodeModalTitle">Sage code add-ons</h3>
+                        <p class="sage-modal-help">What to add to the end of the product code when a customer picks each option, e.g. <code>.3</code>. Leave blank if that option doesn't change the code. Add-ons join in the order Print, Foil, Mailer, Mailer Packing. Saved with the product.</p>
+                        <div id="sageCodeModalBody"></div>
+                        <div class="sage-preview" id="sageCodePreview"></div>
+                        <div class="sage-modal-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeSageCodeModal()">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="saveSageCodeModal()">Done</button>
+                        </div>
+                    </div>
+                </div>
                 <div id="addParentTypeModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 10000; align-items: center; justify-content: center;" class="add-parent-type-modal-overlay" onclick="if (event.target === this) closeAddParentTypeModal()">
                     <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2); max-width: 560px; width: 92%; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
                         <h3 style="margin: 0 0 8px 0; font-size: 1.25rem;">Add a new Parent/Child type</h3>
@@ -2601,6 +2636,9 @@
                                         <span class="radio-text">No</span>
                                     </label>
                                 </div>
+                                <button type="button" class="sage-config-btn" id="calendarSageConfigBtn" hidden onclick="openSageCodeModal('calendar')">
+                                    <i class="fas fa-cog"></i> Configure Sage codes
+                                </button>
                             </div>
                             <div class="form-group form-group-calendar-foil calendar-foil-option-row" id="calendar-foil-option-wrap" hidden style="display: none;">
                                 <label class="form-label">Foil option</label>
@@ -2616,6 +2654,9 @@
                                         <span class="radio-text">No</span>
                                     </label>
                                 </div>
+                                <button type="button" class="sage-config-btn" id="foilSageConfigBtn" hidden onclick="openSageCodeModal('foil')">
+                                    <i class="fas fa-cog"></i> Configure Sage codes
+                                </button>
                             </div>
                             <div class="form-group form-group-calendar-lt1500 calendar-lt1500-option-row" id="calendar-lt1500-option-wrap" hidden style="display: none;">
                                 <label class="form-label">&lt;1500 LT?</label>
@@ -4005,6 +4046,131 @@
             setCalendarFoilEnabled(storefrontOptionEnabledInMetafields(metafields, 'foil'), true);
         }
 
+        // ---- Sage code add-ons (custom.sage_code_addons) ----------------------
+        // { print: { "Outside + Inside": ".3" }, foil: { "Yes": ".1" }, ... }
+        // The production note appends the add-on for each option the customer
+        // picked, in SAGE_OPTION_ORDER, to the product code (M11601 -> M11601.3).
+        const SAGE_OPTION_ORDER = ['print', 'foil', 'mailer', 'mailerpacking'];
+        const SAGE_OPTION_LABELS = { print: 'Print', foil: 'Foil', mailer: 'Mailer', mailerpacking: 'Mailer Packing' };
+        const SAGE_OPTION_CHOICES = {
+            print: ['Outside Only', 'Outside + Inside'],
+            foil: ['Yes', 'No'],
+            mailer: ['Yes', 'No'],
+            mailerpacking: ['Yes', 'No'],
+        };
+        const SAGE_MODAL_OPTIONS = { calendar: ['print', 'mailer', 'mailerpacking'], foil: ['foil'] };
+        let sageCodeAddons = {};
+        let sageModalScope = null;
+
+        function cleanSageCodeAddons(raw) {
+            const out = {};
+            if (!raw || typeof raw !== 'object') return out;
+            SAGE_OPTION_ORDER.forEach(function (opt) {
+                const choices = raw[opt];
+                if (!choices || typeof choices !== 'object') return;
+                Object.keys(choices).forEach(function (choice) {
+                    const v = String(choices[choice] == null ? '' : choices[choice]).trim();
+                    if (v && SAGE_OPTION_CHOICES[opt].indexOf(choice) !== -1) {
+                        out[opt] = out[opt] || {};
+                        out[opt][choice] = v.slice(0, 20);
+                    }
+                });
+            });
+            return out;
+        }
+
+        function loadSageCodeAddons(metafields) {
+            const mf = (metafields || []).find(function (m) {
+                return m && m.namespace === 'custom' && m.key === 'sage_code_addons';
+            });
+            let parsed = {};
+            try { parsed = mf && mf.value ? JSON.parse(mf.value) : {}; } catch (e) { parsed = {}; }
+            sageCodeAddons = cleanSageCodeAddons(parsed);
+            syncSageConfigButtons();
+        }
+
+        function syncSageConfigButtons() {
+            const showCal = isCalendarProduct() && !isChildProduct();
+            const calBtn = document.getElementById('calendarSageConfigBtn');
+            const foilBtn = document.getElementById('foilSageConfigBtn');
+            if (calBtn) calBtn.hidden = !showCal;
+            if (foilBtn) foilBtn.hidden = !(showCal && isCalendarFoilEnabled());
+        }
+
+        function sageChoicesFor(opt) {
+            // Yes/No options only change the code when picked, so "No" is not offered.
+            return SAGE_OPTION_CHOICES[opt].filter(function (c) { return c !== 'No'; });
+        }
+
+        function escapeHtmlSage(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function openSageCodeModal(scope) {
+            sageModalScope = scope;
+            const body = document.getElementById('sageCodeModalBody');
+            const title = document.getElementById('sageCodeModalTitle');
+            if (title) title.textContent = scope === 'foil' ? 'Sage code add-on: Foil' : 'Sage code add-ons: Calendar options';
+            body.innerHTML = SAGE_MODAL_OPTIONS[scope].map(function (opt) {
+                const rows = sageChoicesFor(opt).map(function (choice) {
+                    const val = ((sageCodeAddons[opt] || {})[choice]) || '';
+                    const id = 'sage-' + opt + '-' + choice.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+                    return '<div class="sage-choice-row"><label for="' + id + '">' + escapeHtmlSage(choice) + '</label>'
+                        + '<input type="text" id="' + id + '" maxlength="20" placeholder="e.g. .3" data-opt="' + opt + '"'
+                        + ' data-choice="' + escapeHtmlSage(choice) + '" value="' + escapeHtmlSage(val) + '"></div>';
+                }).join('');
+                return '<div class="sage-option-group"><h4>' + SAGE_OPTION_LABELS[opt] + '</h4>' + rows + '</div>';
+            }).join('');
+            body.querySelectorAll('input').forEach(function (inp) { inp.addEventListener('input', updateSagePreview); });
+            updateSagePreview();
+            document.getElementById('sageCodeModal').classList.add('open');
+            const first = body.querySelector('input');
+            if (first) first.focus();
+        }
+
+        function readSageModalValues() {
+            const next = JSON.parse(JSON.stringify(sageCodeAddons));
+            (SAGE_MODAL_OPTIONS[sageModalScope] || []).forEach(function (opt) { delete next[opt]; });
+            document.querySelectorAll('#sageCodeModalBody input').forEach(function (inp) {
+                const v = inp.value.trim();
+                if (!v) return;
+                next[inp.dataset.opt] = next[inp.dataset.opt] || {};
+                next[inp.dataset.opt][inp.dataset.choice] = v;
+            });
+            return cleanSageCodeAddons(next);
+        }
+
+        function updateSagePreview() {
+            const el = document.getElementById('sageCodePreview');
+            if (!el) return;
+            const codeInput = document.getElementById('product-code');
+            const base = (codeInput && codeInput.value.trim()) || 'M00000';
+            const vals = readSageModalValues();
+            const examples = [];
+            SAGE_OPTION_ORDER.forEach(function (opt) {
+                Object.keys(vals[opt] || {}).forEach(function (choice) {
+                    examples.push(SAGE_OPTION_LABELS[opt] + ' ' + choice + ' &rarr; <code>' + escapeHtmlSage(base + vals[opt][choice]) + '</code>');
+                });
+            });
+            el.innerHTML = examples.length ? examples.join('<br>')
+                : 'No add-ons set: the production note shows <code>' + escapeHtmlSage(base) + '</code>.';
+        }
+
+        function saveSageCodeModal() {
+            sageCodeAddons = readSageModalValues();
+            closeSageCodeModal();
+        }
+
+        function closeSageCodeModal() {
+            const m = document.getElementById('sageCodeModal');
+            if (m) m.classList.remove('open');
+            sageModalScope = null;
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && sageModalScope) closeSageCodeModal();
+        });
+
         const LEADTIME_UNDER_1500_PREFILLS = {
             leadtime3: '10',
             leadtime1: '15',
@@ -4124,6 +4290,7 @@
 
         function onCalendarProductChange() {
             syncCalendarFoilOptionVisibility();
+            syncSageConfigButtons();
             applyCalendarGuidelinePreference(true);
         }
 
@@ -4137,6 +4304,10 @@
             const ltNo = document.getElementById('calendarLt1500No');
             if (ltYes) ltYes.addEventListener('change', onLeadtimeUnder1500Change);
             if (ltNo) ltNo.addEventListener('change', onLeadtimeUnder1500Change);
+            ['calendarFoilYes', 'calendarFoilNo'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('change', syncSageConfigButtons);
+            });
         }
 
         function loadCalendarFromMetafields(metafields) {
@@ -4160,6 +4331,7 @@
                 setLeadtimeUnder1500Enabled(false, false);
             }
             syncCalendarFoilOptionVisibility();
+            loadSageCodeAddons(metafields);
         }
 
         function buildGuidelinesListHtml(arr, col) {
@@ -7016,6 +7188,15 @@
                 productData.bag_colours = collectColoursString('bag-colour-inputs-container');
                 Object.assign(productData, collectCustomOptionProductData());
                 productData.storefront_options = collectStorefrontOptions();
+                // Always sent ("{}" when none) so clearing the add-ons saves too.
+                const sageAddons = isCalendarProduct() ? cleanSageCodeAddons(sageCodeAddons) : {};
+                productData.metafields = (productData.metafields || []).filter(m => m.key !== 'sage_code_addons');
+                productData.metafields.push({
+                    namespace: 'custom',
+                    key: 'sage_code_addons',
+                    type: 'single_line_text_field',
+                    value: JSON.stringify(sageAddons)
+                });
 
                 const colourImages = {};
                 const productContainer = document.getElementById('product-colour-inputs-container');
@@ -10434,6 +10615,8 @@
             setCalendarFoilEnabled(false, false);
             setLeadtimeUnder1500Enabled(false, false);
             syncCalendarFoilOptionVisibility();
+            sageCodeAddons = {};
+            syncSageConfigButtons();
         }
 
         const COLOUR_SKU_SECTIONS = [
