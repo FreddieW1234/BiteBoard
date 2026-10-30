@@ -228,6 +228,33 @@
         #sageCodeModal .sage-preview code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; }
         #sageCodeModal .sage-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+        /* Image alt text: Configure button under each image + popup for all of them */
+        .media-alt-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+            padding: 7px 8px; border: none; border-top: 1px solid #e0e0e0; background: #fff; color: #4338ca;
+            font-size: 12px; font-weight: 600; cursor: pointer; pointer-events: auto; }
+        .media-alt-btn:hover { background: #eef2ff; }
+        .media-alt-btn .alt-state { font-size: 11px; font-weight: 500; color: #b45309; }
+        .media-alt-btn.has-alt .alt-state { color: #15803d; }
+        #mediaAltModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10000;
+            align-items: center; justify-content: center; }
+        #mediaAltModal.open { display: flex; }
+        #mediaAltModal .alt-modal-box { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+            width: 94%; max-width: 640px; max-height: 88vh; display: flex; flex-direction: column; }
+        #mediaAltModal h3 { margin: 0 0 6px 0; font-size: 1.2rem; }
+        #mediaAltModal .alt-modal-help { margin: 0 0 12px 0; color: #64748b; font-size: 0.88rem; line-height: 1.45; }
+        #mediaAltModal .alt-rows { overflow-y: auto; flex: 1; margin: 0 -4px; padding: 0 4px; }
+        #mediaAltModal .alt-row { display: flex; gap: 12px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; }
+        #mediaAltModal .alt-row.focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+        #mediaAltModal .alt-row img, #mediaAltModal .alt-row video { width: 84px; height: 84px; object-fit: contain;
+            background: #f8fafc; border-radius: 6px; flex-shrink: 0; }
+        #mediaAltModal .alt-row-main { flex: 1; min-width: 0; }
+        #mediaAltModal .alt-row-label { font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 4px; }
+        #mediaAltModal textarea { width: 100%; box-sizing: border-box; min-height: 56px; padding: 6px 8px; resize: vertical;
+            border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.88rem; }
+        #mediaAltModal .alt-count { font-size: 0.72rem; color: #94a3b8; text-align: right; }
+        #mediaAltModal .alt-modal-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        #mediaAltModal .alt-modal-actions > div { display: flex; gap: 8px; }
+
         #product-loading-overlay {
             display: none;
             position: fixed;
@@ -2238,7 +2265,7 @@
 
         /* Move up / down buttons */
         .media-move-btns {
-            position: absolute; bottom: 48px; right: 4px;
+            position: absolute; bottom: 40px; right: 4px;
             display: flex; flex-direction: column; gap: 2px;
             z-index: 10; opacity: 0; transition: opacity 0.15s;
         }
@@ -2510,6 +2537,20 @@
                     </div>
                 </div>
 
+                <div id="mediaAltModal" onclick="if (event.target === this) closeMediaAltModal()">
+                    <div class="alt-modal-box" role="dialog" aria-modal="true" aria-labelledby="mediaAltModalTitle">
+                        <h3 id="mediaAltModalTitle">Image alt text</h3>
+                        <p class="alt-modal-help">Describe what each image shows, e.g. "Bounty bar in a custom printed card wrap". Used by screen readers and Google Images. Saved to Shopify when you save the product.</p>
+                        <div class="alt-rows" id="mediaAltRows"></div>
+                        <div class="alt-modal-actions">
+                            <button type="button" class="btn btn-secondary" onclick="fillBlankAltFromTitle()" title="Fill every empty box with the product title">Fill blanks with title</button>
+                            <div>
+                                <button type="button" class="btn btn-secondary" onclick="closeMediaAltModal()">Cancel</button>
+                                <button type="button" class="btn btn-primary" onclick="saveMediaAltModal()">Done</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Add Parent/Child type instructions modal -->
                 <div id="sageCodeModal" onclick="if (event.target === this) closeSageCodeModal()">
                     <div class="sage-modal-box" role="dialog" aria-modal="true" aria-labelledby="sageCodeModalTitle">
@@ -9009,6 +9050,7 @@
                                 rest_api_id: img.id,  // Explicitly store REST API ID for backend comparison
                                 url: img.src,
                                 filename: (img.alt || `image_${img.id}`),
+                                alt: visibleAlt(img.alt),
                                 size: 0,
                                 is_image: true,
                                 content_type: 'image/jpeg'
@@ -9938,6 +9980,108 @@
 
         // Note: updateMediaPreview is defined later with full Shopify media support
 
+        // ------------------------------------------------------------------
+        // Image alt text. Existing images keep it on their media item (.alt);
+        // new uploads keep it here until the save sends it with media_order.
+        // ------------------------------------------------------------------
+        const uploadAltText = new WeakMap();
+        let mediaAltFocusIndex = null;
+
+        // Child copies of a parent's main image carry a hidden
+        // "bb-parent-main:<id>|" marker; staff only ever see the text after it.
+        function visibleAlt(alt) {
+            const s = String(alt || '').trim();
+            const m = s.match(/^bb-parent-main:\d+(?:[| ]|$)/);
+            return m ? s.slice(m[0].length).trim() : s;
+        }
+
+        function getUploadAlt(file) {
+            return uploadAltText.get(file) || '';
+        }
+
+        function escapeAltHtml(s) {
+            return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function mediaAltButtonHtml(index, alt) {
+            const has = !!(alt && alt.trim());
+            return `<button type="button" class="media-alt-btn${has ? ' has-alt' : ''}" draggable="false"
+                        title="${has ? escapeAltHtml(alt) : 'No alt text yet'}"
+                        onclick="event.stopPropagation(); openMediaAltModal(${index})">
+                        <i class="fas fa-sliders-h"></i> Configure
+                        <span class="alt-state">${has ? '<i class="fas fa-check"></i> Alt' : 'No alt'}</span>
+                    </button>`;
+        }
+
+        function openMediaAltModal(focusIndex) {
+            reconcileMediaItems();
+            mediaAltFocusIndex = focusIndex;
+            const rows = document.getElementById('mediaAltRows');
+            rows.innerHTML = '';
+            mediaItems.forEach((entry, idx) => {
+                const isUpload = entry.type === 'uploaded';
+                const alt = isUpload ? getUploadAlt(entry.item) : (entry.item.alt || '');
+                const isVideo = isUpload ? entry.item.type.startsWith('video/') : !entry.item.is_image;
+                const src = isUpload ? URL.createObjectURL(entry.item) : entry.item.url;
+                const row = document.createElement('div');
+                row.className = 'alt-row' + (idx === focusIndex ? ' focus' : '');
+                row.innerHTML = `
+                    ${isVideo ? `<video src="${src}" muted></video>` : `<img src="${src}" alt="">`}
+                    <div class="alt-row-main">
+                        <div class="alt-row-label">Image ${idx + 1}${idx === 0 ? ' · Main image' : ''}${isUpload ? ' · new' : ''}</div>
+                        <textarea maxlength="500" data-index="${idx}" placeholder="Describe this image"></textarea>
+                        <div class="alt-count"></div>
+                    </div>`;
+                const ta = row.querySelector('textarea');
+                const count = row.querySelector('.alt-count');
+                ta.value = alt;
+                const updateCount = () => { count.textContent = `${ta.value.length} / 500`; };
+                ta.addEventListener('input', updateCount);
+                updateCount();
+                rows.appendChild(row);
+            });
+            document.getElementById('mediaAltModal').classList.add('open');
+            const target = rows.querySelector(`textarea[data-index="${focusIndex}"]`);
+            if (target) {
+                target.closest('.alt-row').scrollIntoView({ block: 'nearest' });
+                target.focus();
+            }
+        }
+
+        function closeMediaAltModal() {
+            document.getElementById('mediaAltModal').classList.remove('open');
+        }
+
+        function fillBlankAltFromTitle() {
+            const title = (document.getElementById('title')?.value || '').trim();
+            if (!title) { alert('Enter a product title first.'); return; }
+            document.querySelectorAll('#mediaAltRows textarea').forEach(ta => {
+                if (!ta.value.trim()) {
+                    ta.value = title.slice(0, 500);
+                    ta.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+
+        function saveMediaAltModal() {
+            reconcileMediaItems();
+            document.querySelectorAll('#mediaAltRows textarea').forEach(ta => {
+                const entry = mediaItems[parseInt(ta.dataset.index, 10)];
+                if (!entry) return;
+                const text = ta.value.replace(/\s+/g, ' ').trim();
+                if (entry.type === 'uploaded') uploadAltText.set(entry.item, text);
+                else entry.item.alt = text;
+            });
+            closeMediaAltModal();
+            updateMediaPreview();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('mediaAltModal');
+            if (e.key === 'Escape' && modal && modal.classList.contains('open')) closeMediaAltModal();
+        });
+
         function createMediaPreview(file, index, source = 'uploaded') {
             const totalMedia = (selectedMediaFiles ? selectedMediaFiles.length : 0) + (selectedShopifyMedia ? selectedShopifyMedia.length : 0);
             const previewItem = document.createElement('div');
@@ -9966,12 +10110,9 @@
                 </div>
                 ${isVideo ? 
                     `<video draggable="false"><source src="${URL.createObjectURL(file)}" type="${file.type}"></video>` :
-                    `<img src="${URL.createObjectURL(file)}" alt="${file.name}" draggable="false">`
+                    `<img src="${URL.createObjectURL(file)}" alt="" draggable="false">`
                 }
-                <div class="media-info">
-                    <div class="media-name" title="${file.name}">${file.name}</div>
-                    <div class="media-size">${formatFileSize(file.size)}</div>
-                </div>
+                ${mediaAltButtonHtml(index, getUploadAlt(file))}
             `;
 
             // Add remove button event listener
@@ -10439,7 +10580,7 @@
             
             const typeIcon = media.is_image ? 'fas fa-image' : 'fas fa-video';
             const mediaElement = media.is_image ? 
-                `<img src="${media.url}" alt="${media.filename}" draggable="false" style="pointer-events: none;">` :
+                `<img src="${media.url}" alt="" draggable="false" style="pointer-events: none;">` :
                 `<video draggable="false" style="pointer-events: none;"><source src="${media.url}" type="${media.content_type}"></video>`;
             
             preview.innerHTML = `
@@ -10453,10 +10594,7 @@
                     <button type="button" class="move-btn" title="Move down" ${index >= totalMedia - 1 ? 'disabled' : ''} onclick="event.stopPropagation(); moveMediaItem(${index}, 1)"><i class="fas fa-chevron-down"></i></button>
                 </div>
                 ${mediaElement}
-                <div class="media-info">
-                    <div class="media-filename">${media.filename}</div>
-                    <div class="media-meta">${formatFileSize(media.size)} • Shopify</div>
-                </div>
+                ${mediaAltButtonHtml(index, media.alt)}
                 <div class="media-type">
                     <i class="${typeIcon}"></i>
                 </div>
@@ -10521,14 +10659,14 @@
             mediaItems.forEach(entry => {
                 if (entry.type === 'uploaded') {
                     formData.append('media_files', entry.item);
-                    mediaOrder.push({ type: 'upload', index: uploadIndex, position: currentPosition });
+                    mediaOrder.push({ type: 'upload', index: uploadIndex, position: currentPosition, alt: getUploadAlt(entry.item) });
                     uploadIndex++;
                 } else {
                     // The backend compares against the REST API numeric ID, not the global ID
                     const restApiId = entry.item.rest_api_id || entry.item.id;
                     const mediaIdForBackend = String(restApiId);
                     formData.append('shopify_media_ids', mediaIdForBackend);
-                    mediaOrder.push({ type: 'shopify', id: mediaIdForBackend, position: currentPosition });
+                    mediaOrder.push({ type: 'shopify', id: mediaIdForBackend, position: currentPosition, alt: entry.item.alt || '' });
                 }
                 currentPosition++;
             });

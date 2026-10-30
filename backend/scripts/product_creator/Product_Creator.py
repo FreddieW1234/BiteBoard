@@ -286,6 +286,10 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         
         # Map media order to actual image IDs
         position_map = {}  # Maps desired position -> image ID
+        alt_by_position = {}  # Alt text the editor sent for that slot, if any
+        for order_item in media_order:
+            if "alt" in order_item and order_item.get("position") is not None:
+                alt_by_position[order_item.get("position")] = order_item.get("alt")
         shopify_positions_processed = 0
         upload_positions_processed = 0
         
@@ -394,6 +398,12 @@ def reorder_product_media_by_order(product_id, media_order, shopify_media_ids, s
         for idx, (position, image_id) in enumerate(sorted(position_map.items())):
             put_url = f"https://{domain}/admin/api/{API_VERSION}/products/{product_id}/images/{image_id}.json"
             payload = {"image": {"id": int(image_id), "position": position}}
+            if position in alt_by_position:
+                current_alt = (all_image_map.get(str(image_id)) or {}).get("alt") or ""
+                new_alt = alt_keeping_marker(current_alt, alt_by_position[position])
+                if new_alt != current_alt.strip():
+                    payload["image"]["alt"] = new_alt
+                    print(f"[img] Alt text for image {image_id}: {visible_alt(new_alt)[:60]!r}")
             update_response = _put_with_retry(put_url, payload, f"image position {position}")
             if update_response.ok:
                 successful_updates.append((position, image_id))
@@ -940,7 +950,10 @@ def preupload_media_for_background_save(product_id, data, shopify_domain=None):
         next_new = 0
         for item in (data.get("media_order") or []):
             if item.get("type") == "upload":
-                remapped.append({"type": "shopify", "id": new_ids[next_new], "position": item.get("position")})
+                slot = {"type": "shopify", "id": new_ids[next_new], "position": item.get("position")}
+                if "alt" in item:
+                    slot["alt"] = item["alt"]
+                remapped.append(slot)
                 next_new += 1
             else:
                 remapped.append(item)
@@ -3775,6 +3788,27 @@ def _parent_main_alt_marker(parent_image_id):
     return f"{_PARENT_MAIN_ALT_PREFIX}{parent_image_id}"
 
 
+_ALT_MARKER_RE = re.compile(r"^bb-parent-main:\d+(?:[| ]|$)")
+_ALT_MAX_LEN = 512  # Shopify's limit for image alt text
+
+
+def visible_alt(alt):
+    """The alt text a shopper sees, without our bb-parent-main marker."""
+    alt = (alt or "").strip()
+    m = _ALT_MARKER_RE.match(alt)
+    return alt[m.end():].strip() if m else alt
+
+
+def alt_keeping_marker(existing_alt, text):
+    """New alt text that keeps any bb-parent-main marker already on the image."""
+    text = " ".join(str(text or "").split())
+    m = _ALT_MARKER_RE.match((existing_alt or "").strip())
+    if m:
+        marker = m.group(0).rstrip("| ")
+        return f"{marker}|{text}"[:_ALT_MAX_LEN] if text else marker
+    return text[:_ALT_MAX_LEN]
+
+
 def _image_has_parent_main_marker(img, parent_image_id):
     alt = (img.get("alt") or "").strip()
     marker = _parent_main_alt_marker(parent_image_id)
@@ -3871,7 +3905,9 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
         print("[info] Main image propagation: parent main image has no source URL/id", flush=True)
         return {"success": True, "updated": 0}
     parent_stem = _image_name_stem(main_src)
-    marker = _parent_main_alt_marker(parent_image_id)
+    # Children's copies carry the parent's alt text after the marker.
+    marker = alt_keeping_marker(_parent_main_alt_marker(parent_image_id),
+                                visible_alt(main_image.get("alt")))
 
     print(f"[img] Pushing parent main image to {len(child_ids)} child product(s): {main_src.split('/')[-1][:60]}", flush=True)
 
@@ -3914,7 +3950,7 @@ def propagate_main_image_to_children(parent_product_id, child_ids, shopify_domai
             if existing:
                 image_id = existing.get("id")
                 already_main = (existing.get("position") or 0) == 1
-                already_tagged = _image_has_parent_main_marker(existing, parent_image_id)
+                already_tagged = (existing.get("alt") or "").strip() == marker
                 if already_main and already_tagged and len(copies) <= 1:
                     skipped += 1
                     print(f"[info] Child {cid} already has this parent main image - skipped", flush=True)
