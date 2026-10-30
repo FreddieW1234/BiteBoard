@@ -228,6 +228,18 @@
         #sageCodeModal .sage-preview code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; }
         #sageCodeModal .sage-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+        /* Description with bold */
+        .rich-desc { width: 100%; }
+        .rich-desc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .rich-desc-bold { width: 30px; height: 28px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+            cursor: pointer; font-size: 14px; color: #111827; }
+        .rich-desc-bold:hover { background: #eef2ff; border-color: #6366f1; }
+        .rich-desc-hint { font-size: 0.78rem; color: #64748b; }
+        .rich-desc-editor { min-height: 90px; padding: 10px 12px; border: 2px solid #e2e8f0; border-radius: 12px; background: #fff;
+            font-size: 14px; line-height: 1.55; color: #1f2937; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; }
+        .rich-desc-editor:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.15); }
+        .rich-desc-editor strong, .rich-desc-editor b { font-weight: 700; }
+
         /* SEO section */
         .seo-heading { margin: 0 0 14px 0; color: #4f46e5; font-size: 1.2rem; }
         .seo-preview { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; background: #fff; }
@@ -6785,6 +6797,9 @@
                         ${inputElement}
                     </div>
                 `;
+                if (metafield.key === 'description') {
+                    enhanceRichDescription(metafieldDiv.querySelector('textarea.metafield-value'));
+                }
                 
                 // Debug: Check if dropdown was created for category/subcategory
                 if (metafield.key === 'custom_category' || metafield.key === 'subcategory') {
@@ -10046,6 +10061,94 @@
         }
 
         // Note: updateMediaPreview is defined later with full Shopify media support
+
+        // ------------------------------------------------------------------
+        // Description with bold. The field stays a plain multi-line text
+        // metafield; bold words are stored as <strong>…</strong>, which the
+        // product page shows as bold (the theme strips tags for meta tags).
+        // The hidden textarea stays the source of truth for the rest of the
+        // page, and setting its .value redraws the editor.
+        // ------------------------------------------------------------------
+        function richDescEscape(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function richDescToHtml(stored) {
+            return richDescEscape(stored || '')
+                .replace(/&lt;(\/?)(strong|b)&gt;/gi, '<$1strong>')
+                .replace(/\r?\n/g, '<br>');
+        }
+
+        function richDescFromEditor(root) {
+            let out = '';
+            const isBold = el => /^(B|STRONG)$/.test(el.tagName) || parseInt(el.style && el.style.fontWeight, 10) >= 600
+                || el.style && el.style.fontWeight === 'bold';
+            const walk = (node, inBold) => {
+                node.childNodes.forEach(n => {
+                    if (n.nodeType === 3) { out += n.nodeValue.replace(/ /g, ' '); return; }
+                    if (n.nodeType !== 1) return;
+                    if (n.tagName === 'BR') { out += '\n'; return; }
+                    const block = /^(DIV|P|LI)$/.test(n.tagName);
+                    if (block && out && !out.endsWith('\n')) out += '\n';
+                    const bold = !inBold && isBold(n);
+                    if (bold) out += '<strong>';
+                    walk(n, inBold || bold);
+                    if (bold) out += '</strong>';
+                });
+            };
+            walk(root, false);
+            return out
+                .replace(/<strong>(\s*)<\/strong>/g, '$1')
+                .replace(/<\/strong>(\s*)<strong>/g, '$1')
+                .replace(/<strong>(\s+)/g, '$1<strong>')
+                .replace(/(\s+)<\/strong>/g, '</strong>$1')
+                .replace(/[ \t]+\n/g, '\n')
+                .trim();
+        }
+
+        function enhanceRichDescription(ta) {
+            if (!ta || ta.dataset.rich === '1') return;
+            ta.dataset.rich = '1';
+            const proto = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+            const wrap = document.createElement('div');
+            wrap.className = 'rich-desc';
+            wrap.innerHTML = `
+                <div class="rich-desc-toolbar">
+                    <button type="button" class="rich-desc-bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                    <span class="rich-desc-hint">Highlight words, then press B or Ctrl+B to make them bold</span>
+                </div>
+                <div class="rich-desc-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>`;
+            ta.parentNode.insertBefore(wrap, ta);
+            ta.style.display = 'none';
+            const ed = wrap.querySelector('.rich-desc-editor');
+            const render = v => { ed.innerHTML = richDescToHtml(v); };
+            Object.defineProperty(ta, 'value', {
+                configurable: true,
+                get() { return proto.get.call(this); },
+                set(v) { proto.set.call(this, v); render(v); },
+            });
+            render(proto.get.call(ta));
+            const sync = () => {
+                proto.set.call(ta, richDescFromEditor(ed));
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                ta.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const bold = () => { ed.focus(); document.execCommand('bold'); sync(); };
+            const btn = wrap.querySelector('.rich-desc-bold');
+            btn.addEventListener('mousedown', e => e.preventDefault()); // keep the selection
+            btn.addEventListener('click', bold);
+            ed.addEventListener('input', sync);
+            ed.addEventListener('keydown', e => {
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); bold(); }
+                // Other formatting shortcuts would be thrown away on save, so block them.
+                if ((e.ctrlKey || e.metaKey) && /^[iu]$/i.test(e.key)) e.preventDefault();
+            });
+            ed.addEventListener('paste', e => {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+                document.execCommand('insertText', false, text);
+            });
+        }
 
         // ------------------------------------------------------------------
         // SEO: page title, meta description and URL handle, with a live

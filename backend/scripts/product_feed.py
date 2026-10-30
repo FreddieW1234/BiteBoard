@@ -255,6 +255,12 @@ def _text(value):
     return None if s in (None, "", "-") else s
 
 
+def _plain(value):
+    """Text without the <strong> bold tags staff add in the Product Creator."""
+    s = _text(value)
+    return _text(re.sub(r"</?(?:strong|b)\s*>", "", s, flags=re.I)) if isinstance(s, str) else s
+
+
 def _text_list(*raws) -> list[str]:
     """Taxonomy metafields are list types (``["Events"]``); merge primary + overflow."""
     out: list[str] = []
@@ -457,7 +463,7 @@ def _product_from_node(node: dict) -> dict:
         "handle": node.get("handle"),
         "sku": _text(mf.get("sku")),
         "title": node.get("title"),
-        "description": _text(mf.get("description")) or _text(node.get("description")),
+        "description": _plain(mf.get("description")) or _text(node.get("description")),
         "product_type": _text(node.get("productType")),
         "url": node.get("onlineStoreUrl"),
         "updated_at": node.get("updatedAt"),
