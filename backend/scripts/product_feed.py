@@ -148,7 +148,11 @@ def normalise_groups(groups) -> tuple[str, ...]:
     return tuple(sorted({g for g in groups if g in FIELD_GROUPS}))
 
 # ~65 query-cost points per product; 12 per page stays under Shopify's 1000 cap.
-_PAGE_SIZE = 12
+# One metafields(keys: [...]) list per product instead of ~70 aliased lookups:
+# ~16x cheaper in Shopify query cost, so a full pass stays inside the rate
+# limit bucket (no throttling) and takes seconds rather than minutes.
+_PAGE_SIZE = 50
+_ALL_METAFIELD_KEYS = sorted(set(_METAFIELD_ALIASES.values()) | set(_FILE_ALIASES.values()))
 _PRODUCTS_QUERY = """
 query FeedProducts($cursor: String) {
   products(first: %d, after: $cursor, query: "status:active") {
@@ -162,7 +166,13 @@ query FeedProducts($cursor: String) {
         updatedAt
         onlineStoreUrl
         images(first: 10) { edges { node { url } } }
-        %s
+        metafields(first: %d, keys: [%s]) {
+          nodes {
+            key
+            value
+            reference { ... on GenericFile { url } ... on MediaImage { image { url } } }
+          }
+        }
       }
     }
     pageInfo { hasNextPage endCursor }
@@ -170,15 +180,23 @@ query FeedProducts($cursor: String) {
 }
 """ % (
     _PAGE_SIZE,
-    "\n        ".join(
-        f'{alias}: metafield(namespace: "custom", key: "{key}") {{ value }}'
-        for alias, key in _METAFIELD_ALIASES.items()
-    ) + "\n        " + "\n        ".join(
-        f'{alias}: metafield(namespace: "custom", key: "{key}") '
-        '{ reference { ... on GenericFile { url } ... on MediaImage { image { url } } } }'
-        for alias, key in _FILE_ALIASES.items()
-    ),
+    len(_ALL_METAFIELD_KEYS),
+    ", ".join(f'"custom.{k}"' for k in _ALL_METAFIELD_KEYS),
 )
+
+
+def _alias_node(node: dict) -> dict:
+    """Spread the metafields list onto the alias keys _product_from_node reads."""
+    by_key = {}
+    for mf in ((node.get("metafields") or {}).get("nodes") or []):
+        # Filtered by keys, Shopify returns them namespaced: "custom.sku".
+        key = (mf.get("key") or "").split(".", 1)[-1]
+        by_key[key] = mf
+    out = dict(node)
+    for alias, key in list(_METAFIELD_ALIASES.items()) + list(_FILE_ALIASES.items()):
+        mf = by_key.get(key)
+        out[alias] = {"value": mf.get("value"), "reference": mf.get("reference")} if mf else None
+    return out
 
 _CUSTOMER_TAGS_QUERY = """
 query FeedCustomerTags($id: ID!) { customer(id: $id) { tags } }
@@ -501,7 +519,7 @@ def build_catalogue_snapshot() -> dict:
             node = edge.get("node") or {}
             if not node.get("onlineStoreUrl"):
                 continue  # not published to the Online Store
-            products.append(_product_from_node(node))
+            products.append(_product_from_node(_alias_node(node)))
         _PROGRESS["products"] = len(products)
         page = conn.get("pageInfo") or {}
         if not page.get("hasNextPage"):
