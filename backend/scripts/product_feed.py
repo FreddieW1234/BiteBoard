@@ -228,8 +228,11 @@ def _product_size(raw):
     s = _text(raw)
     if not isinstance(s, str):
         return s
-    parts = [x.strip() for x in s.split("*") if x.strip()]
-    if not parts or any(_num(x) is None for x in parts):
+    # A missing dimension is stored as "" or "-" ("40*65*-").
+    parts = [x.strip() for x in s.split("*") if x.strip() not in ("", "-")]
+    if not parts:
+        return None
+    if any(_num(x) is None for x in parts):
         return s  # free text: pass through untouched
     return " * ".join(f"{_num(x)}mm" for x in parts)
 
