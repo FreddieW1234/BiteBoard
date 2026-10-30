@@ -113,7 +113,28 @@ def _path_without_key() -> str:
     return f"{request.path}?{query}" if query else request.path
 
 
+# Optional "ready yet?" check set by the app (see set_ready_check). Render only
+# moves traffic to a new deploy once /healthz passes, so the old instance keeps
+# serving until this returns True.
+_ready_check = None
+
+
+def set_ready_check(fn) -> None:
+    global _ready_check
+    _ready_check = fn
+
+
 def _healthz():
+    if _ready_check is not None:
+        try:
+            ready = bool(_ready_check())
+        except Exception:
+            ready = True  # never let a broken check take the service down
+        if not ready:
+            response = make_response("starting", 503)
+            response.headers["Content-Type"] = "text/plain; charset=utf-8"
+            response.headers["Cache-Control"] = "no-store, private"
+            return response
     response = make_response("ok", 200)
     response.headers["Content-Type"] = "text/plain; charset=utf-8"
     response.headers["Cache-Control"] = "no-store, private"

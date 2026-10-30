@@ -121,6 +121,26 @@ try:
 
     _feed_keys.start_background()
     threading.Thread(target=_product_feed.warm_on_boot, name="feed-warm", daemon=True).start()
+
+    # Zero-gap deploys: report "not ready" on /healthz until this instance has
+    # its catalogue and keys, so Render keeps the previous instance serving
+    # customers meanwhile. Capped so a Shopify outage can't block a deploy.
+    from maintenance import set_ready_check as _set_ready_check  # type: ignore
+
+    _BOOTED_AT = time.time()
+    _BOOT_READY = {"done": False}
+    _BOOT_READY_CAP_SECONDS = 300
+
+    def _boot_ready() -> bool:
+        if _BOOT_READY["done"]:
+            return True
+        if ((_product_feed.get_snapshot_generated_at() and _feed_keys.keys_loaded())
+                or time.time() - _BOOTED_AT > _BOOT_READY_CAP_SECONDS):
+            _BOOT_READY["done"] = True  # once ready, always ready - never fail a live instance
+            print(f"[feed] instance ready after {time.time() - _BOOTED_AT:.0f}s", flush=True)
+        return _BOOT_READY["done"]
+
+    _set_ready_check(_boot_ready)
 except Exception as _feed_err:
     print(f"[warn] Customer feed warm-up not started: {_feed_err}", flush=True)
 
