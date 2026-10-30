@@ -244,15 +244,73 @@ def _total_cases(line: dict) -> str:
     return ""
 
 
-def _case_price(line: dict) -> str:
+def _money(value) -> float | None:
+    try:
+        return float(str(value if value is not None else "").replace(",", "").replace("£", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _addon_fees(line: dict, order: dict) -> list[dict]:
+    """Per-unit add-on fees (foiling, duplex print, mailer...) charged for this line.
+
+    The storefront adds each chosen extra as its own fee line, linked to the
+    product by ``_for_product`` (title) and ``_pl`` (price-band variant id).
+    Origination is a one-off charge with its own box, so it is left out.
+    """
+    title = (line.get("title") or "").strip()
+    variant_id = str(line.get("variant_id") or "")
+    same_title = [li for li in order.get("order_items") or []
+                  if not li.get("is_fee") and (li.get("title") or "").strip() == title]
+    out = []
+    for fee in order.get("fees") or []:
+        name = (fee.get("fee_name") or fee.get("title") or "").strip()
+        if "origination" in name.lower():
+            continue
+        if (fee.get("for_product") or "").strip() != title:
+            continue
+        pl = str(fee.get("pl_variant_id") or "")
+        if len(same_title) > 1 and pl and variant_id and pl != variant_id:
+            continue  # same product twice in the order - belongs to the other line
+        total = _money(fee.get("total"))
+        if total is None:
+            continue
+        out.append({"name": fee.get("fee_label") or name, "total": total})
+    return out
+
+
+def _unit_prices(line: dict, order: dict) -> tuple[float | None, float | None, list[dict]]:
+    """(base unit price, unit price including add-ons, add-ons per unit)."""
+    base = _money(line.get("unit_price"))
+    qty = line.get("quantity")
+    if base is None:
+        return None, None, []
+    addons = []
+    if isinstance(qty, int) and qty > 0:
+        for fee in _addon_fees(line, order):
+            addons.append({"name": fee["name"], "per_unit": fee["total"] / qty})
+    full = base + sum(a["per_unit"] for a in addons)
+    return base, full, addons
+
+
+def _unit_price_display(line: dict, order: dict) -> str:
+    base, full, addons = _unit_prices(line, order)
+    if full is None:
+        return ""
+    if not addons:
+        return format_gbp(full)
+    parts = " + ".join(f"{a['name']} {format_gbp(a['per_unit'])}" for a in addons)
+    return f"{format_gbp(full)} ({format_gbp(base)} + {parts})"
+
+
+def _case_price(line: dict, order: dict) -> str:
     case_qty = _parse_case_quantity(line)
     if not case_qty or case_qty <= 0:
         return ""
-    try:
-        unit = float(str(line.get("unit_price") or "0").replace(",", "").strip())
-    except (TypeError, ValueError):
+    _base, full, _addons = _unit_prices(line, order)
+    if full is None:
         return ""
-    return format_gbp(unit * case_qty)
+    return format_gbp(full * case_qty)
 
 
 def build_production_note(
@@ -296,7 +354,8 @@ def build_production_note(
         "client_name_logo": _client_name(order, product_section),
         "product": (line.get("title") or "").strip(),
         "total_cases_ordered": _total_cases(line),
-        "case_price": _case_price(line),
+        "case_price": _case_price(line, order),
+        "unit_price": _unit_price_display(line, order),
         "email_address": (order.get("customer_email") or "").strip(),
         "requested_delivery": format_display_date(delivery_date),
         "shipping_charged": (order.get("shipping_display") or "").strip(),

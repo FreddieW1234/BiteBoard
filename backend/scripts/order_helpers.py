@@ -64,6 +64,7 @@ LINE_ITEM_FIELDS = """
               variantTitle
               customAttributes { key value }
               variant {
+                legacyResourceId
                 product {
                   caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
                   originationFee: metafield(namespace: "custom", key: "origination") { value }
@@ -397,12 +398,19 @@ def _is_hidden_fee_property(key: str) -> bool:
     return k in ("_for_product", "_pl") or k.startswith("_pl")
 
 
-def _format_fee_item(item: dict) -> dict:
-    """Fees grouped by product in UI; hide _pl / _for_product and variant suffix."""
+def _format_fee_item(item: dict, raw_properties: list[dict] | None = None) -> dict:
+    """Fees grouped by product in UI; hide _pl / _for_product and variant suffix.
+
+    ``raw_properties`` must be the unfiltered attributes: the display list has
+    already dropped the hidden ``_for_product`` / ``_pl`` keys that link a fee
+    to its product line.
+    """
     properties = item.get("properties") or []
-    by_key = {p["key"]: p["value"] for p in properties}
+    by_key = {p["key"]: p["value"] for p in (raw_properties if raw_properties is not None else properties)}
     fee_name = _clean_fee_title(item.get("title") or "")
     for_product = (by_key.get("_for_product") or "").strip()
+    # "_pl" = "<price-band variant id>:<hash>" - ties the fee to its product line.
+    item["pl_variant_id"] = (by_key.get("_pl") or "").split(":", 1)[0].strip()
     item["fee_name"] = fee_name
     item["for_product"] = for_product
     item["fee_label"] = _display_fee_label(fee_name)
@@ -489,9 +497,10 @@ def format_line_item(li: dict) -> dict:
         "is_fee": is_fee,
         "case_quantity": case_quantity,
         "origination": origination,
+        "variant_id": str(variant.get("legacyResourceId") or ""),
     }
     if is_fee:
-        item = _format_fee_item(item)
+        item = _format_fee_item(item, properties)
     return item
 
 
