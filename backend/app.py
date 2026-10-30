@@ -4291,6 +4291,14 @@ def cron_reconcile_visibility():
     if not expected or not token or not hmac_mod.compare_digest(token, expected):
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
+    # Same nightly run: one variant per product on Google & YouTube. In the
+    # background - it would push the cron's curl past its time limit.
+    try:
+        from scripts import google_variants  # type: ignore
+        google_variants.sync_all_async()
+    except Exception as gerr:
+        print(f"[warn] Google & YouTube variant sync not started: {gerr}", flush=True)
+
     try:
         from shopify_client import taxonomy as taxmod
         from shopify_client.taxonomy import VisibilityCircuitBreaker

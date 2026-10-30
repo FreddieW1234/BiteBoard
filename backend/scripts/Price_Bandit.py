@@ -1201,6 +1201,20 @@ def process_product(product):
         # Sync main image across variants
         attach_main_image_to_variants(product_id, product_name, colours=None, colour_images=None)
 
+        # Google & YouTube: keep only the variant whose price a logged-out
+        # visitor sees ("FROM ..."), so Merchant Center gets one item per product.
+        try:
+            try:
+                from scripts import google_variants  # type: ignore
+            except ImportError:
+                import google_variants  # type: ignore
+            g = google_variants.sync_product(product_id)
+            if g.get("changed"):
+                print(f"[google] {product_name}: kept {g.get('keep')} on Google & YouTube "
+                      f"(+{g.get('published')} / -{g.get('unpublished')})", flush=True)
+        except Exception as exc:
+            print(f"[warn] Google & YouTube variant sync skipped for {product_name}: {exc}", flush=True)
+
         print(f"[ok] Successfully processed product: {product_name}", flush=True)
         return True
     except Exception as e:
