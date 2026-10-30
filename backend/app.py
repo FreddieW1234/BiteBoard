@@ -1655,6 +1655,13 @@ def api_bulk_update_field():
                 got = result.get("success_count", 0)
                 if result.get("success") and got >= expected:
                     saved += 1
+                    # A parent's inherited fields (origination, weights, …) must reach its
+                    # children now, or they silently change at the next full save.
+                    try:
+                        from scripts.product_creator.Product_Creator import push_inherited_metafields_to_children
+                        touched_ids.update(push_inherited_metafields_to_children(pid, metafields, shopify_domain=domain or None))
+                    except Exception as push_exc:
+                        print(f"[warn] bulk-update-field: child push for {pid} failed: {push_exc}", flush=True)
                 else:
                     failed += 1
                     errs = result.get("errors", [])

@@ -4311,6 +4311,54 @@ def remove_images_across_family(parent_child_value, image_srcs, skip_product_id=
     return {"success": True, "removed": removed, "product_ids": members}
 
 
+def push_inherited_metafields_to_children(parent_product_id, metafields, shopify_domain=None):
+    """After a quick edit (e.g. the Products table) on a parent, give its children the
+    same inherited values - otherwise they drift until the next full parent save.
+
+    Only keys children inherit are sent. Returns the child ids updated.
+    """
+    inherited = [
+        m for m in (metafields or [])
+        if (m.get("namespace") or "custom") == "custom" and m.get("key") in PARENT_TO_CHILD_PROPAGATE_METAFIELD_KEYS
+    ]
+    if not inherited:
+        return []
+    domain = shopify_domain or STORE_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+    try:
+        r = requests.post(
+            f"https://{domain}/admin/api/{API_VERSION}/graphql.json",
+            headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
+            json={"query": """query($id: ID!) { product(id: $id) {
+                a: metafield(namespace: "custom", key: "parent_child") { value }
+                b: metafield(namespace: "custom", key: "parent_child2") { value } } }""",
+                  "variables": {"id": f"gid://shopify/Product/{parent_product_id}"}},
+            timeout=20,
+        )
+        product = ((r.json().get("data") or {}).get("product") or {}) if r.ok else {}
+    except Exception as e:
+        print(f"[warn] push_inherited: could not read parent_child for {parent_product_id}: {e}", flush=True)
+        return []
+    parent_values = [
+        v for slot in ("a", "b")
+        for v in _parse_metafield_list((product.get(slot) or {}).get("value"))
+        if _is_parent_child_type(v, "parent")
+    ]
+    updated = []
+    for value in parent_values:
+        for cid in get_child_product_ids_by_parent_child_value(value, shopify_domain) or []:
+            if cid == parent_product_id or cid in updated:
+                continue
+            result = create_metafields(cid, inherited, shopify_domain=shopify_domain)
+            keys = ", ".join(m["key"] for m in inherited)
+            if result.get("success"):
+                updated.append(cid)
+                print(f"[ok] Pushed {keys} from parent {parent_product_id} to child {cid}", flush=True)
+            else:
+                print(f"[warn] Could not push {keys} to child {cid}: {result.get('errors')}", flush=True)
+            time.sleep(0.2)
+    return updated
+
+
 def propagate_parent_to_children(parent_product_id, product_data, metafields_saved, tags, taxable, shopify_domain=None):
     """
     After saving a parent product, push the same inherited fields to all products
