@@ -18,6 +18,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -33,7 +34,7 @@ _BASE_DIR = Path(__file__).resolve().parent.parent
 _CACHE_PATH = _BASE_DIR / "data" / "feed_snapshot.json"
 _DISK_MAX_AGE_SECONDS = 26 * 3600
 # Bump when the per-product shape changes so an old cached snapshot is rebuilt.
-_SNAPSHOT_FORMAT = 3
+_SNAPSHOT_FORMAT = 4
 _CUSTOMER_TAG_TTL = 300
 
 PRICE_KEY_BY_TYPE = {"trade": "pricejsontr", "end-customer": "pricejsoner"}
@@ -501,6 +502,71 @@ def _product_from_node(node: dict) -> dict:
 # Snapshot
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# Carriage - read live from the shop's own checkout rates (the Shipx app).
+# draftOrderCalculate prices a pretend UK order exactly as checkout would and
+# creates nothing, so Shipx stays the single place rates are edited.
+# --------------------------------------------------------------------------- #
+
+# One probe weight inside each Shipx band (kg). Prices are always read live;
+# the band edges come from the rate titles ("20-40kg") when Shipx provides them.
+_CARRIAGE_PROBES_KG = (10, 30, 50, 70, 90, 112.5, 187.5, 375, 750)
+_CARRIAGE_BAND_EDGES_KG = ((0, 20), (20, 40), (40, 60), (60, 80), (80, 100), (100, 125),
+                           (125, 250), (250, 500), (500, 1000))
+_CARRIAGE_QUERY = """
+mutation FeedCarriage($input: DraftOrderInput!) {
+  draftOrderCalculate(input: $input) {
+    calculatedDraftOrder { availableShippingRates { title price { amount } } }
+    userErrors { message }
+  }
+}
+"""
+
+
+def _carriage_rate(kg: float):
+    data = _graphql(_CARRIAGE_QUERY, {"input": {
+        "lineItems": [{"title": "Carriage rate check", "originalUnitPrice": "1.00", "quantity": 1,
+                       "requiresShipping": True, "weight": {"value": kg, "unit": "KILOGRAMS"}}],
+        "shippingAddress": {"address1": "1 High Street", "city": "London", "zip": "SW1A 1AA",
+                            "countryCode": "GB"},
+    }})
+    calc = (data.get("draftOrderCalculate") or {})
+    if calc.get("userErrors"):
+        raise RuntimeError(str(calc["userErrors"])[:200])
+    rates = ((calc.get("calculatedDraftOrder") or {}).get("availableShippingRates")) or []
+    if not rates:
+        return None
+    best = min(rates, key=lambda r: float((r.get("price") or {}).get("amount") or 0))
+    return (best.get("title") or "").strip(), _num((best.get("price") or {}).get("amount"))
+
+
+def build_carriage() -> dict:
+    """UK carriage bands by total order weight, priced live from checkout."""
+    bands = []
+    for probe, (lo, hi) in zip(_CARRIAGE_PROBES_KG, _CARRIAGE_BAND_EDGES_KG):
+        found = _carriage_rate(probe)
+        if found is None or found[1] is None:
+            continue
+        title, price = found
+        m = re.match(r"\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*kg\s*$", title, re.I)
+        if m:
+            lo, hi = _num(m.group(1)), _num(m.group(2))
+        band = {"min_kg": lo, "max_kg": hi, "price": price}
+        if band not in bands:
+            bands.append(band)
+    if not bands:
+        raise RuntimeError("checkout returned no UK carriage rates")
+    bands.sort(key=lambda b: b["min_kg"])
+    return {
+        "country": "GB",
+        "currency": "GBP",
+        "prices_include_vat": False,
+        "basis": "total order weight (unit_weight_g x quantity, summed across the order)",
+        "bands": bands,
+        "above_max": "quoted on request",
+    }
+
+
 def build_catalogue_snapshot() -> dict:
     """One Admin API pass over every active product published to the Online Store."""
     started = time.time()
@@ -527,7 +593,13 @@ def build_catalogue_snapshot() -> dict:
             break
         cursor = page.get("endCursor")
     products.sort(key=lambda p: (p.get("sku") or "", p.get("title") or ""))
+    try:
+        carriage = build_carriage()
+    except Exception as exc:  # never lose the catalogue over carriage
+        print(f"[warn] feed: carriage rates not read: {exc}", flush=True)
+        carriage = (_SNAPSHOT or {}).get("carriage")
     snapshot = {"generated_at": _iso_now(), "currency": "GBP", "format": _SNAPSHOT_FORMAT,
+                "carriage": carriage,
                 "products": products}
     print(f"[feed] snapshot built: {len(products)} products in {time.time() - started:.1f}s", flush=True)
     return snapshot
@@ -725,6 +797,7 @@ def render_view(customer_type: str, groups=None) -> dict | None:
             "currency": snap.get("currency", "GBP"),
             # All prices are ex-VAT. Shown as inc-VAT they would undercharge by 20%.
             "prices_include_vat": False,
+            "carriage": snap.get("carriage"),
             "product_count": len(products),
             "products": products,
         },

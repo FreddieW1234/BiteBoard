@@ -59,6 +59,17 @@ if nothing has changed you get `304 Not Modified` and no body.
   "generated_at": "2026-09-24T03:15:12Z",
   "currency": "GBP",
   "prices_include_vat": false,
+  "carriage": {
+    "country": "GB",
+    "currency": "GBP",
+    "prices_include_vat": false,
+    "basis": "total order weight (unit_weight_g x quantity, summed across the order)",
+    "bands": [
+      { "min_kg": 0, "max_kg": 20, "price": 15 },
+      { "min_kg": 20, "max_kg": 40, "price": 25 }
+    ],
+    "above_max": "quoted on request"
+  },
   "product_count": 487,
   "products": [
     {
@@ -144,6 +155,23 @@ if nothing has changed you get `304 Not Modified` and no body.
 - Any field we have no value for is `null`, or an empty list for list fields.
 - Image URLs point at Shopify's CDN. You may hotlink them or copy them to your
   own hosting.
+
+## Carriage
+
+`carriage` at the top of the feed is our UK delivery charge, one charge per
+order, set by the order's total weight:
+
+1. Add up `unit_weight_g` x quantity for every product in the order and
+   convert to kg.
+2. Find the band where `min_kg` < weight <= `max_kg`. Its `price` is the
+   carriage for the whole order.
+3. Above the last band's `max_kg`, carriage is quoted on request.
+
+Carriage excludes VAT, like product prices; VAT is added at the standard rate.
+The same rates apply across the UK, including Northern Ireland, the Highlands
+and the islands. For delivery outside the UK, ask us. The bands come from our
+live checkout, so they are always current - read them from each nightly pull
+rather than copying them into your code.
 
 ## Status codes
 
