@@ -129,7 +129,7 @@ try:
 
     _BOOTED_AT = time.time()
     _BOOT_READY = {"done": False}
-    _BOOT_READY_CAP_SECONDS = 300
+    _BOOT_READY_CAP_SECONDS = 540
 
     def _boot_ready() -> bool:
         if _BOOT_READY["done"]:
@@ -4629,6 +4629,29 @@ def api_feed_key_copy(key_id):
         }), 404
     print(f"[feed-api] key copied id={key_id} by={get_staff_username()}", flush=True)
     resp = jsonify({"success": True, "key": raw})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.route("/feed-preview")
+def feed_preview_page():
+    """Staff: the whole feed as a trade or end-customer key receives it."""
+    return render_template("UI/Feed_Preview.html")
+
+
+@app.route("/api/feed-preview")
+def api_feed_preview():
+    from scripts import product_feed
+
+    price_list = request.args.get("list") or "trade"
+    if price_list not in product_feed.PRICE_KEY_BY_TYPE:
+        return jsonify({"success": False, "error": "list must be trade or end-customer"}), 400
+    view = product_feed.render_view(price_list)
+    if view is None:
+        return jsonify({"success": False,
+                        "error": "The catalogue is being prepared - try again in a minute"}), 503
+    resp = make_response(view["body"])
+    resp.headers["Content-Type"] = "application/json; charset=utf-8"
     resp.headers["Cache-Control"] = "no-store"
     return resp
 

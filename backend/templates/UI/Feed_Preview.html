@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feed Preview - BiteBoard</title>
+    <style>
+        :root { --bg:#f8fafc; --card:#fff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --accent:#4f46e5; --code-bg:#0f172a; --code-fg:#e2e8f0; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+        header { position: sticky; top: 0; z-index: 2; background: var(--card); border-bottom: 1px solid var(--line);
+            padding: 12px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        h1 { font-size: 1rem; margin: 0 8px 0 0; }
+        .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+        .seg button { border: 0; background: #fff; padding: 7px 14px; font: inherit; cursor: pointer; color: var(--fg); }
+        .seg button + button { border-left: 1px solid var(--line); }
+        .seg button.on { background: var(--accent); color: #fff; }
+        .meta { color: var(--muted); font-size: 0.85rem; }
+        .spacer { flex: 1; }
+        .btn { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+        .btn:hover { background: #f3f4f6; }
+        main { padding: 16px; }
+        pre { margin: 0; background: var(--code-bg); color: var(--code-fg); border-radius: 10px; padding: 16px; overflow: auto;
+            font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+        .msg { padding: 16px; color: var(--muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Feed preview</h1>
+        <div class="seg" role="group" aria-label="Price list">
+            <button type="button" data-list="trade">Trade prices</button>
+            <button type="button" data-list="end-customer">End customer prices</button>
+        </div>
+        <span class="meta" id="meta">Loading…</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="copy">Copy JSON</button>
+        <button type="button" class="btn" id="download">Download</button>
+    </header>
+    <main>
+        <pre id="out" hidden></pre>
+        <div class="msg" id="msg"></div>
+    </main>
+<script>
+(function () {
+    const params = new URLSearchParams(location.search);
+    let list = params.get('list') === 'end-customer' ? 'end-customer' : 'trade';
+    let text = '';
+    const $ = (id) => document.getElementById(id);
+
+    function setButtons() {
+        document.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.list === list));
+    }
+
+    async function load() {
+        setButtons();
+        $('meta').textContent = 'Loading…';
+        $('msg').textContent = '';
+        $('out').hidden = true;
+        try {
+            const r = await fetch('/api/feed-preview?list=' + encodeURIComponent(list), { cache: 'no-store' });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || ('Error ' + r.status));
+            text = JSON.stringify(data, null, 2);
+            $('out').textContent = text;
+            $('out').hidden = false;
+            const built = data.generated_at ? new Date(data.generated_at).toLocaleString('en-GB') : '?';
+            $('meta').textContent = `${data.product_count} products · built ${built} · exactly what a ${list === 'trade' ? 'trade' : 'end customer'} key receives`;
+        } catch (e) {
+            $('meta').textContent = '';
+            $('msg').textContent = e.message || 'Could not load the feed';
+        }
+    }
+
+    document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.list === list) return;
+        list = b.dataset.list;
+        history.replaceState(null, '', '?list=' + list);
+        load();
+    }));
+    $('copy').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(text); $('copy').textContent = 'Copied'; }
+        catch (e) { $('copy').textContent = 'Copy failed'; }
+        setTimeout(() => { $('copy').textContent = 'Copy JSON'; }, 1500);
+    });
+    $('download').addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+        a.download = `bite-feed-${list}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    load();
+})();
+</script>
+</body>
+</html>

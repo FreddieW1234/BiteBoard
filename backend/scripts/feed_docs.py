@@ -160,7 +160,6 @@ footer {{ margin-top: 48px; color:var(--muted); font-size:.85rem; }}
 <header class="top"><span class="brand">Bite Promotions</span><span class="host">Product feed API</span></header>
 {toc}
 {body}
-<footer>Questions or a new key: contact your Bite Promotions account manager.</footer>
 </div>
 </body>
 </html>

@@ -45,7 +45,8 @@ _VIEWS: dict[tuple[str, str], dict] = {}   # (generated_at, customer_type) -> re
 _LAST_BUILD_ERROR: str | None = None
 _BUILD_STARTED_AT: float | None = None
 _CUSTOMER_TYPES: dict[str, tuple[float, str | None]] = {}
-_BUILD_DEADLINE_SECONDS = 240
+# A full pass takes ~1-4 min depending on how busy the Shopify API is.
+_BUILD_DEADLINE_SECONDS = 480
 _RETRY_AFTER_FAILURE_SECONDS = 120
 _BUILD_THREAD_ID: int | None = None
 # Live progress of the current build, shown to staff (Render logs are not).
