@@ -137,8 +137,9 @@ FIELD_GROUPS = {
     "ingredients": ("ingredients", "nutritional_info", "shelf_life"),
     "product_info": ("product_info", "whats_inside", "print_info", "recycle_info"),
 }
-# Keys created before field choices existed get exactly what they got then.
-DEFAULT_GROUPS = ("prices", "description", "categories", "images", "ordering", "physical", "options")
+# Every key gets every group, so "no choice given" means everything too. Sorted
+# to match normalise_groups, so both paths render (and cache) the same body.
+DEFAULT_GROUPS = tuple(sorted(FIELD_GROUPS))
 
 
 def normalise_groups(groups) -> tuple[str, ...]:
