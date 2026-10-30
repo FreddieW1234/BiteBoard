@@ -154,6 +154,13 @@ def portal_auth_gate():
     path = request.path or ""
     # The feed host serves the customer API and nothing else.
     if FEED_API_HOST and (request.host or "").split(":")[0].lower() == FEED_API_HOST:
+        # Customer-facing docs page, rendered from docs/customer-feed-api.md.
+        if path in ("/", "/docs", "/docs/") and request.method in ("GET", "HEAD"):
+            from scripts.feed_docs import render_docs_page  # type: ignore
+            resp = make_response(render_docs_page())
+            resp.headers["Content-Type"] = "text/html; charset=utf-8"
+            resp.headers["Cache-Control"] = "public, max-age=300"
+            return resp
         # Render's health check also arrives on this host - let it through.
         if not path.startswith("/api/v1/") and path != "/healthz":
             return jsonify({"error": "Not found"}), 404
