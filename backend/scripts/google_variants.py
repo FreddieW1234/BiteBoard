@@ -119,11 +119,14 @@ def plan_product(product: dict) -> dict:
     keep = choose_google_variant(variants)
     plan = {"handle": product.get("handle"), "title": product.get("title"),
             "keep": keep, "publish": [], "unpublish": []}
-    if not product.get("onGoogle") or keep is None:
-        return plan  # product itself is not on the channel, or nothing sensible to keep
+    if keep is None:
+        return plan  # nothing sensible to keep
+    # A brand-new product reports itself as not on the channel while every variant
+    # is already switched on for it, so the variants are always tidied. Only
+    # switch the kept variant on when the product itself is on the channel.
     for v in variants:
         if v["id"] == keep["id"]:
-            if not v.get("onGoogle"):
+            if product.get("onGoogle") and not v.get("onGoogle"):
                 plan["publish"].append(v["id"])
         elif v.get("onGoogle"):
             plan["unpublish"].append(v["id"])
@@ -186,13 +189,13 @@ def sync_all(*, write: bool = True) -> dict:
             conn = data.get("products") or {}
             for product in conn.get("nodes") or []:
                 counts["products"] += 1
-                if not product.get("onGoogle"):
-                    continue
-                counts["on_google"] += 1
+                if product.get("onGoogle"):
+                    counts["on_google"] += 1
                 plan = plan_product(product)
                 if plan["keep"] is None:
-                    counts["no_end_customer_variant"] += 1
-                    problems.append(product.get("handle"))
+                    if product.get("onGoogle"):
+                        counts["no_end_customer_variant"] += 1
+                        problems.append(product.get("handle"))
                     continue
                 if not (plan["publish"] or plan["unpublish"]):
                     counts["already_correct"] += 1
