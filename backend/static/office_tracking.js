@@ -934,7 +934,207 @@
         return !!(notify && notify.enabled);
     }
 
-    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail, customerEmail, role) {
+    // ------------------------------------------------------------------
+    // Staff: "Customer:" next to the updates email. Clicking it opens a
+    // search over all customers; picking one moves the order onto their
+    // Shopify account (it then shows in their order history).
+    // ------------------------------------------------------------------
+    let customerListCache = null;
+
+    function customerLabel(name, email) {
+        return (name || '').trim() || (email || '').trim() || 'No customer';
+    }
+
+    function renderCustomerPicker(orderId, customerId, customerName, customerEmail) {
+        return `<span class="office-order-customer">
+                <span class="office-order-customer-label">Customer:</span>
+                <button type="button" class="office-customer-btn" data-order-id="${escapeHtml(orderId)}"
+                    data-customer-id="${escapeHtml(customerId || '')}"
+                    title="Change who this order belongs to">${escapeHtml(customerLabel(customerName, customerEmail))}</button>
+            </span>`;
+    }
+
+    async function loadCustomerList(force) {
+        if (customerListCache && !force) return customerListCache;
+        const resp = await fetch('/api/customers', { credentials: 'same-origin' });
+        const data = await resp.json().catch(() => ({}));
+        const list = Array.isArray(data.customers) ? data.customers : [];
+        if (list.length && !data.building) customerListCache = list;
+        return { list, building: !!data.building };
+    }
+
+    function ensureCustomerPickerModal() {
+        let modal = document.getElementById('office-customer-modal');
+        if (modal) return modal;
+        modal = document.createElement('div');
+        modal.id = 'office-customer-modal';
+        modal.className = 'office-changes-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="office-changes-modal-backdrop" data-close-customer-modal></div>
+            <div class="office-changes-modal-panel office-customer-panel" role="dialog" aria-modal="true" aria-labelledby="office-customer-modal-title">
+                <button type="button" class="office-changes-modal-close" data-close-customer-modal aria-label="Close">&times;</button>
+                <h3 id="office-customer-modal-title">Change customer</h3>
+                <div class="office-customer-step" data-step="search">
+                    <input type="search" class="office-customer-search" placeholder="Search by name, email or company" autocomplete="off">
+                    <div class="office-customer-results" role="listbox"></div>
+                </div>
+                <div class="office-customer-step" data-step="confirm" hidden>
+                    <p class="office-changes-modal-lead office-customer-confirm-lead"></p>
+                    <label class="office-customer-updates">
+                        <input type="checkbox" class="office-customer-updates-cb" checked>
+                        <span class="office-customer-updates-text"></span>
+                    </label>
+                    <p class="office-notify-msg err office-customer-error" hidden></p>
+                    <div class="office-changes-modal-actions">
+                        <button type="button" class="office-btn office-btn-approve office-customer-confirm-btn">Move order</button>
+                        <button type="button" class="office-btn office-btn-changes office-customer-back-btn">Back</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function (e) {
+            if (e.target.closest('[data-close-customer-modal]')) { hideOfficeModal(modal); return; }
+            const row = e.target.closest('.office-customer-result');
+            if (row) { showCustomerConfirm(modal, row.dataset.index); return; }
+            if (e.target.closest('.office-customer-back-btn')) { showCustomerStep(modal, 'search'); return; }
+            if (e.target.closest('.office-customer-confirm-btn')) applyCustomerChange(modal);
+        });
+        modal.querySelector('.office-customer-search').addEventListener('input', function () {
+            renderCustomerResults(modal);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !modal.hidden) hideOfficeModal(modal);
+        });
+        return modal;
+    }
+
+    function showCustomerStep(modal, step) {
+        modal.querySelectorAll('.office-customer-step').forEach(el => { el.hidden = el.dataset.step !== step; });
+        if (step === 'search') modal.querySelector('.office-customer-search').focus();
+    }
+
+    function renderCustomerResults(modal) {
+        const box = modal.querySelector('.office-customer-results');
+        const list = modal._customers || [];
+        const term = (modal.querySelector('.office-customer-search').value || '').trim().toLowerCase();
+        const words = term.split(/\s+/).filter(Boolean);
+        const matches = [];
+        for (let i = 0; i < list.length && matches.length < 50; i++) {
+            const c = list[i];
+            const hay = `${c.name || ''} ${c.email || ''} ${c.company_name || ''}`.toLowerCase();
+            if (words.every(w => hay.includes(w))) matches.push(i);
+        }
+        if (!list.length) {
+            box.innerHTML = `<div class="office-customer-empty">${modal._loading ? 'Loading customers…' : 'No customers found.'}</div>`;
+            return;
+        }
+        if (!matches.length) {
+            box.innerHTML = '<div class="office-customer-empty">No customers match.</div>';
+            return;
+        }
+        box.innerHTML = matches.map(i => {
+            const c = list[i];
+            const current = String(c.id) === String(modal._currentCustomerId) ? ' <span class="office-customer-current">current</span>' : '';
+            return `<button type="button" class="office-customer-result" data-index="${i}">
+                    <span class="office-customer-name">${escapeHtml(c.name || c.email || 'Unknown')}${current}</span>
+                    <span class="office-customer-meta">${escapeHtml([c.email, c.company_name].filter(Boolean).join(' · '))}</span>
+                </button>`;
+        }).join('');
+    }
+
+    async function openCustomerPicker(btn) {
+        const modal = ensureCustomerPickerModal();
+        modal._btn = btn;
+        modal._orderId = btn.dataset.orderId;
+        modal._currentCustomerId = btn.dataset.customerId || '';
+        modal._customers = customerListCache || [];
+        modal._loading = !customerListCache;
+        modal.querySelector('.office-customer-search').value = '';
+        showOfficeModal(modal);
+        showCustomerStep(modal, 'search');
+        renderCustomerResults(modal);
+        if (customerListCache) return;
+        try {
+            for (let attempt = 0; attempt < 10; attempt++) {
+                const res = await loadCustomerList(attempt > 0);
+                if (Array.isArray(res)) { modal._customers = res; break; }
+                modal._customers = res.list;
+                if (!res.building) break;
+                renderCustomerResults(modal);
+                await new Promise(r => setTimeout(r, 3000)); // list still building on the server
+            }
+        } catch (err) {
+            console.warn('Customer list failed:', err);
+        }
+        modal._loading = false;
+        renderCustomerResults(modal);
+    }
+
+    function showCustomerConfirm(modal, index) {
+        const c = (modal._customers || [])[parseInt(index, 10)];
+        if (!c) return;
+        modal._picked = c;
+        const email = (c.email || '').trim();
+        modal.querySelector('.office-customer-confirm-lead').innerHTML =
+            `Move this order to <strong>${escapeHtml(c.name || email)}</strong>${email ? ` (${escapeHtml(email)})` : ''}? ` +
+            'It will show in their account on the website as if they placed it.';
+        const updates = modal.querySelector('.office-customer-updates');
+        const cb = modal.querySelector('.office-customer-updates-cb');
+        updates.hidden = !email;
+        cb.checked = !!email;
+        modal.querySelector('.office-customer-updates-text').textContent =
+            `Send production updates to their email (${email})`;
+        const err = modal.querySelector('.office-customer-error');
+        err.hidden = true;
+        showCustomerStep(modal, 'confirm');
+    }
+
+    async function applyCustomerChange(modal) {
+        const c = modal._picked;
+        const btn = modal._btn;
+        if (!c || !btn) return;
+        const confirmBtn = modal.querySelector('.office-customer-confirm-btn');
+        const err = modal.querySelector('.office-customer-error');
+        const sendUpdates = modal.querySelector('.office-customer-updates-cb').checked && !!(c.email || '').trim();
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Moving…';
+        try {
+            const resp = await fetch(`/api/orders/${encodeURIComponent(modal._orderId)}/customer`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_id: String(c.id) }),
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.success) throw new Error(data.error || ('Request failed: ' + resp.status));
+
+            const newEmail = (data.customer_email || c.email || '').trim();
+            btn.dataset.customerId = data.customer_id || String(c.id);
+            btn.textContent = customerLabel(data.customer_name || c.name, newEmail);
+            const block = btn.closest('.office-order-notify');
+            if (block) {
+                block.dataset.customerEmail = newEmail;
+                if (sendUpdates) {
+                    const input = block.querySelector('.office-notify-email');
+                    const cb = block.querySelector('.office-notify-checkbox');
+                    if (input) { input.value = newEmail; fitNotifyEmailWidth(input); }
+                    if (cb) cb.checked = true;
+                    saveNotifyPref(block);
+                }
+            }
+            delete orderTrackingCache[String(modal._orderId)];
+            hideOfficeModal(modal);
+        } catch (e) {
+            err.textContent = 'Could not move the order: ' + (e.message || e);
+            err.hidden = false;
+        } finally {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Move order';
+        }
+    }
+
+    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail, customerEmail, role, customerId, customerName) {
         const enabled = notifyDefaultEnabled(notify, role);
         const savedEmail = (notify && notify.email) || '';
         const defaultEmail = (savedEmail || sessionEmail || customerEmail || '').trim();
@@ -951,6 +1151,7 @@
                 <span>${escapeHtml(labelText)}</span>
             </label>
             ${emailField}
+            ${isStaff ? renderCustomerPicker(orderId, customerId, customerName, customerEmail) : ''}
             <span class="office-notify-msg" hidden></span>
         </div>`;
     }
@@ -985,7 +1186,9 @@
             notify,
             payload.session_email || '',
             payload.customer_email || '',
-            role
+            role,
+            payload.customer_id || '',
+            payload.customer_name || ''
         );
         if (!notifyIsExplicitlySet(notify)) {
             const block = host.querySelector('.office-order-notify');
@@ -1518,7 +1721,9 @@
             const changes = e.target.closest('.office-changes-btn');
             if (changes) { e.preventDefault(); handleRequestChanges(changes); return; }
             const setStage = e.target.closest('.office-set-stage-btn');
-            if (setStage) { e.preventDefault(); handleSetStage(setStage); }
+            if (setStage) { e.preventDefault(); handleSetStage(setStage); return; }
+            const customerBtn = e.target.closest('.office-customer-btn');
+            if (customerBtn) { e.preventDefault(); openCustomerPicker(customerBtn); }
         });
     }
 

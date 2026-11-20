@@ -3291,7 +3291,63 @@ def _office_tracking_response(order_id, entry, api_prefix):
     }
     if api_prefix.startswith("/api/client"):
         payload["session_email"] = get_client_email()
+    else:
+        payload["customer_id"] = str(entry.get("customer_id") or order.get("customer_id") or "")
+        payload["customer_name"] = (order.get("customer_name") or "").strip()
     return jsonify(payload)
+
+
+_ORDER_CUSTOMER_SET = """
+mutation OrderCustomerSet($orderId: ID!, $customerId: ID!) {
+  orderCustomerSet(orderId: $orderId, customerId: $customerId) {
+    order { id customer { legacyResourceId displayName email } }
+    userErrors { field message }
+  }
+}
+"""
+
+
+@app.route("/api/orders/<order_id>/customer", methods=["POST"])
+def api_order_set_customer(order_id):
+    """Staff: move an order onto another customer's Shopify account."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    oid = str(order_id).strip()
+    cid = str(data.get("customer_id") or "").strip()
+    if not oid.isdigit() or not cid.isdigit():
+        return jsonify({"success": False, "error": "Order and customer are required"}), 400
+    try:
+        resp = requests.post(
+            f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json",
+            headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
+            json={"query": _ORDER_CUSTOMER_SET, "variables": {
+                "orderId": f"gid://shopify/Order/{oid}",
+                "customerId": f"gid://shopify/Customer/{cid}",
+            }},
+            timeout=30,
+        )
+        body = resp.json() if resp.ok else {}
+        if not resp.ok or body.get("errors"):
+            return jsonify({"success": False, "error": f"Shopify error: {str(body.get('errors') or resp.status_code)[:200]}"}), 502
+        result = (body.get("data") or {}).get("orderCustomerSet") or {}
+        if result.get("userErrors"):
+            return jsonify({"success": False, "error": "; ".join(e.get("message", "") for e in result["userErrors"])}), 400
+        customer = ((result.get("order") or {}).get("customer")) or {}
+        try:
+            from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
+            invalidate_order_access_cache(oid)
+        except Exception:
+            pass
+        print(f"[orders] Order {oid} moved to customer {cid} ({customer.get('email')}) by staff", flush=True)
+        return jsonify({
+            "success": True,
+            "customer_id": str(customer.get("legacyResourceId") or cid),
+            "customer_name": customer.get("displayName") or "",
+            "customer_email": (customer.get("email") or "").strip(),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 def _office_item_context(order_id, item):

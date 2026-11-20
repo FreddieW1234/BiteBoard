@@ -805,3 +805,25 @@ html.co-embed .office-changes-contact-link:hover {
     .office-tracking-body .office-staff-status { max-width: none; width: 100%; }
     .office-staff-uploads { width: 100%; }
 }
+
+/* Staff: Customer picker next to the production-updates email */
+.office-order-customer { display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; color: #374151; }
+.office-order-customer-label { font-weight: 500; }
+.office-customer-btn { font: inherit; font-size: 0.84rem; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.office-customer-btn:hover { background: #e0e7ff; border-color: #818cf8; }
+.office-customer-panel { width: min(560px, 94vw); }
+.office-customer-search { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.9rem; padding: 9px 12px;
+    border: 1px solid #d1d5db; border-radius: 8px; margin: 4px 0 10px; }
+.office-customer-search:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12); }
+.office-customer-results { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.office-customer-result { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit;
+    padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer; }
+.office-customer-result:hover { border-color: #818cf8; background: #f5f7ff; }
+.office-customer-name { font-size: 0.88rem; font-weight: 600; color: #111827; }
+.office-customer-meta { font-size: 0.78rem; color: #6b7280; }
+.office-customer-current { font-size: 0.7rem; font-weight: 600; color: #059669; background: #ecfdf5; border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+.office-customer-empty { font-size: 0.85rem; color: #6b7280; padding: 12px 4px; }
+.office-customer-updates { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: #374151; margin: 0 0 14px; cursor: pointer; }
+.office-customer-updates input { width: 15px; height: 15px; accent-color: #4f46e5; }
+.office-customer-error { margin: 0 0 12px; }
