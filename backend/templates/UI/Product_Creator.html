@@ -8931,7 +8931,11 @@
 
                 // Parent? and parent_child from metafields (list.single_line_text_field: value may be JSON array)
                 let parentChildVal = '';
-                for (const pcKey of ['parent_child', 'parent_child2', 'parent_child3']) {
+                // Every Parent/Child field the product has (parent_child, parent_child2, ...).
+                const pcKeys = mfs.filter(m => m.namespace === 'custom' && /^parent_child\d*$/.test(m.key || ''))
+                    .map(m => m.key)
+                    .sort((a, b) => (parseInt(a.slice(12), 10) || 1) - (parseInt(b.slice(12), 10) || 1));
+                for (const pcKey of pcKeys) {
                     const mfPc = mfs.find(m => m.namespace === 'custom' && m.key === pcKey);
                     if (!mfPc || mfPc.value == null || mfPc.value === '') continue;
                     const v = String(mfPc.value).trim();

@@ -22,6 +22,7 @@ Job payload shape::
 
 from __future__ import annotations
 
+import re
 import os
 import sys
 import uuid
@@ -525,7 +526,7 @@ def _intended_parent_child_value(intended_data: dict) -> str:
             continue
         if (mf.get("namespace") or "custom") != "custom":
             continue
-        if mf.get("key") in ("parent_child", "parent_child2", "parent_child3"):
+        if re.match(r"^parent_child\d*$", str(mf.get("key") or "")):
             val = mf.get("value")
             if val is None:
                 continue
@@ -663,7 +664,11 @@ def verify_product(intended_data: dict, product_id) -> list:
         clear_pc = bool(clear_pc_raw)
     if want_pc or clear_pc:
         got_pc = ""
-        for key in ("parent_child", "parent_child2", "parent_child3"):
+        pc_keys = sorted(
+            (k for ns, k in actual_mf if ns == "custom" and re.match(r"^parent_child\d*$", str(k))),
+            key=lambda k: int(k[len("parent_child"):] or 1),
+        )
+        for key in pc_keys:
             raw = actual_mf.get(("custom", key))
             if raw is None or str(raw).strip() == "":
                 continue

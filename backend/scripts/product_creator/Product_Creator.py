@@ -1083,20 +1083,12 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
     while True:
         query = """
         query GetProductsWithParentChild($cursor: String) {
-          products(first: 250, after: $cursor) {
+          products(first: __PAGE__, after: $cursor) {
             edges {
               node {
                 id
                 legacyResourceId
-                metafield(namespace: "custom", key: "parent_child") {
-                  value
-                }
-                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
-                  value
-                }
-                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
-                  value
-                }
+                __PARENT_CHILD_FIELDS__
               }
             }
             pageInfo {
@@ -1106,6 +1098,7 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
           }
         }
         """
+        query = _with_parent_child_fields(query)
         variables = {"cursor": cursor} if cursor else {}
         try:
             resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
@@ -1250,21 +1243,13 @@ def get_all_children_by_family(shopify_domain=None):
     while True:
         query = """
         query GetProductsWithParentChild($cursor: String) {
-          products(first: 250, after: $cursor) {
+          products(first: __PAGE__, after: $cursor) {
             edges {
               node {
                 id
                 legacyResourceId
                 title
-                metafield(namespace: "custom", key: "parent_child") {
-                  value
-                }
-                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
-                  value
-                }
-                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
-                  value
-                }
+                __PARENT_CHILD_FIELDS__
                 skuMetafield: metafield(namespace: "custom", key: "sku") {
                   value
                 }
@@ -1274,6 +1259,7 @@ def get_all_children_by_family(shopify_domain=None):
           }
         }
         """
+        query = _with_parent_child_fields(query)
         try:
             resp = requests.post(graphql_url, json={"query": query, "variables": {"cursor": cursor} if cursor else {}}, headers=headers, timeout=30)
             if resp.status_code == 404:
@@ -1351,7 +1337,7 @@ def get_all_children_by_family(shopify_domain=None):
                             key = mf.get("key")
                             if key == "sku":
                                 sku = str(mf.get("value") or "").strip()
-                            elif key in PARENT_CHILD_METAFIELD_KEYS and not val:
+                            elif _is_parent_child_key(key) and not val:
                                 val = (mf.get("value") or "").strip()
                         if not val:
                             continue
@@ -1635,7 +1621,43 @@ def _build_filter_values(mf_map):
     return {fk: _parse_metafield_list(mf_map.get(fk)) for fk in FILTER_GROUP_KEYS}
 
 
-PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2", "parent_child3")
+def parent_child_metafield_keys():
+    """Parent/Child metafields that exist in Shopify: parent_child, parent_child2, ...
+
+    Read from Shopify's definitions (cached), so a new Parent/Child4 works
+    without a code change.
+    """
+    try:
+        from .categories import parent_child_metafield_keys as _keys
+    except ImportError:
+        from categories import parent_child_metafield_keys as _keys  # type: ignore
+    return _keys()
+
+
+def _parent_child_gql_aliases():
+    """GraphQL alias for each Parent/Child metafield (first one keeps the plain name)."""
+    return ["metafield" if k == "parent_child" else f"pc_{k}" for k in parent_child_metafield_keys()]
+
+
+def _with_parent_child_fields(query):
+    """Fill a product scan query with every Parent/Child metafield and a page size
+    that keeps the request under Shopify's 1000-point cost limit."""
+    fields = " ".join(
+        f'{alias}: metafield(namespace: "custom", key: "{key}") {{ value }}'
+        for alias, key in zip(_parent_child_gql_aliases(), parent_child_metafield_keys())
+    )
+    query = query.replace("__PARENT_CHILD_FIELDS__", fields)
+    objects = query.count("metafield(") + 1
+    return query.replace("__PAGE__", str(max(25, min(250, 950 // (objects + 1)))))
+
+
+def _is_parent_child_key(key):
+    """True for parent_child, parent_child2, parent_child3, ..."""
+    try:
+        from .categories import is_parent_child_key as _is
+    except ImportError:
+        from categories import is_parent_child_key as _is  # type: ignore
+    return _is(key)
 
 
 def _normalize_parent_child_family(value):
@@ -1679,7 +1701,7 @@ def _parent_child_allocation_from_raw(raw):
 
 def _parent_child_value_from_mf_map(mf_map):
     """Read parent/child allocation from parent_child or overflow parent_child2."""
-    for key in PARENT_CHILD_METAFIELD_KEYS:
+    for key in parent_child_metafield_keys():
         val = _parent_child_allocation_from_raw(mf_map.get(key))
         if val:
             return val
@@ -1703,7 +1725,7 @@ def _metafield_raw_matches_value(raw, target_value):
 
 
 def _parent_child_value_from_graphql_node(node):
-    for alias in ("metafield", "parentChild2Metafield", "parentChild3Metafield"):
+    for alias in _parent_child_gql_aliases():
         mf = node.get(alias)
         if not mf or not mf.get("value"):
             continue
@@ -1715,7 +1737,7 @@ def _parent_child_value_from_graphql_node(node):
 
 def _graphql_node_matches_parent_child(node, target_value):
     target = str(target_value).strip()
-    for alias in ("metafield", "parentChild2Metafield", "parentChild3Metafield"):
+    for alias in _parent_child_gql_aliases():
         mf = node.get(alias)
         if mf and mf.get("value") and _metafield_raw_matches_value(mf.get("value"), target):
             return True
@@ -3271,7 +3293,7 @@ def _get_child_products_by_parent_child_value_rest(domain, child_value_stripped,
                     metafields = mf_data.get("metafields") or []
                     matched = False
                     for mf in metafields:
-                        if mf.get("key") not in PARENT_CHILD_METAFIELD_KEYS:
+                        if not _is_parent_child_key(mf.get("key")):
                             continue
                         if _metafield_raw_matches_value(mf.get("value"), child_value_stripped):
                             matched = True
@@ -3317,21 +3339,13 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
     while True:
         query = """
         query GetProductsWithParentChild($cursor: String) {
-          products(first: 250, after: $cursor) {
+          products(first: __PAGE__, after: $cursor) {
             edges {
               node {
                 id
                 legacyResourceId
                 title
-                metafield(namespace: "custom", key: "parent_child") {
-                  value
-                }
-                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
-                  value
-                }
-                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
-                  value
-                }
+                __PARENT_CHILD_FIELDS__
               }
             }
             pageInfo {
@@ -3341,6 +3355,7 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
           }
         }
         """
+        query = _with_parent_child_fields(query)
         variables = {"cursor": cursor} if cursor else {}
         try:
             resp = requests.post(graphql_url, json={"query": query, "variables": variables}, headers=headers, timeout=30)
@@ -3520,26 +3535,19 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
     for _ in range(50):  # cap pages
         query = """
         query GetProductsWithParentChild($cursor: String) {
-          products(first: 250, after: $cursor) {
+          products(first: __PAGE__, after: $cursor) {
             edges {
               node {
                 id
                 legacyResourceId
-                metafield(namespace: "custom", key: "parent_child") {
-                  value
-                }
-                parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
-                  value
-                }
-                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
-                  value
-                }
+                __PARENT_CHILD_FIELDS__
               }
             }
             pageInfo { hasNextPage endCursor }
           }
         }
         """
+        query = _with_parent_child_fields(query)
         try:
             resp = requests.post(
                 graphql_url,
@@ -3597,7 +3605,7 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                 mf_list = mf_r.json().get("metafields") or []
                 matched = False
                 for mf in mf_list:
-                    if mf.get("key") not in PARENT_CHILD_METAFIELD_KEYS:
+                    if not _is_parent_child_key(mf.get("key")):
                         continue
                     if _metafield_raw_matches_value(mf.get("value"), pv):
                         matched = True
@@ -4340,10 +4348,9 @@ def push_inherited_metafields_to_children(parent_product_id, metafields, shopify
         r = requests.post(
             f"https://{domain}/admin/api/{API_VERSION}/graphql.json",
             headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
-            json={"query": """query($id: ID!) { product(id: $id) {
-                a: metafield(namespace: "custom", key: "parent_child") { value }
-                b: metafield(namespace: "custom", key: "parent_child2") { value }
-                c: metafield(namespace: "custom", key: "parent_child3") { value } } }""",
+            json={"query": "query($id: ID!) { product(id: $id) { " + " ".join(
+                f'{a}: metafield(namespace: "custom", key: "{k}") {{ value }}'
+                for a, k in zip(_parent_child_gql_aliases(), parent_child_metafield_keys())) + " } }",
                   "variables": {"id": f"gid://shopify/Product/{parent_product_id}"}},
             timeout=20,
         )
@@ -4352,7 +4359,7 @@ def push_inherited_metafields_to_children(parent_product_id, metafields, shopify
         print(f"[warn] push_inherited: could not read parent_child for {parent_product_id}: {e}", flush=True)
         return []
     parent_values = [
-        v for slot in ("a", "b", "c")
+        v for slot in _parent_child_gql_aliases()
         for v in _parse_metafield_list((product.get(slot) or {}).get("value"))
         if _is_parent_child_type(v, "parent")
     ]
@@ -4512,7 +4519,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         clearable_keys = set([
             "artworkguidelines", "artworktemplates", "stockdesigns", "custom_category", "subcategory",
             "sub_subcategory",
-            *PARENT_CHILD_METAFIELD_KEYS,
+            *parent_child_metafield_keys(),
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
             "sku",
@@ -4667,7 +4674,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                                     formatted_value = json.dumps(filtered)
                         except Exception as e:
                             print(f"[warn] Could not filter subcategory choices for {key}: {e}", flush=True)
-                    if namespace == "custom" and key in PARENT_CHILD_METAFIELD_KEYS:
+                    if namespace == "custom" and _is_parent_child_key(key):
                         try:
                             from .categories import get_metafield_choices
                             allowed = list(get_metafield_choices(key) or [])
@@ -4761,7 +4768,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
                 elif response.status_code == 422 and mf_type.startswith('list.') and namespace == "custom" and (
                     key == "subcategory" or (key and key.startswith("subcategory_"))
                     or key == "sub_subcategory" or (key and key.startswith("sub_subcategory"))
-                    or key in PARENT_CHILD_METAFIELD_KEYS
+                    or _is_parent_child_key(key)
                 ):
                     # 422 "does not exist in provided choices" - extract Shopify's actual choices and retry with filtered value
                     # Applies to subcategory / sub_sub overflow keys and parent_child / parent_child2.
@@ -5651,7 +5658,7 @@ def create_product(product_data):
             # Remove parent_child keys from metafields (we add routed value from top-level, same as category)
             metafields = [
                 mf for mf in metafields
-                if not (mf.get("namespace") == "custom" and mf.get("key") in PARENT_CHILD_METAFIELD_KEYS)
+                if not (mf.get("namespace") == "custom" and _is_parent_child_key(mf.get("key")))
             ]
             parent_child_value = (product_data.get("parent_child") or "").strip()
             if parent_child_value:
@@ -5685,7 +5692,7 @@ def create_product(product_data):
                         "type": "list.single_line_text_field",
                     })
                     # The value lives in exactly one Parent/Child field; clear the others.
-                    for other_key in PARENT_CHILD_METAFIELD_KEYS:
+                    for other_key in parent_child_metafield_keys():
                         if other_key == pc_key:
                             continue
                         metafields.append({
@@ -5706,7 +5713,7 @@ def create_product(product_data):
                 # Only clear when the client explicitly says Parent? No and Child? No.
                 # An empty parent_child alone used to wipe the metafield whenever the
                 # UI raced the async dropdown - leaving products Unassigned by mistake.
-                for pc_key in PARENT_CHILD_METAFIELD_KEYS:
+                for pc_key in parent_child_metafield_keys():
                     metafields.append({
                         "namespace": "custom",
                         "key": pc_key,

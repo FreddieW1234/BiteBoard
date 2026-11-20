@@ -15,6 +15,7 @@ import json
 import os
 import time
 
+import re
 import requests
 
 # Fallback Parent/Child choices if Shopify metafield definitions cannot be read.
@@ -698,13 +699,57 @@ def get_filter_groups():
         for g in FILTER_GROUPS
     ]
 
-# Every Parent/Child metafield, in order. Shopify caps a choice list at 128
-# options, so when one fills up a new definition is made and added here.
-PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2", "parent_child3")
+# Parent/Child metafields: parent_child, parent_child2, parent_child3, ...
+# Shopify caps a choice list at 128 options, so when one fills up staff make
+# the next definition in Shopify. The keys are read from Shopify's definitions,
+# so a new one works without a code change.
+_PARENT_CHILD_KEY_RE = re.compile(r"^parent_child(\d*)$")
+_PARENT_CHILD_KEYS_FALLBACK = ("parent_child", "parent_child2", "parent_child3")
+_PARENT_CHILD_KEYS_CACHE = {"at": 0.0, "keys": None}
+
+
+def is_parent_child_key(key):
+    """True for parent_child, parent_child2, parent_child3, ..."""
+    return bool(_PARENT_CHILD_KEY_RE.match(str(key or "")))
+
+
+def parent_child_metafield_keys(force=False):
+    """Every Parent/Child metafield defined in Shopify, in order (cached 5 min)."""
+    now = time.time()
+    cached = _PARENT_CHILD_KEYS_CACHE
+    if not force and cached["keys"] and (now - cached["at"]) < _PARENT_CHILD_SHOPIFY_TTL_SEC:
+        return cached["keys"]
+    keys = None
+    domain, token, api_version = _shopify_admin_creds()
+    if domain and token:
+        domain = str(domain).replace("https://", "").replace("http://", "").rstrip("/").strip()
+        try:
+            resp = requests.post(
+                f"https://{domain}/admin/api/{api_version or '2024-10'}/graphql.json",
+                headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"},
+                json={"query": '{ metafieldDefinitions(first: 250, ownerType: PRODUCT, namespace: "custom") '
+                               '{ nodes { key } } }'},
+                timeout=20,
+            )
+            nodes = (((resp.json() or {}).get("data") or {}).get("metafieldDefinitions") or {}).get("nodes")                 if resp.status_code == 200 else None
+            if nodes is not None:
+                found = [n.get("key") for n in nodes if is_parent_child_key(n.get("key"))]
+                found.sort(key=lambda k: int(_PARENT_CHILD_KEY_RE.match(k).group(1) or 1))
+                if "parent_child" in found:
+                    keys = tuple(found)
+        except Exception as exc:
+            print(f"[warn] Could not list Parent/Child metafields: {exc}", flush=True)
+    if not keys:
+        keys = cached["keys"] or _PARENT_CHILD_KEYS_FALLBACK
+    if keys != cached["keys"]:
+        print(f"[ok] Parent/Child metafields: {', '.join(keys)}", flush=True)
+    cached["keys"] = keys
+    cached["at"] = now
+    return keys
+
 
 _PARENT_CHILD_SHOPIFY_CACHE = {
     "at": 0.0,
-    **{k: None for k in PARENT_CHILD_METAFIELD_KEYS},
     "merged": None,
     "source": None,  # "shopify" | "fallback"
 }
@@ -828,29 +873,30 @@ def _load_parent_child_choice_cache(force=False):
     ):
         return cached
 
-    chunks = {k: fetch_shopify_metafield_definition_choices("custom", k) for k in PARENT_CHILD_METAFIELD_KEYS}
+    pc_keys = parent_child_metafield_keys(force=force)
+    chunks = {k: fetch_shopify_metafield_definition_choices("custom", k) for k in pc_keys}
     source = "shopify"
     if not any(chunks.values()):
         pc, pc2 = _fallback_parent_child_chunks()
-        chunks = {k: [] for k in PARENT_CHILD_METAFIELD_KEYS}
+        chunks = {k: [] for k in pc_keys}
         chunks["parent_child"], chunks["parent_child2"] = pc, pc2
         source = "fallback"
         print("[warn] Using hardcoded PARENT_CHILD_CHOICES fallback (Shopify definition choices empty)", flush=True)
     else:
         # Keep definition order; later lists only add values not already seen.
         seen = set()
-        for k in PARENT_CHILD_METAFIELD_KEYS:
+        for k in pc_keys:
             kept = [c for c in chunks[k] if c.lower() not in seen]
             seen.update(c.lower() for c in kept)
             chunks[k] = kept
 
-    merged = [c for k in PARENT_CHILD_METAFIELD_KEYS for c in chunks[k]]
+    merged = [c for k in pc_keys for c in chunks[k]]
     cached["at"] = now
-    for k in PARENT_CHILD_METAFIELD_KEYS:
+    for k in pc_keys:
         cached[k] = list(chunks[k])
     cached["merged"] = merged
     cached["source"] = source
-    counts = ", ".join(f"{k}={len(chunks[k])}" for k in PARENT_CHILD_METAFIELD_KEYS)
+    counts = ", ".join(f"{k}={len(chunks[k])}" for k in pc_keys)
     print(f"[ok] Parent/Child choices loaded from {source}: {counts}, merged={len(merged)}", flush=True)
     return cached
 
@@ -886,11 +932,12 @@ def get_parent_child_metafield_key(parent_child_value):
                     return i
             return None
 
-    for key in PARENT_CHILD_METAFIELD_KEYS:
+    pc_keys = parent_child_metafield_keys()
+    for key in pc_keys:
         if _index_in(cache.get(key) or []) is not None:
             return key
     # Unknown value: the last list that has any choices (newest overflow).
-    for key in reversed(PARENT_CHILD_METAFIELD_KEYS):
+    for key in reversed(pc_keys):
         if cache.get(key):
             return key
     return "parent_child"
@@ -909,7 +956,7 @@ def resolve_parent_child_choice_value(parent_child_value):
         return ""
     cache = _load_parent_child_choice_cache()
     val_lower = val.lower()
-    for key in PARENT_CHILD_METAFIELD_KEYS:
+    for key in parent_child_metafield_keys():
         for choice in (cache.get(key) or []):
             c = str(choice)
             if c == val:
@@ -966,7 +1013,7 @@ def get_metafield_choices(metafield_key):
             return get_subcategory_choices()[start_idx:end_idx]
         except (ValueError, IndexError):
             return []
-    elif metafield_key in PARENT_CHILD_METAFIELD_KEYS:
+    elif is_parent_child_key(metafield_key):
         cache = _load_parent_child_choice_cache()
         return list(cache.get(metafield_key) or [])
     else:
