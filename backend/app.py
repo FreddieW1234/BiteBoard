@@ -3209,6 +3209,26 @@ def art_job_sheet_page(order_id):
     )
 
 
+@app.route("/orders/<order_id>/sage-info")
+def sage_info_page(order_id):
+    """Printable Sage info - everything needed to key the whole order into Sage (staff only)."""
+    if not is_staff_authenticated():
+        return redirect(url_for("staff_login", next=request.path))
+    if not can_access_order(order_id):
+        return "Order not found", 404
+    from scripts.sage_info import get_sage_info_for_order  # type: ignore
+
+    result = get_sage_info_for_order(order_id)
+    if not result.get("success"):
+        return result.get("error") or "Order not found", 404
+    return render_template(
+        "UI/Sage_Info.html",
+        info=result["info"],
+        embed=request.args.get("embed") == "1",
+        auto_print=request.args.get("print") == "1",
+    )
+
+
 @app.route("/api/client/orders/<order_id>/order-info", methods=["PUT"])
 def api_client_order_info_update(order_id):
     """Order info editing is staff-only."""

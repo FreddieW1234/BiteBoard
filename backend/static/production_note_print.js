@@ -37,3 +37,9 @@ function printArtJobSheet(orderId, lineNumber) {
     const url = `/orders/${encodeURIComponent(orderId)}/art-job-sheet?line=${encodeURIComponent(lineNumber)}&embed=1`;
     _printOrderLineSheet(url, 'art-job-sheet-print-frame', 'Art job sheet');
 }
+
+function printSageInfo(orderId) {
+    if (!orderId) return;
+    const url = `/orders/${encodeURIComponent(orderId)}/sage-info?embed=1`;
+    _printOrderLineSheet(url, 'sage-info-print-frame', 'Sage info');
+}

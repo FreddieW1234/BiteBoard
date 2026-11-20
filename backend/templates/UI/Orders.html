@@ -181,6 +181,10 @@
         .line-sku { font-size: 0.75rem; font-weight: 600; color: #6b7280; letter-spacing: 0.02em; margin-bottom: 2px; }
         .line-title { font-weight: 600; color: #111827; display: block; }
         .line-price { font-weight: 600; white-space: nowrap; color: #111827; font-size: 0.86rem; text-align: right; }
+        .print-select-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: #374151; white-space: nowrap; }
+        .print-select { font-family: inherit; font-size: 0.78rem; font-weight: 600; color: #374151; background: #fff;
+            border: 1px solid #d1d5db; border-radius: 8px; padding: 5px 8px; cursor: pointer; }
+        .print-select:hover { border-color: #9ca3af; }
         .btn-print-art-job-sheet,
         .btn-print-production-note {
             background: #fff;
@@ -465,8 +469,13 @@
                     <div class="line-head-right">
                         <div class="line-head-actions">`;
             if (orderId && li.line_number != null) {
-                html += `<button type="button" class="btn-print-art-job-sheet" data-order-id="${escapeHtml(orderId)}" data-line-number="${escapeHtml(li.line_number)}">Print art job sheet</button>`;
-                html += `<button type="button" class="btn-print-production-note" data-order-id="${escapeHtml(orderId)}" data-line-number="${escapeHtml(li.line_number)}">Print production note</button>`;
+                html += `<label class="print-select-wrap">Print:
+                    <select class="print-select" data-order-id="${escapeHtml(orderId)}" data-line-number="${escapeHtml(li.line_number)}">
+                        <option value="" selected>Choose…</option>
+                        <option value="production">Production note</option>
+                        <option value="artwork">Artwork job sheet</option>
+                        <option value="sage">Sage info (whole order)</option>
+                    </select></label>`;
             }
             html += `</div>
                         <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
@@ -1099,6 +1108,15 @@
             e.stopPropagation();
             saveOrderInfoForm(form);
         });
+        document.getElementById('content').addEventListener('change', function(e) {
+            const sel = e.target.closest('.print-select');
+            if (!sel || !sel.value) return;
+            const kind = sel.value;
+            sel.value = '';  // back to "Choose…" so the same sheet can be printed again
+            if (kind === 'production') printProductionNote(sel.dataset.orderId, sel.dataset.lineNumber);
+            else if (kind === 'artwork') printArtJobSheet(sel.dataset.orderId, sel.dataset.lineNumber);
+            else if (kind === 'sage') printSageInfo(sel.dataset.orderId);
+        });
         document.getElementById('content').addEventListener('click', function(e) {
             const artBtn = e.target.closest('.btn-print-art-job-sheet');
             if (artBtn) {
@@ -1134,7 +1152,7 @@
         loadOrders();
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
-    <script src="/static/production_note_print.js?v=2"></script>
+    <script src="/static/production_note_print.js?v=3"></script>
     <script src="/static/office_tracking.js?v=43"></script>
 </body>
 </html>
