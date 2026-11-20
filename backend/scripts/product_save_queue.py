@@ -525,7 +525,7 @@ def _intended_parent_child_value(intended_data: dict) -> str:
             continue
         if (mf.get("namespace") or "custom") != "custom":
             continue
-        if mf.get("key") in ("parent_child", "parent_child2"):
+        if mf.get("key") in ("parent_child", "parent_child2", "parent_child3"):
             val = mf.get("value")
             if val is None:
                 continue
@@ -663,7 +663,7 @@ def verify_product(intended_data: dict, product_id) -> list:
         clear_pc = bool(clear_pc_raw)
     if want_pc or clear_pc:
         got_pc = ""
-        for key in ("parent_child", "parent_child2"):
+        for key in ("parent_child", "parent_child2", "parent_child3"):
             raw = actual_mf.get(("custom", key))
             if raw is None or str(raw).strip() == "":
                 continue

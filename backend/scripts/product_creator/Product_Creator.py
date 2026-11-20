@@ -1094,6 +1094,9 @@ def get_child_product_ids_by_parent_child_value(parent_child_value, shopify_doma
                 parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
                   value
                 }
+                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
+                  value
+                }
               }
             }
             pageInfo {
@@ -1257,6 +1260,9 @@ def get_all_children_by_family(shopify_domain=None):
                   value
                 }
                 parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
+                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
                   value
                 }
                 skuMetafield: metafield(namespace: "custom", key: "sku") {
@@ -1629,7 +1635,7 @@ def _build_filter_values(mf_map):
     return {fk: _parse_metafield_list(mf_map.get(fk)) for fk in FILTER_GROUP_KEYS}
 
 
-PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2")
+PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2", "parent_child3")
 
 
 def _normalize_parent_child_family(value):
@@ -1697,7 +1703,7 @@ def _metafield_raw_matches_value(raw, target_value):
 
 
 def _parent_child_value_from_graphql_node(node):
-    for alias in ("metafield", "parentChild2Metafield"):
+    for alias in ("metafield", "parentChild2Metafield", "parentChild3Metafield"):
         mf = node.get(alias)
         if not mf or not mf.get("value"):
             continue
@@ -1709,7 +1715,7 @@ def _parent_child_value_from_graphql_node(node):
 
 def _graphql_node_matches_parent_child(node, target_value):
     target = str(target_value).strip()
-    for alias in ("metafield", "parentChild2Metafield"):
+    for alias in ("metafield", "parentChild2Metafield", "parentChild3Metafield"):
         mf = node.get(alias)
         if mf and mf.get("value") and _metafield_raw_matches_value(mf.get("value"), target):
             return True
@@ -3323,6 +3329,9 @@ def get_child_products_by_parent_child_value(parent_child_value, shopify_domain=
                 parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
                   value
                 }
+                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
+                  value
+                }
               }
             }
             pageInfo {
@@ -3520,6 +3529,9 @@ def _find_parent_product_id_by_parent_value(parent_value, shopify_domain=None):
                   value
                 }
                 parentChild2Metafield: metafield(namespace: "custom", key: "parent_child2") {
+                  value
+                }
+                parentChild3Metafield: metafield(namespace: "custom", key: "parent_child3") {
                   value
                 }
               }
@@ -4330,7 +4342,8 @@ def push_inherited_metafields_to_children(parent_product_id, metafields, shopify
             headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
             json={"query": """query($id: ID!) { product(id: $id) {
                 a: metafield(namespace: "custom", key: "parent_child") { value }
-                b: metafield(namespace: "custom", key: "parent_child2") { value } } }""",
+                b: metafield(namespace: "custom", key: "parent_child2") { value }
+                c: metafield(namespace: "custom", key: "parent_child3") { value } } }""",
                   "variables": {"id": f"gid://shopify/Product/{parent_product_id}"}},
             timeout=20,
         )
@@ -4339,7 +4352,7 @@ def push_inherited_metafields_to_children(parent_product_id, metafields, shopify
         print(f"[warn] push_inherited: could not read parent_child for {parent_product_id}: {e}", flush=True)
         return []
     parent_values = [
-        v for slot in ("a", "b")
+        v for slot in ("a", "b", "c")
         for v in _parse_metafield_list((product.get(slot) or {}).get("value"))
         if _is_parent_child_type(v, "parent")
     ]
@@ -4499,7 +4512,7 @@ def create_metafields(product_id, metafields_data, shopify_domain=None):
         clearable_keys = set([
             "artworkguidelines", "artworktemplates", "stockdesigns", "custom_category", "subcategory",
             "sub_subcategory",
-            "parent_child", "parent_child2",
+            *PARENT_CHILD_METAFIELD_KEYS,
             "pricejsontr", "pricejsoner", "pricejsontid", "pricejsoneid",
             "leadtime3",
             "sku",
@@ -5671,13 +5684,16 @@ def create_product(product_data):
                         "value": json.dumps([parent_child_value]),
                         "type": "list.single_line_text_field",
                     })
-                    other_key = "parent_child2" if pc_key == "parent_child" else "parent_child"
-                    metafields.append({
-                        "namespace": "custom",
-                        "key": other_key,
-                        "value": "",
-                        "type": "list.single_line_text_field",
-                    })
+                    # The value lives in exactly one Parent/Child field; clear the others.
+                    for other_key in PARENT_CHILD_METAFIELD_KEYS:
+                        if other_key == pc_key:
+                            continue
+                        metafields.append({
+                            "namespace": "custom",
+                            "key": other_key,
+                            "value": "",
+                            "type": "list.single_line_text_field",
+                        })
                 except Exception as e:
                     print(f"[warn] Failed to route parent/child: {e}", flush=True)
                     metafields.append({
@@ -5697,7 +5713,7 @@ def create_product(product_data):
                         "value": "",
                         "type": "list.single_line_text_field",
                     })
-                print("[delete] Parent/Child cleared - will delete parent_child and parent_child2 metafields", flush=True)
+                print("[delete] Parent/Child cleared - will delete all Parent/Child metafields", flush=True)
             elif product_id and not parent_child_value:
                 print(
                     "[info] parent_child empty on update without clear_parent_child - "

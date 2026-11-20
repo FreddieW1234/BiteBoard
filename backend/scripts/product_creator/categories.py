@@ -698,10 +698,13 @@ def get_filter_groups():
         for g in FILTER_GROUPS
     ]
 
+# Every Parent/Child metafield, in order. Shopify caps a choice list at 128
+# options, so when one fills up a new definition is made and added here.
+PARENT_CHILD_METAFIELD_KEYS = ("parent_child", "parent_child2", "parent_child3")
+
 _PARENT_CHILD_SHOPIFY_CACHE = {
     "at": 0.0,
-    "parent_child": None,
-    "parent_child2": None,
+    **{k: None for k in PARENT_CHILD_METAFIELD_KEYS},
     "merged": None,
     "source": None,  # "shopify" | "fallback"
 }
@@ -825,29 +828,30 @@ def _load_parent_child_choice_cache(force=False):
     ):
         return cached
 
-    pc = fetch_shopify_metafield_definition_choices("custom", "parent_child")
-    pc2 = fetch_shopify_metafield_definition_choices("custom", "parent_child2")
+    chunks = {k: fetch_shopify_metafield_definition_choices("custom", k) for k in PARENT_CHILD_METAFIELD_KEYS}
     source = "shopify"
-    if not pc and not pc2:
+    if not any(chunks.values()):
         pc, pc2 = _fallback_parent_child_chunks()
+        chunks = {k: [] for k in PARENT_CHILD_METAFIELD_KEYS}
+        chunks["parent_child"], chunks["parent_child2"] = pc, pc2
         source = "fallback"
         print("[warn] Using hardcoded PARENT_CHILD_CHOICES fallback (Shopify definition choices empty)", flush=True)
     else:
-        # Keep definition order; append overflow without duplicating.
-        pc_set = {c.lower() for c in pc}
-        pc2 = [c for c in pc2 if c.lower() not in pc_set]
+        # Keep definition order; later lists only add values not already seen.
+        seen = set()
+        for k in PARENT_CHILD_METAFIELD_KEYS:
+            kept = [c for c in chunks[k] if c.lower() not in seen]
+            seen.update(c.lower() for c in kept)
+            chunks[k] = kept
 
-    merged = list(pc) + list(pc2)
+    merged = [c for k in PARENT_CHILD_METAFIELD_KEYS for c in chunks[k]]
     cached["at"] = now
-    cached["parent_child"] = list(pc)
-    cached["parent_child2"] = list(pc2)
+    for k in PARENT_CHILD_METAFIELD_KEYS:
+        cached[k] = list(chunks[k])
     cached["merged"] = merged
     cached["source"] = source
-    print(
-        f"[ok] Parent/Child choices loaded from {source}: "
-        f"parent_child={len(pc)}, parent_child2={len(pc2)}, merged={len(merged)}",
-        flush=True,
-    )
+    counts = ", ".join(f"{k}={len(chunks[k])}" for k in PARENT_CHILD_METAFIELD_KEYS)
+    print(f"[ok] Parent/Child choices loaded from {source}: {counts}, merged={len(merged)}", flush=True)
     return cached
 
 
@@ -871,8 +875,6 @@ def get_parent_child_metafield_key(parent_child_value):
     if not val:
         return "parent_child"
     cache = _load_parent_child_choice_cache()
-    pc = cache.get("parent_child") or []
-    pc2 = cache.get("parent_child2") or []
 
     def _index_in(choices):
         try:
@@ -884,13 +886,13 @@ def get_parent_child_metafield_key(parent_child_value):
                     return i
             return None
 
-    if _index_in(pc) is not None:
-        return "parent_child"
-    if _index_in(pc2) is not None:
-        return "parent_child2"
-    # Unknown value: prefer overflow if the primary list looks full.
-    if pc2 or len(pc) >= 120:
-        return "parent_child2"
+    for key in PARENT_CHILD_METAFIELD_KEYS:
+        if _index_in(cache.get(key) or []) is not None:
+            return key
+    # Unknown value: the last list that has any choices (newest overflow).
+    for key in reversed(PARENT_CHILD_METAFIELD_KEYS):
+        if cache.get(key):
+            return key
     return "parent_child"
 
 
@@ -907,7 +909,7 @@ def resolve_parent_child_choice_value(parent_child_value):
         return ""
     cache = _load_parent_child_choice_cache()
     val_lower = val.lower()
-    for key in ("parent_child", "parent_child2"):
+    for key in PARENT_CHILD_METAFIELD_KEYS:
         for choice in (cache.get(key) or []):
             c = str(choice)
             if c == val:
@@ -964,12 +966,9 @@ def get_metafield_choices(metafield_key):
             return get_subcategory_choices()[start_idx:end_idx]
         except (ValueError, IndexError):
             return []
-    elif metafield_key == "parent_child":
+    elif metafield_key in PARENT_CHILD_METAFIELD_KEYS:
         cache = _load_parent_child_choice_cache()
-        return list(cache.get("parent_child") or [])
-    elif metafield_key == "parent_child2":
-        cache = _load_parent_child_choice_cache()
-        return list(cache.get("parent_child2") or [])
+        return list(cache.get(metafield_key) or [])
     else:
         # Filter group metafields (custom.packaging, custom.size, custom.brand, custom.eco)
         for group in FILTER_GROUPS:

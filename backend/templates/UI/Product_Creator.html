@@ -6553,7 +6553,7 @@
                     if (namespace === 'shopify' && key.includes('chocolate')) return false;
                     if (namespace === 'custom' && key === 'sku') return false;
                     if (namespace === 'custom' && key === 'filters') return false;
-                    if (namespace === 'custom' && (key === 'parent_child' || key === 'parent_child2')) return false;
+                    if (namespace === 'custom' && /^parent_child\d*$/.test(key)) return false;
                     // Category + subcategory are merged into one combined "Category & Subcategory" dropdown
                     if (namespace === 'custom' && (key === 'custom_category' || key === 'subcategory' || key.startsWith('subcategory_'))) return false;
                     // Filter group metafields are shown together in the single combined Filters dropdown, not as separate fields
@@ -8931,7 +8931,7 @@
 
                 // Parent? and parent_child from metafields (list.single_line_text_field: value may be JSON array)
                 let parentChildVal = '';
-                for (const pcKey of ['parent_child', 'parent_child2']) {
+                for (const pcKey of ['parent_child', 'parent_child2', 'parent_child3']) {
                     const mfPc = mfs.find(m => m.namespace === 'custom' && m.key === pcKey);
                     if (!mfPc || mfPc.value == null || mfPc.value === '') continue;
                     const v = String(mfPc.value).trim();
