@@ -8,7 +8,10 @@ tied to a product, shipping and the totals.
 from __future__ import annotations
 
 from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
-from scripts.production_note import _format_order_date, _money, _parse_case_quantity, _po_number, sage_product_code  # type: ignore
+from scripts.Diary import load_saved_entries  # type: ignore
+from scripts.production_note import (  # type: ignore
+    _format_order_date, _money, _parse_case_quantity, _po_number, build_production_note, sage_product_code,
+)
 
 
 def _fee_row(fee: dict) -> dict:
@@ -44,6 +47,10 @@ def build_sage_info(order: dict) -> dict:
     products = [li for li in order.get("order_items") or [] if not li.get("is_fee")]
     fees = list(order.get("fees") or [])
     used: set[int] = set()
+    try:
+        saved = load_saved_entries()
+    except Exception:
+        saved = {}
 
     lines = []
     for line in products:
@@ -51,6 +58,10 @@ def build_sage_info(order: dict) -> dict:
         total = _money(line.get("total"))
         line_fees = _fees_for_line(line, fees, products)
         case_qty = _parse_case_quantity(line)
+        try:  # same expected dispatch date the production note shows
+            dispatch = build_production_note(order, line, saved=saved).get("expected_dispatch") or ""
+        except Exception:
+            dispatch = ""
         used.update(id(f) for f in line_fees)
         lines.append({
             "code": sage_product_code(line),
@@ -61,6 +72,7 @@ def build_sage_info(order: dict) -> dict:
             "case_size": case_qty or "",
             "case_price": format_gbp(unit * case_qty) if (unit is not None and case_qty) else "",
             "total": format_gbp(total) if total is not None else "",
+            "dispatch": dispatch,
             "fees": [_fee_row(f) for f in line_fees],
         })
 
