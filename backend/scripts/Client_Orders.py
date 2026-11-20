@@ -32,6 +32,7 @@ query CustomerOrders($id: ID!, $cursor: String) {{
           legacyResourceId
           name
           processedAt
+          orderOwner: customer {{ legacyResourceId }}
           displayFinancialStatus
           displayFulfillmentStatus
 {ORDER_EXTRA_FIELDS}
@@ -273,6 +274,14 @@ def register_client_customer(payload: dict) -> dict:
     }
 
 
+def invalidate_customer_orders(customer_id: str | int) -> None:
+    """Forget a customer's cached order list (after an order moves to/from them)."""
+    prefix = f"orders:{str(customer_id).strip()}:"
+    with _customer_cache_lock:
+        for key in [k for k in _customer_cache if k.startswith(prefix)]:
+            _customer_cache.pop(key, None)
+
+
 def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
     """Return orders for one customer (paginated when fetch_all=True)."""
     cid = str(customer_id).strip()
@@ -307,6 +316,11 @@ def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
             block = customer.get("orders") or {}
             for edge in block.get("edges") or []:
                 node = edge.get("node") or {}
+                # An order moved to another customer can linger in this list
+                # while Shopify catches up - only show orders they own now.
+                owner = str(((node.get("orderOwner") or {}).get("legacyResourceId")) or "")
+                if owner and owner != cid:
+                    continue
                 base = {
                     "id": node.get("legacyResourceId"),
                     "name": node.get("name") or "",

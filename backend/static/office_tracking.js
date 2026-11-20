@@ -991,6 +991,13 @@
                         <button type="button" class="office-btn office-btn-changes office-customer-back-btn">Back</button>
                     </div>
                 </div>
+                <div class="office-customer-step" data-step="done" hidden>
+                    <div class="office-customer-done"></div>
+                    <div class="office-changes-modal-actions">
+                        <a class="office-btn office-btn-approve office-customer-shopify-link" target="_blank" rel="noopener">Open order in Shopify</a>
+                        <button type="button" class="office-btn office-btn-changes" data-close-customer-modal>Done</button>
+                    </div>
+                </div>
             </div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', function (e) {
@@ -1078,7 +1085,8 @@
         const email = (c.email || '').trim();
         modal.querySelector('.office-customer-confirm-lead').innerHTML =
             `Move this order to <strong>${escapeHtml(c.name || email)}</strong>${email ? ` (${escapeHtml(email)})` : ''}? ` +
-            'It will show in their account on the website as if they placed it.';
+            'It will show in their account on the website as if they placed it, and disappear from the current customer\'s. ' +
+            'Their saved address becomes the shipping address.';
         const updates = modal.querySelector('.office-customer-updates');
         const cb = modal.querySelector('.office-customer-updates-cb');
         updates.hidden = !email;
@@ -1124,7 +1132,18 @@
                 }
             }
             delete orderTrackingCache[String(modal._orderId)];
-            hideOfficeModal(modal);
+
+            // Billing address can't be changed through Shopify's API, so point staff to Shopify.
+            const lines = [`<p class="office-changes-modal-lead"><strong>Moved to ${escapeHtml(data.customer_name || c.name || newEmail)}.</strong></p>`, '<ul class="office-customer-done-list">'];
+            lines.push(`<li>${data.shipping_address_updated ? 'Shipping address changed to their saved address.' : 'Shipping address not changed.'}</li>`);
+            (data.notes || []).forEach(n => lines.push(`<li>${escapeHtml(n)}</li>`));
+            lines.push('<li class="office-customer-billing"><strong>Billing address:</strong> Shopify only allows this to be changed in Shopify itself. Open the order, then edit Billing address.</li>');
+            lines.push('</ul>');
+            modal.querySelector('.office-customer-done').innerHTML = lines.join('');
+            const link = modal.querySelector('.office-customer-shopify-link');
+            link.href = data.shopify_order_url || '#';
+            link.hidden = !data.shopify_order_url;
+            showCustomerStep(modal, 'done');
         } catch (e) {
             err.textContent = 'Could not move the order: ' + (e.message || e);
             err.hidden = false;

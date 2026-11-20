@@ -827,3 +827,6 @@ html.co-embed .office-changes-contact-link:hover {
 .office-customer-updates { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; color: #374151; margin: 0 0 14px; cursor: pointer; }
 .office-customer-updates input { width: 15px; height: 15px; accent-color: #4f46e5; }
 .office-customer-error { margin: 0 0 12px; }
+.office-customer-done-list { margin: 0 0 16px; padding-left: 18px; font-size: 0.86rem; color: #374151; line-height: 1.5; }
+.office-customer-billing { color: #92400e; }
+a.office-customer-shopify-link { text-decoration: none; display: inline-flex; align-items: center; }

@@ -3317,34 +3317,88 @@ def api_order_set_customer(order_id):
     cid = str(data.get("customer_id") or "").strip()
     if not oid.isdigit() or not cid.isdigit():
         return jsonify({"success": False, "error": "Order and customer are required"}), 400
-    try:
+    def _gql(query, variables):
         resp = requests.post(
             f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json",
             headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
-            json={"query": _ORDER_CUSTOMER_SET, "variables": {
-                "orderId": f"gid://shopify/Order/{oid}",
-                "customerId": f"gid://shopify/Customer/{cid}",
-            }},
+            json={"query": query, "variables": variables},
             timeout=30,
         )
         body = resp.json() if resp.ok else {}
         if not resp.ok or body.get("errors"):
-            return jsonify({"success": False, "error": f"Shopify error: {str(body.get('errors') or resp.status_code)[:200]}"}), 502
-        result = (body.get("data") or {}).get("orderCustomerSet") or {}
+            raise RuntimeError(f"Shopify error: {str(body.get('errors') or resp.status_code)[:200]}")
+        return body.get("data") or {}
+
+    order_gid = f"gid://shopify/Order/{oid}"
+    try:
+        before = (_gql("query($id: ID!) { order(id: $id) { customer { legacyResourceId } } }",
+                       {"id": order_gid}).get("order") or {})
+        old_cid = str(((before.get("customer") or {}).get("legacyResourceId")) or "")
+
+        result = _gql(_ORDER_CUSTOMER_SET, {
+            "orderId": order_gid,
+            "customerId": f"gid://shopify/Customer/{cid}",
+        }).get("orderCustomerSet") or {}
         if result.get("userErrors"):
             return jsonify({"success": False, "error": "; ".join(e.get("message", "") for e in result["userErrors"])}), 400
         customer = ((result.get("order") or {}).get("customer")) or {}
+        new_email = (customer.get("email") or "").strip()
+
+        # Make the order look like theirs: their email and default (shipping) address.
+        # Shopify's API cannot change an order's billing address - staff do that in Shopify.
+        notes = []
+        address_updated = False
+        try:
+            cust = (_gql("""query($id: ID!) { customer(id: $id) { defaultAddress {
+                        firstName lastName company address1 address2 city provinceCode zip countryCodeV2 phone } } }""",
+                         {"id": f"gid://shopify/Customer/{cid}"}).get("customer") or {})
+            addr = cust.get("defaultAddress") or {}
+            update = {"id": order_gid}
+            if new_email:
+                update["email"] = new_email
+            if addr.get("address1"):
+                update["shippingAddress"] = {k: v for k, v in {
+                    "firstName": addr.get("firstName"), "lastName": addr.get("lastName"),
+                    "company": addr.get("company"), "address1": addr.get("address1"),
+                    "address2": addr.get("address2"), "city": addr.get("city"),
+                    "provinceCode": addr.get("provinceCode"), "zip": addr.get("zip"),
+                    "countryCode": addr.get("countryCodeV2"), "phone": addr.get("phone"),
+                }.items() if v}
+            else:
+                notes.append("They have no saved address, so the shipping address was left as it was.")
+            if len(update) > 1:
+                upd = _gql("""mutation($input: OrderInput!) { orderUpdate(input: $input) {
+                                userErrors { field message } } }""", {"input": update}).get("orderUpdate") or {}
+                if upd.get("userErrors"):
+                    notes.append("Could not update the order's details: "
+                                 + "; ".join(e.get("message", "") for e in upd["userErrors"]))
+                else:
+                    address_updated = "shippingAddress" in update
+        except Exception as addr_exc:
+            notes.append(f"Could not update the shipping address: {addr_exc}")
+
         try:
             from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
             invalidate_order_access_cache(oid)
         except Exception:
             pass
-        print(f"[orders] Order {oid} moved to customer {cid} ({customer.get('email')}) by staff", flush=True)
+        try:
+            from scripts.Client_Orders import invalidate_customer_orders  # type: ignore
+            for c in {old_cid, cid} - {""}:
+                invalidate_customer_orders(c)
+        except Exception:
+            pass
+        print(f"[orders] Order {oid} moved from customer {old_cid or '-'} to {cid} ({new_email}) by staff; "
+              f"shipping address {'updated' if address_updated else 'unchanged'}", flush=True)
+        store = STORE_DOMAIN.replace("https://", "").replace("http://", "").split(".")[0]
         return jsonify({
             "success": True,
             "customer_id": str(customer.get("legacyResourceId") or cid),
             "customer_name": customer.get("displayName") or "",
-            "customer_email": (customer.get("email") or "").strip(),
+            "customer_email": new_email,
+            "shipping_address_updated": address_updated,
+            "notes": notes,
+            "shopify_order_url": f"https://admin.shopify.com/store/{store}/orders/{oid}",
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
