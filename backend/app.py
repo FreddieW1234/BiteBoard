@@ -3391,10 +3391,20 @@ def api_order_add_charge(order_id):
             pass
         print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
               f"(taxable={taxable}, customer emailed={'yes' if notify else 'no'})", flush=True)
+        # The whole updated order, so the page can redraw fees and totals in place.
+        updated = None
+        try:
+            from scripts.order_helpers import attach_dispatch_displays, fetch_order_by_id  # type: ignore
+            updated = fetch_order_by_id(oid)
+            if updated:
+                attach_dispatch_displays([updated])
+        except Exception as fetch_exc:
+            print(f"[warn] charge: could not reload order {oid}: {fetch_exc}", flush=True)
         return jsonify({
             "success": True, "order": order.get("name"), "title": title, "amount": amount,
             "total": total, "outstanding": outstanding,
             "customer_notified": notify,
+            "updated_order": updated,
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:300]}), 500

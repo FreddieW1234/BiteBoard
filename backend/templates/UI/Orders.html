@@ -591,12 +591,22 @@
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.success) throw new Error(data.error || ('Request failed: ' + res.status));
-                // Show the new line straight away; the full list refreshes on next load.
-                wrap.insertAdjacentHTML('beforebegin', renderFeeItem({ title, fee_label: title, fee_name: title, total: amount, total_display: formatGbp(amount) }));
                 let note = `Added. New order total ${formatGbp(data.total)}`;
                 if (data.outstanding > 0) note += `, ${formatGbp(data.outstanding)} still to pay`;
                 if (data.customer_notified) note += ' - order update emailed to the customer';
-                msg.textContent = note + '.';
+                note += '.';
+                const existing = allOrders.find(o => String(o.id) === String(orderId));
+                if (data.updated_order && existing) {
+                    // Redraw this order with Shopify's new fees and totals (open orders stay open).
+                    Object.assign(existing, data.updated_order);
+                    renderOrdersView(filterOrders(document.getElementById('search-input').value));
+                    const box = document.querySelector(`#details-${CSS.escape(String(orderId))} .add-charge`);
+                    if (box) box.insertAdjacentHTML('beforeend', `<div class="add-charge-msg ok">${escapeHtml(note)}</div>`);
+                    return;
+                }
+                // Fallback: show the new line; totals refresh on next load.
+                wrap.insertAdjacentHTML('beforebegin', renderFeeItem({ title, fee_label: title, fee_name: title, total: amount, total_display: formatGbp(amount) }));
+                msg.textContent = note;
                 msg.className = 'add-charge-msg ok';
                 msg.hidden = false;
                 form.elements.title.value = '';
