@@ -456,6 +456,38 @@ def _print_error_message(resp: requests.Response) -> str:
     return detail or f"Print request failed ({code})"
 
 
+def print_document(pdf: bytes, title: str = "", copies: int = 1) -> dict:
+    """``POST /print/document`` - print a PDF on the office A4 printer (DOC_PRINTER)."""
+    _require_config()
+    if not pdf or not pdf.startswith(b"%PDF"):
+        raise OfficeApiError("Not a PDF")
+    url = f"{OFFICE_API_URL.rstrip('/')}/print/document"
+    resp = _request(
+        "POST", url,
+        files={"file": ("document.pdf", pdf, "application/pdf")},
+        data={"title": title or "", "copies": str(int(copies or 1))},
+        timeout=120,
+    )
+    if not resp.ok:
+        raise OfficeApiError(_print_error_message(resp))
+    try:
+        return resp.json()
+    except Exception:
+        return {"ok": True}
+
+
+def print_document_health() -> dict:
+    """``GET /print/document/health`` - A4 printer status and installed printers."""
+    _require_config()
+    resp = _request("GET", f"{OFFICE_API_URL.rstrip('/')}/print/document/health", timeout=30)
+    if resp.status_code == 404:
+        return {"configured": False, "error": "Office server has no document printing yet (add-on not installed)."}
+    try:
+        return resp.json()
+    except Exception:
+        return {"configured": False, "error": f"HTTP {resp.status_code}"}
+
+
 def print_health() -> dict:
     """``GET /print/health`` -> ``{configured: bool, ...}``."""
     _require_config()

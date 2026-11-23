@@ -4498,6 +4498,51 @@ def webhook_shopify_collections():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def _cron_or_staff_authorised():
+    from config import CRON_SECRET
+    import hmac as hmac_mod
+    if is_staff_authenticated():
+        return True
+    expected = (CRON_SECRET or "").strip()
+    auth = (request.headers.get("Authorization") or "").strip()
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    return bool(expected and token and hmac_mod.compare_digest(token, expected))
+
+
+@app.route("/api/cron/print-sage-info", methods=["POST"])
+def cron_print_sage_info():
+    """6am weekdays: print the previous working day's Sage info sheets in the office.
+
+    The cron fires at 05:00 and 06:00 UTC; only the one that is 6am UK time
+    prints. Staff can run it by hand: ?now=1 skips the time check, ?dry_run=1
+    lists what would print, ?reprint=1 includes orders already printed.
+    """
+    if not _cron_or_staff_authorised():
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    from scripts import sage_autoprint  # type: ignore
+    flag = lambda k: (request.args.get(k) or "").lower() in ("1", "true", "yes")
+    if not flag("now") and not sage_autoprint.is_print_time():
+        return jsonify({"success": True, "skipped": "not 6am UK on a weekday"})
+    if flag("dry_run"):
+        return jsonify(sage_autoprint.run(dry_run=True))
+    sage_autoprint.run_async(reprint=flag("reprint"))  # printing outlasts the cron's curl
+    return jsonify({"success": True, "started": True})
+
+
+@app.route("/api/sage-autoprint/status", methods=["GET"])
+def sage_autoprint_status():
+    """Staff: last morning run and whether the office A4 printer is ready."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    from scripts import sage_autoprint  # type: ignore
+    from scripts.office_api import print_document_health  # type: ignore
+    try:
+        printer = print_document_health()
+    except Exception as exc:
+        printer = {"configured": False, "error": str(exc)}
+    return jsonify({"success": True, "last_run": sage_autoprint.last_report(), "printer": printer})
+
+
 @app.route("/api/cron/reconcile-visibility", methods=["POST"])
 def cron_reconcile_visibility():
     """Nightly backstop. Authorization: Bearer <CRON_SECRET>. Circuit breaker stays on."""

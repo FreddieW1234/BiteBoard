@@ -122,6 +122,24 @@ services:
         sync: false
 
 
+  # 6am weekday auto-print of the previous working day's Sage info sheets
+  # (Monday covers Fri-Sun). Fires at 05:00 and 06:00 UTC; the web service only
+  # prints on the run that is 6am UK time, so it is right in GMT and BST.
+  # PRINT_SAGE_URL = https://<web-service>/api/cron/print-sage-info
+  - type: cron
+    name: print-sage-info-6am
+    runtime: native
+    plan: free
+    region: oregon
+    schedule: "0 5,6 * * 1-5"
+    buildCommand: "true"
+    startCommand: 'curl -fsS --max-time 60 -X POST "$PRINT_SAGE_URL" -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" -d "{}"'
+    envVars:
+      - key: CRON_SECRET
+        sync: false
+      - key: PRINT_SAGE_URL
+        sync: false
+
   # Nightly customer product-feed snapshot - 03:15 UTC, after the reconcile so
   # publish/visibility changes are settled. Same CRON_SECRET as the web service;
   # REBUILD_FEED_URL = https://<web-service>/api/cron/rebuild-feed

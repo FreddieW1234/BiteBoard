@@ -23,17 +23,16 @@
             font-size: 13px; font-weight: 600; cursor: pointer; }
         .sheet { max-width: 186mm; margin: 0 auto; }
 
-        .head { display: flex; justify-content: space-between; align-items: flex-end;
-            border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
+        /* Plain tables throughout so the same page also renders as a PDF for
+           the morning auto-print (the PDF renderer has no flex/grid). */
+        table.head { border-bottom: 2px solid #000; margin-bottom: 10px; }
+        table.head td { border: none; padding: 0 0 6px 0; vertical-align: bottom; }
         .head h1 { font-size: 16pt; letter-spacing: 0.02em; }
         .head .order { font-size: 13pt; font-weight: bold; text-align: right; }
         .head .date { font-size: 9pt; font-weight: normal; }
 
         .label { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; color: #444; margin-bottom: 2px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #000; margin-bottom: 10px; }
-        .cell { padding: 6px 8px; border-right: 1px solid #000; border-bottom: 1px solid #000; min-height: 34px; }
-        .cell:nth-child(2n) { border-right: none; }
-        .cell.last-row { border-bottom: none; }
+        table.info td { width: 50%; padding: 6px 8px; }
         .cell .value { font-size: 10pt; }
         .cell .big { font-size: 11pt; font-weight: bold; }
         .addr { white-space: pre-line; }
@@ -41,7 +40,8 @@
         table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
         th, td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; text-align: left; }
         th { background: #e5e7eb; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.04em; }
-        td.num, th.num { text-align: right; white-space: nowrap; }
+        td.num, th.num { text-align: right; }
+        td.num { white-space: nowrap; }
         td.code { font-family: Consolas, "Courier New", monospace; font-weight: bold; white-space: nowrap; }
         tr.product td { font-weight: bold; border-top: 2px solid #000; }
         tr.product td .opts { font-weight: normal; font-size: 8.5pt; color: #333; }
@@ -49,7 +49,7 @@
         tr.fee td.name { padding-left: 18px; }
         tr.section td { background: #f3f4f6; font-weight: bold; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.04em; }
 
-        .totals { width: 70mm; margin-left: auto; }
+        .totals { width: 85mm; margin-left: auto; }
         .totals td { border: 1px solid #000; }
         .totals tr.grand td { font-weight: bold; font-size: 11pt; border-top: 2px solid #000; }
 
@@ -64,33 +64,39 @@
     <div class="toolbar"><button type="button" onclick="window.print()">Print</button></div>
     {% endif %}
     <div class="sheet">
-        <div class="head">
-            <h1>SAGE INFO</h1>
-            <div class="order">{{ info.order_name }}<br><span class="date">{{ info.order_date }}</span></div>
-        </div>
+        <table class="head">
+            <tr>
+                <td><h1>SAGE INFO</h1></td>
+                <td class="order">{{ info.order_name }}<br><span class="date">{{ info.order_date }}</span></td>
+            </tr>
+        </table>
 
-        <div class="grid">
-            <div class="cell">
-                <div class="label">Customer</div>
-                <div class="value big">{{ info.company or info.customer_name or '-' }}</div>
-                {% if info.company and info.customer_name %}<div class="value">{{ info.customer_name }}</div>{% endif %}
-                {% if info.email %}<div class="value">{{ info.email }}</div>{% endif %}
-            </div>
-            <div class="cell">
-                <div class="label">PO / purchase order number</div>
-                <div class="value big">{{ info.po_number or '-' }}</div>
-                <div class="label" style="margin-top:6px;">Payment method</div>
-                <div class="value">{{ info.payment }}</div>
-            </div>
-            <div class="cell last-row">
-                <div class="label">Billing address</div>
-                <div class="value addr">{{ info.billing_address|join('\n') if info.billing_address else '-' }}</div>
-            </div>
-            <div class="cell last-row">
-                <div class="label">Shipping address</div>
-                <div class="value addr">{{ info.shipping_address|join('\n') if info.shipping_address else '-' }}</div>
-            </div>
-        </div>
+        <table class="info">
+            <tr>
+                <td class="cell">
+                    <div class="label">Customer</div>
+                    <div class="value big">{{ info.company or info.customer_name or '-' }}</div>
+                    {% if info.company and info.customer_name %}<div class="value">{{ info.customer_name }}</div>{% endif %}
+                    {% if info.email %}<div class="value">{{ info.email }}</div>{% endif %}
+                </td>
+                <td class="cell">
+                    <div class="label">PO / purchase order number</div>
+                    <div class="value big">{{ info.po_number or '-' }}</div>
+                    <div class="label" style="margin-top:6px;">Payment method</div>
+                    <div class="value">{{ info.payment }}</div>
+                </td>
+            </tr>
+            <tr>
+                <td class="cell">
+                    <div class="label">Billing address</div>
+                    <div class="value">{% for l in info.billing_address %}{{ l }}<br>{% else %}-{% endfor %}</div>
+                </td>
+                <td class="cell">
+                    <div class="label">Shipping address</div>
+                    <div class="value">{% for l in info.shipping_address %}{{ l }}<br>{% else %}-{% endfor %}</div>
+                </td>
+            </tr>
+        </table>
 
         <table>
             <thead>
@@ -149,7 +155,7 @@
         </table>
 
         <table class="totals">
-            <tr><td>Subtotal (products &amp; fees)</td><td class="num">{{ info.subtotal }}</td></tr>
+            <tr><td>Subtotal</td><td class="num">{{ info.subtotal }}</td></tr>
             <tr><td>Shipping</td><td class="num">{{ info.shipping }}</td></tr>
             <tr><td>VAT</td><td class="num">{{ info.tax }}</td></tr>
             <tr class="grand"><td>Order total</td><td class="num">{{ info.total }}</td></tr>
