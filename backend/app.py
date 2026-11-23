@@ -3323,7 +3323,8 @@ def api_order_add_charge(order_id):
 
     Uses Shopify order editing - no product needed, so nothing can leak onto the
     storefront. Amount is ex-VAT (the shop's prices exclude tax); VAT is added
-    when taxable. Optionally emails the customer Shopify's invoice / payment link.
+    when taxable. Optionally Shopify emails the customer its "order updated" message
+    (which carries a payment link when there is a balance to pay).
     """
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
@@ -3341,7 +3342,7 @@ def api_order_add_charge(order_id):
     if amount <= 0:
         return jsonify({"success": False, "error": "Enter an amount above £0"}), 400
     taxable = bool(data.get("taxable", True))
-    send_invoice = bool(data.get("send_invoice"))
+    notify = bool(data.get("notify_customer"))
 
     def _gql(query, variables):
         resp = requests.post(
@@ -3373,33 +3374,27 @@ def api_order_add_charge(order_id):
         if _errors(add):
             return jsonify({"success": False, "error": _errors(add)}), 400
         staff = get_staff_username() or "staff"
-        commit = _gql("""mutation($id: ID!, $note: String) { orderEditCommit(id: $id, notifyCustomer: false, staffNote: $note) {
+        commit = _gql("""mutation($id: ID!, $note: String, $notify: Boolean) { orderEditCommit(id: $id, notifyCustomer: $notify, staffNote: $note) {
                            order { name totalOutstandingSet { shopMoney { amount } } totalPriceSet { shopMoney { amount } } }
                            userErrors { field message } } }""",
-                      {"id": calc_id, "note": f"Charge added in BiteBoard by {staff}: {title} £{amount:.2f}"}).get("orderEditCommit") or {}
+                      {"id": calc_id, "notify": notify, "note": f"Charge added in BiteBoard by {staff}: {title} £{amount:.2f}"}).get("orderEditCommit") or {}
         if _errors(commit):
             return jsonify({"success": False, "error": _errors(commit)}), 400
         order = commit.get("order") or {}
         outstanding = float((((order.get("totalOutstandingSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
         total = float((((order.get("totalPriceSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
 
-        invoice_sent, invoice_error = False, ""
-        if send_invoice and outstanding > 0:
-            inv = _gql("""mutation($id: ID!) { orderInvoiceSend(id: $id) { userErrors { field message } } }""",
-                       {"id": f"gid://shopify/Order/{oid}"}).get("orderInvoiceSend") or {}
-            invoice_error = _errors(inv)
-            invoice_sent = not invoice_error
         try:
             from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
             invalidate_order_access_cache(oid)
         except Exception:
             pass
         print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
-              f"(taxable={taxable}, invoice={'sent' if invoice_sent else 'no'})", flush=True)
+              f"(taxable={taxable}, customer emailed={'yes' if notify else 'no'})", flush=True)
         return jsonify({
             "success": True, "order": order.get("name"), "title": title, "amount": amount,
             "total": total, "outstanding": outstanding,
-            "invoice_sent": invoice_sent, "invoice_error": invoice_error,
+            "customer_notified": notify,
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:300]}), 500
