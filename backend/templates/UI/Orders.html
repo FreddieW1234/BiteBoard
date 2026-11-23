@@ -594,6 +594,7 @@
                 let note = `Added. New order total ${formatGbp(data.total)}`;
                 if (data.outstanding > 0) note += `, ${formatGbp(data.outstanding)} still to pay`;
                 if (data.customer_notified) note += ' - order update emailed to the customer';
+                if (data.notify_error) note += ` - order update email NOT sent: ${data.notify_error}`;
                 note += '.';
                 const existing = allOrders.find(o => String(o.id) === String(orderId));
                 if (data.updated_order && existing) {

@@ -3374,10 +3374,14 @@ def api_order_add_charge(order_id):
         if _errors(add):
             return jsonify({"success": False, "error": _errors(add)}), 400
         staff = get_staff_username() or "staff"
-        commit = _gql("""mutation($id: ID!, $note: String, $notify: Boolean) { orderEditCommit(id: $id, notifyCustomer: $notify, staffNote: $note) {
-                           order { name totalOutstandingSet { shopMoney { amount } } totalPriceSet { shopMoney { amount } } }
+        # Shopify never emails here: with a balance due it would send its invoice
+        # email. The customer gets our own "order updated" email via Klaviyo below.
+        commit = _gql("""mutation($id: ID!, $note: String) { orderEditCommit(id: $id, notifyCustomer: false, staffNote: $note) {
+                           order { name email statusPageUrl
+                                   totalOutstandingSet { shopMoney { amount } } totalPriceSet { shopMoney { amount } }
+                                   paymentCollectionDetails { additionalPaymentCollectionUrl } }
                            userErrors { field message } } }""",
-                      {"id": calc_id, "notify": notify, "note": f"Charge added in BiteBoard by {staff}: {title} £{amount:.2f}"}).get("orderEditCommit") or {}
+                      {"id": calc_id, "note": f"Charge added in BiteBoard by {staff}: {title} £{amount:.2f}"}).get("orderEditCommit") or {}
         if _errors(commit):
             return jsonify({"success": False, "error": _errors(commit)}), 400
         order = commit.get("order") or {}
@@ -3389,8 +3393,6 @@ def api_order_add_charge(order_id):
             invalidate_order_access_cache(oid)
         except Exception:
             pass
-        print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
-              f"(taxable={taxable}, customer emailed={'yes' if notify else 'no'})", flush=True)
         # The whole updated order, so the page can redraw fees and totals in place.
         updated = None
         try:
@@ -3400,10 +3402,29 @@ def api_order_add_charge(order_id):
                 attach_dispatch_displays([updated])
         except Exception as fetch_exc:
             print(f"[warn] charge: could not reload order {oid}: {fetch_exc}", flush=True)
+
+        notified, notify_error = False, ""
+        if notify:
+            try:
+                from scripts.klaviyo_api import send_order_updated  # type: ignore
+                send_order_updated(
+                    (order.get("email") or (updated or {}).get("customer_email") or "").strip(),
+                    updated or {"name": order.get("name"), "id": oid},
+                    charge_title=title, charge_amount=amount, charge_taxable=taxable,
+                    outstanding=outstanding,
+                    payment_url=((order.get("paymentCollectionDetails") or {}).get("additionalPaymentCollectionUrl") or ""),
+                    status_url=order.get("statusPageUrl") or "",
+                )
+                notified = True
+            except Exception as kexc:
+                notify_error = str(kexc)[:200]
+                print(f"[warn] charge: order-updated email not sent for {order.get('name') or oid}: {kexc}", flush=True)
+        print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
+              f"(taxable={taxable}, order update email={'sent' if notified else ('FAILED' if notify else 'not requested')})", flush=True)
         return jsonify({
             "success": True, "order": order.get("name"), "title": title, "amount": amount,
             "total": total, "outstanding": outstanding,
-            "customer_notified": notify,
+            "customer_notified": notified, "notify_error": notify_error,
             "updated_order": updated,
         })
     except Exception as e:

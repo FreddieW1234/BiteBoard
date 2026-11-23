@@ -140,6 +140,9 @@ KLAVIYO_CUSTOMER_REGISTERED_METRIC_NAME = os.environ.get(
 KLAVIYO_PROOF_APPROVED_METRIC_NAME = os.environ.get(
     "KLAVIYO_PROOF_APPROVED_METRIC_NAME", "Bite Proof Approved"
 )
+KLAVIYO_ORDER_UPDATED_METRIC_NAME = os.environ.get(
+    "KLAVIYO_ORDER_UPDATED_METRIC_NAME", "Bite Order Updated"
+)
 
 # Direct carrier APIs (ShipStation removed)
 ROYAL_MAIL_API_KEY = os.environ.get("ROYAL_MAIL_API_KEY") or ""

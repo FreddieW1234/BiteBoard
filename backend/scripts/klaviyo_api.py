@@ -496,3 +496,88 @@ def send_customer_registered(
         detail = resp.text[:500] if resp.text else resp.reason
         log.warning("Klaviyo customer registered event failed (%s): %s", resp.status_code, detail)
         raise KlaviyoError(f"Klaviyo returned {resp.status_code}")
+
+
+def klaviyo_order_updated_configured() -> bool:
+    from config import KLAVIYO_ORDER_UPDATED_METRIC_NAME  # type: ignore
+    return bool(KLAVIYO_API_KEY and KLAVIYO_ORDER_UPDATED_METRIC_NAME)
+
+
+def send_order_updated(
+    email: str,
+    order: dict,
+    *,
+    charge_title: str,
+    charge_amount: float,
+    charge_taxable: bool,
+    outstanding: float = 0.0,
+    payment_url: str = "",
+    status_url: str = "",
+) -> None:
+    """Fire 'Bite Order Updated' (a Klaviyo Flow sends the customer email) after
+    staff add a charge to an existing order. Replaces Shopify's invoice email."""
+    from config import KLAVIYO_ORDER_UPDATED_METRIC_NAME  # type: ignore
+    if not klaviyo_order_updated_configured():
+        raise KlaviyoError("Klaviyo is not configured (KLAVIYO_API_KEY / KLAVIYO_ORDER_UPDATED_METRIC_NAME)")
+    email = (email or "").strip()
+    if not email:
+        raise KlaviyoError("The order has no email address")
+    order = order or {}
+    order_name = (order.get("name") or "").strip()
+    gbp = lambda v: f"£{float(v or 0):,.2f}"
+
+    items = [{
+        "title": (li.get("title") or "").strip(),
+        "options": (li.get("meta_line") or "").strip(),
+        "quantity": li.get("quantity") or 0,
+        "unit_price": li.get("unit_price_display") or gbp(li.get("unit_price")),
+        "total": li.get("total_display") or gbp(li.get("total")),
+    } for li in order.get("order_items") or []]
+    fees = [{
+        "title": (f.get("fee_label") or f.get("title") or "").strip(),
+        "total": f.get("total_display") or gbp(f.get("total")),
+    } for f in order.get("fees") or []]
+
+    properties: dict[str, Any] = {
+        "order_name": order_name,
+        "order_id": str(order.get("id") or ""),
+        "charge_title": charge_title,
+        "charge_amount": gbp(charge_amount),
+        "charge_vat_applies": bool(charge_taxable),
+        "items": items,
+        "fees": fees,
+        "subtotal": order.get("subtotal_display") or "",
+        "shipping": order.get("shipping_display") or "",
+        "vat": order.get("tax_display") or "",
+        "total": order.get("total_display") or "",
+        "balance_due": gbp(outstanding),
+        "has_balance_due": outstanding > 0,
+        "payment_url": payment_url or "",
+        "order_status_url": status_url or "",
+        "portal_url": build_portal_url(str(order.get("id") or "")),
+    }
+    payload: dict[str, Any] = {
+        "data": {
+            "type": "event",
+            "attributes": {
+                "properties": properties,
+                "value": float(charge_amount or 0),
+                "metric": {"data": {"type": "metric", "attributes": {"name": KLAVIYO_ORDER_UPDATED_METRIC_NAME}}},
+                "profile": {"data": {"type": "profile", "attributes": {"email": email}}},
+                "unique_id": f"order-updated-{order_name}-{uuid.uuid4().hex}",
+            },
+        }
+    }
+    headers = {
+        "Authorization": f"Klaviyo-API-Key {KLAVIYO_API_KEY}",
+        "accept": "application/json",
+        "content-type": "application/json",
+        "revision": KLAVIYO_API_REVISION,
+    }
+    try:
+        resp = requests.post("https://a.klaviyo.com/api/events", json=payload, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        raise KlaviyoError(f"Could not reach Klaviyo: {exc}") from exc
+    if resp.status_code not in (200, 202):
+        log.warning("Klaviyo order updated event failed (%s): %s", resp.status_code, resp.text[:500])
+        raise KlaviyoError(f"Klaviyo returned {resp.status_code}")
