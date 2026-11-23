@@ -3654,9 +3654,16 @@ def _office_order_cached(order_name):
 def api_orders_indicators_batch():
     """Staff Orders list: progress for many orders in one request.
 
-    Body: {"orders": [{"id", "name", "lines": [{"line_number", "title", "office_item_id"}]}]}
+    Body: {"orders": [{"id", "name", "awaiting_fulfillment",
+                       "lines": [{"line_number", "title", "office_item_id"}]}]}
     The client already has each order's lines from /api/orders, so this only
     asks the office server (in parallel) - no Shopify lookups per order.
+
+    A line the office server has no record of yet (nobody has opened the order)
+    comes back as {"office": None, "untracked": True} when the order is still
+    awaiting fulfilment, so a brand-new order shows "customer waiting on us"
+    straight away. Only set when the office server answered - an outage leaves
+    the order out of the results instead of turning everything red.
     """
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
@@ -3675,13 +3682,18 @@ def api_orders_indicators_batch():
             key = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
             if key:
                 by_item[key] = view
+        awaiting = bool(o.get("awaiting_fulfillment"))
         items = []
         for line in o.get("lines") or []:
             ln = line.get("line_number")
             if ln is None:
                 continue
             key = line.get("office_item_id") or item_key(ln, line.get("title") or "")
-            items.append({"office": by_item.get(key)})
+            office = by_item.get(key)
+            if office is None and awaiting:
+                items.append({"office": None, "untracked": True})
+            else:
+                items.append({"office": office})
         return str(o["id"]), items
 
     results = {}

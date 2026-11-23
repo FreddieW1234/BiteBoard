@@ -2003,7 +2003,9 @@
         let worst = 'none';
         let worstP = INDICATOR_PRIORITY.none;
         (items || []).forEach(item => {
-            const t = computeItemIndicator(item.office);
+            // A live order line nobody has opened yet: nothing started, so the
+            // customer is waiting on us.
+            const t = (item && item.untracked && !item.office) ? 'red' : computeItemIndicator(item && item.office);
             const p = INDICATOR_PRIORITY[t] ?? INDICATOR_PRIORITY.none;
             if (p < worstP) {
                 worst = t;

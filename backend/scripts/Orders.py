@@ -21,6 +21,8 @@ query StaffOrders($cursor: String) {{
         legacyResourceId
         name
         processedAt
+        cancelledAt
+        displayFulfillmentStatus
         customer {{
           legacyResourceId
           displayName
@@ -82,8 +84,21 @@ def _format_order_node(node: dict) -> dict:
         "company": company,
         "landline_phone": landline,
         "mobile_number": mobile,
+        "awaiting_fulfillment": _awaiting_fulfillment(node),
     }
     return enrich_order(node, base)
+
+
+# Fulfilment states that mean the goods have gone (or never will).
+_DONE_FULFILLMENT_STATUSES = frozenset({"FULFILLED", "RESTOCKED"})
+
+
+def _awaiting_fulfillment(node: dict) -> bool:
+    """True while an order is live: not cancelled and not yet sent out."""
+    if node.get("cancelledAt"):
+        return False
+    status = (node.get("displayFulfillmentStatus") or "").upper()
+    return status not in _DONE_FULFILLMENT_STATUSES
 
 
 def get_orders_overview(max_orders: int = 250) -> dict:
