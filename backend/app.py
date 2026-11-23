@@ -3431,6 +3431,30 @@ def api_order_add_charge(order_id):
         return jsonify({"success": False, "error": str(e)[:300]}), 500
 
 
+@app.route("/api/klaviyo/test-order-updated", methods=["GET"])
+def api_klaviyo_test_order_updated():
+    """Staff: fire one sample 'Bite Order Updated' event so the metric appears in
+    Klaviyo and can be picked as a Flow trigger. ?email=<address to send it as>.
+    Nothing is emailed unless a Flow on the metric is already live."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    email = (request.args.get("email") or "").strip()
+    if "@" not in email:
+        return jsonify({"success": False, "error": "Add ?email=you@example.com to the link"}), 400
+    try:
+        from scripts.Orders import get_orders_overview  # type: ignore
+        from scripts.order_helpers import fetch_order_by_id  # type: ignore
+        from scripts.klaviyo_api import send_order_updated  # type: ignore
+        recent = (get_orders_overview(max_orders=1).get("orders") or [{}])[0]
+        sample = fetch_order_by_id(recent["id"]) if recent.get("id") else {"name": "#TEST"}
+        send_order_updated(email, sample, charge_title="Sample charge (test)", charge_amount=10.0,
+                           charge_taxable=True, outstanding=12.0, payment_url="https://bitepromotions.co.uk/")
+        return jsonify({"success": True, "sent_to": email, "sample_order": sample.get("name"),
+                        "next": "In Klaviyo: Flows > Create flow > trigger metric 'Bite Order Updated'"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)[:300]}), 500
+
+
 _ORDER_CUSTOMER_SET = """
 mutation OrderCustomerSet($orderId: ID!, $customerId: ID!) {
   orderCustomerSet(orderId: $orderId, customerId: $customerId) {
