@@ -3490,6 +3490,70 @@ def _office_indicator_response(order_id):
     return jsonify({"success": True, "items": _fetch_office_items_for_indicator(entry)})
 
 
+_OFFICE_ORDER_CACHE: dict = {}
+_OFFICE_ORDER_CACHE_TTL = 60
+_OFFICE_ORDER_CACHE_LOCK = threading.Lock()
+
+
+def _office_order_cached(order_name):
+    """Office progress for one order, reused for a minute so tab switches are cheap."""
+    now = time.time()
+    with _OFFICE_ORDER_CACHE_LOCK:
+        hit = _OFFICE_ORDER_CACHE.get(order_name)
+    if hit and hit[0] > now:
+        return hit[1]
+    from scripts.office_api import get_order, OfficeApiError  # type: ignore
+    try:
+        data = get_order(order_name) or {}
+    except OfficeApiError:
+        return None  # don't cache failures
+    with _OFFICE_ORDER_CACHE_LOCK:
+        _OFFICE_ORDER_CACHE[order_name] = (now + _OFFICE_ORDER_CACHE_TTL, data)
+    return data
+
+
+@app.route("/api/orders/indicators", methods=["POST"])
+def api_orders_indicators_batch():
+    """Staff Orders list: progress for many orders in one request.
+
+    Body: {"orders": [{"id", "name", "lines": [{"line_number", "title", "office_item_id"}]}]}
+    The client already has each order's lines from /api/orders, so this only
+    asks the office server (in parallel) - no Shopify lookups per order.
+    """
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    from concurrent.futures import ThreadPoolExecutor
+    from scripts.office_api import item_key  # type: ignore
+
+    orders = (request.get_json(silent=True) or {}).get("orders") or []
+    orders = [o for o in orders if isinstance(o, dict) and o.get("id") and o.get("name")][:100]
+
+    def one(o):
+        data = _office_order_cached(str(o["name"]))
+        if data is None:
+            return str(o["id"]), None
+        by_item = {}
+        for view in data.get("items") or []:
+            key = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
+            if key:
+                by_item[key] = view
+        items = []
+        for line in o.get("lines") or []:
+            ln = line.get("line_number")
+            if ln is None:
+                continue
+            key = line.get("office_item_id") or item_key(ln, line.get("title") or "")
+            items.append({"office": by_item.get(key)})
+        return str(o["id"]), items
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        for oid, items in pool.map(one, orders):
+            if items is not None:
+                results[oid] = items
+    return jsonify({"success": True, "results": results})
+
+
 @app.route("/api/orders/<order_id>/indicator", methods=["GET"])
 def api_order_indicator(order_id):
     if not can_access_order(order_id):

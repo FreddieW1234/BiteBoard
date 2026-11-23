@@ -1016,6 +1016,10 @@
                 indicator = OfficeTracking.computeOrderIndicator(entry.data.items);
             }
             orderIndicators[id] = indicator;
+            if (entry && entry.status === 'done') {
+                freshIndicatorIds.add(id);
+                saveStoredIndicators();
+            }
             if (window.OfficeTracking && typeof OfficeTracking.updateOrderRowIndicator === 'function') {
                 OfficeTracking.updateOrderRowIndicator(id, indicator);
             }
@@ -1028,36 +1032,79 @@
         }
 
         let trackingPrefetchToken = 0;
+        const INDICATOR_STORE_KEY = 'bb_order_indicators_v1';
+        const freshIndicatorIds = new Set();   // refreshed from the server this visit
+
+        // Last known progress per order, kept in the browser so completed orders
+        // can be filtered away the moment the tab opens, then quietly refreshed.
+        function loadStoredIndicators() {
+            try { return JSON.parse(localStorage.getItem(INDICATOR_STORE_KEY) || '{}') || {}; }
+            catch (_) { return {}; }
+        }
+        function saveStoredIndicators() {
+            try {
+                const keep = {};
+                allOrders.forEach(o => {
+                    const id = String(o.id);
+                    if (Object.prototype.hasOwnProperty.call(orderIndicators, id)) keep[id] = orderIndicators[id];
+                });
+                localStorage.setItem(INDICATOR_STORE_KEY, JSON.stringify(keep));
+            } catch (_) { /* storage full or blocked - fine */ }
+        }
 
         async function prefetchTrackingForOrders(orders) {
-            if (!window.OfficeTracking || typeof OfficeTracking.prefetchAllOrderTracking !== 'function') {
-                return;
-            }
+            if (!window.OfficeTracking || typeof OfficeTracking.computeOrderIndicator !== 'function') return;
             const token = ++trackingPrefetchToken;
-            const ids = (orders || []).map(o => o.id).filter(Boolean);
-            if (!ids.length) return;
+            const todo = (orders || []).filter(o => o.id && !freshIndicatorIds.has(String(o.id)));
+            if (!todo.length) return;
+            const chunks = [];
+            for (let i = 0; i < todo.length; i += 40) chunks.push(todo.slice(i, i + 40));
 
-            suppressOrdersRefresh = true;
-            try {
-                await OfficeTracking.prefetchAllOrderTracking(
-                    ids,
-                    '/api/orders',
-                    'staff',
-                    (orderId, entry) => {
-                        if (token !== trackingPrefetchToken) return;
-                        onTrackingSettled(orderId, entry, false);
-                        const content = document.getElementById('content');
-                        if (content && typeof OfficeTracking.applyCachedTrackingIn === 'function') {
-                            OfficeTracking.applyCachedTrackingIn(content, '/api/orders', 'staff');
+            async function runChunk(chunk) {
+                const body = {
+                    orders: chunk.map(o => ({
+                        id: String(o.id),
+                        name: o.name,
+                        lines: (o.order_items || []).map(li => ({
+                            line_number: li.line_number, title: li.title, office_item_id: li.office_item_id || null,
+                        })),
+                    })),
+                };
+                try {
+                    const res = await fetch('/api/orders/indicators', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await res.json();
+                    if (token !== trackingPrefetchToken || !data.success) return;
+                    let changed = false;
+                    Object.entries(data.results || {}).forEach(([id, items]) => {
+                        freshIndicatorIds.add(id);
+                        const indicator = OfficeTracking.computeOrderIndicator(items);
+                        const prev = orderIndicators[id];
+                        orderIndicators[id] = indicator;
+                        if (typeof OfficeTracking.updateOrderRowIndicator === 'function') {
+                            OfficeTracking.updateOrderRowIndicator(id, indicator);
                         }
-                    },
-                    3
-                );
-            } finally {
-                if (token !== trackingPrefetchToken) return;
-                suppressOrdersRefresh = false;
-                renderOrdersView(filterOrders(document.getElementById('search-input').value));
+                        if ((prev === 'green') !== (indicator === 'green') || (sortMode === 'priority' && prev !== indicator)) {
+                            changed = true;
+                        }
+                    });
+                    saveStoredIndicators();
+                    if (changed) scheduleOrdersRefresh(false);
+                } catch (err) {
+                    console.warn('Progress batch failed:', err);
+                }
             }
+
+            // A few batches in flight at once; each one updates the list as it lands.
+            const queue = chunks.slice();
+            const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+                while (queue.length && token === trackingPrefetchToken) await runChunk(queue.shift());
+            });
+            await Promise.all(workers);
         }
 
         function startBackgroundTrackingPrefetch(orders) {
@@ -1086,7 +1133,9 @@
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load orders');
                 allOrders = data.orders || [];
-                orderIndicators = {};
+                // Start from the last known progress so completed orders hide straight away.
+                orderIndicators = forceRefresh ? {} : loadStoredIndicators();
+                freshIndicatorIds.clear();
                 if (window.OfficeTracking && typeof OfficeTracking.clearOrderTrackingCache === 'function') {
                     OfficeTracking.clearOrderTrackingCache();
                 }
