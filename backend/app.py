@@ -3317,6 +3317,94 @@ def _office_tracking_response(order_id, entry, api_prefix):
     return jsonify(payload)
 
 
+@app.route("/api/orders/<order_id>/charge", methods=["POST"])
+def api_order_add_charge(order_id):
+    """Staff: add a custom charge (any description and amount) to an existing order.
+
+    Uses Shopify order editing - no product needed, so nothing can leak onto the
+    storefront. Amount is ex-VAT (the shop's prices exclude tax); VAT is added
+    when taxable. Optionally emails the customer Shopify's invoice / payment link.
+    """
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    data = request.get_json(silent=True) or {}
+    oid = str(order_id).strip()
+    title = " ".join(str(data.get("title") or "").split())[:120]
+    try:
+        amount = round(float(str(data.get("amount") or "").replace("£", "").replace(",", "")), 2)
+    except ValueError:
+        amount = 0
+    if not oid.isdigit():
+        return jsonify({"success": False, "error": "Invalid order"}), 400
+    if not title:
+        return jsonify({"success": False, "error": "Enter a description for the charge"}), 400
+    if amount <= 0:
+        return jsonify({"success": False, "error": "Enter an amount above £0"}), 400
+    taxable = bool(data.get("taxable", True))
+    send_invoice = bool(data.get("send_invoice"))
+
+    def _gql(query, variables):
+        resp = requests.post(
+            f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json",
+            headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
+            json={"query": query, "variables": variables}, timeout=30,
+        )
+        body = resp.json() if resp.ok else {}
+        if not resp.ok or body.get("errors"):
+            raise RuntimeError(f"Shopify error: {str(body.get('errors') or resp.status_code)[:200]}")
+        return body.get("data") or {}
+
+    def _errors(result):
+        return "; ".join(e.get("message", "") for e in (result.get("userErrors") or []))
+
+    try:
+        begin = _gql("""mutation($id: ID!) { orderEditBegin(id: $id) {
+                          calculatedOrder { id } userErrors { field message } } }""",
+                     {"id": f"gid://shopify/Order/{oid}"}).get("orderEditBegin") or {}
+        if _errors(begin):
+            return jsonify({"success": False, "error": _errors(begin)}), 400
+        calc_id = ((begin.get("calculatedOrder") or {}).get("id"))
+        add = _gql("""mutation($id: ID!, $title: String!, $price: MoneyInput!, $taxable: Boolean) {
+                        orderEditAddCustomItem(id: $id, title: $title, price: $price, quantity: 1,
+                                               taxable: $taxable, requiresShipping: false) {
+                          userErrors { field message } } }""",
+                   {"id": calc_id, "title": title, "taxable": taxable,
+                    "price": {"amount": f"{amount:.2f}", "currencyCode": "GBP"}}).get("orderEditAddCustomItem") or {}
+        if _errors(add):
+            return jsonify({"success": False, "error": _errors(add)}), 400
+        staff = get_staff_username() or "staff"
+        commit = _gql("""mutation($id: ID!, $note: String) { orderEditCommit(id: $id, notifyCustomer: false, staffNote: $note) {
+                           order { name totalOutstandingSet { shopMoney { amount } } totalPriceSet { shopMoney { amount } } }
+                           userErrors { field message } } }""",
+                      {"id": calc_id, "note": f"Charge added in BiteBoard by {staff}: {title} £{amount:.2f}"}).get("orderEditCommit") or {}
+        if _errors(commit):
+            return jsonify({"success": False, "error": _errors(commit)}), 400
+        order = commit.get("order") or {}
+        outstanding = float((((order.get("totalOutstandingSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
+        total = float((((order.get("totalPriceSet") or {}).get("shopMoney") or {}).get("amount")) or 0)
+
+        invoice_sent, invoice_error = False, ""
+        if send_invoice and outstanding > 0:
+            inv = _gql("""mutation($id: ID!) { orderInvoiceSend(id: $id) { userErrors { field message } } }""",
+                       {"id": f"gid://shopify/Order/{oid}"}).get("orderInvoiceSend") or {}
+            invoice_error = _errors(inv)
+            invoice_sent = not invoice_error
+        try:
+            from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
+            invalidate_order_access_cache(oid)
+        except Exception:
+            pass
+        print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
+              f"(taxable={taxable}, invoice={'sent' if invoice_sent else 'no'})", flush=True)
+        return jsonify({
+            "success": True, "order": order.get("name"), "title": title, "amount": amount,
+            "total": total, "outstanding": outstanding,
+            "invoice_sent": invoice_sent, "invoice_error": invoice_error,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)[:300]}), 500
+
+
 _ORDER_CUSTOMER_SET = """
 mutation OrderCustomerSet($orderId: ID!, $customerId: ID!) {
   orderCustomerSet(orderId: $orderId, customerId: $customerId) {

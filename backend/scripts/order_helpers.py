@@ -476,7 +476,9 @@ def format_line_item(li: dict) -> dict:
     # When custom.sku is a JSON list of option codes, show the code for the
     # selected option (e.g. Flavour = Cranberry & Raspberry -> M12645).
     sku = resolve_line_item_display_sku(raw_sku, display_properties)
-    is_fee = is_fee_item(title)
+    # Custom charges added to an order (no product, no SKU) count as fees, so
+    # they never get production notes / job sheets of their own.
+    is_fee = is_fee_item(title) or (li.get("variant") is None and not raw_sku)
     unit_price = unit_money.get("amount") or "0.00"
     total = li_money.get("amount") or "0.00"
     quantity = li.get("quantity") or 0

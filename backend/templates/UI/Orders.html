@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/theme.css?v=7" rel="stylesheet">
-    <link rel="stylesheet" href="/static/dark-auto.css?v=1">
+    <link rel="stylesheet" href="/static/dark-auto.css?v=2">
     <script src="/static/theme.js?v=5"></script>
     <link href="/static/office_tracking.css?v=24" rel="stylesheet">
     <style>
@@ -114,6 +114,25 @@
             padding: 3px 0;
             border-bottom: none;
         }
+        .add-charge { margin-top: 10px; }
+        .btn-add-charge, .btn-add-charge-cancel, .btn-add-charge-save {
+            font-family: inherit; font-size: 0.8rem; font-weight: 600; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+            border: 1px solid #d1d5db; background: #fff; color: #374151;
+        }
+        .btn-add-charge[hidden] { display: none; }
+        .btn-add-charge-save { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+        .btn-add-charge-save:disabled { opacity: 0.6; cursor: wait; }
+        .add-charge-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+        .add-charge-form[hidden] { display: none; }
+        .add-charge-form input[type=text] { flex: 1 1 260px; }
+        .add-charge-form input[type=number] { width: 120px; }
+        .add-charge-form input[type=text], .add-charge-form input[type=number] {
+            font-family: inherit; font-size: 0.85rem; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+        }
+        .add-charge-form label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #374151; }
+        .add-charge-msg { width: 100%; font-size: 0.82rem; font-weight: 500; }
+        .add-charge-msg.ok { color: #059669; }
+        .add-charge-msg.err { color: #dc2626; }
         .detail-section-fees h4 {
             margin-bottom: 6px;
         }
@@ -529,12 +548,67 @@
             return html;
         }
 
-        function renderFeesSection(fees) {
-            if (!fees || !fees.length) return '';
+        function renderFeesSection(fees, orderId) {
             let html = '<div class="detail-section detail-section-fees"><h4>Fees</h4>';
-            fees.forEach(li => { html += renderFeeItem(li); });
+            (fees || []).forEach(li => { html += renderFeeItem(li); });
+            html += `<div class="add-charge" data-order-id="${escapeHtml(orderId)}">
+                <button type="button" class="btn-add-charge"><i class="fas fa-plus"></i> Add charge</button>
+                <form class="add-charge-form" hidden>
+                    <input type="text" name="title" maxlength="120" placeholder="Description, e.g. Extra artwork time" required>
+                    <input type="number" name="amount" min="0.01" step="0.01" placeholder="£ ex VAT" required>
+                    <label><input type="checkbox" name="taxable" checked> Add VAT</label>
+                    <label><input type="checkbox" name="send_invoice"> Email the customer a payment link</label>
+                    <button type="submit" class="btn-add-charge-save">Add to order</button>
+                    <button type="button" class="btn-add-charge-cancel">Cancel</button>
+                    <span class="add-charge-msg" hidden></span>
+                </form>
+            </div>`;
             html += '</div>';
             return html;
+        }
+
+        async function submitAddCharge(form) {
+            const wrap = form.closest('.add-charge');
+            const orderId = wrap.dataset.orderId;
+            const msg = form.querySelector('.add-charge-msg');
+            const btn = form.querySelector('.btn-add-charge-save');
+            const title = form.elements.title.value.trim();
+            const amount = parseFloat(form.elements.amount.value);
+            const taxable = form.elements.taxable.checked;
+            const sendInvoice = form.elements.send_invoice.checked;
+            if (!title || !(amount > 0)) return;
+            const order = allOrders.find(o => String(o.id) === String(orderId));
+            const label = `${title} - ${formatGbp(amount)}${taxable ? ' + VAT' : ' (no VAT)'}`;
+            const extra = sendInvoice ? '\n\nThe customer will be emailed a payment link.' : '';
+            if (!confirm(`Add this charge to ${order ? order.name : 'the order'} in Shopify?\n\n${label}${extra}`)) return;
+            btn.disabled = true; btn.textContent = 'Adding...';
+            msg.hidden = true;
+            try {
+                const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/charge`, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, amount, taxable, send_invoice: sendInvoice }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) throw new Error(data.error || ('Request failed: ' + res.status));
+                // Show the new line straight away; the full list refreshes on next load.
+                wrap.insertAdjacentHTML('beforebegin', renderFeeItem({ title, fee_label: title, fee_name: title, total: amount, total_display: formatGbp(amount) }));
+                let note = `Added. New order total ${formatGbp(data.total)}`;
+                if (data.outstanding > 0) note += `, ${formatGbp(data.outstanding)} still to pay`;
+                if (data.invoice_sent) note += ' - payment link emailed';
+                if (data.invoice_error) note += ` - payment link NOT sent: ${data.invoice_error}`;
+                msg.textContent = note + '.';
+                msg.className = 'add-charge-msg ok';
+                msg.hidden = false;
+                form.elements.title.value = '';
+                form.elements.amount.value = '';
+            } catch (err) {
+                msg.textContent = 'Could not add the charge: ' + (err.message || err);
+                msg.className = 'add-charge-msg err';
+                msg.hidden = false;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Add to order';
+            }
         }
 
         function renderAddressBlock(label, address) {
@@ -779,7 +853,7 @@
         function renderOrderDetails(o) {
             let html = '<div class="details-inner">';
             html += renderLineSection('Items', o.order_items || [], 'No items', o.id);
-            html += renderFeesSection(o.fees);
+            html += renderFeesSection(o.fees, o.id);
             html += renderOrderCostSections(o);
             html += renderOrderAddressesSection(o);
             html += renderOrderInfoSection(o);
@@ -1152,6 +1226,8 @@
         }
 
         document.getElementById('content').addEventListener('submit', function(e) {
+            const chargeForm = e.target.closest('.add-charge-form');
+            if (chargeForm) { e.preventDefault(); e.stopPropagation(); submitAddCharge(chargeForm); return; }
             const form = e.target.closest('.order-info-form');
             if (!form) return;
             e.preventDefault();
@@ -1168,6 +1244,19 @@
             else if (kind === 'sage') printSageInfo(sel.dataset.orderId);
         });
         document.getElementById('content').addEventListener('click', function(e) {
+            const addCharge = e.target.closest('.btn-add-charge, .btn-add-charge-cancel');
+            if (addCharge) {
+                const box = addCharge.closest('.add-charge');
+                const form = box.querySelector('.add-charge-form');
+                const opening = addCharge.classList.contains('btn-add-charge');
+                form.hidden = !opening;
+                box.querySelector('.btn-add-charge').hidden = opening;
+                if (opening) {
+                    form.querySelector('.add-charge-msg').hidden = true;
+                    form.elements.title.focus();
+                }
+                return;
+            }
             const artBtn = e.target.closest('.btn-print-art-job-sheet');
             if (artBtn) {
                 e.preventDefault();

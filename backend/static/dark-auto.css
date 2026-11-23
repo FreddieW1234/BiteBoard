@@ -361,6 +361,14 @@ html[data-theme="dark"] .status-legend { background-color: #161b22; border-color
 html[data-theme="dark"] .sort-select { border-color: #30363d; color: #c9d1d9; background-color: #161b22; }
 html[data-theme="dark"] .orders-section-heading { color: #c9d1d9; }
 html[data-theme="dark"] .orders-section-heading i { color: #75fad1; }
+html[data-theme="dark"] .btn-add-charge,
+html[data-theme="dark"] .btn-add-charge-cancel,
+html[data-theme="dark"] .btn-add-charge-save { border-color: #30363d; background-color: #161b22; color: #c9d1d9; }
+html[data-theme="dark"] .add-charge-form input[type=text],
+html[data-theme="dark"] .add-charge-form input[type=number] { border-color: #30363d; }
+html[data-theme="dark"] .add-charge-form label { color: #c9d1d9; }
+html[data-theme="dark"] .add-charge-msg.ok { color: #75fad1; }
+html[data-theme="dark"] .add-charge-msg.err { color: #eb8484; }
 html[data-theme="dark"] .order-summary-total { border-top-color: #30363d; }
 html[data-theme="dark"] .btn-print-art-job-sheet,
 html[data-theme="dark"] .btn-print-production-note { background-color: #161b22; color: #c9d1d9; border-color: #30363d; }

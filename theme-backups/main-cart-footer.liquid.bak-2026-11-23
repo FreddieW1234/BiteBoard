@@ -1,0 +1,1526 @@
+    {%- if cart != empty -%}
+    {{ 'component-cart.css' | asset_url | stylesheet_tag }}
+    {{ 'component-totals.css' | asset_url | stylesheet_tag }}
+    {{ 'component-price.css' | asset_url | stylesheet_tag }}
+    {{ 'component-discounts.css' | asset_url | stylesheet_tag }}
+
+    {%- style -%}
+        .section-{{ section.id }}-padding {
+        padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+        padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+        }
+
+        @media screen and (min-width: 750px) {
+        .section-{{ section.id }}-padding {
+            padding-top: {{ section.settings.padding_top }}px;
+            padding-bottom: {{ section.settings.padding_bottom }}px;
+        }
+        }
+        
+        /* Override cart footer CSS rules */
+        .cart__footer > * {
+        width: auto !important;
+        }
+
+        .cart-footer-layout {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 20px;
+        width: 100% !important;
+        }
+
+        .cart-footer-fees {
+        flex: 0 0 480px;
+        max-width: 480px;
+        align-self: flex-start;
+        }
+        
+        /* Keep the margin for right alignment but reduce it */
+        .cart-footer-layout > * + * {
+        margin-left: 0 !important;
+        }
+        
+        /* Make checkout button right-aligned like the text above */
+        .cart__ctas {
+        text-align: right !important;
+        }
+        
+        /* Constrain totals/checkout section */
+        .cart-footer-layout .cart__blocks {
+        flex: 0 0 300px;
+        max-width: 300px !important;
+        margin-left: auto !important;
+        }
+        
+        /* Ensure the checkout button itself is right-aligned */
+        .cart__checkout-button {
+        margin-left: auto !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: 320px !important;
+        }
+        
+        /* More specific selector to override theme CSS */
+        .cart__ctas .cart__checkout-button {
+        width: 100% !important;
+        max-width: 320px !important;
+        min-width: 0 !important;
+        }
+        
+        /* Ensure popup is absolutely on top of everything including site footer */
+        #nameAddressPopup {
+        z-index: 2147483647 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        }
+        
+        /* Override any theme CSS that might interfere */
+        body #nameAddressPopup,
+        html #nameAddressPopup,
+        * #nameAddressPopup {
+        z-index: 2147483647 !important;
+        }
+        
+        /* Additional popup positioning to ensure it's above everything */
+        #nameAddressPopup {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 2147483647 !important;
+        }
+        
+        /* Ensure popup is moved to body for highest stacking context */
+        body > #nameAddressPopup {
+        z-index: 2147483647 !important;
+        }
+
+        .cart-footer-fields {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        width: auto !important;
+        flex: 1 1 640px;
+        min-width: 0;
+        }
+
+        .cart-footer-fields__col {
+        flex: 0 0 280px;
+        max-width: 280px;
+        }
+
+        .cart-footer-fields__col input,
+        .cart-footer-fields__col textarea,
+        .cart-footer-fields__col button {
+        width: 100%;
+        box-sizing: border-box;
+        }
+
+        .cart-footer-field-label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #333;
+        line-height: 1.2;
+        min-height: 17px;
+        }
+
+        .cart-footer-fields__notes {
+        min-height: 132px;
+        resize: vertical;
+        }
+
+        .origination-fee-summary {
+        margin: 0 0 1rem 0;
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border: 1px solid #e3e3e3;
+        border-radius: 8px;
+        box-sizing: border-box;
+        }
+
+        .origination-fee-summary__title {
+        font-size: 0.78em;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #666;
+        margin-bottom: 0.5rem;
+        }
+
+        .origination-fee-summary__row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 0.2rem 0;
+        font-size: 0.85em;
+        font-style: italic;
+        font-weight: 500;
+        color: #888;
+        line-height: 1.35;
+        }
+
+        .origination-fee-summary__amount {
+        font-style: normal;
+        white-space: nowrap;
+        }
+
+        .origination-fee-summary__label {
+        flex: 1;
+        min-width: 0;
+        }
+
+        .origination-fee-help {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        margin-left: 0.15rem;
+        border-radius: 50%;
+        border: 1px solid #888;
+        font-size: 10px;
+        font-weight: 700;
+        font-style: normal;
+        line-height: 1;
+        color: #888;
+        cursor: help;
+        position: relative;
+        vertical-align: middle;
+        top: -1px;
+        }
+
+        .origination-fee-help__tooltip {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: 240px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: #333;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 400;
+        font-style: normal;
+        line-height: 1.4;
+        text-align: left;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease, visibility 0.15s ease;
+        z-index: 10;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .origination-fee-help:hover .origination-fee-help__tooltip,
+        .origination-fee-help:focus .origination-fee-help__tooltip,
+        .origination-fee-help:focus-visible .origination-fee-help__tooltip {
+        opacity: 1;
+        visibility: visible;
+        }
+
+        .required-empty {
+        background-color: #e8f4fc !important;
+        }
+
+        .required-filled {
+        background-color: #fff !important;
+        }
+
+        .required-btn-empty {
+        background-color: #b8d4f0 !important;
+        color: #333 !important;
+        }
+
+        .required-btn-filled {
+        background-color: #9e9e9e !important;
+        color: #fff !important;
+        }
+
+        .product-address-toggle {
+        display: flex;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 8px;
+        }
+
+        .product-address-toggle.required-empty {
+        border-color: #b8d4f0;
+        box-shadow: 0 0 0 2px #e8f4fc;
+        }
+
+        .toggle-btn {
+        flex: 1;
+        padding: 12px 8px;
+        border: none;
+        background: #f5f5f5;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        font-family: inherit;
+        transition: background-color 0.2s ease, color 0.2s ease;
+        }
+
+        .toggle-btn.selected {
+        background: #5977ED;
+        color: #fff;
+        }
+
+        .cart-footer-action-btn {
+        font-size: 1em;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 16px 12px;
+        transition: background-color 0.3s ease;
+        border: none;
+        height: auto;
+        min-height: 50px;
+        text-align: center;
+        line-height: 1.2;
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+        }
+
+        #delivery-btn {
+        min-height: 40px;
+        height: 40px;
+        padding: 8px 12px;
+        border-radius: 15px;
+        }
+
+        #deliveryPopup {
+        z-index: 2147483647 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        }
+
+        @keyframes validation-pulse {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(89, 119, 237, 0);
+            transform: scale(1);
+        }
+        50% {
+            box-shadow: 0 0 0 5px rgba(89, 119, 237, 0.35);
+            transform: scale(1.02);
+        }
+        }
+
+        .validation-pulse-once {
+        animation: validation-pulse 0.65s ease-in-out 1;
+        }
+        /* ---------- Delivery method toggle (Shipping / Pickup) ---------- */
+        .delivery-method-toggle {
+        display: flex;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 0;
+        }
+        .method-btn {
+        flex: 1;
+        padding: 12px 8px;
+        border: none;
+        background: #f5f5f5;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+        font-family: inherit;
+        color: #333;
+        transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .method-btn.selected {
+        background: #5977ED;
+        color: #fff;
+        }
+        .method-btn:focus-visible { outline: 2px solid #14202e; outline-offset: -2px; }
+
+        /* ---------- Collection notice (button shown when Pickup is chosen + popup) ---------- */
+        #pickupDetails .bpcol-open { max-width: none; margin-left: 0; }
+        .bpcol-open {
+        width: 100%; max-width: 320px; margin-left: auto; display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px; border: 1.5px solid #ef6ba8; border-radius: 10px; background: #fff;
+        color: #14202e; font: inherit; font-size: 14px; line-height: 1.3; cursor: pointer; text-align: left;
+        box-sizing: border-box;
+        }
+        .bpcol-open svg { color: #ef6ba8; flex: none; }
+        .bpcol-open:hover { background: #fdf0f6; }
+        .bpcol-open:focus-visible { outline: 2px solid #14202e; outline-offset: 2px; }
+        .bpcol-label { display: flex; flex-direction: column; }
+        .bpcol-label strong { font-size: 15px; }
+        .bpcol-label span { text-decoration: underline; text-underline-offset: 2px; color: #4a5666; }
+
+        .bpcol-dialog { border: 0; padding: 0; border-radius: 16px; width: min(600px, calc(100% - 32px)); max-height: calc(100% - 48px); overflow: auto; overscroll-behavior: contain; color: #14202e; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
+        .bpcol-dialog::backdrop { background: rgba(20, 32, 46, 0.55); }
+        .bpcol-inner { position: relative; padding: 28px 28px 22px; font-size: 15px; line-height: 1.5; text-align: left; }
+        .bpcol-inner h2 { margin: 0 32px 10px 0; font-size: 22px; }
+        .bpcol-inner h3 { margin: 18px 0 6px; font-size: 16px; }
+        .bpcol-inner p { margin: 0 0 10px; }
+        .bpcol-inner ul { margin: 0; padding-left: 20px; }
+        .bpcol-inner li { margin: 0 0 6px; }
+        .bpcol-inner address { font-style: normal; margin-bottom: 12px; }
+        .bpcol-inner a { color: inherit; }
+        .bpcol-next { margin-top: 14px !important; padding: 10px 12px; background: #fdf0f6; border-left: 3px solid #ef6ba8; border-radius: 6px; }
+        .bpcol-x { position: absolute; top: 14px; right: 16px; border: 0; background: none; font-size: 28px; line-height: 1; cursor: pointer; color: #14202e; }
+        .bpcol-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 18px; }
+        .bpcol-actions button { font: inherit; font-size: 15px; padding: 11px 18px; border-radius: 10px; cursor: pointer; }
+        .bpcol-close-btn { border: 1.5px solid #c9ced6; background: #fff; color: #14202e; }
+        .bpcol-go { border: 0; background: #ef6ba8; color: #fff; font-weight: 600; }
+
+        /* ---------- Desktop layout: fields on the left; fees, totals, collection
+           button and Check out stacked as one column on the right ---------- */
+        @media screen and (min-width: 990px) {
+        .cart-footer-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            grid-template-rows: auto 1fr;
+            column-gap: 40px;
+            row-gap: 16px;
+            align-items: start;
+        }
+        .cart-footer-layout > .cart-footer-fields { grid-column: 1; grid-row: 1 / span 2; }
+        .cart-footer-layout > .cart-footer-fees { grid-column: 2; grid-row: 1; flex: none; max-width: none; width: 100% !important; }
+        .cart-footer-layout > .cart-footer-fees .origination-fee-summary { margin: 0; }
+        .cart-footer-layout > .cart__blocks { grid-column: 2; grid-row: 2; flex: none; max-width: none !important; width: 100% !important; margin-left: 0 !important; }
+        .cart-footer-layout .cart__ctas .cart__checkout-button,
+        .cart-footer-layout .bpcol-open { max-width: none !important; }
+        }
+
+        @media screen and (max-width: 749px) {
+        .bpcol-open { max-width: none; }
+        .bpcol-inner { padding: 22px 18px 18px; font-size: 14.5px; }
+        .bpcol-actions button { flex: 1 1 auto; }
+        }
+    {%- endstyle -%}
+
+    <div class="gradient color-{{ section.settings.color_scheme }}{% if cart == empty %} is-empty{% endif %}" id="main-cart-footer" data-id="{{ section.id }}">
+        <div class="page-width">
+        <div class="cart__footer isolate section-{{ section.id }}-padding">
+            <div class="cart-footer-layout">
+            {%- if settings.show_cart_note -%}
+            <div class="cart-footer-fields">
+                <div class="cart-footer-fields__col">
+                    <label for="po-number" class="cart-footer-field-label">PO Number *</label>
+                    <input
+                    type="text"
+                    name="po_number"
+                    form="cart"
+                    id="po-number"
+                    placeholder="Enter PO Number"
+                    class="required-empty"
+                    style="border-radius: 15px !important; height: 40px; padding: 8px 12px; border: 1px solid #ccc;"
+                    >
+
+                    <label class="cart-footer-field-label" style="margin-top: 15px;">Delivery method *</label>
+                    <div class="delivery-method-toggle" id="deliveryMethodToggle" role="group" aria-label="Delivery method">
+                        <button type="button" class="method-btn selected" data-method="shipping" aria-pressed="true" onclick="selectDeliveryMethod('shipping')">Shipping</button>
+                        <button type="button" class="method-btn" data-method="pickup" aria-pressed="false" onclick="selectDeliveryMethod('pickup')">Pickup</button>
+                    </div>
+
+                    <div id="pickupDetails" style="display: none; margin-top: 15px;">
+                    <button type="button" class="bpcol-open" onclick="openCollectionPopup()" aria-haspopup="dialog">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3 7l9-4 9 4v10l-9 4-9-4V7zm9-1.8L6.2 7.7 12 10.3l5.8-2.6L12 5.2zM5 9.2v6.5l6 2.7v-6.5L5 9.2zm8 9.2l6-2.7V9.2l-6 2.7v6.5z"/></svg>
+                        <span class="bpcol-label"><strong>Collecting your order?</strong><span>Read our collection process</span></span>
+                    </button>
+                    </div>
+
+                    <div id="shippingDetails" style="margin-top: 15px;">
+                    <button
+                    type="button"
+                    id="delivery-btn"
+                    class="cart-footer-action-btn required-btn-empty"
+                    onclick="openDeliveryPopup()"
+                    >
+                    Delivery Contact Details *
+                    </button>
+
+                    <div id="deliveryPreview" style="display: none; margin-top: 10px; padding: 15px; background-color: #f8f8f8; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <div id="previewDeliveryName" style="margin-bottom: 8px;"></div>
+                    <div id="previewDeliveryPhone" style="margin-bottom: 8px;"></div>
+                    <div id="previewDeliveryNotes"></div>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="cart-footer-fields__col">
+                    <label class="cart-footer-field-label">Name and address on product:</label>
+                    <div class="product-address-toggle" id="productAddressToggle">
+                        <button type="button" class="toggle-btn selected" data-value="bite" onclick="selectProductAddressChoice('bite')">Bite Promotions</button>
+                        <button type="button" class="toggle-btn" data-value="own" onclick="selectProductAddressChoice('own')">Custom</button>
+                    </div>
+
+                    <div id="yourOwnAddressSection" style="display: none; margin-top: 15px;">
+                    <button
+                    type="button"
+                    name="product_name"
+                    id="product-name"
+                    class="cart-footer-action-btn required-btn-empty"
+                    onclick="openNameAddressPopup()"
+                    >
+                    Company name and address to show on product *
+                    </button>
+
+                    <div id="nameAddressPreview" style="display: none; margin-top: 10px; padding: 15px; background-color: #f8f8f8; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <div id="previewName" style="margin-bottom: 8px;"></div>
+                    <div id="previewAddress" style="margin-bottom: 2px;"></div>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="cart-footer-fields__col">
+                    <label for="notes" class="cart-footer-field-label">Notes (optional)</label>
+                    <textarea
+                        id="notes"
+                        name="notes"
+                        form="cart"
+                        class="cart-footer-fields__notes"
+                        placeholder="Enter any additional notes..."
+                        style="border-radius: 15px; padding: 8px 12px; border: 1px solid #ccc; font-family: inherit; font-size: 14px; line-height: 1.4;"
+                        rows="5"
+                    ></textarea>
+                    <input type="hidden" id="shopify-order-notes" name="note" form="cart">
+                </div>
+                
+                <!-- Delivery Popup -->
+                <div id="deliveryPopup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 2147483647;">
+                    <div style="background: white; padding: 30px; border-radius: 15px; width: 400px; max-width: 90%; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 18px; text-align: center;">Delivery Details</h3>
+
+                    <div style="margin-bottom: 20px;">
+                        <label for="popup-delivery-name" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Name: *</label>
+                        <input
+                        type="text"
+                        id="popup-delivery-name"
+                        placeholder="Enter delivery contact name"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: inherit;"
+                        >
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label for="popup-delivery-phone" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Phone Number: *</label>
+                        <input
+                        type="tel"
+                        id="popup-delivery-phone"
+                        placeholder="Enter delivery contact phone number"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: inherit;"
+                        >
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <label for="popup-delivery-notes" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Delivery Notes (Optional)</label>
+                        <textarea
+                        id="popup-delivery-notes"
+                        placeholder="Enter any delivery notes..."
+                        rows="3"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; resize: vertical; font-family: inherit;"
+                        ></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; justify-content: center;">
+                        <button
+                        type="button"
+                        onclick="saveDelivery()"
+                        style="background: #5977ED; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+                        onmouseover="this.style.background='#5955BB'"
+                        onmouseout="this.style.background='#5977ED'"
+                        >
+                        Save
+                        </button>
+                        <button
+                        type="button"
+                        onclick="closeDeliveryPopup()"
+                        style="background: #888; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+                        onmouseover="this.style.background='#666'"
+                        onmouseout="this.style.background='#888'"
+                        >
+                        Cancel
+                        </button>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Name and Address Popup -->
+                <div id="nameAddressPopup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 2147483647;">
+                    <div style="background: white; padding: 30px; border-radius: 15px; width: 400px; max-width: 90%; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);">
+                    <h3 style="margin: 0 0 20px 0; color: #333; font-size: 18px; text-align: center;">Enter Name and Address</h3>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label for="popup-name" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Company name on product: *</label>
+                        <input
+                        type="text"
+                        id="popup-name"
+                        placeholder="Enter name to show on product"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: inherit;"
+                        >
+                    </div>
+                    
+                    <div style="margin-bottom: 25px;">
+                        <label for="popup-address" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Company address: *</label>
+                        <textarea
+                        id="popup-address"
+                        placeholder="Enter address"
+                        rows="4"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; resize: vertical; font-family: inherit;"
+                        ></textarea>
+                    </div>
+                    
+                    <div style="margin-bottom: 25px;">
+                        <label for="popup-postcode" style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Company post code: *</label>
+                        <input
+                        type="text"
+                        id="popup-postcode"
+                        placeholder="Enter post code"
+                        style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: inherit;"
+                        >
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; justify-content: center;">
+                        <button
+                        type="button"
+                        onclick="saveNameAddress()"
+                        style="background: #5977ED; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+                        onmouseover="this.style.background='#5955BB'"
+                        onmouseout="this.style.background='#5977ED'"
+                        >
+                        Save
+                        </button>
+                        <button
+                        type="button"
+                        onclick="closeNameAddressPopup()"
+                        style="background: #888; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+                        onmouseover="this.style.background='#666'"
+                        onmouseout="this.style.background='#888'"
+                        >
+                        Cancel
+                        </button>
+                    </div>
+                    </div>
+                </div>
+            </div>
+            {%- endif -%}
+
+            {%- comment -%} Fees summary — grouped by product, fees high-to-low per product {%- endcomment -%}
+            {%- assign _fee_handles = 'origination-fee,foiling-fee,mailer-fee,mailer-packing-fee,duplex-fee' | split: ',' -%}
+            {%- assign has_fee_lines = false -%}
+            {%- for item in cart.items -%}
+              {%- if _fee_handles contains item.product.handle -%}{%- assign has_fee_lines = true -%}{%- break -%}{%- endif -%}
+            {%- endfor -%}
+            {%- if has_fee_lines -%}
+              {%- assign fee_products = '' -%}
+              {%- for item in cart.items -%}
+                {%- if _fee_handles contains item.product.handle -%}
+                  {%- assign _p = item.properties._for_product | default: item.product.title -%}
+                  {%- unless fee_products contains _p -%}
+                    {%- if fee_products == '' -%}{%- assign fee_products = _p -%}{%- else -%}{%- assign fee_products = fee_products | append: '~~' | append: _p -%}{%- endif -%}
+                  {%- endunless -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- assign fee_product_list = fee_products | split: '~~' -%}
+              <div class="cart-footer-fees">
+                <div class="origination-fee-summary">
+                  <div class="origination-fee-summary__title">Fees</div>
+                  {%- for prod in fee_product_list -%}
+                   <div class="origination-fee-summary__product" style="margin-top:10px; margin-bottom:2px; font-size:13px; font-weight:600; font-style:italic; color:#777;">{{ prod | escape }}</div>
+                    {%- assign pcount = 0 -%}
+                    {%- for item in cart.items -%}
+                      {%- if _fee_handles contains item.product.handle -%}
+                        {%- assign _p = item.properties._for_product | default: item.product.title -%}
+                        {%- if _p == prod -%}{%- assign pcount = pcount | plus: 1 -%}{%- endif -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                    {%- assign shown_keys = '' -%}
+                    {%- for i in (1..pcount) -%}
+                      {%- assign best = null -%}
+                      {%- assign best_price = -1 -%}
+                      {%- for item in cart.items -%}
+                        {%- if _fee_handles contains item.product.handle -%}
+                          {%- assign _p = item.properties._for_product | default: item.product.title -%}
+                          {%- if _p == prod -%}
+                            {%- unless shown_keys contains item.key -%}
+                              {%- if item.final_line_price > best_price -%}
+                                {%- assign best = item -%}
+                                {%- assign best_price = item.final_line_price -%}
+                              {%- endif -%}
+                            {%- endunless -%}
+                          {%- endif -%}
+                        {%- endif -%}
+                      {%- endfor -%}
+                      {%- if best -%}
+                        {%- assign shown_keys = shown_keys | append: ',' | append: best.key -%}
+                        {%- assign h = best.product.handle -%}
+                        <div class="origination-fee-summary__row" style="padding-left:8px;">
+                          <span class="origination-fee-summary__label">
+                            {%- if h == 'origination-fee' -%}Origination Fee <span class="origination-fee-help" tabindex="0" role="button" aria-label="Origination fee information">?<span class="origination-fee-help__tooltip">The origination fee is for setting up our die cutting &amp; finishing machines for products that require such processes.</span></span>
+                            {%- elsif h == 'foiling-fee' -%}Foiling
+                            {%- elsif h == 'mailer-fee' -%}Mailer
+                            {%- elsif h == 'mailer-packing-fee' -%}Mailer Packing
+                            {%- elsif h == 'duplex-fee' -%}Double-Sided Print
+                            {%- endif -%}
+                          </span>
+                          <span class="origination-fee-summary__amount">{{ best.final_line_price | money }}</span>
+                        </div>
+                      {%- endif -%}
+                    {%- endfor -%}
+                  {%- endfor -%}
+                </div>
+              </div>
+            {%- endif -%}
+
+            <div class="cart__blocks">
+            {% for block in section.blocks %}
+                {%- case block.type -%}
+                {%- when '@app' -%}
+                    {% render block %}
+                {%- when 'subtotal' -%}
+                    <div class="js-contents" {{ block.shopify_attributes }}>
+                    <div>
+                        {%- if cart.cart_level_discount_applications.size > 0 -%}
+                        <ul class="discounts list-unstyled" role="list" aria-label="{{ 'customer.order.discount' | t }}">
+                            {%- for discount in cart.cart_level_discount_applications -%}
+                            <li class="discounts__discount discounts__discount--position">
+                                {{- 'icon-discount.svg' | inline_asset_content -}}
+                                {%- if discount.title contains 'Origination' -%}Origination{%- else -%}{{ discount.title | escape }}{%- endif -%}
+                                (-{{ discount.total_allocated_amount | money }})
+                            </li>
+                            {%- endfor -%}
+                        </ul>
+                        {%- endif -%}
+                    </div>
+
+                    <div class="totals">
+                        <h2 class="totals__total">{{ 'sections.cart.estimated_total' | t }}</h2>
+                        <p class="totals__total-value">{{ cart.total_price | money }}</p>
+                    </div>
+
+                    <small class="tax-note caption-large rte">
+                        {%- if cart.duties_included and cart.taxes_included -%}
+                        {%- if shop.shipping_policy.body == blank -%}
+                            {{ 'sections.cart.duties_and_taxes_included_shipping_at_checkout_without_policy' | t }}
+                        {%- else -%}
+                            {{
+                            'sections.cart.duties_and_taxes_included_shipping_at_checkout_with_policy_html'
+                            | t: link: shop.shipping_policy.url
+                            }}
+                        {%- endif -%}
+                        {%- elsif cart.duties_included == false and cart.taxes_included -%}
+                        {%- if shop.shipping_policy.body == blank -%}
+                            {{ 'sections.cart.taxes_included_shipping_at_checkout_without_policy' | t }}
+                        {%- else -%}
+                            {{
+                            'sections.cart.taxes_included_shipping_at_checkout_with_policy_html'
+                            | t: link: shop.shipping_policy.url
+                            }}
+                        {%- endif -%}
+                        {%- elsif cart.duties_included and cart.taxes_included == false -%}
+                        {%- if shop.shipping_policy.body == blank -%}
+                            {{ 'sections.cart.duties_included_taxes_at_checkout_shipping_at_checkout_without_policy' | t }}
+                        {%- else -%}
+                            {{
+                            'sections.cart.duties_included_taxes_at_checkout_shipping_at_checkout_with_policy_html'
+                            | t: link: shop.shipping_policy.url
+                            }}
+                        {%- endif -%}
+                        {%- elsif cart.duties_included == false and cart.taxes_included == false -%}
+                        {%- if shop.shipping_policy.body == blank -%}
+                            {{ 'sections.cart.taxes_at_checkout_shipping_at_checkout_without_policy' | t }}
+                        {%- else -%}
+                            {{
+                            'sections.cart.taxes_at_checkout_shipping_at_checkout_with_policy_html'
+                            | t: link: shop.shipping_policy.url
+                            }}
+                        {%- endif -%}
+                        {%- endif -%}
+                    </small>
+                    </div>
+                {%- when 'buttons' -%}
+                    <div class="cart__ctas" {{ block.shopify_attributes }}>
+                    <button
+                        type="submit"
+                        id="checkout"
+                        class="cart__checkout-button button"
+                        name="checkout"
+                        {% if cart == empty %}
+                        disabled
+                        {% endif %}
+                        form="cart"
+                    >
+                        {{ 'sections.cart.checkout' | t }}
+                    </button>
+                    </div>
+
+                    {%- if additional_checkout_buttons -%}
+                    <div class="cart__dynamic-checkout-buttons additional-checkout-buttons">
+                        {{ content_for_additional_checkout_buttons }}
+                    </div>
+                    {%- endif -%}
+                {%- endcase -%}
+            {% endfor %}
+
+            <div id="cart-errors"></div>
+            </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    {%- comment -%} Artwork templates — detect cart products that have custom.artworktemplates set {%- endcomment -%}
+    {%- assign artwork_titles_string = '' -%}
+    {%- for item in cart.items -%}
+        {%- assign _artwork_templates = item.product.metafields.custom.artworktemplates -%}
+        {%- if _artwork_templates != blank and _artwork_templates.value != blank -%}
+        {%- unless artwork_titles_string contains item.product.title -%}
+            {%- assign artwork_titles_string = artwork_titles_string | append: item.product.title | append: '~|~' -%}
+        {%- endunless -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {%- assign artwork_titles = artwork_titles_string | split: '~|~' -%}
+
+    <!-- Artwork Upload Reminder Popup -->
+    <div id="artworkReminderPopup" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 2147483647;">
+        <div style="background: white; padding: 30px; border-radius: 15px; width: 560px; max-width: 92%; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);">
+        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 20px; text-align: center;">Your order needs artwork</h3>
+        <p id="artworkReminderIntroWrap" style="margin: 0 0 20px 0; color: #555; font-size: 14px; line-height: 1.5; text-align: center;">
+            <span id="artworkReminderIntro"></span>
+        </p>
+
+        <ul id="artworkReminderProductList" style="margin: 0 0 22px 0; padding: 14px 18px 14px 34px; background-color: #f4f6ff; border: 1px solid #dde3ff; border-radius: 10px; color: #333; font-size: 14px; line-height: 1.6;"></ul>
+
+        <div style="background-color: #fff8e6; border: 1px solid #ffe1a3; border-radius: 10px; padding: 16px 18px; margin-bottom: 22px;">
+            <div style="font-weight: 700; color: #333; margin-bottom: 10px; font-size: 14px;">After you have placed your order:</div>
+            <ol style="margin: 0; padding-left: 20px; color: #555; font-size: 14px; line-height: 1.7;">
+            <li>
+                Come back to our site and click the account icon
+                <span style="display: inline-flex; vertical-align: middle; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid #ccc; border-radius: 50%; margin: 0 2px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                </span>
+                at the top right of the page to reach your orders.
+            </li>
+            <li>Select the order you have just placed.</li>
+            <li>Click the <strong>Upload Artwork</strong> button and send us your files.</li>
+            </ol>
+        </div>
+
+        <div style="background-color: #f0f7f2; border: 1px solid #cfe6d8; border-radius: 10px; padding: 16px 18px; margin-bottom: 25px;">
+            <div style="font-weight: 700; color: #333; margin-bottom: 6px; font-size: 14px;">Then look out for your proofs</div>
+            <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6;">
+            Once we have prepared your proofs you will need to return to that same order page to <strong>review and approve</strong> them. We cannot begin production until your artwork is uploaded and your proofs are approved.
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+            <button
+            type="button"
+            onclick="proceedToCheckoutFromArtworkPopup()"
+            style="background: #5977ED; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+            onmouseover="this.style.background='#5955BB'"
+            onmouseout="this.style.background='#5977ED'"
+            >
+            I understand — continue to checkout
+            </button>
+            <button
+            type="button"
+            onclick="closeArtworkReminderPopup()"
+            style="background: #888; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; transition: background-color 0.3s ease;"
+            onmouseover="this.style.background='#666'"
+            onmouseout="this.style.background='#888'"
+            >
+            Back to basket
+            </button>
+        </div>
+        </div>
+    </div>
+
+    <!-- Collection Procedure Popup -->
+    <dialog id="collectionPopup" class="bpcol-dialog" aria-labelledby="collectionPopupTitle">
+        <div class="bpcol-inner">
+        <button type="button" class="bpcol-x" aria-label="Close" onclick="closeCollectionPopup()">&times;</button>
+        <h2 id="collectionPopupTitle">Collecting your order</h2>
+        <p>To collect your order you will need to follow the step-by-step process below to receive your order on time.</p>
+        <h3>Our collection procedure</h3>
+        <ul>
+            <li>We will provide a collection date once your proof is approved.</li>
+            <li>We will provide a collection reference for your driver to confirm on arrival.</li>
+            <li>You will need to confirm which courier company will be collecting on your behalf. This is required 24 hours before the collection date.</li>
+            <li>Once you receive your collection reference, you will need to pass this on to your driver.</li>
+            <li>We will require delivery labelling at least 24 hours before the collection date. This will need to be sent to us by email.</li>
+            <li>When your driver arrives on the date of collection, they will need to provide the collection reference number.</li>
+            <li>We will hand over your order when the driver provides the correct reference number.</li>
+            <li>Our collection department is closed from 1pm to 1.30pm and closes at 4pm. We may not be able to hand over your order if your driver arrives late, so please inform your courier company of this.</li>
+            <li>Please contact us for shipping box dimensions and weight.</li>
+        </ul>
+        <h3>Our collection address</h3>
+        <address>The Chocolate Factory<br>3 Kenfig Industrial Estate<br>Port Talbot<br>South Wales<br>SA13 2PE</address>
+        <p>Please call <a href="tel:01792293689">01792 293689</a> or email <a href="mailto:sales@bitepromotions.co.uk">sales@bitepromotions.co.uk</a> if you require further information.</p>
+        <p class="bpcol-next"><strong>At checkout, choose <em>Pick up</em> as your delivery method.</strong></p>
+        <div class="bpcol-actions">
+            <button type="button" class="bpcol-close-btn" onclick="closeCollectionPopup()">Close</button>
+            <button type="button" class="bpcol-go" onclick="proceedToCheckoutFromCollectionPopup()">Continue to checkout</button>
+        </div>
+        </div>
+    </dialog>
+
+
+    <script>
+        /* ---------- Collection procedure popup ---------- */
+        function openCollectionPopup() {
+        const popup = document.getElementById('collectionPopup');
+        if (!popup) return;
+        if (popup.parentNode !== document.body) document.body.appendChild(popup);
+        if (typeof popup.showModal === 'function') {
+            if (!popup.open) popup.showModal();
+        } else {
+            popup.setAttribute('open', '');
+        }
+        }
+
+        function closeCollectionPopup() {
+        const popup = document.getElementById('collectionPopup');
+        if (!popup) return;
+        if (typeof popup.close === 'function') popup.close(); else popup.removeAttribute('open');
+        }
+
+        // Goes through the normal checkout checks (PO number, delivery details,
+        // artwork reminder) exactly as if Check out had been clicked.
+        function proceedToCheckoutFromCollectionPopup() {
+        closeCollectionPopup();
+        const cartForm = document.getElementById('cart');
+        const checkoutButton = document.getElementById('checkout');
+        if (!cartForm) return;
+        if (typeof cartForm.requestSubmit === 'function' && checkoutButton) {
+            cartForm.requestSubmit(checkoutButton);
+        } else if (checkoutButton) {
+            checkoutButton.click();
+        }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+        const popup = document.getElementById('collectionPopup');
+        if (popup) {
+            // Close when clicking the dimmed area outside the box
+            popup.addEventListener('click', function (e) { if (e.target === popup) closeCollectionPopup(); });
+        }
+        });
+
+        /* ---------- Delivery method (Shipping / Pickup) ---------- */
+        window.deliveryMethod = 'shipping';
+
+        function selectDeliveryMethod(method) {
+        window.deliveryMethod = method;
+
+        document.querySelectorAll('.method-btn').forEach(function (btn) {
+            const on = btn.dataset.method === method;
+            btn.classList.toggle('selected', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+
+        const shipping = document.getElementById('shippingDetails');
+        const pickup = document.getElementById('pickupDetails');
+        if (shipping) shipping.style.display = method === 'shipping' ? 'block' : 'none';
+        if (pickup) pickup.style.display = method === 'pickup' ? 'block' : 'none';
+
+        clearValidationMessage();
+        updateRequiredFieldStates();
+        }
+
+        window.productNameChoice = 'bite';
+        window.savedName = 'Bite Promotions';
+        window.savedDeliveryName = '';
+        window.savedDeliveryPhone = '';
+        window.savedDeliveryNotes = '';
+
+        /* ---------- Artwork upload reminder ---------- */
+        window.biteArtworkProducts = {{ artwork_titles | json }};
+        window.biteArtworkAcknowledged = false;
+        let artworkReminderOriginalContainer = null;
+
+        function openArtworkReminderPopup() {
+        const popup = document.getElementById('artworkReminderPopup');
+        if (!popup) return;
+
+        const list = document.getElementById('artworkReminderProductList');
+        const intro = document.getElementById('artworkReminderIntro');
+        const products = window.biteArtworkProducts || [];
+
+        if (intro) {
+            intro.textContent = products.length === 1
+            ? 'The following item in your basket needs artwork from you before we can start production:'
+            : 'The following items in your basket need artwork from you before we can start production:';
+        }
+
+        if (list) {
+            list.innerHTML = products.map(function (name) {
+            const li = document.createElement('li');
+            li.textContent = name;
+            return li.outerHTML;
+            }).join('');
+        }
+
+        artworkReminderOriginalContainer = popup.parentNode;
+        if (popup.parentNode !== document.body) {
+            document.body.appendChild(popup);
+        }
+
+        popup.style.display = 'flex';
+        popup.style.alignItems = 'center';
+        popup.style.justifyContent = 'center';
+        document.body.style.overflow = 'hidden';
+        }
+
+        function closeArtworkReminderPopup() {
+        const popup = document.getElementById('artworkReminderPopup');
+        if (!popup) return;
+
+        popup.style.display = 'none';
+        document.body.style.overflow = 'auto';
+
+        if (artworkReminderOriginalContainer && popup.parentNode === document.body) {
+            artworkReminderOriginalContainer.appendChild(popup);
+        }
+        }
+
+        function proceedToCheckoutFromArtworkPopup() {
+        window.biteArtworkAcknowledged = true;
+        closeArtworkReminderPopup();
+
+        const cartForm = document.getElementById('cart');
+        const checkoutButton = document.getElementById('checkout');
+        if (!cartForm) return;
+
+        if (typeof cartForm.requestSubmit === 'function' && checkoutButton) {
+            cartForm.requestSubmit(checkoutButton);
+        } else if (checkoutButton) {
+            checkoutButton.click();
+        }
+        }
+
+        function clearValidationMessage() {
+        const existingMessage = document.querySelector('.validation-message');
+        if (existingMessage) existingMessage.remove();
+        }
+
+        function pulseValidationField(el) {
+        if (!el) return;
+        el.classList.remove('validation-pulse-once');
+        void el.offsetWidth;
+        el.classList.add('validation-pulse-once');
+        function onEnd() {
+            el.classList.remove('validation-pulse-once');
+            el.removeEventListener('animationend', onEnd);
+        }
+        el.addEventListener('animationend', onEnd);
+        }
+        window.pulseValidationField = pulseValidationField;
+
+        function pulseMissingValidationFields(validation) {
+        if (!validation.hasPONumber) {
+            pulseValidationField(document.getElementById('po-number'));
+        }
+        if (!validation.hasDeliveryName || !validation.hasDeliveryPhone) {
+            pulseValidationField(document.getElementById('delivery-btn'));
+        }
+        if (!validation.hasProductChoice) {
+            pulseValidationField(document.getElementById('productAddressToggle'));
+        } else if (window.productNameChoice === 'own' && (!validation.hasName || !validation.hasAddress || !validation.hasPostcode)) {
+            pulseValidationField(document.getElementById('product-name'));
+        }
+        if (!validation.hasDeliveryDate && typeof window.pulseMissingDeliveryDateFields === 'function') {
+            window.pulseMissingDeliveryDateFields();
+        }
+        }
+
+        function updateRequiredFieldStates() {
+        const poField = document.getElementById('po-number');
+        if (poField) {
+            if (poField.value.trim()) {
+            poField.classList.remove('required-empty');
+            poField.classList.add('required-filled');
+            } else {
+            poField.classList.remove('required-filled');
+            poField.classList.add('required-empty');
+            }
+        }
+
+        const toggle = document.getElementById('productAddressToggle');
+        if (toggle) {
+            if (window.productNameChoice) {
+            toggle.classList.remove('required-empty');
+            } else {
+            toggle.classList.add('required-empty');
+            }
+        }
+
+        const productBtn = document.getElementById('product-name');
+        if (productBtn && window.productNameChoice === 'own') {
+            const ownComplete = window.savedName && window.savedName.trim() !== '' &&
+                            window.savedAddress && window.savedAddress.trim() !== '' &&
+                            window.savedPostcode && window.savedPostcode.trim() !== '';
+            productBtn.classList.remove('required-btn-empty', 'required-btn-filled');
+            productBtn.classList.add(ownComplete ? 'required-btn-filled' : 'required-btn-empty');
+        }
+
+        const deliveryBtn = document.getElementById('delivery-btn');
+        if (deliveryBtn) {
+            const deliveryComplete = window.savedDeliveryName && window.savedDeliveryName.trim() !== '' &&
+                                    window.savedDeliveryPhone && window.savedDeliveryPhone.trim() !== '';
+            deliveryBtn.classList.remove('required-btn-empty', 'required-btn-filled');
+            deliveryBtn.classList.add(deliveryComplete ? 'required-btn-filled' : 'required-btn-empty');
+        }
+        }
+
+        function selectProductAddressChoice(choice) {
+        window.productNameChoice = choice;
+
+        document.querySelectorAll('.toggle-btn').forEach(function(btn) {
+            btn.classList.toggle('selected', btn.dataset.value === choice);
+        });
+
+        const yourOwnSection = document.getElementById('yourOwnAddressSection');
+        if (yourOwnSection) {
+            yourOwnSection.style.display = choice === 'own' ? 'block' : 'none';
+        }
+
+        if (choice === 'bite') {
+            window.savedName = 'Bite Promotions';
+            window.savedAddress = '';
+            window.savedPostcode = '';
+            const previewBox = document.getElementById('nameAddressPreview');
+            if (previewBox) previewBox.style.display = 'none';
+        } else {
+            window.savedName = '';
+            window.savedAddress = '';
+            window.savedPostcode = '';
+        }
+
+        clearValidationMessage();
+        updateRequiredFieldStates();
+        }
+
+        function openNameAddressPopup() {
+        const popup = document.getElementById('nameAddressPopup');
+        
+        if (popup.parentNode !== document.body) {
+            document.body.appendChild(popup);
+        }
+        
+        popup.style.display = 'flex';
+        popup.style.alignItems = 'center';
+        popup.style.justifyContent = 'center';
+        document.body.style.overflow = 'hidden';
+        }
+        
+        function closeNameAddressPopup() {
+        const popup = document.getElementById('nameAddressPopup');
+        popup.style.display = 'none';
+        
+        const originalContainer = document.querySelector('.cart__footer');
+        if (originalContainer && popup.parentNode === document.body) {
+            originalContainer.appendChild(popup);
+        }
+        
+        document.body.style.overflow = 'auto';
+        }
+
+        function openDeliveryPopup() {
+        const popup = document.getElementById('deliveryPopup');
+
+        if (popup.parentNode !== document.body) {
+            document.body.appendChild(popup);
+        }
+
+        document.getElementById('popup-delivery-name').value = window.savedDeliveryName || '';
+        document.getElementById('popup-delivery-phone').value = window.savedDeliveryPhone || '';
+        document.getElementById('popup-delivery-notes').value = window.savedDeliveryNotes || '';
+
+        popup.style.display = 'flex';
+        popup.style.alignItems = 'center';
+        popup.style.justifyContent = 'center';
+        document.body.style.overflow = 'hidden';
+        }
+
+        function closeDeliveryPopup() {
+        const popup = document.getElementById('deliveryPopup');
+        popup.style.display = 'none';
+
+        const originalContainer = document.querySelector('.cart__footer');
+        if (originalContainer && popup.parentNode === document.body) {
+            originalContainer.appendChild(popup);
+        }
+
+        document.body.style.overflow = 'auto';
+        }
+
+        function saveDelivery() {
+        const name = document.getElementById('popup-delivery-name').value.trim();
+        const phone = document.getElementById('popup-delivery-phone').value.trim();
+        const notes = document.getElementById('popup-delivery-notes').value.trim();
+
+        window.savedDeliveryName = name;
+        window.savedDeliveryPhone = phone;
+        window.savedDeliveryNotes = notes;
+
+        const previewBox = document.getElementById('deliveryPreview');
+        const previewName = document.getElementById('previewDeliveryName');
+        const previewPhone = document.getElementById('previewDeliveryPhone');
+        const previewNotes = document.getElementById('previewDeliveryNotes');
+        const button = document.getElementById('delivery-btn');
+
+        if (previewBox && previewName && previewPhone && previewNotes) {
+            if (name || phone || notes) {
+            previewName.innerHTML = name ? `<strong>Name:</strong> ${name}` : '';
+            previewPhone.innerHTML = phone ? `<strong>Phone:</strong> ${phone}` : '';
+            previewNotes.innerHTML = notes ? `<strong>Delivery Notes:</strong> ${notes}` : '';
+            previewBox.style.display = 'block';
+            } else {
+            previewBox.style.display = 'none';
+            }
+        }
+
+        if (button) {
+            button.textContent = (name && phone) ? 'Edit Delivery Details' : 'Delivery Details *';
+        }
+
+        closeDeliveryPopup();
+        clearValidationMessage();
+        updateRequiredFieldStates();
+        }
+        
+        function saveNameAddress() {
+        const name = document.getElementById('popup-name').value;
+        const address = document.getElementById('popup-address').value;
+        const postcode = document.getElementById('popup-postcode').value;
+        
+        const previewBox = document.getElementById('nameAddressPreview');
+        const previewName = document.getElementById('previewName');
+        const previewAddress = document.getElementById('previewAddress');
+        
+        if (previewBox && previewName && previewAddress) {
+            const addressLines = address.split('\n').filter(line => line.trim() !== '');
+            let addressHTML = addressLines.map(line => `<div style="margin-bottom: 2px;">${line}</div>`).join('');
+            
+            if (postcode.trim()) {
+            addressHTML += `<div style="margin-bottom: 2px;">${postcode}</div>`;
+            }
+            
+            previewName.innerHTML = `<strong>Company name:</strong> ${name}`;
+            previewAddress.innerHTML = `<strong>Company address:</strong><br>${addressHTML}`;
+            previewBox.style.display = 'block';
+        }
+        
+        const button = document.getElementById('product-name');
+        if (button) {
+            button.textContent = (name.trim() && address.trim() && postcode.trim()) ? 'Edit' : 'Company name and address to show on product *';
+        }
+        
+        window.savedName = name;
+        window.savedAddress = address;
+        window.savedPostcode = postcode;
+        
+        closeNameAddressPopup();
+        clearValidationMessage();
+        updateRequiredFieldStates();
+        }
+        
+        document.getElementById('nameAddressPopup').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeNameAddressPopup();
+        }
+        });
+
+        document.getElementById('deliveryPopup').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeDeliveryPopup();
+        }
+        });
+        
+        function checkCheckoutValidation() {
+        const missingDeliveryProducts = typeof window.getMissingDeliveryDateProducts === 'function'
+            ? window.getMissingDeliveryDateProducts()
+            : [];
+        const hasDeliveryDate = missingDeliveryProducts.length === 0;
+
+        let hasName = false;
+        let hasAddress = false;
+        let hasPostcode = false;
+
+        if (window.productNameChoice === 'bite') {
+            hasName = true;
+            hasAddress = true;
+            hasPostcode = true;
+        } else if (window.productNameChoice === 'own') {
+            hasName = window.savedName && window.savedName.trim() !== '';
+            hasAddress = window.savedAddress && window.savedAddress.trim() !== '';
+            hasPostcode = window.savedPostcode && window.savedPostcode.trim() !== '';
+        }
+        
+        const hasPONumber = document.getElementById('po-number').value.trim() !== '';
+        const isPickup = window.deliveryMethod === 'pickup';
+        const hasDeliveryName = isPickup || (window.savedDeliveryName && window.savedDeliveryName.trim() !== '');
+        const hasDeliveryPhone = isPickup || (window.savedDeliveryPhone && window.savedDeliveryPhone.trim() !== '');
+        const hasProductChoice = window.productNameChoice !== null;
+        
+        clearValidationMessage();
+        
+        return { hasDeliveryDate, missingDeliveryProducts, hasName, hasAddress, hasPostcode, hasPONumber, hasDeliveryName, hasDeliveryPhone, hasProductChoice };
+        }
+        
+        // Function to show validation errors
+        function showValidationErrors() {
+        const validation = checkCheckoutValidation();
+        
+        // Remove any existing validation message
+        const existingMessage = document.querySelector('.validation-message');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+        
+        if (validation.hasDeliveryDate && validation.hasProductChoice && validation.hasName && validation.hasAddress && validation.hasPostcode && validation.hasPONumber && validation.hasDeliveryName && validation.hasDeliveryPhone) {
+            return true;
+        } else {
+            const missingItems = [];
+            if (!validation.hasDeliveryDate) {
+            missingItems.push('Request delivery date for: ' + validation.missingDeliveryProducts.join(', '));
+            }
+
+            if (!validation.hasProductChoice) {
+            missingItems.push('Name and address on product (Bite Promotions or Custom)');
+            } else if (window.productNameChoice === 'own') {
+            if (!validation.hasName && !validation.hasAddress) {
+                missingItems.push('Company name and address to show on product');
+            } else if (!validation.hasName) {
+                missingItems.push('Company name to show on product');
+            } else if (!validation.hasAddress) {
+                missingItems.push('Company address to show on product');
+            } else if (!validation.hasPostcode) {
+                missingItems.push('Company post code to show on product');
+            }
+            }
+            
+            if (!validation.hasPONumber) missingItems.push('PO Number');
+            
+            if (!validation.hasDeliveryName && !validation.hasDeliveryPhone) {
+            missingItems.push('Delivery name and phone number');
+            } else if (!validation.hasDeliveryName) {
+            missingItems.push('Delivery name');
+            } else if (!validation.hasDeliveryPhone) {
+            missingItems.push('Delivery phone number');
+            }
+            
+            const checkoutButton = document.getElementById('checkout');
+            const buttonContainer = checkoutButton.parentElement;
+            
+            // Create validation message after the button container, not inside it
+            const validationDiv = document.createElement('div');
+            validationDiv.className = 'validation-message';
+            validationDiv.style.cssText = 'margin-top: 15px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; color: #856404; width: 100%; max-width: 400px; margin-left: auto; margin-right: 0;';
+            
+            validationDiv.innerHTML = `
+            <div style="margin-bottom: 10px; font-weight: 600;">Please complete the following before checkout:</div>
+            <ul style="margin: 0; padding-left: 20px;">
+                ${missingItems.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+            `;
+            
+            // Insert the validation message after the button container, not inside it
+            buttonContainer.parentElement.insertBefore(validationDiv, buttonContainer.nextSibling);
+            pulseMissingValidationFields(validation);
+            return false;
+        }
+        }
+        
+        // Initialize footer form behaviour when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+        const poField = document.getElementById('po-number');
+        if (poField) {
+            poField.addEventListener('input', function() {
+            clearValidationMessage();
+            updateRequiredFieldStates();
+            });
+        }
+
+        updateRequiredFieldStates();
+        
+        const cartForm = document.getElementById('cart');
+        if (cartForm) {
+            cartForm.addEventListener('submit', function(e) {
+            if (!showValidationErrors()) {
+                e.preventDefault(); // Prevent form submission if validation fails
+                return;
+            }
+
+            // Artwork templates present? Show the upload/proofs reminder before leaving the basket
+            if (window.biteArtworkProducts && window.biteArtworkProducts.length > 0 && !window.biteArtworkAcknowledged) {
+                e.preventDefault();
+                openArtworkReminderPopup();
+                return;
+            }
+
+            // Validation passed and reminder acknowledged - compile order data into hidden field
+            compileOrderDataIntoHiddenField();
+            });
+        }
+        
+        // Function to compile order data into hidden field for Shopify order notes
+        function compileOrderDataIntoHiddenField() {
+            const hiddenNotesField = document.getElementById('shopify-order-notes');
+            if (!hiddenNotesField) return;
+            
+            // Get all the form data
+            const poNumber = document.getElementById('po-number').value.trim();
+            const deliveryName = window.savedDeliveryName || '';
+            const deliveryPhone = window.savedDeliveryPhone || '';
+            const deliveryNotes = window.savedDeliveryNotes || '';
+            const userNotes = document.getElementById('notes').value.trim();
+
+            let deliveryDatesSection = '';
+            document.querySelectorAll('.cart-item[data-line-key]').forEach(function(row) {
+            const lineKey = row.dataset.lineKey;
+            const date = window.lineItemDeliveryDates && window.lineItemDeliveryDates[lineKey];
+            if (date) {
+                const title = row.dataset.productTitle || 'Product';
+                const sku = row.dataset.variantSku || 'N/A';
+                const formattedDate = typeof window.formatDeliveryDate === 'function'
+                ? window.formatDeliveryDate(date)
+                : date.toLocaleDateString('en-GB');
+                deliveryDatesSection += `${title} (${sku}): ${formattedDate}\n`;
+            }
+            });
+            
+            // Get name and address data
+            let productName = '';
+            let productAddress = '';
+            if (window.productNameChoice === 'bite') {
+            productName = 'Bite Promotions';
+            } else if (window.savedName && window.savedAddress) {
+            productName = window.savedName.trim();
+            productAddress = window.savedAddress.trim();
+            if (window.savedPostcode) {
+                productAddress += '\n' + window.savedPostcode.trim();
+            }
+            }
+            
+            // Compile all data into a structured format
+            let compiledNotes = '';
+            
+            if (poNumber) {
+            compiledNotes += `PO NUMBER: ${poNumber}\n\n`;
+            }
+            
+            if (productName || productAddress) {
+            compiledNotes += `NAME AND ADDRESS ON PRODUCT:\n`;
+            if (productName) compiledNotes += `Name: ${productName}\n`;
+            if (productAddress) compiledNotes += `Address:\n${productAddress}\n`;
+            compiledNotes += '\n';
+            }
+            
+            if (deliveryDatesSection) {
+            compiledNotes += `REQUEST DELIVERY DATES:\n${deliveryDatesSection}\n`;
+            }
+            
+            compiledNotes += `DELIVERY METHOD: ${window.deliveryMethod === 'pickup' ? 'Pickup (customer collecting)' : 'Shipping'}\n\n`;
+
+            if (window.deliveryMethod !== 'pickup' && (deliveryName || deliveryPhone || deliveryNotes)) {
+            compiledNotes += `DELIVERY CONTACT:\n`;
+            if (deliveryName) compiledNotes += `Name: ${deliveryName}\n`;
+            if (deliveryPhone) compiledNotes += `Phone: ${deliveryPhone}\n`;
+            if (deliveryNotes) compiledNotes += `Delivery Notes: ${deliveryNotes}\n`;
+            compiledNotes += '\n';
+            }
+            
+            if (userNotes) {
+            compiledNotes += `ADDITIONAL NOTES:\n${userNotes}`;
+            }
+            
+            // Update the hidden field with compiled data
+            hiddenNotesField.value = compiledNotes.trim();
+        }
+        
+        // Initialize checkout button state (no validation needed initially)
+        });
+        
+        // Auto-resize notes textarea as user types
+        document.addEventListener('DOMContentLoaded', function() {
+        const notesTextarea = document.getElementById('notes');
+        if (notesTextarea) {
+            notesTextarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px'; // Max height of 120px
+            });
+        }
+        });
+    </script>
+    {%- endif -%}
+
+    {% schema %}
+    {
+    "name": "t:sections.main-cart-footer.name",
+    "class": "cart__footer-wrapper",
+    "settings": [
+        {
+        "type": "color_scheme",
+        "id": "color_scheme",
+        "label": "t:sections.all.colors.label",
+        "default": "scheme-1"
+        },
+        {
+        "type": "header",
+        "content": "t:sections.all.padding.section_padding_heading"
+        },    
+        {
+        "type": "range",
+        "id": "padding_top",
+        "min": 0,
+        "max": 100,
+        "step": 4,
+        "unit": "px",
+        "label": "t:sections.all.padding.padding_top",
+        "default": 40
+        },
+        {
+        "type": "range",
+        "id": "padding_bottom",
+        "min": 0,
+        "max": 100,
+        "step": 4,
+        "unit": "px",
+        "label": "t:sections.all.padding.padding_bottom",
+        "default": 40
+        }
+    ],
+    "blocks": [
+        {
+        "type": "subtotal",
+        "name": "t:sections.main-cart-footer.blocks.subtotal.name",
+        "limit": 1
+        },
+        {
+        "type": "buttons",
+        "name": "t:sections.main-cart-footer.blocks.buttons.name",
+        "limit": 1
+        },
+        {
+        "type": "@app"
+        }
+    ]
+    }
+    {% endschema %}
