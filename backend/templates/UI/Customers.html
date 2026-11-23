@@ -863,6 +863,7 @@
                     <i class="fas fa-search"></i>
                     <input type="text" id="cu-search" placeholder="Search by name, email, company or tag…" autocomplete="off">
                 </div>
+                <span id="cu-loading" hidden title="Loading more customers…" aria-label="Loading more customers"><div class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></div></span>
                 <span class="count-pill" id="cu-count">–</span>
                 <div class="toolbar-actions">
                     <a href="/app/API_Keys" class="btn-ghost" style="text-decoration:none"><i class="fas fa-key"></i> API Keys</a>
@@ -2032,20 +2033,6 @@
                     if (window.CompaniesPanel && window.CompaniesPanel.onCustomersLoaded) {
                         window.CompaniesPanel.onCustomersLoaded();
                     }
-                    // Keep a subtle note while more pages are still arriving.
-                    if (data.building) {
-                        let note = document.getElementById('cu-building-note');
-                        const html = `<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> Loading more customers… (${list.length} so far)`;
-                        if (!note) {
-                            const flagged = document.getElementById('cu-flagged');
-                            if (flagged) {
-                                flagged.insertAdjacentHTML('afterbegin',
-                                    `<div class="state-msg" id="cu-building-note" style="margin-bottom:12px;">${html}</div>`);
-                            }
-                        } else {
-                            note.innerHTML = html;
-                        }
-                    }
                 } else if (data.building) {
                     content.innerHTML = `<div class="state-msg"><div class="spinner"></div>Loading customers from Shopify…<br><span style="font-size:0.85rem;color:#6b7280;margin-top:8px;display:inline-block;">Results appear as each page loads.</span></div>`;
                 } else {
@@ -2053,12 +2040,9 @@
                     window.CU_DATA = CU_DATA;
                     render();
                 }
-                if (!data.building) {
-                    const note = document.getElementById('cu-building-note');
-                    if (note) note.remove();
-                    const flagged = document.getElementById('cu-flagged');
-                    if (flagged) delete flagged.dataset.buildingNote;
-                }
+                // Small spinner by the search bar while more pages are still arriving.
+                const loadingEl = document.getElementById('cu-loading');
+                if (loadingEl) loadingEl.hidden = !(data.building && list.length);
                 // Server builds off the request thread; poll until ready.
                 if (data.building) {
                     if (_cuBuildingPoll) clearTimeout(_cuBuildingPoll);
@@ -2068,6 +2052,8 @@
                     _cuBuildingPoll = null;
                 }
             } catch (err) {
+                const loadingEl = document.getElementById('cu-loading');
+                if (loadingEl) loadingEl.hidden = true;
                 if (_cuBuildingPoll) {
                     clearTimeout(_cuBuildingPoll);
                     _cuBuildingPoll = null;
