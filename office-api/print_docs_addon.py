@@ -8,6 +8,12 @@ printing). The Zebra label route (/print) is unchanged.
 
 Setup on the office PC
 ----------------------
+Easiest - printers that understand PDF themselves (e.g. HP LaserJet M401dn):
+put the printer's IP address in .env and restart. No driver, no SumatraPDF:
+       DOC_PRINTER_IP=192.168.5.137
+The PDF is sent straight to the printer's raw port (9100, DOC_PRINTER_PORT).
+
+Otherwise, print through Windows:
 1. Install SumatraPDF (https://www.sumatrapdfreader.org) - the normal
    installer, "for all users". Or put SumatraPDF.exe next to app.py.
 2. In .env (next to app.py) add the printer's exact Windows name, e.g.
@@ -32,6 +38,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import socket
 import subprocess
 import tempfile
 import threading
@@ -41,6 +48,41 @@ from fastapi import Depends, File, Form, HTTPException, UploadFile
 
 _PRINT_LOCK = threading.Lock()  # one job at a time - keeps pages in order
 _MAX_PDF_BYTES = 20 * 1024 * 1024
+
+
+def _printer_ip() -> str:
+    return (os.environ.get("DOC_PRINTER_IP") or "").strip()
+
+
+def _printer_port() -> int:
+    try:
+        return int(os.environ.get("DOC_PRINTER_PORT") or 9100)
+    except ValueError:
+        return 9100
+
+
+def _send_direct(pdf: bytes, copies: int, title: str) -> None:
+    """Raw-port printing: PJL tells the printer it is a PDF and how many copies."""
+    uel = b"\x1b%-12345X"  # PJL "universal exit language" - starts/ends a job
+    name = (title or "BiteBoard").replace('"', "'")[:60]
+    job = (
+        uel + b"@PJL\r\n"
+        + f'@PJL JOB NAME="{name}"\r\n'.encode("ascii", "replace")
+        + f"@PJL SET COPIES={copies}\r\n".encode()
+        + b"@PJL ENTER LANGUAGE=PDF\r\n"
+        + pdf
+        + uel + b"@PJL EOJ\r\n" + uel
+    )
+    with socket.create_connection((_printer_ip(), _printer_port()), timeout=30) as sock:
+        sock.sendall(job)
+
+
+def _printer_reachable() -> bool:
+    try:
+        with socket.create_connection((_printer_ip(), _printer_port()), timeout=5):
+            return True
+    except OSError:
+        return False
 
 
 def _printer_name() -> str:
@@ -76,10 +118,19 @@ def _installed_printers() -> list[str]:
 def register_print_docs_routes(app, *, require_key_dep) -> None:
     @app.get("/print/document/health", dependencies=[Depends(require_key_dep)])
     def print_document_health():
+        if _printer_ip():
+            reachable = _printer_reachable()
+            return {
+                "configured": reachable,
+                "mode": "direct",
+                "printer": f"{_printer_ip()}:{_printer_port()}",
+                "printer_found": reachable,
+            }
         printer = _printer_name()
         printers = _installed_printers()
         return {
             "configured": bool(printer and _sumatra_path()),
+            "mode": "windows",
             "printer": printer or None,
             "printer_found": bool(printer) and printer in printers,
             "sumatra": _sumatra_path(),
@@ -92,18 +143,28 @@ def register_print_docs_routes(app, *, require_key_dep) -> None:
         title: str = Form(""),
         copies: int = Form(1),
     ):
-        printer = _printer_name()
-        if not printer:
-            raise HTTPException(500, "DOC_PRINTER is not set in the office server's .env.")
-        sumatra = _sumatra_path()
-        if not sumatra:
-            raise HTTPException(500, "SumatraPDF is not installed on the office PC.")
         data = file.file.read(_MAX_PDF_BYTES + 1)
         if len(data) > _MAX_PDF_BYTES:
             raise HTTPException(413, "PDF is too large.")
         if not data.startswith(b"%PDF"):
             raise HTTPException(400, "File is not a PDF.")
         copies = max(1, min(int(copies or 1), 5))
+
+        if _printer_ip():
+            try:
+                with _PRINT_LOCK:
+                    _send_direct(data, copies, title)
+            except OSError as exc:
+                raise HTTPException(502, f"Printer {_printer_ip()} unreachable: {exc}")
+            return {"ok": True, "printer": _printer_ip(), "mode": "direct", "title": title,
+                    "copies": copies, "bytes": len(data)}
+
+        printer = _printer_name()
+        if not printer:
+            raise HTTPException(500, "Set DOC_PRINTER_IP (or DOC_PRINTER) in the office server's .env.")
+        sumatra = _sumatra_path()
+        if not sumatra:
+            raise HTTPException(500, "SumatraPDF is not installed on the office PC.")
 
         tmp = None
         try:
