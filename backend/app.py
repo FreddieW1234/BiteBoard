@@ -4523,6 +4523,11 @@ def cron_print_sage_info():
         return jsonify({"success": False, "error": "Staff login required"}), 403
     from scripts import sage_autoprint  # type: ignore
     flag = lambda k: (request.args.get(k) or "").lower() in ("1", "true", "yes")
+    if request.args.get("order") and is_staff_authenticated():
+        try:  # staff test / reprint of one order, e.g. ?order=S1099
+            return jsonify(sage_autoprint.print_one(request.args["order"]))
+        except Exception as exc:
+            return jsonify({"success": False, "error": str(exc)[:300]}), 502
     if not flag("now") and not sage_autoprint.is_print_time():
         return jsonify({"success": True, "skipped": "not 6am UK on a weekday"})
     if flag("dry_run"):

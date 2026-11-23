@@ -140,6 +140,29 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
         _RUN_LOCK.release()
 
 
+def print_one(order_name: str) -> dict:
+    """Print one order's Sage info now (staff test / reprint), e.g. "#S1099"."""
+    from scripts.office_api import print_document  # type: ignore
+    from scripts.sage_info import get_sage_info_for_order  # type: ignore
+
+    name = order_name.strip()
+    if not name.startswith("#"):
+        name = "#" + name
+    url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/graphql.json"
+    resp = requests.post(url, timeout=30,
+                         headers={"X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json"},
+                         json={"query": "query($q: String!) { orders(first: 1, query: $q) { nodes { legacyResourceId name } } }",
+                               "variables": {"q": f"name:{name}"}})
+    nodes = (((resp.json().get("data") or {}).get("orders") or {}).get("nodes")) or []
+    if not nodes:
+        return {"success": False, "error": f"Order {name} not found"}
+    result = get_sage_info_for_order(nodes[0]["legacyResourceId"])
+    if not result.get("success"):
+        return {"success": False, "error": result.get("error") or "Order not found"}
+    printed = print_document(render_pdf(result["info"]), title=f"Sage info {nodes[0]['name']}")
+    return {"success": True, "printed": nodes[0]["name"], "printer": printed}
+
+
 def run_async(**kwargs) -> None:
     threading.Thread(target=run, kwargs=kwargs, name="sage-autoprint", daemon=True).start()
 
