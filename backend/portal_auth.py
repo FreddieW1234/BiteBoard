@@ -133,6 +133,10 @@ def is_staff_public_path(path: str) -> bool:
     # Nightly customer-feed snapshot (Bearer CRON_SECRET verified in the route).
     if path == "/api/cron/rebuild-feed":
         return True
+    # 6am Sage info auto-print (Bearer CRON_SECRET verified in the route;
+    # staff sessions also allowed there for testing).
+    if path == "/api/cron/print-sage-info":
+        return True
     # Customer product feed (Bearer feed key verified in the route).
     if path in ("/api/v1/feed", "/api/v1/ping"):
         return True
