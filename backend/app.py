@@ -4509,7 +4509,7 @@ def _cron_or_staff_authorised():
     return bool(expected and token and hmac_mod.compare_digest(token, expected))
 
 
-@app.route("/api/cron/print-sage-info", methods=["POST"])
+@app.route("/api/cron/print-sage-info", methods=["GET", "POST"])
 def cron_print_sage_info():
     """6am weekdays: print the previous working day's Sage info sheets in the office.
 
@@ -4519,6 +4519,8 @@ def cron_print_sage_info():
     """
     if not _cron_or_staff_authorised():
         return jsonify({"success": False, "error": "Unauthorized"}), 401
+    if request.method == "GET" and not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
     from scripts import sage_autoprint  # type: ignore
     flag = lambda k: (request.args.get(k) or "").lower() in ("1", "true", "yes")
     if not flag("now") and not sage_autoprint.is_print_time():
