@@ -982,7 +982,7 @@
         function customerMatchesSearch(c) {
             if (!CU_SEARCH) return true;
             const hay = [
-                c.name, c.first_name, c.last_name, c.email, c.company_name, c.invoice_address,
+                c.name, c.first_name, c.last_name, c.email, c.company_name, c.address,
                 c.landline_phone, c.mobile_number, c.phone,
                 ...(c.tags || []), ...(c.matched_tags || [])
             ].join(' ').toLowerCase();
@@ -1300,8 +1300,8 @@
                                     <input class="cu-edit-input" id="cu-mobile-${escapeHtml(c.id)}" name="mobile_number" type="text" value="${escapeHtml(c.mobile_number || '')}">
                                 </div>
                                 <div class="cu-edit-field full-width">
-                                    <label for="cu-invoice-${escapeHtml(c.id)}">Invoice address</label>
-                                    <textarea class="cu-edit-textarea" id="cu-invoice-${escapeHtml(c.id)}" name="invoice_address">${escapeHtml(c.invoice_address || '')}</textarea>
+                                    <label>Address <span style="font-weight:400;color:#6b7280;">(from Shopify - set at checkout or in their account)</span></label>
+                                    <div class="cu-address-readonly" style="white-space:pre-line;font-size:0.88rem;color:#374151;padding:8px 10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;min-height:38px;">${escapeHtml(c.address || 'No saved address yet')}</div>
                                 </div>
                                 ${otherHtml}
                             </div>
@@ -1375,7 +1375,6 @@
                 last_name: fd.get('last_name'),
                 email: fd.get('email'),
                 company_name: fd.get('company_name'),
-                invoice_address: fd.get('invoice_address'),
                 landline_phone: fd.get('landline_phone'),
                 mobile_number: fd.get('mobile_number'),
                 type_tag: fd.get('type_tag') || null,

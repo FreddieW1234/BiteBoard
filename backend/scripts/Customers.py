@@ -46,6 +46,7 @@ query GetCustomersOverview($cursor: String) {
         tags
         numberOfOrders
         amountSpent { amount }
+        defaultAddress { company address1 address2 city province zip country }
         state
         createdAt
         metafields(first: 15, namespace: "custom_fields") {
@@ -540,6 +541,16 @@ def _metafields_map_from_graphql_node(node):
     return by_key
 
 
+def _format_default_address(addr):
+    """Customer's saved Shopify address (from checkout / their account) as lines."""
+    if not addr:
+        return ""
+    get = lambda *keys: next((str(addr.get(k) or "").strip() for k in keys if str(addr.get(k) or "").strip()), "")
+    city_line = ", ".join(x for x in (get("city"), get("province"), get("zip")) if x)
+    lines = [get("company"), get("address1"), get("address2"), city_line, get("country")]
+    return "\n".join(x for x in lines if x)
+
+
 def _format_customer_graphql(node):
     first = (node.get("firstName") or "").strip()
     last = (node.get("lastName") or "").strip()
@@ -557,6 +568,7 @@ def _format_customer_graphql(node):
         "email": node.get("email") or "",
         "company_name": mf.get("company_name_new", ""),
         "invoice_address": mf.get("invoice_address_new", ""),
+        "address": _format_default_address(node.get("defaultAddress")),
         "landline_phone": mf.get("landline_phone_number", ""),
         "mobile_number": mf.get("mobile_number", ""),
         "linked_company_id": linked,
@@ -588,6 +600,7 @@ def _format_customer_rest(raw, metafields_by_key=None):
         "email": raw.get("email") or "",
         "company_name": mf.get("company_name_new", ""),
         "invoice_address": mf.get("invoice_address_new", ""),
+        "address": _format_default_address(raw.get("default_address")),
         "landline_phone": mf.get("landline_phone_number", ""),
         "mobile_number": mf.get("mobile_number", ""),
         "linked_company_id": mf.get("linked_company_id", ""),
