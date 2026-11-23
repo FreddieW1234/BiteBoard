@@ -557,7 +557,7 @@
                     <input type="text" name="title" maxlength="120" placeholder="Description, e.g. Extra artwork time" required>
                     <input type="number" name="amount" min="0.01" step="0.01" placeholder="£ ex VAT" required>
                     <label><input type="checkbox" name="taxable" checked> Add VAT</label>
-                    <label><input type="checkbox" name="notify_customer"> Email the customer the updated order</label>
+                    <label><input type="checkbox" name="notify_customer" checked> Email an order update</label>
                     <button type="submit" class="btn-add-charge-save">Add to order</button>
                     <button type="button" class="btn-add-charge-cancel">Cancel</button>
                     <span class="add-charge-msg" hidden></span>
@@ -579,7 +579,7 @@
             if (!title || !(amount > 0)) return;
             const order = allOrders.find(o => String(o.id) === String(orderId));
             const label = `${title} - ${formatGbp(amount)}${taxable ? ' + VAT' : ' (no VAT)'}`;
-            const extra = notifyCustomer ? '\n\nThe customer will be emailed the updated order.' : '';
+            const extra = notifyCustomer ? '\n\nThe customer will be emailed an order update.' : '\n\nThe customer will NOT be emailed.';
             if (!confirm(`Add this charge to ${order ? order.name : 'the order'} in Shopify?\n\n${label}${extra}`)) return;
             btn.disabled = true; btn.textContent = 'Adding...';
             msg.hidden = true;
@@ -595,7 +595,7 @@
                 wrap.insertAdjacentHTML('beforebegin', renderFeeItem({ title, fee_label: title, fee_name: title, total: amount, total_display: formatGbp(amount) }));
                 let note = `Added. New order total ${formatGbp(data.total)}`;
                 if (data.outstanding > 0) note += `, ${formatGbp(data.outstanding)} still to pay`;
-                if (data.customer_notified) note += ' - customer emailed the updated order';
+                if (data.customer_notified) note += ' - order update emailed to the customer';
                 msg.textContent = note + '.';
                 msg.className = 'add-charge-msg ok';
                 msg.hidden = false;
