@@ -152,7 +152,6 @@
             .then(function (data) {
                 // Only decorate staff sidebars (client portal has no user_type).
                 if (data && data.user_type) {
-                    injectCommitInfo(footer, data);
                     injectUserType(footer, data);
                 }
             })
