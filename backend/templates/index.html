@@ -108,6 +108,9 @@
 
         .app-tab:hover i { color: #4f46e5; }
 
+        .app-tab.active, .app-tab.active:hover { background: #4f46e5; color: #fff; }
+        .app-tab.active i, .app-tab.active:hover i { color: #fff; }
+
         .app-tab span { white-space: nowrap; }
 
         .sidebar-footer {
@@ -436,7 +439,7 @@
                 }
                 const ordered = tabOrder.filter(t => visibleTools.includes(t));
 
-                appTabsEl.innerHTML = '';
+                appTabsEl.innerHTML = '<a href="/" class="app-tab active" aria-current="page"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>';
                 ordered.forEach(tool => {
                     const path = toolUrlPath[tool] || tool;
                     const data = toolInfo[tool] || {
