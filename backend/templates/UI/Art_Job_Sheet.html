@@ -153,6 +153,16 @@
         @media screen {
             .sheet { box-shadow: 0 0 0 1px #ccc; }
         }
+        {% if pdf %}
+        /* Morning auto-print PDF: the renderer has no % heights. */
+        .sheet { height: auto; max-height: none; overflow: visible; margin: 0; }
+        table { height: auto; }
+        /* Taller rows so the sheet still fills the page, as it does in the browser. */
+        .title-cell, .designer-cell { height: 22mm; }
+        .h-md { height: 30mm; }
+        .h-lg { height: 40mm; }
+        .bar td { height: 12mm; }
+        {% endif %}
     </style>
 </head>
 <body{% if embed %} class="embed"{% endif %}>

@@ -1,9 +1,12 @@
-"""6am auto-print: yesterday's orders' Sage info sheets on the office printer.
+"""6am auto-print: yesterday's orders' paperwork on the office printer.
+
+Prints every order's Sage info sheet first, then every artwork job sheet, then
+every production note - three neat piles, each in order-date order.
 
 Runs Monday-Friday. Each run covers the previous working day's orders by UK
 date; Monday's run covers Friday, Saturday and Sunday so nothing ordered over
-the weekend is missed. Every order printed is recorded on the office server,
-so a retry or a second trigger never prints the same order twice.
+the weekend is missed. Every sheet printed is recorded on the office server,
+so a retry or a second trigger never prints the same sheet twice.
 """
 
 from __future__ import annotations
@@ -20,7 +23,13 @@ from config import ACCESS_TOKEN, API_VERSION, STORE_DOMAIN  # type: ignore
 
 LONDON = ZoneInfo("Europe/London")
 PRINT_HOUR = 6
-_PRINTED_KIND = "sage_autoprint"
+# Print order, and the office-server record kept for each (so nothing prints twice).
+# "sage_autoprint" predates the other two sheets - keep the name.
+DOCUMENTS = (
+    ("sage", "Sage info", "sage_autoprint"),
+    ("art", "Art job sheet", "artjob_autoprint"),
+    ("prod", "Production note", "prodnote_autoprint"),
+)
 _TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 
 _RUN_LOCK = threading.Lock()
@@ -69,14 +78,13 @@ def orders_between(start: datetime, end: datetime) -> list[dict]:
         cursor = page.get("endCursor")
 
 
-def render_pdf(info: dict) -> bytes:
-    """The same Sage info page staff print by hand, as a PDF."""
+def _html_to_pdf(template: str, **ctx) -> bytes:
     from io import BytesIO
     from jinja2 import Environment, FileSystemLoader, select_autoescape
     from xhtml2pdf import pisa
 
     env = Environment(loader=FileSystemLoader(str(_TEMPLATES)), autoescape=select_autoescape(["html"]))
-    html = env.get_template("UI/Sage_Info.html").render(info=info, embed=True, auto_print=False)
+    html = env.get_template(template).render(embed=True, auto_print=False, pdf=True, **ctx)
     buf = BytesIO()
     result = pisa.CreatePDF(html, dest=buf, encoding="utf-8")
     if result.err:
@@ -84,10 +92,43 @@ def render_pdf(info: dict) -> bytes:
     return buf.getvalue()
 
 
-def _already_printed(order_id: str) -> bool:
+def render_pdf(info: dict) -> bytes:
+    """The same Sage info page staff print by hand, as a PDF."""
+    return _html_to_pdf("UI/Sage_Info.html", info=info)
+
+
+def build_pdf(doc: str, order_id: str) -> bytes | None:
+    """One order's sheet(s) of one kind as a PDF; None when the order has none
+    (e.g. no product lines, so no art job sheet or production note)."""
+    if doc == "sage":
+        from scripts.sage_info import get_sage_info_for_order  # type: ignore
+        result = get_sage_info_for_order(order_id)
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or "order not found")
+        return render_pdf(result["info"])
+    if doc == "art":
+        from scripts.art_job_sheet import get_art_job_sheets_for_order  # type: ignore
+        result = get_art_job_sheets_for_order(order_id)
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or "order not found")
+        sheets = result.get("sheets") or []
+        return _html_to_pdf("UI/Art_Job_Sheet.html", sheets=sheets,
+                            order_name=result.get("order_name") or "") if sheets else None
+    if doc == "prod":
+        from scripts.production_note import get_production_notes_for_order  # type: ignore
+        result = get_production_notes_for_order(order_id)
+        if not result.get("success"):
+            raise RuntimeError(result.get("error") or "order not found")
+        notes = result.get("notes") or []
+        return _html_to_pdf("UI/Production_Note.html", notes=notes,
+                            order_name=result.get("order_name") or "") if notes else None
+    raise ValueError(doc)
+
+
+def _already_printed(kind: str, order_id: str) -> bool:
     from scripts.office_api import get_snapshot_item  # type: ignore
     try:
-        return bool(get_snapshot_item(_PRINTED_KIND, order_id))
+        return bool(get_snapshot_item(kind, order_id))
     except Exception:
         return False
 
@@ -95,7 +136,6 @@ def _already_printed(order_id: str) -> bool:
 def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = False) -> dict:
     """Print every order in the window. Returns a report (also kept for /status)."""
     from scripts.office_api import print_document, put_snapshot_item  # type: ignore
-    from scripts.sage_info import get_sage_info_for_order  # type: ignore
 
     if not _RUN_LOCK.acquire(blocking=False):
         return {"success": False, "error": "Already running"}
@@ -105,24 +145,29 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
         start, end = print_window(today)
         report = {"success": True, "dry_run": dry_run, "window": [start.isoformat(), end.isoformat()],
                   "printed": [], "skipped": [], "failed": []}
-        for o in orders_between(start, end):
-            oid, name = str(o["legacyResourceId"]), o.get("name") or ""
-            if not reprint and _already_printed(oid):
-                report["skipped"].append(name)
-                continue
-            if dry_run:
-                report["printed"].append(name)
-                continue
-            try:
-                result = get_sage_info_for_order(oid)
-                if not result.get("success"):
-                    raise RuntimeError(result.get("error") or "order not found")
-                print_document(render_pdf(result["info"]), title=f"Sage info {name}")
-                put_snapshot_item(_PRINTED_KIND, oid, {"name": name, "printed_at": datetime.now(LONDON).isoformat()},
-                                  updated_by="sage-autoprint")
-                report["printed"].append(name)
-            except Exception as exc:
-                report["failed"].append({"order": name, "error": str(exc)[:200]})
+        orders = orders_between(start, end)
+        # All Sage sheets, then all art job sheets, then all production notes.
+        for doc, label, kind in DOCUMENTS:
+            for o in orders:
+                oid, name = str(o["legacyResourceId"]), o.get("name") or ""
+                what = f"{label} {name}"
+                if not reprint and _already_printed(kind, oid):
+                    report["skipped"].append(what)
+                    continue
+                if dry_run:
+                    report["printed"].append(what)
+                    continue
+                try:
+                    pdf = build_pdf(doc, oid)
+                    if pdf:
+                        print_document(pdf, title=what)
+                    put_snapshot_item(kind, oid, {"name": name, "printed_at": datetime.now(LONDON).isoformat(),
+                                                  "nothing_to_print": not pdf},
+                                      updated_by="sage-autoprint")
+                    if pdf:
+                        report["printed"].append(what)
+                except Exception as exc:
+                    report["failed"].append({"order": what, "error": str(exc)[:200]})
         report["success"] = not report["failed"]
         report["seconds"] = round(time.time() - started, 1)
         print(f"[sage-autoprint] {'dry run' if dry_run else 'run'} {start.date()}..{end.date()}: "
@@ -141,9 +186,9 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
 
 
 def print_one(order_name: str) -> dict:
-    """Print one order's Sage info now (staff test / reprint), e.g. "#S1099"."""
+    """Print one order's Sage info, art job sheet and production note now
+    (staff test / reprint), e.g. "#S1099"."""
     from scripts.office_api import print_document  # type: ignore
-    from scripts.sage_info import get_sage_info_for_order  # type: ignore
 
     name = order_name.strip()
     if not name.startswith("#"):
@@ -156,11 +201,14 @@ def print_one(order_name: str) -> dict:
     nodes = (((resp.json().get("data") or {}).get("orders") or {}).get("nodes")) or []
     if not nodes:
         return {"success": False, "error": f"Order {name} not found"}
-    result = get_sage_info_for_order(nodes[0]["legacyResourceId"])
-    if not result.get("success"):
-        return {"success": False, "error": result.get("error") or "Order not found"}
-    printed = print_document(render_pdf(result["info"]), title=f"Sage info {nodes[0]['name']}")
-    return {"success": True, "printed": nodes[0]["name"], "printer": printed}
+    oid, name = str(nodes[0]["legacyResourceId"]), nodes[0]["name"]
+    printed, printer = [], None
+    for doc, label, _kind in DOCUMENTS:
+        pdf = build_pdf(doc, oid)
+        if pdf:
+            printer = print_document(pdf, title=f"{label} {name}")
+            printed.append(label)
+    return {"success": True, "order": name, "printed": printed, "printer": printer}
 
 
 def run_async(**kwargs) -> None:

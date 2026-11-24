@@ -229,6 +229,16 @@
         @media screen {
             .sheet { box-shadow: 0 0 0 1px #ccc; }
         }
+        {% if pdf %}
+        /* Morning auto-print PDF: the renderer has no flex and no % heights,
+           so the notes box gets a fixed height that fills the rest of the A4. */
+        .sheet { display: block; height: auto; max-height: none; overflow: visible; margin: 0; }
+        .notes-wrap { display: block; margin-top: 0; }
+        .notes-wrap table, .notes-row { height: auto; }
+        .notes-body, .sage-body { height: 80mm; }
+        .pdf-sizer td { border: none; padding: 0; height: 1pt; font-size: 1pt; line-height: 1pt; }
+        .addr-lbl, .carrier-tick { width: auto; }  /* the sizer row sets the columns */
+        {% endif %}
     </style>
 </head>
 <body{% if embed %} class="embed"{% endif %}>
@@ -253,6 +263,7 @@
                 <col style="width:16.66%">
             </colgroup>
 
+            {% if pdf %}<tr class="pdf-sizer">{% for _ in range(6) %}<td width="16.66%">&nbsp;</td>{% endfor %}</tr>{% endif %}
             <tr><th class="hdr" colspan="6">Production Note</th></tr>
 
             <tr>
@@ -375,6 +386,7 @@
                     <col span="3" style="width:16.66%">
                     <col span="3" style="width:16.66%">
                 </colgroup>
+                {% if pdf %}<tr class="pdf-sizer">{% for _ in range(6) %}<td width="16.66%">&nbsp;</td>{% endfor %}</tr>{% endif %}
                 <tr>
                     <th class="hdr" colspan="3">Notes</th>
                     <th class="hdr" colspan="3">Order Number Sage</th>

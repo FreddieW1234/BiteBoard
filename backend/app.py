@@ -4661,7 +4661,8 @@ def _cron_or_staff_authorised():
 
 @app.route("/api/cron/print-sage-info", methods=["GET", "POST"])
 def cron_print_sage_info():
-    """6am weekdays: print the previous working day's Sage info sheets in the office.
+    """6am weekdays: print the previous working day's paperwork in the office -
+    all Sage info sheets, then all art job sheets, then all production notes.
 
     The cron fires at 05:00 and 06:00 UTC; only the one that is 6am UK time
     prints. Staff can run it by hand: ?now=1 skips the time check, ?dry_run=1
