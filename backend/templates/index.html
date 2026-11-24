@@ -108,6 +108,16 @@
 
         .app-tab:hover i { color: #4f46e5; }
 
+        /* Collapsed sidebar - same as the other pages: icons only, opens on hover. */
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar.collapsed .header-stat { display: none; }
+        .sidebar.collapsed:hover .header-stat { display: block; }
+
         .app-tab.active, .app-tab.active:hover { background: #4f46e5; color: #fff; }
         .app-tab.active i, .app-tab.active:hover i { color: #fff; }
 
@@ -306,7 +316,7 @@
 </head>
 <body>
     <div class="app-layout">
-        <aside class="sidebar">
+        <aside class="sidebar collapsed">
             <div class="sidebar-brand">
                 <a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a>
             </div>
