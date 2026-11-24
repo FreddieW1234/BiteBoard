@@ -186,6 +186,15 @@
         .co-portal-profile .co-save-msg.ok { color: #059669; }
         .co-portal-profile .co-save-msg.err { color: #dc2626; }
 
+        /* My orders / Company orders switch (customers in a company only) */
+        .co-scope-switch { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 12px; border-radius: 999px;
+            background: #f3f4f6; border: 1px solid #e5e7eb; }
+        .co-scope-switch a { padding: 7px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+            color: var(--bite-text); text-decoration: none; white-space: nowrap; }
+        .co-scope-switch a:hover { background: #fff; }
+        .co-scope-switch a.active { background: var(--bite-pink); color: #fff; }
+        .orders-wrap td.order-placed-by { color: #4b5563; white-space: nowrap; }
+
         /* Orders — match staff Orders page */
         .orders-wrap {
             background: #fff;
@@ -552,6 +561,12 @@
         </div>
 
         <div id="co-panel-orders" class="co-tab-panel co-tab-active">
+            {% if company_name %}
+            <nav class="co-scope-switch" aria-label="Whose orders to show">
+                <a href="?scope=mine" class="{{ 'active' if order_scope != 'company' else '' }}">My orders</a>
+                <a href="?scope=company" class="{{ 'active' if order_scope == 'company' else '' }}">All {{ company_name }} orders</a>
+            </nav>
+            {% endif %}
             <div class="orders-wrap">
                 {% if orders %}
                 <div class="list-card-scroll">
@@ -559,6 +574,7 @@
                     <thead>
                         <tr>
                             <th>Order</th>
+                            {% if order_scope == 'company' %}<th>Placed by</th>{% endif %}
                             <th>Date</th>
                             <th>Order Status</th>
                             <th>Dispatch</th>
@@ -569,13 +585,14 @@
                         {% for order in orders %}
                         <tr class="data-row" data-order-id="{{ order.id }}" onclick="event.stopPropagation(); toggleDetails(this, 'details-{{ order.id }}')">
                             <td><strong>{{ order.name }}</strong><i class="fas fa-chevron-down order-chevron"></i></td>
+                            {% if order_scope == 'company' %}<td class="order-placed-by">{{ order.placed_by or '—' }}</td>{% endif %}
                             <td class="order-date">{{ order.processed_at[:10] if order.processed_at else '—' }}</td>
                             <td class="order-status-label-cell"><span class="order-status-label-slot" data-order-id="{{ order.id }}">—</span></td>
                             <td>{{ order.dispatch_display or '—' }}</td>
                             <td class="order-col-total">{{ order.total_display }}</td>
                         </tr>
                         <tr class="details-row" id="details-{{ order.id }}" data-order-id="{{ order.id }}">
-                            <td colspan="5">
+                            <td colspan="{{ 6 if order_scope == 'company' else 5 }}">
                                 <div class="details-inner">
                                     <div class="detail-section">
                                         <h4>Items</h4>
@@ -774,7 +791,7 @@
                 {% else %}
                 <div class="state-msg">
                     <i class="fas fa-inbox"></i>
-                    You don't have any orders yet.
+                    {% if order_scope == 'company' %}Nobody at {{ company_name }} has placed an order yet.{% else %}You don't have any orders yet.{% endif %}
                 </div>
                 {% endif %}
             </div>

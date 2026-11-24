@@ -1183,6 +1183,19 @@ def _build_access_entry(order: dict) -> dict:
     }
 
 
+def _client_may_see(client_customer_id, owner_customer_id) -> bool:
+    """Own orders, or orders placed by someone in the client's company."""
+    if not owner_customer_id:
+        return False
+    if str(owner_customer_id) == str(client_customer_id):
+        return True
+    try:
+        from scripts.Client_Orders import client_can_see_owner  # type: ignore
+        return client_can_see_owner(client_customer_id, owner_customer_id)
+    except Exception:
+        return False
+
+
 def resolve_order_access(
     order_id: str | int,
     *,
@@ -1199,20 +1212,16 @@ def resolve_order_access(
             cached = _order_access_cache.get(oid)
         if cached and cached[0] > now:
             entry = cached[1]
-            if client_customer_id is not None:
-                owner = entry.get("customer_id")
-                if not owner or str(owner) != str(client_customer_id):
-                    return None
+            if client_customer_id is not None and not _client_may_see(client_customer_id, entry.get("customer_id")):
+                return None
             return entry
 
     order = fetch_order_by_id(order_id)
     if not order:
         return None
     entry = _build_access_entry(order)
-    if client_customer_id is not None:
-        owner = entry.get("customer_id")
-        if not owner or str(owner) != str(client_customer_id):
-            return None
+    if client_customer_id is not None and not _client_may_see(client_customer_id, entry.get("customer_id")):
+        return None
     with _order_access_cache_lock:
         _order_access_cache[oid] = (now + ORDER_ACCESS_CACHE_TTL_SEC, entry)
     return entry

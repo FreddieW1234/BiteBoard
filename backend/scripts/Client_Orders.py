@@ -349,3 +349,77 @@ def get_customer_orders(customer_id: str | int, fetch_all: bool = True) -> dict:
         return result
     except Exception as e:
         return {"success": False, "error": str(e), "orders": [], "total": 0}
+
+
+# --------------------------------------------------------------------------- #
+# Company view: a customer can see every order placed by people in the same
+# company (Customers > Companies in BiteBoard). Membership is cached briefly.
+# --------------------------------------------------------------------------- #
+_COMPANY_TTL_SEC = 300
+_company_cache: dict[str, tuple[float, dict]] = {}
+
+
+def client_company(customer_id: str | int) -> dict:
+    """{"company_id", "company_name", "member_ids"} for this customer.
+
+    Not in a company -> company_id None and member_ids == [customer_id].
+    Lookup failures fail closed (just the customer themself).
+    """
+    cid = str(customer_id or "").strip()
+    now = time.time()
+    with _customer_cache_lock:
+        hit = _company_cache.get(cid)
+    if hit and hit[0] > now:
+        return hit[1]
+    result = {"company_id": None, "company_name": None, "member_ids": [cid]}
+    try:
+        from scripts.office_api import get_customer_company, get_company  # type: ignore
+        link = get_customer_company(cid) or {}
+        company_id = link.get("company_id")
+        if company_id:
+            company = get_company(str(company_id)) or {}
+            if isinstance(company.get("company"), dict):
+                company = company["company"]
+            members = [str(m.get("customer_id") or "").strip() for m in company.get("members") or []]
+            members = [m for m in members if m]
+            if cid not in members:
+                members.append(cid)
+            result = {"company_id": str(company_id), "company_name": link.get("company_name") or company.get("name"),
+                      "member_ids": members}
+    except Exception:
+        return result  # don't cache a failed lookup
+    with _customer_cache_lock:
+        _company_cache[cid] = (now + _COMPANY_TTL_SEC, result)
+    return result
+
+
+def client_can_see_owner(client_customer_id: str | int, owner_customer_id: str | int | None) -> bool:
+    """A client sees their own orders, plus orders of anyone in their company."""
+    client = str(client_customer_id or "").strip()
+    owner = str(owner_customer_id or "").strip()
+    if not client or not owner:
+        return False
+    if client == owner:
+        return True
+    return owner in client_company(client)["member_ids"]
+
+
+def get_company_orders(customer_id: str | int) -> dict:
+    """Every order placed by anyone in this customer's company, newest first,
+    each tagged with who placed it."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    company = client_company(customer_id)
+    members = company["member_ids"]
+    with ThreadPoolExecutor(max_workers=min(6, len(members) or 1)) as pool:
+        results = list(pool.map(get_customer_orders, members))
+    orders = []
+    for member, res in zip(members, results):
+        if not res.get("success"):
+            continue
+        who = res.get("customer") or {}
+        placed_by = f"{who.get('first_name') or ''} {who.get('last_name') or ''}".strip() or who.get("email") or ""
+        for o in res.get("orders") or []:
+            orders.append({**o, "placed_by": placed_by, "placed_by_id": member})
+    orders.sort(key=lambda o: o.get("processed_at") or "", reverse=True)
+    return {"success": True, "orders": orders, "total": len(orders), "company": company}

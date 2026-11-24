@@ -276,10 +276,20 @@ def client_orders_page():
             deep_link={"order": "", "item": "", "proof": ""},
         )
     try:
-        from scripts.Client_Orders import get_customer_orders, get_customer_profile  # type: ignore
+        from scripts.Client_Orders import (  # type: ignore
+            client_company, get_company_orders, get_customer_orders, get_customer_profile,
+        )
         profile_result = get_customer_profile(cid)
         profile = profile_result.get("profile") if profile_result.get("success") else None
-        orders_result = get_customer_orders(cid)
+        # "My orders" / "Company orders" switch - only for customers in a company
+        # with other members. Company view lists everyone's orders.
+        company = client_company(cid)
+        has_company = bool(company.get("company_id")) and len(company.get("member_ids") or []) > 1
+        scope = "company" if (has_company and request.args.get("scope") == "company") else "mine"
+        if scope == "company":
+            orders_result = get_company_orders(cid)
+        else:
+            orders_result = get_customer_orders(cid)
         orders = orders_result.get("orders") or [] if orders_result.get("success") else []
     except Exception as e:
         print(f"Client portal error: {e}", flush=True)
@@ -304,6 +314,8 @@ def client_orders_page():
         error=None,
         logout_url=_client_logout_url(),
         deep_link=deep_link,
+        order_scope=scope,
+        company_name=(company.get("company_name") or "") if has_company else "",
     )
 
 
