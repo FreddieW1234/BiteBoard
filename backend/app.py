@@ -4284,7 +4284,7 @@ def api_shipping_labels_status():
 
 @app.route('/api/dashboard', methods=['GET'])
 def api_dashboard():
-    """Staff home page: sales, dispatch, money owed, sign-ups (cached ~2 min)."""
+    """Staff home page: sales, dispatch, sign-ups (cached ~2 min)."""
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
     try:

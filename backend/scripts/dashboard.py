@@ -1,5 +1,8 @@
 """Staff home dashboard: one call that gathers the numbers worth seeing first.
 
+Money owed and overdue dispatches are deliberately left out - the office and
+Sage handle those (Sage may be linked in later for the accounting side).
+
 Each section is built on its own, so one slow or failing source (e.g. the
 office server) leaves the rest of the page working. The whole result is cached
 for a couple of minutes - the page is opened a lot, the numbers move slowly.
@@ -26,21 +29,6 @@ query Dash($q: String!, $c: String) {
       displayFinancialStatus displayFulfillmentStatus
       totalPriceSet { shopMoney { amount } }
       totalTaxSet { shopMoney { amount } }
-      totalOutstandingSet { shopMoney { amount } }
-      customer { displayName companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") { value } }
-      billingAddress { company }
-    }
-    pageInfo { hasNextPage endCursor }
-  }
-}"""
-
-_UNPAID_QUERY = """
-query DashUnpaid($c: String) {
-  orders(first: 100, after: $c, sortKey: PROCESSED_AT, reverse: true,
-         query: "financial_status:pending OR financial_status:partially_paid OR financial_status:authorized") {
-    nodes {
-      legacyResourceId name processedAt cancelledAt displayFinancialStatus
-      totalOutstandingSet { shopMoney { amount } }
       customer { displayName companyNameNew: metafield(namespace: "custom_fields", key: "company_name_new") { value } }
       billingAddress { company }
     }
@@ -116,7 +104,6 @@ def _sales(today: date) -> dict:
     daily = {today - timedelta(days=i): bucket() for i in range(30)}
     companies: dict[str, float] = {}
     recent = []
-    fulfilled = set()
     for n in nodes:
         if n.get("cancelledAt"):
             continue
@@ -124,8 +111,6 @@ def _sales(today: date) -> dict:
         if not d:
             continue
         net = _money(n, "totalPriceSet") - _money(n, "totalTaxSet")
-        if (n.get("displayFulfillmentStatus") or "").upper() == "FULFILLED":
-            fulfilled.add(n.get("name") or "")
         hits = []
         if d == today:
             hits.append("today")
@@ -159,25 +144,7 @@ def _sales(today: date) -> dict:
         "top_companies": [{"company": c, "net": round(v, 2)}
                           for c, v in sorted(companies.items(), key=lambda kv: -kv[1])[:5]],
         "recent_orders": recent,
-        "_fulfilled": fulfilled,
     }
-
-
-def _unpaid(today: date) -> dict:
-    nodes = _paged(_UNPAID_QUERY, {}, "orders", 300)
-    rows = []
-    for n in nodes:
-        owed = _money(n, "totalOutstandingSet")
-        if n.get("cancelledAt") or owed <= 0.005:
-            continue
-        d = _uk_date(n.get("processedAt") or "")
-        rows.append({
-            "id": n.get("legacyResourceId"), "name": n.get("name") or "", "company": _company(n),
-            "owed": round(owed, 2), "days": (today - d).days if d else None,
-            "status": (n.get("displayFinancialStatus") or "").replace("_", " ").title(),
-        })
-    rows.sort(key=lambda r: -(r["days"] or 0))
-    return {"count": len(rows), "total": round(sum(r["owed"] for r in rows), 2), "oldest": rows[:6]}
 
 
 def _pending_customers() -> dict:
@@ -200,11 +167,11 @@ def _dispatch(today: date) -> dict:
     if not result.get("success"):
         raise RuntimeError(result.get("error") or "Diary unavailable")
     week_end = today + timedelta(days=6 - today.weekday() if today.weekday() < 5 else 7 + 4 - today.weekday())
-    out = {"today": [], "tomorrow": [], "late": [], "this_week": 0, "no_date": 0, "rows": result.get("rows") or []}
+    out = {"today": [], "tomorrow": [], "this_week": 0, "no_date": 0}
     next_day = today + timedelta(days=1)
     while next_day.weekday() >= 5:
         next_day += timedelta(days=1)
-    for r in out["rows"]:
+    for r in result.get("rows") or []:
         if r.get("shipped"):
             continue
         iso = r.get("dispatch_date_iso") or ""
@@ -221,8 +188,6 @@ def _dispatch(today: date) -> dict:
             out["today"].append(line)
         elif d == next_day:
             out["tomorrow"].append(line)
-        elif today - timedelta(days=14) <= d < today:
-            out["late"].append({**line, "days_late": (today - d).days})
         if today <= d <= week_end:
             out["this_week"] += 1
     return out
@@ -235,7 +200,7 @@ def _autoprint() -> dict:
 
 def build(today: date | None = None) -> dict:
     today = today or datetime.now(LONDON).date()
-    jobs = {"sales": lambda: _sales(today), "unpaid": lambda: _unpaid(today),
+    jobs = {"sales": lambda: _sales(today),
             "pending_customers": _pending_customers, "dispatch": lambda: _dispatch(today),
             "autoprint": _autoprint}
     out: dict = {"success": True, "today": today.isoformat(), "errors": {}}
@@ -247,13 +212,6 @@ def build(today: date | None = None) -> dict:
             except Exception as exc:
                 out[k] = None
                 out["errors"][k] = str(exc)[:200]
-    # Lines whose order Shopify already shows as fulfilled aren't really late.
-    fulfilled = (out.get("sales") or {}).pop("_fulfilled", set())
-    disp = out.get("dispatch")
-    if disp:
-        disp.pop("rows", None)
-        disp["late"] = sorted((r for r in disp["late"] if r["order_name"] not in fulfilled),
-                              key=lambda r: -r["days_late"])
     out["generated_at"] = datetime.now(LONDON).isoformat(timespec="seconds")
     return out
 

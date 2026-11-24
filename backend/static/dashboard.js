@@ -31,21 +31,16 @@
 
     function statTiles(data) {
         const s = data.sales;
-        const u = data.unpaid;
         if (!s) return `<div class="dash-card span-12">${sectionError(data, 'sales')}</div>`;
         const t = s.totals;
         const n = b => `${b.orders} order${b.orders === 1 ? '' : 's'}`;
-        const tile = (label, value, meta) => `<div class="dash-card stat span-3">
+        const tile = (label, value, meta) => `<div class="dash-card stat span-4">
             <div class="label">${label}</div><div class="value">${value}</div><div class="meta">${meta}</div></div>`;
-        const owed = u
-            ? tile('Money owed', gbp.format(u.total), `${u.count} unpaid order${u.count === 1 ? '' : 's'}`)
-            : tile('Money owed', '–', sectionError(data, 'unpaid'));
         return tile('Today', gbp.format(t.today.net), n(t.today))
             + tile('This week', gbp.format(t.week.net), n(t.week))
             + tile('This month', gbp.format(t.month.net),
                 `${n(t.month)} ${deltaHtml(t.month.net, t.last_month_same_point.net)}
-                 <span title="Same days last month">vs ${gbp.format(t.last_month_same_point.net)}</span>`)
-            + owed;
+                 <span title="Same days last month">vs ${gbp.format(t.last_month_same_point.net)}</span>`);
     }
 
     function chartCard(data) {
@@ -137,13 +132,12 @@
         if (!d) return `<div class="dash-card span-7"><h2>Dispatch</h2>${sectionError(data, 'dispatch')}</div>`;
         const btn = (key, n, label, cls) => `<button type="button" class="dc ${cls || ''} ${dispatchView === key ? 'active' : ''}" data-view="${key}">
             <span class="n">${n}</span><span class="t">${label}</span></button>`;
-        const lists = { today: d.today, tomorrow: d.tomorrow, late: d.late };
+        const lists = { today: d.today, tomorrow: d.tomorrow };
         const rows = lists[dispatchView] || [];
-        const emptyMsg = { today: 'Nothing due to go out today.', tomorrow: 'Nothing due next working day.', late: 'Nothing past its dispatch date.' }[dispatchView];
+        const emptyMsg = { today: 'Nothing due to go out today.', tomorrow: 'Nothing due next working day.' }[dispatchView];
         const list = rows.length ? '<ul class="dash-list">' + rows.slice(0, 8).map(r => `<li>
                 <span class="main-txt"><a href="${orderUrl(r.order_name)}">${esc(r.order_name)}</a> &middot; ${esc(r.product_label)}
                     <small>${esc(r.company || '')}</small></span>
-                ${r.days_late ? `<span class="pill bad">${r.days_late} day${r.days_late === 1 ? '' : 's'} late</span>` : ''}
                 ${r.carrier_label ? `<span class="pill neutral">${esc(r.carrier_label)}</span>` : ''}
             </li>`).join('') + '</ul>'
             + (rows.length > 8 ? `<div class="chart-foot">+ ${rows.length - 8} more in the <a href="/app/Diary">Diary</a></div>` : '')
@@ -152,11 +146,10 @@
             <div class="dispatch-counts">
                 ${btn('today', d.today.length, 'Due today', '')}
                 ${btn('tomorrow', d.tomorrow.length, 'Next working day', '')}
-                ${btn('late', d.late.length, 'Past dispatch date', d.late.length ? 'bad' : '')}
+                <div class="dc static"><span class="n">${d.this_week}</span><span class="t">Still to go this week</span></div>
                 <div class="dc static ${d.no_date ? 'warn' : ''}"><span class="n">${d.no_date}</span><span class="t">No dispatch date</span></div>
             </div>
             ${list}
-            <div class="chart-foot">${d.this_week} line${d.this_week === 1 ? '' : 's'} still to go out this week. "Late" means no shipping label yet for a date in the last 2 weeks.</div>
         </div>`;
     }
 
@@ -174,15 +167,6 @@
             parts.push('<h2>New sign-ups to approve</h2>' + sectionError(data, 'pending_customers'));
         }
 
-        const u = data.unpaid;
-        parts.push('<h2 style="margin-top:18px">Oldest unpaid</h2>');
-        if (!u) parts.push(sectionError(data, 'unpaid'));
-        else if (!u.oldest.length) parts.push('<div class="empty">Everything is paid.</div>');
-        else parts.push('<ul class="dash-list">' + u.oldest.map(o => `<li>
-                <span class="main-txt"><a href="${orderUrl(o.name)}">${esc(o.name)}</a> &middot; ${esc(o.company)}
-                    <small>${esc(o.status)}${o.days != null ? ` &middot; ${o.days} day${o.days === 1 ? '' : 's'} ago` : ''}</small></span>
-                <span class="num">${gbp2.format(o.owed)}</span></li>`).join('') + '</ul>');
-
         const a = data.autoprint || {};
         let print;
         if (!a.finished_at) print = '<span class="pill neutral">No run since the last restart</span>';
@@ -196,22 +180,16 @@
     function recentOrders(data) {
         const s = data.sales;
         if (!s) return '';
-        const payPill = f => {
-            const k = (f || '').toLowerCase();
-            const cls = k === 'paid' ? 'good' : (k.includes('pending') || k.includes('partially') || k.includes('authorized') ? 'warn' : 'neutral');
-            return f ? `<span class="pill ${cls}">${esc(f)}</span>` : '';
-        };
         const rows = s.recent_orders.map(o => `<tr>
             <td><a href="${orderUrl(o.name)}">${esc(o.name)}</a></td>
             <td class="hide-sm">${shortDate(o.date)}</td>
             <td class="company">${esc(o.company)}</td>
-            <td>${payPill(o.financial)}</td>
             <td class="hide-sm">${esc(o.fulfillment)}</td>
             <td class="r">${gbp2.format(o.total)}</td></tr>`).join('');
         return `<div class="dash-card span-12"><h2>Latest orders <a class="more" href="/app/Orders">All orders</a></h2>
             <div class="table-scroll"><table class="dash-table"><thead><tr>
-                <th>Order</th><th class="hide-sm">Date</th><th>Customer</th><th>Payment</th><th class="hide-sm">Fulfilment</th><th class="r">Total inc VAT</th>
-            </tr></thead><tbody>${rows || '<tr><td colspan="6" class="empty">No orders yet.</td></tr>'}</tbody></table></div></div>`;
+                <th>Order</th><th class="hide-sm">Date</th><th>Customer</th><th class="hide-sm">Fulfilment</th><th class="r">Total inc VAT</th>
+            </tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No orders yet.</td></tr>'}</tbody></table></div></div>`;
     }
 
     function render(data) {
