@@ -4282,6 +4282,19 @@ def api_shipping_labels_status():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/dashboard', methods=['GET'])
+def api_dashboard():
+    """Staff home page: sales, dispatch, money owed, sign-ups (cached ~2 min)."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    try:
+        from scripts.dashboard import get_dashboard  # type: ignore
+        refresh = request.args.get('refresh', '').lower() in ('1', 'true', 'yes')
+        return jsonify(get_dashboard(refresh=refresh))
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/orders', methods=['GET'])
 def api_orders():
     """Return recent Shopify orders for the staff Orders page."""

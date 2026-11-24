@@ -1298,6 +1298,11 @@
                 data: { items: detail.items || [] },
             }, !!detail.immediate);
         });
+        // ?q=#S1099 (e.g. from the home dashboard) opens the list already searched.
+        try {
+            const preset = new URLSearchParams(window.location.search).get('q');
+            if (preset) document.getElementById('search-input').value = preset;
+        } catch (e) { /* ignore */ }
         loadOrders();
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
