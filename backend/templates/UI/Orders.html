@@ -414,11 +414,11 @@
         .order-info-msg { font-size: 0.82rem; font-weight: 500; }
         .order-info-msg.ok { color: #059669; }
         .order-info-msg.err { color: #dc2626; }
-        /* Cancel / delete order - same look as "Remove customer" */
+        /* Cancel order - same look as "Remove customer" */
         .order-danger-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
-        .order-cancel-btn, .order-delete-btn { color: #b91c1c; }
-        .order-cancel-btn:hover, .order-delete-btn:hover { color: #991b1b; background: #fef2f2; }
-        .order-cancel-btn:disabled, .order-delete-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .order-cancel-btn { color: #b91c1c; }
+        .order-cancel-btn:hover { color: #991b1b; background: #fef2f2; }
+        .order-cancel-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .order-cancelled-note { font-size: 0.82rem; font-weight: 600; color: #b91c1c; margin-right: auto; }
         .order-cancelled-pill { margin-left: 6px; font-size: 0.68rem; font-weight: 600; color: #991b1b; background: #fee2e2; border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
         .order-cancel-panel { max-width: 460px; display: flex; flex-direction: column; gap: 10px; }
@@ -990,7 +990,7 @@
             return html;
         }
 
-        // ---- Cancel / delete order (bottom of the dropdown) ----
+        // ---- Cancel order (bottom of the dropdown) ----
         function renderOrderDangerActions(o) {
             const id = escapeHtml(o.id), name = escapeHtml(o.name);
             let html = '<div class="order-danger-actions">';
@@ -999,7 +999,6 @@
             } else {
                 html += `<button type="button" class="btn-ghost order-cancel-btn" data-order-id="${id}" data-order-name="${name}"><i class="fas fa-ban"></i> Cancel order</button>`;
             }
-            html += `<button type="button" class="btn-ghost order-delete-btn" data-order-id="${id}" data-order-name="${name}"><i class="fas fa-trash-can"></i> Delete order</button>`;
             return html + '</div>';
         }
 
@@ -1096,31 +1095,6 @@
                 msg.hidden = false;
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-ban"></i> Cancel order';
-            }
-        }
-
-        async function deleteOrder(btn) {
-            const orderId = btn.dataset.orderId;
-            const name = btn.dataset.orderName || 'this order';
-            if (!window.confirm(
-                `Delete ${name} from Shopify?\n\nThis cannot be undone. Shopify only lets you delete some orders ` +
-                `(manual payment, draft or test orders) and they usually have to be cancelled first.`
-            )) return;
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting…';
-            try {
-                const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/delete`, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.success) throw new Error(data.error || 'Could not delete the order');
-                allOrders = allOrders.filter(o => String(o.id) !== String(orderId));
-                renderOrdersView(filterOrders(document.getElementById('search-input').value));
-            } catch (err) {
-                alert(err.message || err);
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-trash-can"></i> Delete order';
             }
         }
 
@@ -1589,13 +1563,6 @@
                 e.preventDefault();
                 e.stopPropagation();
                 openCancelOrder(cancelBtn.dataset.orderId, cancelBtn.dataset.orderName);
-                return;
-            }
-            const deleteBtn = e.target.closest('.order-delete-btn');
-            if (deleteBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                deleteOrder(deleteBtn);
                 return;
             }
             const historyBtn = e.target.closest('.btn-order-history');
