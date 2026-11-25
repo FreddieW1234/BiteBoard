@@ -415,11 +415,11 @@
         .order-info-msg.ok { color: #059669; }
         .order-info-msg.err { color: #dc2626; }
         /* Change history button + timeline */
-        .order-history-bar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
         .btn-order-history {
             display: inline-flex; align-items: center; gap: 6px;
             border: 1px solid #d1d5db; background: #fff; color: #374151;
-            border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            border-radius: 8px; padding: 5px 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            margin-left: 8px; white-space: nowrap;
         }
         .btn-order-history:hover { border-color: #a5b4fc; color: #4f46e5; }
         .order-history-panel { max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
@@ -954,11 +954,7 @@
 
         function renderOrderDetails(o) {
             let html = '<div class="details-inner">';
-            html += `<div class="order-history-bar">
-                <button type="button" class="btn-order-history" data-order-id="${escapeHtml(o.id)}" data-order-name="${escapeHtml(o.name)}">
-                    <i class="fas fa-clock-rotate-left"></i> Change history
-                </button>
-            </div>`;
+
             html += renderLineSection('Items', o.order_items || [], 'No items', o.id);
             html += renderFeesSection(o.fees, o.id);
             html += renderOrderCostSections(o);
@@ -1479,6 +1475,6 @@
         window.addEventListener('load', () => scheduleAddressTextareaFit(document.getElementById('content')));
     </script>
     <script src="/static/production_note_print.js?v=3"></script>
-    <script src="/static/office_tracking.js?v=43"></script>
+    <script src="/static/office_tracking.js?v=44"></script>
 </body>
 </html>

@@ -1153,7 +1153,7 @@
         }
     }
 
-    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail, customerEmail, role, customerId, customerName) {
+    function renderNotifyBlock(orderId, apiPrefix, notify, sessionEmail, customerEmail, role, customerId, customerName, orderName) {
         const enabled = notifyDefaultEnabled(notify, role);
         const savedEmail = (notify && notify.email) || '';
         const defaultEmail = (savedEmail || sessionEmail || customerEmail || '').trim();
@@ -1171,6 +1171,9 @@
             </label>
             ${emailField}
             ${isStaff ? renderCustomerPicker(orderId, customerId, customerName, customerEmail) : ''}
+            ${isStaff && typeof global.openOrderHistory === 'function'
+                ? `<button type="button" class="btn-order-history" data-order-id="${escapeHtml(orderId)}" data-order-name="${escapeHtml(orderName || '')}"><i class="fas fa-clock-rotate-left"></i> View change history</button>`
+                : ''}
             <span class="office-notify-msg" hidden></span>
         </div>`;
     }
@@ -1207,7 +1210,8 @@
             payload.customer_email || '',
             role,
             payload.customer_id || '',
-            payload.customer_name || ''
+            payload.customer_name || '',
+            payload.order || ''
         );
         if (!notifyIsExplicitlySet(notify)) {
             const block = host.querySelector('.office-order-notify');
