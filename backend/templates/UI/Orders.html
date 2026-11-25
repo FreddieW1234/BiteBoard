@@ -1245,13 +1245,32 @@
                         }
                         if (isOpen) {
                             scheduleAddressTextareaFit(dr);
+                        } else if (ordersRefreshDeferred && !anyOrderOpen()) {
+                            scheduleOrdersRefresh(true);  // catch up on the re-sort we held back
                         }
                     }
                 });
             });
         }
 
+        function captureScrollAnchor() {
+            const rows = [...document.querySelectorAll('#content .data-row')];
+            const anchor = rows.find(r => r.classList.contains('expanded'))
+                || rows.find(r => r.getBoundingClientRect().bottom > 0);
+            return anchor
+                ? { id: anchor.dataset.orderId, top: anchor.getBoundingClientRect().top, y: window.scrollY }
+                : { id: null, top: 0, y: window.scrollY };
+        }
+
+        function restoreScrollAnchor(a) {
+            if (!a) return;
+            const row = a.id && document.querySelector('#content .data-row[data-order-id="' + CSS.escape(a.id) + '"]');
+            if (row) window.scrollBy(0, row.getBoundingClientRect().top - a.top);
+            else window.scrollTo(0, a.y);
+        }
+
         function renderOrdersView(orders) {
+            const scrollAnchor = captureScrollAnchor();
             const content = document.getElementById('content');
             const pill = document.getElementById('count-pill');
             const expandedIds = new Set();
@@ -1307,11 +1326,28 @@
                     });
                 });
             }
+            restoreScrollAnchor(scrollAnchor);
+            requestAnimationFrame(() => requestAnimationFrame(() => restoreScrollAnchor(scrollAnchor)));
+        }
+
+        let ordersRefreshDeferred = false;
+
+        function anyOrderOpen() {
+            return !!document.querySelector('#content .details-row.open');
         }
 
         function scheduleOrdersRefresh(immediate) {
             clearTimeout(ordersRefreshTimer);
-            const run = () => renderOrdersView(filterOrders(document.getElementById('search-input').value));
+            const run = () => {
+                // Don't redraw under someone who has an order open - it would reset
+                // what they're typing and jump the page. Catch up when it's closed.
+                if (anyOrderOpen()) {
+                    ordersRefreshDeferred = true;
+                    return;
+                }
+                ordersRefreshDeferred = false;
+                renderOrdersView(filterOrders(document.getElementById('search-input').value));
+            };
             if (immediate) {
                 run();
                 return;
