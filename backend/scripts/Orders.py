@@ -21,6 +21,7 @@ query StaffOrders($cursor: String) {{
         legacyResourceId
         name
         processedAt
+        cancelledAt
         customer {{
           legacyResourceId
           displayName
@@ -76,6 +77,7 @@ def _format_order_node(node: dict) -> dict:
         "id": node.get("legacyResourceId"),
         "name": node.get("name") or "",
         "processed_at": node.get("processedAt") or "",
+        "cancelled_at": node.get("cancelledAt") or "",
         "customer_id": customer.get("legacyResourceId"),
         "customer_name": customer.get("displayName") or "",
         "customer_email": customer.get("email") or "",

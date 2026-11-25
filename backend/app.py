@@ -3559,6 +3559,126 @@ mutation OrderCustomerSet($orderId: ID!, $customerId: ID!) {
 """
 
 
+_ORDER_CANCEL_REASONS = ("CUSTOMER", "DECLINED", "FRAUD", "INVENTORY", "STAFF", "OTHER")
+_ORDER_CANCEL_LABELS = {
+    "CUSTOMER": "Customer changed or cancelled their order",
+    "DECLINED": "Payment declined",
+    "FRAUD": "Fraudulent order",
+    "INVENTORY": "Items unavailable",
+    "STAFF": "Staff error",
+    "OTHER": "Other",
+}
+
+
+def _shopify_admin_gql(query, variables):
+    from scripts.order_helpers import _graphql  # type: ignore
+    return _graphql(query, variables)
+
+
+@app.route("/api/orders/<order_id>/cancel", methods=["POST"])
+def api_order_cancel(order_id):
+    """Staff: cancel an order in Shopify (can't be undone).
+
+    Options: reason, restock, refund (to the original payment method),
+    notify_customer, staff_note. Shopify cancels in the background, so this
+    waits a few seconds for it to finish.
+    """
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    oid = str(order_id).strip()
+    if not oid.isdigit():
+        return jsonify({"success": False, "error": "Invalid order"}), 400
+    data = request.get_json(silent=True) or {}
+    reason = str(data.get("reason") or "OTHER").strip().upper()
+    if reason not in _ORDER_CANCEL_REASONS:
+        return jsonify({"success": False, "error": "Choose a reason"}), 400
+    restock = bool(data.get("restock"))
+    refund = bool(data.get("refund"))
+    notify = bool(data.get("notify_customer"))
+    staff = get_staff_username() or "staff"
+    note = " ".join(str(data.get("staff_note") or "").split())
+    staff_note = (f"Cancelled in BiteBoard by {staff}" + (f": {note}" if note else ""))[:255]
+    gid = f"gid://shopify/Order/{oid}"
+    try:
+        result = _shopify_admin_gql(
+            """mutation($orderId: ID!, $reason: OrderCancelReason!, $restock: Boolean!,
+                        $notifyCustomer: Boolean, $staffNote: String, $refundMethod: OrderCancelRefundMethodInput) {
+                 orderCancel(orderId: $orderId, reason: $reason, restock: $restock, notifyCustomer: $notifyCustomer,
+                             staffNote: $staffNote, refundMethod: $refundMethod) {
+                   job { id done }
+                   orderCancelUserErrors { field message code }
+                 }
+               }""",
+            {"orderId": gid, "reason": reason, "restock": restock, "notifyCustomer": notify,
+             "staffNote": staff_note, "refundMethod": {"originalPaymentMethodsRefund": refund}},
+        ).get("orderCancel") or {}
+        errors = result.get("orderCancelUserErrors") or []
+        if errors:
+            return jsonify({"success": False, "error": "; ".join(e.get("message", "") for e in errors)}), 400
+        # Shopify cancels in the background - give it a few seconds to finish.
+        cancelled_at = ""
+        job = result.get("job") or {}
+        for _ in range(10):
+            check = _shopify_admin_gql("query($id: ID!) { order(id: $id) { name cancelledAt } }", {"id": gid}).get("order") or {}
+            cancelled_at = check.get("cancelledAt") or ""
+            if cancelled_at or job.get("done"):
+                break
+            time.sleep(1)
+        order_name = check.get("name") or ""
+        try:
+            from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
+            invalidate_order_access_cache(oid)
+        except Exception:
+            pass
+        extras = [x for x, on in (("restocked", restock), ("refunded", refund), ("customer emailed", notify)) if on]
+        _history(order_name, "Order cancelled",
+                 _ORDER_CANCEL_LABELS[reason] + (f" ({', '.join(extras)})" if extras else "") + (f" - {note}" if note else ""))
+        print(f"[orders] {order_name or oid} cancelled by {staff}: {reason} restock={restock} refund={refund} "
+              f"notify={notify} done={bool(cancelled_at)}", flush=True)
+        return jsonify({"success": True, "order": order_name, "cancelled_at": cancelled_at,
+                        "pending": not cancelled_at})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)[:300]}), 500
+
+
+@app.route("/api/orders/<order_id>/delete", methods=["POST"])
+def api_order_delete(order_id):
+    """Admins: permanently delete an order from Shopify (can't be undone).
+
+    Shopify only deletes some orders (manual payment, draft or test orders)
+    and they normally have to be cancelled first; its message is passed on.
+    """
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    from portal_auth import staff_is_admin  # type: ignore
+    if not staff_is_admin():
+        return jsonify({"success": False, "error": "Only admins can delete orders"}), 403
+    oid = str(order_id).strip()
+    if not oid.isdigit():
+        return jsonify({"success": False, "error": "Invalid order"}), 400
+    gid = f"gid://shopify/Order/{oid}"
+    try:
+        before = _shopify_admin_gql("query($id: ID!) { order(id: $id) { name } }", {"id": gid}).get("order") or {}
+        result = _shopify_admin_gql(
+            """mutation($orderId: ID!) { orderDelete(orderId: $orderId) { deletedId userErrors { field message code } } }""",
+            {"orderId": gid},
+        ).get("orderDelete") or {}
+        errors = result.get("userErrors") or []
+        if errors:
+            return jsonify({"success": False, "error": "; ".join(e.get("message", "") for e in errors)}), 400
+        if not result.get("deletedId"):
+            return jsonify({"success": False, "error": "Shopify did not confirm the order was deleted"}), 502
+        try:
+            from scripts.order_helpers import invalidate_order_access_cache  # type: ignore
+            invalidate_order_access_cache(oid)
+        except Exception:
+            pass
+        print(f"[orders] {before.get('name') or oid} DELETED by {get_staff_username()}", flush=True)
+        return jsonify({"success": True, "order": before.get("name") or ""})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)[:300]}), 500
+
+
 @app.route("/api/orders/<order_id>/customer", methods=["POST"])
 def api_order_set_customer(order_id):
     """Staff: move an order onto another customer's Shopify account."""

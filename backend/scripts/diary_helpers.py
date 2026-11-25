@@ -261,6 +261,8 @@ def order_dispatch_display(order: dict, saved: dict[tuple[str, str], dict]) -> s
 def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> list[dict]:
     rows: list[dict] = []
     for order in orders or []:
+        if order.get("cancelled_at"):
+            continue  # cancelled - nothing to dispatch
         order_name = order.get("name") or ""
         order_id = str(order.get("id") or "")
         order_info = order.get("order_info") or {}
