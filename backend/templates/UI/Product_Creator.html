@@ -255,6 +255,16 @@
         .seo-preview-desc.empty { color: #b45309; font-style: italic; }
         .seo-count { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
         .seo-count.over { color: #b91c1c; }
+        /* Character count inside the box, at its right-hand end ("66/70"). */
+        .seo-count-wrap { position: relative; }
+        .seo-count-wrap .seo-count-in {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            margin: 0; pointer-events: none; font-variant-numeric: tabular-nums;
+        }
+        .seo-count-wrap input, .seo-count-wrap textarea { width: 100%; box-sizing: border-box; }
+        .seo-count-wrap input { padding-right: 76px; }
+        .seo-count-wrap--area .seo-count-in { top: auto; bottom: 12px; right: 26px; transform: none; }
+        .seo-count-wrap--area textarea { padding-bottom: 30px; }
         .seo-handle-wrap { display: flex; align-items: center; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; overflow: hidden; }
         .seo-handle-wrap span { padding: 0 0 0 12px; color: #64748b; }
         .seo-handle-wrap input { flex: 1; border: none; outline: none; padding: 10px 12px 10px 0; font-size: 0.95rem; background: transparent; }
@@ -3159,13 +3169,17 @@
                         </div>
                         <div class="form-group full-width">
                             <label class="form-label" for="seo-title">Page title</label>
-                            <input type="text" id="seo-title" class="form-input" maxlength="255" placeholder="Defaults to the product title">
-                            <div class="seo-count" id="seoTitleCount"></div>
+                            <div class="seo-count-wrap">
+                                <input type="text" id="seo-title" class="form-input" maxlength="255" placeholder="Defaults to the product title">
+                                <div class="seo-count seo-count-in" id="seoTitleCount"></div>
+                            </div>
                         </div>
                         <div class="form-group full-width">
                             <label class="form-label" for="seo-description">Meta description</label>
-                            <textarea id="seo-description" class="form-textarea" rows="3" maxlength="320" placeholder="A sentence or two that sells the product in search results"></textarea>
-                            <div class="seo-count" id="seoDescCount"></div>
+                            <div class="seo-count-wrap seo-count-wrap--area">
+                                <textarea id="seo-description" class="form-textarea" rows="3" maxlength="320" placeholder="A sentence or two that sells the product in search results"></textarea>
+                                <div class="seo-count seo-count-in" id="seoDescCount"></div>
+                            </div>
                         </div>
                         <div class="form-group full-width">
                             <label class="form-label" for="seo-handle">URL handle</label>
@@ -10202,10 +10216,10 @@
             document.getElementById('seoPreviewCrumb').textContent = `https://bitepromotions.co.uk › products › ${handle}`;
 
             const tc = document.getElementById('seoTitleCount');
-            tc.textContent = `${t.value.trim().length} of 70 characters used`;
+            tc.textContent = `${t.value.trim().length}/70`;
             tc.classList.toggle('over', t.value.trim().length > 70);
             const dc = document.getElementById('seoDescCount');
-            dc.textContent = `${desc.length} of 160 characters used`;
+            dc.textContent = `${desc.length}/160`;
             dc.classList.toggle('over', desc.length > 160);
             document.getElementById('seoHandleUrl').textContent = url;
             const typed = seoSlug(h.value);

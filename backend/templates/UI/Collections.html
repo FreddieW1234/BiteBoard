@@ -117,6 +117,15 @@
         }
         .cl-field textarea.cl-readonly { min-height: 88px; line-height: 1.45; }
         .cl-field .hint { margin-top: 6px; font-size: 0.75rem; color: #6b7280; }
+        /* Character count inside the box, at its right-hand end ("66/70"). */
+        .cl-count-wrap { position: relative; }
+        .cl-count {
+            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+            font-size: 0.75rem; color: #6b7280; pointer-events: none; font-variant-numeric: tabular-nums;
+        }
+        .cl-count-wrap .cl-readonly { padding-right: 64px; }
+        .cl-count-wrap--area .cl-count { top: auto; bottom: 10px; transform: none; }
+        .cl-count-wrap--area textarea.cl-readonly { padding-bottom: 28px; }
         .cl-handle-box {
             display: flex; align-items: stretch; border: 1px solid #d1d5db; border-radius: 8px;
             overflow: hidden; background: #f9fafb;
@@ -331,11 +340,11 @@
             + '<div class="seo-preview-desc">' + esc(seoDesc || '—') + '</div>'
             + '</div>'
             + '<div class="cl-field"><label>Page title</label>'
-            + '<div class="cl-readonly">' + esc(seoTitle) + '</div>'
-            + '<div class="hint">' + esc(String(seoTitle.length)) + ' of 70 characters used</div></div>'
+            + '<div class="cl-count-wrap"><div class="cl-readonly">' + esc(seoTitle) + '</div>'
+            + '<span class="cl-count">' + esc(String(seoTitle.length)) + '/70</span></div></div>'
             + '<div class="cl-field"><label>Meta description</label>'
-            + '<textarea class="cl-readonly" readonly>' + esc(seoDesc) + '</textarea>'
-            + '<div class="hint">' + esc(String(seoDesc.length)) + ' of 160 characters used</div></div>'
+            + '<div class="cl-count-wrap cl-count-wrap--area"><textarea class="cl-readonly" readonly>' + esc(seoDesc) + '</textarea>'
+            + '<span class="cl-count">' + esc(String(seoDesc.length)) + '/160</span></div></div>'
             + '<div class="cl-field"><label>URL handle</label>'
             + '<div class="cl-handle-box"><span class="cl-handle-prefix">collections/</span>'
             + '<div class="cl-readonly">' + esc(handle) + '</div></div>'
