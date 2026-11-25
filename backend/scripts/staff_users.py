@@ -1,9 +1,14 @@
-"""Individual staff logins: username, hashed password, role (staff / admin).
+"""Individual staff logins: username, hashed password and access level.
+
+Access levels:
+  staff - everyday use of BiteBoard
+  admin - also the Users page (add / change / remove staff and admins)
+  dev   - everything: Users (including dev accounts) and the dev-only pages
+          (Files, Artwork Updater)
 
 Kept on the office server (named snapshot ``staff_users``) so accounts survive
-redeploys. The two logins in config.STAFF_ACCOUNTS ("built-in") still work and
-count as admins, so there is always a way in to set people up; admins can
-switch a built-in login off from the Users page (``dev`` stays on).
+redeploys. Usernames in config.STAFF_DEV_USERNAMES are always dev, so the
+owner can never be locked out of dev access by someone else.
 """
 
 from __future__ import annotations
@@ -19,10 +24,10 @@ from werkzeug.security import check_password_hash, generate_password_hash
 log = logging.getLogger(__name__)
 
 SNAPSHOT = "staff_users"
-ROLES = ("staff", "admin")
+ROLES = ("staff", "admin", "dev")
+MANAGER_ROLES = ("admin", "dev")  # can open the Users page
 MIN_PASSWORD = 1  # no length rule - just not blank
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._@!-]{1,39}$")
-ALWAYS_ON_BUILTINS = frozenset({"dev"})
 
 _LOCK = threading.Lock()
 _CACHE: dict = {"at": 0.0, "data": None}
@@ -37,13 +42,20 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _builtins() -> dict:
-    from config import STAFF_ACCOUNTS  # type: ignore
-    return dict(STAFF_ACCOUNTS)
+def _fixed_devs() -> frozenset:
+    from config import STAFF_DEV_USERNAMES  # type: ignore
+    return frozenset(n.strip().lower() for n in STAFF_DEV_USERNAMES)
+
+
+def _role_of(key: str, user: dict) -> str:
+    if key in _fixed_devs():
+        return "dev"
+    role = user.get("role") or "staff"
+    return role if role in ROLES else "staff"
 
 
 def _load(force: bool = False) -> dict:
-    """{"users": {lower_name: {...}}, "disabled_builtins": [...]} (cached)."""
+    """{"users": {lower_name: {...}}, "last_active": {...}} (cached)."""
     now = time.time()
     if not force and _CACHE["data"] is not None and now - _CACHE["at"] < _CACHE_TTL:
         return _CACHE["data"]
@@ -55,9 +67,9 @@ def _load(force: bool = False) -> dict:
         log.warning("Staff users unavailable: %s", exc)
         if _CACHE["data"] is not None:
             return _CACHE["data"]  # keep the last good copy if the office server blips
-        return {"users": {}, "disabled_builtins": [], "_unavailable": True}  # not cached
+        return {"users": {}, "_unavailable": True}  # not cached
     data.setdefault("users", {})
-    data.setdefault("disabled_builtins", [])
+    data.pop("disabled_builtins", None)  # left over from the old built-in logins
     _CACHE.update(at=now, data=data)
     return data
 
@@ -77,10 +89,6 @@ def _save(data: dict, by: str) -> None:
     _CACHE.update(at=time.time(), data=data)
 
 
-def _builtin_enabled(name: str, data: dict) -> bool:
-    return name in ALWAYS_ON_BUILTINS or name not in (data.get("disabled_builtins") or [])
-
-
 # ---------------------------------------------------------------- login / lookup
 
 def authenticate(username: str, password: str) -> str | None:
@@ -89,21 +97,30 @@ def authenticate(username: str, password: str) -> str | None:
     p = password or ""
     if not u or not p:
         return None
-    data = _load()
-    user = data["users"].get(u.lower())
-    if user:
-        if user.get("active", True) and check_password_hash(user.get("password_hash") or "", p):
-            _touch_login(u.lower())
-            return user["username"]
-        return None
-    builtins = _builtins()
-    if u in builtins and builtins[u] == p and _builtin_enabled(u, data):
-        return u
+    user = _load()["users"].get(u.lower())
+    if user and user.get("active", True) and check_password_hash(user.get("password_hash") or "", p):
+        mark_active(u.lower())
+        return user["username"]
     return None
 
 
-def _touch_login(key: str) -> None:
-    mark_active(key)
+def account(username: str | None) -> dict | None:
+    """{"username", "role"} for an active account, else None."""
+    u = (username or "").strip()
+    if not u:
+        return None
+    data = _load()
+    key = u.lower()
+    user = data["users"].get(key)
+    if user:
+        if not user.get("active", True):
+            return None
+        return {"username": user["username"], "role": _role_of(key, user)}
+    if data.get("_unavailable"):
+        # Office server unreachable: keep people signed in rather than throwing
+        # everyone out; Users and dev pages wait until it's back.
+        return {"username": u, "role": "staff"}
+    return None
 
 
 # ---------------------------------------------------------------- last active
@@ -141,52 +158,30 @@ def _last_active(key: str, data: dict) -> str | None:
     return max(seen) if seen else None
 
 
-def account(username: str | None) -> dict | None:
-    """{"username", "role", "builtin"} for an active account, else None."""
-    u = (username or "").strip()
-    if not u:
-        return None
-    data = _load()
-    user = data["users"].get(u.lower())
-    if user:
-        if not user.get("active", True):
-            return None
-        return {"username": user["username"], "role": user.get("role") or "staff", "builtin": False}
-    if data.get("_unavailable") and u not in _builtins():
-        # Office server unreachable: keep them signed in as staff rather than
-        # throwing everyone out; admin pages wait until it's back.
-        return {"username": u, "role": "staff", "builtin": False}
-    if u in _builtins() and _builtin_enabled(u, data):
-        return {"username": u, "role": "admin", "builtin": True}
-    return None
+# ---------------------------------------------------------------- managing users
 
+def _actor_role(by: str, data: dict) -> str:
+    key = (by or "").strip().lower()
+    user = data["users"].get(key)
+    return _role_of(key, user) if user else "staff"
 
-# ---------------------------------------------------------------- admin actions
 
 def list_users() -> list[dict]:
     data = _load(force=True)
     out = []
-    for name in _builtins():
+    for key, user in sorted(data["users"].items(), key=lambda kv: kv[1]["username"].lower()):
         out.append({
-            "username": name, "role": "admin", "builtin": True,
-            "active": _builtin_enabled(name, data),
-            "can_disable": name not in ALWAYS_ON_BUILTINS,
-            "last_active": _last_active(name.lower(), data),
-        })
-    for user in sorted(data["users"].values(), key=lambda x: x["username"].lower()):
-        out.append({
-            "username": user["username"], "role": user.get("role") or "staff", "builtin": False,
+            "username": user["username"], "role": _role_of(key, user),
+            "role_fixed": key in _fixed_devs(),
             "active": user.get("active", True), "created_at": user.get("created_at"),
             "created_by": user.get("created_by"),
-            "last_active": _last_active(user["username"].lower(), data),
+            "last_active": _last_active(key, data),
         })
     return out
 
 
-def _active_admins(data: dict) -> set[str]:
-    admins = {n.lower() for n in _builtins() if _builtin_enabled(n, data)}
-    admins |= {k for k, v in data["users"].items() if v.get("active", True) and v.get("role") == "admin"}
-    return admins
+def _managers_left(data: dict) -> bool:
+    return any(v.get("active", True) and _role_of(k, v) in MANAGER_ROLES for k, v in data["users"].items())
 
 
 def _check_password(password: str) -> None:
@@ -194,16 +189,22 @@ def _check_password(password: str) -> None:
         raise UserError("Enter a password")
 
 
+def _check_role(role: str, actor_role: str) -> None:
+    if role not in ROLES:
+        raise UserError("Access must be Staff, Admin or Dev")
+    if role == "dev" and actor_role != "dev":
+        raise UserError("Only a dev can give dev access")
+
+
 def create_user(username: str, password: str, role: str, *, by: str) -> dict:
     u = (username or "").strip()
     if not _USERNAME_RE.match(u):
         raise UserError("Username must be 2-40 characters: letters, numbers, spaces and . _ @ ! -")
-    if role not in ROLES:
-        raise UserError("Role must be staff or admin")
     _check_password(password)
     with _LOCK:
         data = _load_for_write()
-        if u.lower() in data["users"] or u.lower() in {n.lower() for n in _builtins()}:
+        _check_role(role, _actor_role(by, data))
+        if u.lower() in data["users"]:
             raise UserError("That username is already taken")
         data["users"][u.lower()] = {
             "username": u, "role": role, "active": True,
@@ -220,30 +221,18 @@ def update_user(username: str, *, by: str, role: str | None = None, active: bool
     me = (by or "").strip().lower()
     with _LOCK:
         data = _load_for_write()
-        builtin = next((n for n in _builtins() if n.lower() == key), None)
-        if builtin:
-            if role is not None or password is not None:
-                raise UserError("Built-in logins are set in config; you can only switch them on or off")
-            if active is not None:
-                if builtin in ALWAYS_ON_BUILTINS:
-                    raise UserError(f"The {builtin} login can't be switched off")
-                if not active and key == me:
-                    raise UserError("You can't switch off the login you're using")
-                disabled = set(data.get("disabled_builtins") or [])
-                (disabled.discard if active else disabled.add)(builtin)
-                data["disabled_builtins"] = sorted(disabled)
-                if not _active_admins(data):
-                    raise UserError("There must always be at least one admin")
-                _save(data, by)
-            return {"username": builtin}
         user = data["users"].get(key)
         if not user:
             raise UserError("No such user")
+        actor = _actor_role(by, data)
+        if _role_of(key, user) == "dev" and actor != "dev":
+            raise UserError("Only a dev can change a dev account")
         if role is not None:
-            if role not in ROLES:
-                raise UserError("Role must be staff or admin")
-            if key == me and role != "admin":
-                raise UserError("You can't remove your own admin access")
+            _check_role(role, actor)
+            if key in _fixed_devs() and role != "dev":
+                raise UserError(f"{user['username']} is always a dev")
+            if key == me and role != _role_of(key, user):
+                raise UserError("You can't change your own access")
             user["role"] = role
         if active is not None:
             if key == me and not active:
@@ -252,24 +241,27 @@ def update_user(username: str, *, by: str, role: str | None = None, active: bool
         if password is not None:
             _check_password(password)
             user["password_hash"] = generate_password_hash(password)
-        if not _active_admins(data):
-            raise UserError("There must always be at least one admin")
+        if not _managers_left(data):
+            raise UserError("There must always be at least one admin or dev")
         user["updated_at"] = _now()
         _save(data, by)
-        return {"username": user["username"], "role": user["role"], "active": user["active"]}
+        return {"username": user["username"], "role": _role_of(key, user), "active": user.get("active", True)}
 
 
 def delete_user(username: str, *, by: str) -> None:
     key = (username or "").strip().lower()
     with _LOCK:
         data = _load_for_write()
-        if any(n.lower() == key for n in _builtins()):
-            raise UserError("Built-in logins can't be deleted - switch them off instead")
+        user = data["users"].get(key)
+        if not user:
+            raise UserError("No such user")
         if key == (by or "").strip().lower():
             raise UserError("You can't delete your own login")
-        if key not in data["users"]:
-            raise UserError("No such user")
+        if key in _fixed_devs():
+            raise UserError(f"{user['username']} can't be deleted")
+        if _role_of(key, user) == "dev" and _actor_role(by, data) != "dev":
+            raise UserError("Only a dev can delete a dev account")
         del data["users"][key]
-        if not _active_admins(data):
-            raise UserError("There must always be at least one admin")
+        if not _managers_left(data):
+            raise UserError("There must always be at least one admin or dev")
         _save(data, by)

@@ -6,7 +6,7 @@
     <title>Users - BiteBoard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="/static/theme.css?v=8" rel="stylesheet">
+    <link href="/static/theme.css?v=9" rel="stylesheet">
     <link rel="stylesheet" href="/static/dark-auto.css?v=2">
     <script src="/static/theme.js?v=6"></script>
     <style>
@@ -61,14 +61,14 @@
         .pill.admin { background: #ede9fe; color: #5b21b6; }
         .pill.staff { background: #e0f2fe; color: #075985; }
         .pill.off { background: #fee2e2; color: #991b1b; }
-        .pill.builtin { background: #f3f4f6; color: #4b5563; }
+        .pill.dev { background: #d1fae5; color: #065f46; }
         .user-actions { display: flex; gap: 6px; align-items: center; }
         .user-actions select { border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 0.8rem; background: #fff; }
         .you { color: #6b7280; font-size: 0.75rem; margin-left: 4px; }
         html[data-theme="dark"] .pill.admin { background: rgba(139, 92, 246, 0.2); color: #ddd6fe; }
         html[data-theme="dark"] .pill.staff { background: rgba(14, 165, 233, 0.18); color: #bae6fd; }
         html[data-theme="dark"] .pill.off { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
-        html[data-theme="dark"] .pill.builtin { background: #21262d; color: #c9d1d9; }
+        html[data-theme="dark"] .pill.dev { background: rgba(16, 185, 129, 0.18); color: #a7f3d0; }
         html[data-theme="dark"] th, html[data-theme="dark"] td { border-bottom-color: #30363d; }
         html[data-theme="dark"] .user-actions select, html[data-theme="dark"] .btn-small { background: #161b22; border-color: #30363d; color: #c9d1d9; }
     </style>
@@ -87,8 +87,8 @@
                     <a href="/app/Menu" class="app-tab"><i class="fas fa-sitemap"></i><span>Menu</span></a>
                     <a href="/app/Users" class="app-tab active"><i class="fas fa-user-gear"></i><span>Users</span></a>
                     {% if staff_show_dev_tabs %}
-                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
-                    <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
+                    <a href="/app/Artwork_Updater" class="app-tab dev-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/Files" class="app-tab dev-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
                     {% endif %}
                 </div>
             </nav>
@@ -115,6 +115,7 @@
                         <select id="add-role">
                             <option value="staff">Staff</option>
                             <option value="admin">Admin (can manage users)</option>
+                            <option value="dev" hidden>Dev (everything, incl. Files &amp; Artwork Updater)</option>
                         </select>
                     </div>
                     <button type="submit" class="btn" id="add-btn"><i class="fas fa-user-plus"></i> Add user</button>
@@ -123,7 +124,6 @@
             </div>
 
             <div class="card">
-                <h2>Everyone</h2>
                 <div class="msg" id="list-msg" hidden></div>
                 <div class="table-wrap">
                     <table>
@@ -131,7 +131,6 @@
                         <tbody id="users-body"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
                     </table>
                 </div>
-                <p class="muted" style="margin-top:10px">Built-in logins come from the server settings and count as admins. Once everyone has their own login, switch the shared one off here.</p>
             </div>
         </div>
     </div>
@@ -145,6 +144,8 @@
         return isNaN(d) ? iso : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
     let me = '';
+    let myRole = 'staff';
+    const ROLE_LABEL = { staff: 'Staff', admin: 'Admin', dev: 'Dev' };
 
     function showMsg(el, text, ok) {
         el.hidden = !text;
@@ -166,16 +167,16 @@
 
     function actionsFor(u, isMe) {
         const user = esc(u.username);
-        if (u.builtin) {
-            if (!u.can_disable || isMe) return '';
-            return `<button class="btn-small" data-act="toggle" data-user="${user}" data-active="${u.active ? 1 : 0}">${u.active ? 'Switch off' : 'Switch on'}</button>`;
-        }
-        const roleSelect = `<select data-act="role" data-user="${user}"${isMe ? ' disabled title="You can&#39;t change your own access"' : ''}>
-                <option value="staff"${u.role === 'staff' ? ' selected' : ''}>Staff</option>
-                <option value="admin"${u.role === 'admin' ? ' selected' : ''}>Admin</option>
+        // Only a dev can change a dev account.
+        if (u.role === 'dev' && myRole !== 'dev') return '';
+        const roles = myRole === 'dev' ? ['staff', 'admin', 'dev'] : ['staff', 'admin'];
+        const locked = isMe || u.role_fixed;
+        const why = isMe ? 'You can&#39;t change your own access' : 'Always a dev';
+        const roleSelect = `<select data-act="role" data-user="${user}"${locked ? ` disabled title="${why}"` : ''}>
+                ${roles.map(r => `<option value="${r}"${u.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}
             </select>`;
         const reset = `<button class="btn-small" data-act="password" data-user="${user}">Reset password</button>`;
-        if (isMe) return roleSelect + reset;
+        if (isMe || u.role_fixed) return roleSelect + reset;
         return roleSelect + reset
             + `<button class="btn-small" data-act="toggle" data-user="${user}" data-active="${u.active ? 1 : 0}">${u.active ? 'Disable' : 'Enable'}</button>`
             + `<button class="btn-danger" data-act="delete" data-user="${user}">Delete</button>`;
@@ -185,10 +186,10 @@
         const rows = users.map(u => {
             const isMe = u.username.toLowerCase() === me.toLowerCase();
             const status = u.active ? '<span class="muted">Active</span>' : '<span class="pill off">Disabled</span>';
-            const added = u.builtin ? 'Server settings' : esc(when(u.created_at)) + (u.created_by ? ' by ' + esc(u.created_by) : '');
+            const added = esc(when(u.created_at)) + (u.created_by ? ' by ' + esc(u.created_by) : '');
             return `<tr>
                 <td><strong>${esc(u.username)}</strong>${isMe ? '<span class="you">(you)</span>' : ''}</td>
-                <td><span class="pill ${u.role === 'admin' ? 'admin' : 'staff'}">${u.role === 'admin' ? 'Admin' : 'Staff'}</span>${u.builtin ? ' <span class="pill builtin">Built-in</span>' : ''}</td>
+                <td><span class="pill ${esc(u.role)}">${ROLE_LABEL[u.role] || 'Staff'}</span></td>
                 <td>${status}</td>
                 <td class="muted">${esc(when(u.last_active))}</td>
                 <td class="muted">${added}</td>
@@ -202,6 +203,9 @@
         try {
             const data = await api('/api/users', 'GET');
             me = data.me || '';
+            myRole = data.my_role || 'staff';
+            const devOpt = document.querySelector('#add-role option[value="dev"]');
+            if (devOpt) devOpt.hidden = myRole !== 'dev';
             render(data.users || []);
         } catch (err) {
             showMsg($('list-msg'), err.message);
@@ -238,7 +242,7 @@
         const sel = e.target.closest('select[data-act="role"]');
         if (!sel) return;
         act(() => api('/api/users/' + encodeURIComponent(sel.dataset.user), 'PUT', { role: sel.value }),
-            `${sel.dataset.user} is now ${sel.value === 'admin' ? 'an admin' : 'staff'}.`);
+            `${sel.dataset.user} is now ${sel.value === 'admin' ? 'an admin' : sel.value === 'dev' ? 'a dev' : 'staff'}.`);
     });
 
     $('users-body').addEventListener('click', e => {

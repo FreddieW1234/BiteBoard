@@ -26,16 +26,10 @@ STORE_DOMAIN = os.environ.get("SHOPIFY_STORE_DOMAIN", "")
 API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2025-07")
 ACCESS_TOKEN = os.environ.get("SHOPIFY_ACCESS_TOKEN", "")
 
-# Staff portal logins (hardcoded - blocks customers from staff area only).
-# "dev" can see Files / Dev / Artwork Updater; other staff cannot.
-STAFF_ACCOUNTS = {
-    "Chocolate1!": "Chocolate2!",
-    "dev": "dev",
-}
-STAFF_DEV_TOOL_USERNAMES = frozenset({"dev"})
-# Back-compat aliases (primary Chocolate account)
-STAFF_USERNAME = "Chocolate1!"
-STAFF_PASSWORD = STAFF_ACCOUNTS[STAFF_USERNAME]
+# Staff logins are individual accounts, managed on the Users page (stored on the
+# office server - see scripts/staff_users.py). These usernames always have Dev
+# access (everything, including Files and Artwork Updater).
+STAFF_DEV_USERNAMES = frozenset({"Freddie"})
 FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "biteboard-portal-session-key")
 # Set to "false" for local HTTP dev so session cookies work without HTTPS
 FLASK_SESSION_SECURE = os.environ.get("FLASK_SESSION_SECURE", "true").lower() in ("1", "true", "yes")

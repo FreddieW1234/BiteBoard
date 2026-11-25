@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from flask import session
 
-from config import STAFF_ACCOUNTS, STAFF_DEV_TOOL_USERNAMES  # type: ignore
 
 STAFF_SESSION_KEY = "staff_authenticated"
 STAFF_USERNAME_SESSION_KEY = "staff_username"
 CLIENT_ID_SESSION_KEY = "client_customer_id"
 CLIENT_EMAIL_SESSION_KEY = "client_email"
 
-# Pages / APIs only the "dev" staff user may open.
+# Pages / APIs only Dev accounts may open.
 STAFF_DEV_ONLY_PATH_PREFIXES = (
     "/app/Artwork_Updater",
     "/app/Files",
@@ -43,8 +42,9 @@ def current_staff_account() -> dict | None:
 
 
 def staff_is_admin() -> bool:
+    """Admin or Dev - can open the Users page."""
     acc = current_staff_account()
-    return bool(acc and acc.get("role") == "admin")
+    return bool(acc and acc.get("role") in ("admin", "dev"))
 
 
 def is_staff_admin_only_path(path: str) -> bool:
@@ -68,9 +68,9 @@ def get_staff_username() -> str | None:
 
 
 def staff_can_access_dev_tools() -> bool:
-    """Files / Dev / Artwork Updater - only the dedicated dev account."""
-    u = get_staff_username()
-    return bool(u and u in STAFF_DEV_TOOL_USERNAMES)
+    """Files / Dev / Artwork Updater - Dev accounts only."""
+    acc = current_staff_account()
+    return bool(acc and acc.get("role") == "dev")
 
 
 def staff_user_type_label() -> str | None:

@@ -275,7 +275,10 @@ def api_users():
     from scripts.staff_users import UserError, create_user, list_users  # type: ignore
     try:
         if request.method == "GET":
-            return jsonify({"success": True, "users": list_users(), "me": get_staff_username() or ""})
+            from portal_auth import current_staff_account  # type: ignore
+            my_role = (current_staff_account() or {}).get("role") or "staff"
+            return jsonify({"success": True, "users": list_users(), "me": get_staff_username() or "",
+                            "my_role": my_role})
         data = request.get_json(silent=True) or {}
         user = create_user(data.get("username") or "", data.get("password") or "",
                            (data.get("role") or "staff").strip().lower(), by=get_staff_username() or "")

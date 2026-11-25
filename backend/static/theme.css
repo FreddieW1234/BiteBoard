@@ -1489,3 +1489,16 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
         z-index: 20;
     }
 }
+
+/* Dev-only tabs (Files, Artwork Updater) - green, so it's obvious only Dev accounts see them. */
+.app-tab.dev-tab { color: #047857; }
+.app-tab.dev-tab i,
+.app-tab.dev-tab:hover i { color: #059669; }
+.app-tab.dev-tab:hover { background: #ecfdf5; color: #065f46; }
+.app-tab.dev-tab.active { background: #059669; color: #fff; }
+.app-tab.dev-tab.active i { color: #fff; }
+html[data-theme="dark"] .app-tab.dev-tab { color: #6ee7b7; }
+html[data-theme="dark"] .app-tab.dev-tab i { color: #34d399; }
+html[data-theme="dark"] .app-tab.dev-tab:hover { background: rgba(16, 185, 129, 0.14); color: #a7f3d0; }
+html[data-theme="dark"] .app-tab.dev-tab.active { background: #047857; color: #fff; }
+html[data-theme="dark"] .app-tab.dev-tab.active i { color: #fff; }
