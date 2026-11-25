@@ -7,7 +7,7 @@ from scripts.diary_helpers import (  # type: ignore
     format_display_date,
 )
 from scripts.dispatch_schedule import (  # type: ignore
-    asap_display,
+    asap_sentence,
     is_pickup,
     line_requested_date,
 )
@@ -51,10 +51,9 @@ def build_art_job_sheet(
         "customer_supplier": (order.get("company") or "").strip(),
         "unit_quantity": qty_text,
         "dispatch_date": dispatch_date,
-        "requested_label": "REQUESTED COLLECTION DATE" if pickup else "REQUESTED DELIVERY DATE",
+        "requested_label": "Requested collection" if pickup else "Requested delivery",
         "requested_date": format_display_date(delivery_date),
-        "asap_label": "EARLY COLLECTION IF READY" if pickup else "ASAP IF READY EARLY",
-        "asap": asap_display(line.get("asap_if_ready_sooner")),
+        "asap_sentence": asap_sentence(line.get("asap_if_ready_sooner"), pickup),
         "initial_proof_date": "",
         "additional_info": "",
         "rm_number": "",

@@ -249,9 +249,11 @@ def is_pickup(order: dict) -> bool:
     return (order.get("dispatch_method") or "") == "pickup"
 
 
-def asap_display(value: bool | None) -> str:
-    if value is True:
-        return "YES"
-    if value is False:
-        return "NO"
-    return ""
+def asap_sentence(value: bool | None, pickup: bool) -> str:
+    """One line for under the dispatch / collection date ("" when not known)."""
+    if value is None:
+        return ""
+    answer = "Yes" if value else "No"
+    if pickup:
+        return f"Early collection if ready sooner: {answer}"
+    return f"Dispatch ASAP if ready sooner: {answer}"

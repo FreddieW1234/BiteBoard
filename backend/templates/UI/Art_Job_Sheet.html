@@ -114,18 +114,14 @@
 
         .h-md { height: 14mm; }
         .h-lg { height: 21mm; }
-        .h-sm { height: 11mm; }
 
-        /* Customer's "dispatch / collect early" choice - staff must not miss it. */
-        td.asap-box {
-            border: 2.5px solid #000;
-            vertical-align: middle;
-            text-align: center;
-            font-size: 12pt;
+        /* Customer's "dispatch / collect early" choice, under the date. */
+        .asap-line {
+            display: block;
+            margin-top: 3px;
+            font-size: 10pt;
             font-weight: 700;
         }
-        .asap-box .asap-val { font-size: 14pt; }
-        td.asap-box.asap-yes { background: #000; color: #fff; }
 
         .note {
             display: block;
@@ -171,9 +167,8 @@
         table { height: auto; }
         /* Taller rows so the sheet still fills the page, as it does in the browser. */
         .title-cell, .designer-cell { height: 22mm; }
-        .h-md { height: 28mm; }
-        .h-lg { height: 34mm; }
-        .h-sm { height: 16mm; }
+        .h-md { height: 30mm; }
+        .h-lg { height: 40mm; }
         .bar td { height: 12mm; }
         {% endif %}
     </style>
@@ -236,20 +231,12 @@
                 <td class="h-md">
                     <span class="label">DISPATCH DATE</span>
                     {% if sheet.dispatch_date %}<span class="value">{{ sheet.dispatch_date }}</span>{% endif %}
+                    {% if sheet.requested_date %}<span class="value">{{ sheet.requested_label }}: {{ sheet.requested_date }}</span>{% endif %}
+                    {% if sheet.asap_sentence %}<span class="asap-line">{{ sheet.asap_sentence }}</span>{% endif %}
                 </td>
                 <td class="h-md">
                     <span class="label">INITIAL PROOF DATE</span>
                     {% if sheet.initial_proof_date %}<span class="value">{{ sheet.initial_proof_date }}</span>{% endif %}
-                </td>
-            </tr>
-
-            <tr>
-                <td class="h-sm">
-                    <span class="label">{{ sheet.requested_label or 'REQUESTED DELIVERY DATE' }}</span>
-                    {% if sheet.requested_date %}<span class="value">{{ sheet.requested_date }}</span>{% endif %}
-                </td>
-                <td colspan="2" class="h-sm asap-box{% if sheet.asap == 'YES' %} asap-yes{% endif %}">
-                    {{ sheet.asap_label or 'ASAP IF READY EARLY' }}: <span class="asap-val">{{ sheet.asap or 'NOT GIVEN' }}</span>
                 </td>
             </tr>
 

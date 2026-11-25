@@ -168,17 +168,12 @@
             font-size: 50pt;
         }
 
-        /* Customer's "dispatch / collect early" choice - staff must not miss it. */
-        .asap-box {
-            border: 2.5px solid #000;
-            padding: 5px 8px;
-            font-size: 12pt;
+        /* Customer's "dispatch / collect early" choice, under the date. */
+        .asap-line {
+            margin-top: 8px;
+            font-size: 11pt;
             font-weight: 700;
-            text-transform: uppercase;
-            text-align: center;
         }
-        .asap-box .asap-val { font-size: 14pt; }
-        .asap-box.asap-yes { background: #000; color: #fff; }
 
         .shipping-box {
             padding: 6px 8px;
@@ -332,11 +327,6 @@
                 <td class="lbl" colspan="2">{{ note.requested_label or 'Requested Delivery' }}</td>
                 <td class="val">{{ note.requested_delivery }}</td>
             </tr>
-            <tr>
-                <td colspan="6" class="asap-box{% if note.asap == 'YES' %} asap-yes{% endif %}">
-                    {{ note.asap_label or 'ASAP if ready early' }}: <span class="asap-val">{{ note.asap or 'not given' }}</span>
-                </td>
-            </tr>
 
             <tr class="addr-dispatch-row">
                 <td class="lbl addr-lbl">{% if note.is_pickup %}Collection{% else %}Delivery Address{% endif %}</td>
@@ -344,6 +334,7 @@
                 <td colspan="3" class="dispatch-box">
                     <div class="dispatch-label">{{ note.dispatch_label or 'Dispatch' }}</div>
                     <div class="dispatch-date">{{ note.expected_dispatch }}</div>
+                    {% if note.asap_sentence %}<div class="asap-line">{{ note.asap_sentence }}</div>{% endif %}
                 </td>
             </tr>
 

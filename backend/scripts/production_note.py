@@ -11,7 +11,7 @@ from scripts.diary_helpers import (  # type: ignore
 )
 from scripts.dispatch_schedule import (  # type: ignore
     SCHEDULE_HEADINGS,
-    asap_display,
+    asap_sentence,
     heading_norm,
     is_pickup,
     line_requested_date,
@@ -399,8 +399,7 @@ def build_production_note(
         "is_pickup": pickup,
         "requested_label": "Requested Collection" if pickup else "Requested Delivery",
         "dispatch_label": "Ready for collection by" if pickup else "Dispatch",
-        "asap_label": "Early collection if ready" if pickup else "ASAP if ready early",
-        "asap": asap_display(line.get("asap_if_ready_sooner")),
+        "asap_sentence": asap_sentence(line.get("asap_if_ready_sooner"), pickup),
         "shipping_charged": (order.get("shipping_display") or "").strip(),
         "use_customers_delivery_note": _global_note_value(
             order_info,
