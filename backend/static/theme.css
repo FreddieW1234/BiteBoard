@@ -1477,3 +1477,15 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb {
 html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
     background: var(--bb-muted);
 }
+
+/* Sidebar stays put on the left while the page scrolls (every staff page). */
+@media (min-width: 769px) {
+    .app-layout > .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        max-height: 100vh;
+        align-self: flex-start;
+        z-index: 20;
+    }
+}
