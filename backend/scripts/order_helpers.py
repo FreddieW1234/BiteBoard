@@ -726,6 +726,17 @@ def parse_order_note(note: str) -> list[dict]:
     while i < n:
         stripped = lines[i].strip()
         if not stripped:
+            # Keep blank lines inside the ADDITIONAL NOTES text (but not after it),
+            # so saving the Order info panel doesn't squash paragraphs together.
+            if (
+                current
+                and _is_additional_notes_section(current.get("heading"))
+                and current.get("fields")
+                and current["fields"][-1].get("value")
+            ):
+                _, upcoming = next_meaningful(i + 1)
+                if upcoming and not _NOTE_LINE.match(upcoming):
+                    current["fields"][-1]["value"] += "\n"
             i += 1
             continue
 
@@ -1372,6 +1383,23 @@ def attach_dispatch_displays(orders: list[dict]) -> None:
     from scripts.Diary import load_saved_entries  # type: ignore
     from scripts.diary_helpers import order_dispatch_display  # type: ignore
 
+    from scripts.diary_helpers import dispatch_display_for_line  # type: ignore
+    from scripts.dispatch_schedule import asap_sentence, is_pickup, line_requested_date  # type: ignore
+
     saved = load_saved_entries()
     for order in orders:
         order["dispatch_display"] = order_dispatch_display(order, saved)
+        # Per line, for the customer portal: requested date, expected dispatch /
+        # collection date and the "ASAP if ready sooner" choice.
+        pickup = is_pickup(order)
+        for line in order.get("order_items") or []:
+            if line.get("is_fee") or line.get("line_number") is None:
+                continue
+            try:
+                line["dispatch_display"] = dispatch_display_for_line(
+                    order.get("name") or "", line, saved, requested_date=line_requested_date(order, line))
+            except Exception:
+                line["dispatch_display"] = ""
+            line["requested_label"] = "Requested collection" if pickup else "Requested delivery"
+            line["dispatch_label"] = "Ready for collection by" if pickup else "Expected dispatch"
+            line["asap_sentence"] = asap_sentence(line.get("asap_if_ready_sooner"), pickup)

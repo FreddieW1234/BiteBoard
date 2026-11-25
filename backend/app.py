@@ -3162,7 +3162,20 @@ def api_order_info_update(order_id):
         note = data.get("note", "")
         attributes = data.get("attributes") or []
         note_sections = data.get("note_sections")
-        return jsonify(update_order_info(order_id, note, attributes, note_sections=note_sections))
+        try:  # what it said before, for the change history
+            before = _office_access(order_id) or {}
+            old_note = ((before.get("order") or {}).get("order_info") or {}).get("note") or ""
+            order_name = before.get("name") or ""
+        except Exception:
+            old_note, order_name = None, ""
+        result = update_order_info(order_id, note, attributes, note_sections=note_sections)
+        if order_name and old_note is not None:
+            from scripts.order_history import note_changes  # type: ignore
+            new_note = (result.get("order_info") or {}).get("note") or ""
+            changes = note_changes(old_note, new_note)
+            if changes:
+                _history(order_name, "Order info edited", changes)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 400
 
@@ -3431,6 +3444,9 @@ def api_order_add_charge(order_id):
             except Exception as kexc:
                 notify_error = str(kexc)[:200]
                 print(f"[warn] charge: order-updated email not sent for {order.get('name') or oid}: {kexc}", flush=True)
+        _history(order.get("name") or "", "Charge added",
+                 f"{title}: £{amount:.2f}" + (" + VAT" if taxable else " (no VAT)")
+                 + (" - customer emailed" if notify else ""))
         print(f"[orders] Charge added to {order.get('name') or oid} by {staff}: {title} £{amount:.2f} "
               f"(taxable={taxable}, order update email={'sent' if notified else ('FAILED' if notify else 'not requested')})", flush=True)
         return jsonify({
@@ -3558,6 +3574,13 @@ def api_order_set_customer(order_id):
                 invalidate_customer_orders(c)
         except Exception:
             pass
+        try:
+            who_to = customer.get("displayName") or cid
+            _history((_office_access(oid) or {}).get("name") or "", "Customer changed",
+                     f"Order moved to {who_to}" + (f" ({new_email})" if new_email else "")
+                     + ("; shipping address updated" if address_updated else ""))
+        except Exception:
+            pass
         print(f"[orders] Order {oid} moved from customer {old_cid or '-'} to {cid} ({new_email}) by staff; "
               f"shipping address {'updated' if address_updated else 'unchanged'}", flush=True)
         store = STORE_DOMAIN.replace("https://", "").replace("http://", "").split(".")[0]
@@ -3572,6 +3595,15 @@ def api_order_set_customer(order_id):
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _history(order_name, action, detail="", *, item=""):
+    """Add an event to the order's change history (never fails the request)."""
+    try:
+        from scripts.order_history import record  # type: ignore
+        record(order_name, action, detail, item=item)
+    except Exception:
+        pass
 
 
 def _office_item_context(order_id, item):
@@ -3700,6 +3732,36 @@ def _seed_new_order_tracking(order_name: str, missing: list) -> None:
     if seeded:
         with _OFFICE_ORDER_CACHE_LOCK:
             _OFFICE_ORDER_CACHE.pop(order_name, None)
+
+
+@app.route("/api/orders/<order_id>/history", methods=["GET"])
+def api_order_history(order_id):
+    """Staff: the order's change history, newest first."""
+    if not is_staff_authenticated():
+        return jsonify({"success": False, "error": "Staff login required"}), 403
+    entry = _office_access(order_id)
+    if not entry:
+        return jsonify({"success": False, "error": "Order not found"}), 404
+    try:
+        from scripts.order_history import get_history  # type: ignore
+        events = get_history(entry.get("name") or "")
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"History unavailable: {exc}"}), 502
+    order = entry.get("order") or {}
+    items = {}
+    for li in order.get("order_items") or []:
+        if li.get("line_number") is None:
+            continue
+        from scripts.office_api import item_key  # type: ignore
+        key = li.get("office_item_id") or item_key(li["line_number"], li.get("title") or "")
+        items[key] = li.get("title") or ""
+    return jsonify({
+        "success": True,
+        "order": entry.get("name") or "",
+        "placed_at": order.get("processed_at") or "",
+        "items": items,
+        "events": events,
+    })
 
 
 @app.route("/api/orders/indicators", methods=["POST"])
@@ -3831,6 +3893,7 @@ def _office_delete_file(order_id, item, filename, *, client_mode: bool = False):
         elif not is_staff_authenticated():
             return jsonify({"success": False, "error": "Not authorised"}), 403
         delete_file(order_name, item, filename)
+        _history(order_name, "File deleted", filename, item=item)
         return jsonify({"success": True})
     except OfficeApiError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
@@ -3883,6 +3946,10 @@ def _office_notify_set(order_id):
     try:
         from scripts.office_api import set_notify, OfficeApiError  # type: ignore
         notify = set_notify(order_name, enabled, email)
+        if enabled:
+            _history(order_name, "Update emails turned on", (notify or {}).get("email") or email)
+        else:
+            _history(order_name, "Update emails turned off")
         return jsonify({"success": True, "notify": notify})
     except OfficeApiError as exc:
         msg = str(exc)
@@ -3966,6 +4033,9 @@ def api_order_production_notify(order_id):
     except KlaviyoError as exc:
         return jsonify({"success": False, "error": str(exc)}), 502
 
+    from scripts.klaviyo_api import UPDATE_LABELS  # type: ignore
+    _history(order_name, "Customer emailed",
+             f"'{UPDATE_LABELS.get(update_type, update_type)}' update sent to {email}", item=item_id)
     portal_url = build_portal_url(
         str(order_id),
         item_id=item_id,
@@ -4062,6 +4132,7 @@ def _office_upload_artwork(order_id, item, api_prefix, *, staff=False):
     try:
         from scripts.office_api import upload_artwork, OfficeApiError  # type: ignore
         office = upload_artwork(order_name, item, f.stream, f.filename)
+        _history(order_name, "Artwork uploaded", f.filename, item=item)
         _rewrite_office_files(office, order_id, item, api_prefix)
         return jsonify({"success": True, "office": office})
     except OfficeApiError as exc:
@@ -4080,6 +4151,7 @@ def _office_upload_proof(order_id, item, api_prefix):
     try:
         from scripts.office_api import upload_proof, OfficeApiError  # type: ignore
         office = upload_proof(order_name, item, f.stream, f.filename)
+        _history(order_name, "Proof uploaded", f.filename, item=item)
         _rewrite_office_files(office, order_id, item, api_prefix)
         return jsonify({"success": True, "office": office})
     except OfficeApiError as exc:
@@ -4156,6 +4228,12 @@ def _office_set_status(order_id, item, api_prefix, *, client_mode=False):
             office = set_status(order_name, item, "printing", note=note or "In Production", by=by)
         except OfficeApiError:
             office = current
+    from scripts.order_history import stage_label  # type: ignore
+    if by == "customer" and stage != "approved":
+        _history(order_name, "Customer asked for changes", note, item=item)
+    else:
+        label = "In production" if (stage == "in_production" or note == "In Production") else stage_label(stage)
+        _history(order_name, f"Stage set to {label}", "" if note in ("", "In Production") else note, item=item)
     _rewrite_office_files(office, order_id, item, api_prefix)
     if stage == "approved" and previous_stage != "approved":
         _fire_proof_approved_klaviyo(order_id, entry, order_name, item, approved_by=by)
@@ -4226,6 +4304,16 @@ def api_diary_entry():
         result = save_diary_entry(data)
         if not result.get("success"):
             return jsonify(result), 400
+        order_name = (data.get("order_name") or "").strip()
+        item_id = (data.get("item_id") or "").strip()
+        if "dispatch_date" in data:
+            from scripts.diary_helpers import format_display_date, parse_delivery_date  # type: ignore
+            new = format_display_date(parse_delivery_date(str(data.get("dispatch_date") or "")))
+            _history(order_name, "Dispatch date changed", f"Now {new}" if new else "Cleared", item=item_id)
+        if "carrier" in data:
+            from scripts.diary_helpers import _CARRIER_LABELS  # type: ignore
+            carrier = str(data.get("carrier") or "").strip().lower()
+            _history(order_name, "Carrier changed", _CARRIER_LABELS.get(carrier, carrier) or "None", item=item_id)
         return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

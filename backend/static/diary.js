@@ -15,7 +15,14 @@
         { value: 'requested_far', label: 'Furthest requested' },
     ];
 
+    const SHOW_OPTIONS = [
+        { value: 'all', label: 'All lines' },
+        { value: 'asap', label: 'Can go early' },
+        { value: 'pickup', label: 'Collections only' },
+    ];
+
     let allRows = [];
+    let showMode = localStorage.getItem('diary-show') || 'all';
     let sortMode = localStorage.getItem('diary-sort') || 'dispatch_close';
     let viewMode = localStorage.getItem('diary-view') || 'week';
     let focusDate = parseIsoDate(localStorage.getItem('diary-focus')) || startOfDay(new Date());
@@ -139,7 +146,23 @@
                 ordersInRange.add(row.order_name);
             }
         });
-        return rows.filter(row => ordersInRange.has(row.order_name));
+        return rows.filter(row => ordersInRange.has(row.order_name) && matchesShowMode(row));
+    }
+
+    function matchesShowMode(row) {
+        if (showMode === 'asap') return row.asap === true && !row.shipped;
+        if (showMode === 'pickup') return !!row.is_pickup;
+        return true;
+    }
+
+    // Small tags under the dispatch date: collection order / customer would take it early.
+    function rowTagsHtml(row) {
+        let html = '';
+        if (row.is_pickup) html += '<span class="diary-tag diary-tag-pickup"><i class="fas fa-store" aria-hidden="true"></i> Collection</span>';
+        if (row.asap === true) {
+            html += `<span class="diary-tag diary-tag-asap"><i class="fas fa-bolt" aria-hidden="true"></i> ${row.is_pickup ? 'Collect early if ready' : 'ASAP if ready'}</span>`;
+        }
+        return html ? `<div class="diary-tags">${html}</div>` : '';
     }
 
     function sortRows(rows) {
@@ -164,6 +187,7 @@
 
     function persistPrefs() {
         localStorage.setItem('diary-sort', sortMode);
+        localStorage.setItem('diary-show', showMode);
         localStorage.setItem('diary-view', viewMode);
         localStorage.setItem('diary-focus', toIsoDate(focusDate));
     }
@@ -217,7 +241,7 @@
             </div>
             <div class="diary-table-scroll"><table class="diary-table"><thead><tr>
             <th>Dispatch date</th>
-            <th>Requested delivery date</th>
+            <th>Requested date</th>
             <th>Order number</th>
             <th>Product</th>
             <th>Company</th>
@@ -242,6 +266,7 @@
                     <span class="diary-save-msg diary-screen-only" data-msg="${escapeHtml(key)}" hidden></span>
                 </div>
                 <span class="diary-print-only">${escapeHtml(dispatchPrint)}</span>
+                ${rowTagsHtml(row)}
             </td>`;
             html += `<td class="diary-requested">${escapeHtml(row.requested_date || '—')}</td>`;
             html += `<td><a class="diary-order-link diary-screen-only" href="/app/Orders#order-${escapeHtml(row.order_id)}">${escapeHtml(row.order_name)}</a><span class="diary-print-only">${escapeHtml(row.order_name)}</span></td>`;
@@ -635,6 +660,11 @@
         persistPrefs();
         renderTable();
     });
+    document.getElementById('diary-show-select')?.addEventListener('change', e => {
+        showMode = e.target.value;
+        persistPrefs();
+        renderTable();
+    });
     document.getElementById('diary-focus-input')?.addEventListener('change', e => {
         const d = parseIsoDate(e.target.value);
         if (d) {
@@ -681,6 +711,13 @@
     if (sortSelect) {
         sortSelect.innerHTML = SORT_OPTIONS.map(o =>
             `<option value="${escapeHtml(o.value)}"${o.value === sortMode ? ' selected' : ''}>${escapeHtml(o.label)}</option>`
+        ).join('');
+    }
+    const showSelect = document.getElementById('diary-show-select');
+    if (showSelect) {
+        if (!SHOW_OPTIONS.some(o => o.value === showMode)) showMode = 'all';
+        showSelect.innerHTML = SHOW_OPTIONS.map(o =>
+            `<option value="${escapeHtml(o.value)}"${o.value === showMode ? ' selected' : ''}>${escapeHtml(o.label)}</option>`
         ).join('');
     }
     const focusInput = document.getElementById('diary-focus-input');

@@ -141,8 +141,8 @@ def production_update_extra_properties(
     *,
     order: dict | None = None,
 ) -> dict[str, str]:
-    """Diary dispatch date, PO number, and raw order note for Klaviyo templates."""
-    props = {"dispatch_date": "", "po_number": "", "order_note": ""}
+    """Diary dispatch date, PO number, raw order note and shipping / pickup for Klaviyo templates."""
+    props = {"dispatch_date": "", "po_number": "", "order_note": "", "dispatch_method": ""}
     order_name = (order_name or "").strip()
     item_id = (item_id or "").strip()
 
@@ -160,24 +160,19 @@ def production_update_extra_properties(
     order_info = order.get("order_info") or {}
     props["order_note"] = (order_info.get("note") or order.get("note") or "").strip()
     props["po_number"] = _extract_po_number(order_info)
+    # "pickup" orders use collection wording in the email template.
+    props["dispatch_method"] = (order.get("dispatch_method") or "").strip()
 
     line = _find_line_for_item(order, item_id)
     if not line or not order_name:
         return props
 
     try:
-        from scripts.diary_helpers import (  # type: ignore
-            collect_delivery_date_fields,
-            dispatch_display_for_line,
-            parse_delivery_date,
-            _match_field_for_line,
-        )
+        from scripts.diary_helpers import dispatch_display_for_line  # type: ignore
+        from scripts.dispatch_schedule import line_requested_date  # type: ignore
         from scripts.Diary import load_saved_entries  # type: ignore
 
-        date_fields = collect_delivery_date_fields(order_info)
-        matched_date = _match_field_for_line(line, date_fields)
-        delivery_raw = (matched_date.get("value") if matched_date else "") or ""
-        requested_date = parse_delivery_date(str(delivery_raw).strip())
+        requested_date = line_requested_date(order, line)
         props["dispatch_date"] = dispatch_display_for_line(
             order_name,
             line,
@@ -224,6 +219,9 @@ def send_production_update(
         order_name, order_id, item_id, order=order
     )
 
+    if extra["dispatch_method"] == "pickup" and update_type == "shipped":
+        stage_label = "Ready for collection"
+
     payload: dict[str, Any] = {
         "data": {
             "type": "event",
@@ -240,6 +238,7 @@ def send_production_update(
                     "dispatch_date": extra["dispatch_date"],
                     "po_number": extra["po_number"],
                     "order_note": extra["order_note"],
+                    "dispatch_method": extra["dispatch_method"],
                 },
                 "metric": {
                     "data": {

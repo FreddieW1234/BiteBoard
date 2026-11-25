@@ -651,6 +651,12 @@
             line-height: 1.35;
             word-break: break-word;
         }
+        .cu-orders-modal-body .order-info-asap-select {
+            margin-left: 4px;
+            font: inherit;
+            padding: 1px 4px;
+            border-radius: 6px;
+        }
         .cu-orders-modal-body .order-info-top-dates .order-info-asap {
             margin-top: 4px;
             font-size: 0.75rem;
@@ -1476,7 +1482,7 @@
                         <option value="production">Production note</option>
                         <option value="artwork">Artwork job sheet</option>
                         <option value="sage">Sage info (whole order)</option>
-                    </select></label>`;
+                    </select></div>`;
             }
             html += `</div>
                         <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
@@ -1688,23 +1694,41 @@
         function noteHeadingNorm(h) { return (h || '').trim().replace(/:$/, '').trim().toUpperCase(); }
         function isAsapHeading(h) { return ASAP_HEADINGS.includes(noteHeadingNorm(h)); }
 
-        function asapSentenceFor(o, field) {
+        // Returns the line to show under one date: a Yes/No switch when the note has
+        // an ASAP line for that product (switching it edits the hidden ASAP field,
+        // saved with "Save order info"), else plain text from the storefront data.
+        function asapControlFor(o, field) {
             if (!field || field.field_role === 'po') return '';
             const pickup = (o.dispatch_method || '') === 'pickup'
                 || /COLLECTION/i.test(field.restore_heading || '');
-            const sentence = yes => (pickup ? 'Early collection if ready sooner: ' : 'Dispatch ASAP if ready sooner: ') + (yes ? 'Yes' : 'No');
+            const label = pickup ? 'Early collection if ready sooner' : 'Dispatch ASAP if ready sooner';
             const key = noteHeadingNorm(field.key);
-            // The note's own ASAP section first (same "Title (SKU):" key as the date).
             for (const sec of (o.order_info && o.order_info.note_sections) || []) {
                 if (!isAsapHeading(sec.heading)) continue;
                 const hit = (sec.fields || []).find(f => noteHeadingNorm(f.key) === key);
-                const v = hit ? String(hit.value || '').trim().toLowerCase() : '';
-                if (v === 'yes' || v === 'no') return sentence(v === 'yes');
+                if (!hit) continue;
+                const v = String(hit.value || '').trim().toLowerCase();
+                const opt = (val, text) => `<option value="${val}"${v === val.toLowerCase() ? ' selected' : ''}>${text}</option>`;
+                return `<div class="order-info-asap">${escapeHtml(label)}:
+                    <select class="order-info-asap-select" data-asap-key="${escapeHtml(hit.key)}" onchange="setAsapNoteField(this)">
+                        ${v === 'yes' || v === 'no' ? '' : '<option value="" selected>—</option>'}${opt('Yes', 'Yes')}${opt('No', 'No')}
+                    </select></div>`;
             }
-            // Otherwise the line item (from the storefront's _dispatch_schedule).
+            // No ASAP line in the note: show the storefront's answer, if any.
             const line = (o.order_items || []).find(li => li.sku && key.includes('(' + String(li.sku).toUpperCase() + ')'));
-            if (line && typeof line.asap_if_ready_sooner === 'boolean') return sentence(line.asap_if_ready_sooner);
+            if (line && typeof line.asap_if_ready_sooner === 'boolean') {
+                return `<div class="order-info-asap">${escapeHtml(label)}: ${line.asap_if_ready_sooner ? 'Yes' : 'No'}</div>`;
+            }
             return '';
+        }
+
+        function setAsapNoteField(select) {
+            const form = select.closest('form');
+            if (!form) return;
+            const key = select.dataset.asapKey;
+            form.querySelectorAll('.order-info-note-group[hidden] .order-info-note-field').forEach(el => {
+                if (el.dataset.noteKey === key) el.value = select.value;
+            });
         }
 
         function renderDateTopRow(sec, inputClass, keyAttr, o) {
@@ -1717,7 +1741,7 @@
                 html += `<div class="order-info-field">
                     <label>${escapeHtml(orderInfoFieldLabel(f))}</label>
                     <textarea class="${inputClass}" ${keyAttr}="${escapeHtml(f.key)}" rows="2"${restore}${role}>${escapeHtml(f.value || '')}</textarea>
-                    ${(() => { const t = asapSentenceFor(o || {}, f); return t ? `<div class="order-info-asap">${escapeHtml(t)}</div>` : ''; })()}
+                    ${asapControlFor(o || {}, f)}
                 </div>`;
             });
             html += '</div></div>';

@@ -317,6 +317,9 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 "company": (order.get("company") or "").strip(),
                 "requested_date": format_display_date(requested_date),
                 "requested_date_iso": format_iso_date(requested_date),
+                # Customer is collecting / would take it early if it's ready.
+                "is_pickup": (order.get("dispatch_method") or "") == "pickup",
+                "asap": line.get("asap_if_ready_sooner"),
                 "dispatch_date": format_display_date(dispatch_date),
                 "dispatch_date_iso": format_iso_date(dispatch_date),
                 "dispatch_manual": dispatch_manual,

@@ -501,6 +501,13 @@ def ship_order(payload: dict) -> dict:
                 "tracking_number": tracking,
             }
 
+        try:
+            from scripts.order_history import record  # type: ignore
+            for item_id in stamp_ids:
+                record(order_name, "Shipping label bought", f"FedEx {service_code}, tracking {tracking}", item=item_id)
+        except Exception:
+            pass
+
         # Office server is the source of truth for label ZPL (not Render disk).
         from scripts import office_api  # type: ignore
         from scripts.office_api import OfficeApiError  # type: ignore

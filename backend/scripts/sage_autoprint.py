@@ -166,6 +166,11 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
                                       updated_by="sage-autoprint")
                     if pdf:
                         report["printed"].append(what)
+                        try:
+                            from scripts.order_history import record  # type: ignore
+                            record(name, "Printed automatically", f"{label} (6am print)", who="BiteBoard")
+                        except Exception:
+                            pass
                 except Exception as exc:
                     report["failed"].append({"order": what, "error": str(exc)[:200]})
         report["success"] = not report["failed"]

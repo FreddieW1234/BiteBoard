@@ -2,9 +2,9 @@
 
 The storefront saves these two ways:
 
-* the ``_dispatch_schedule`` order note attribute (JSON) - the main source for
-  the ASAP choice and the method. When the note also has a date for a line,
-  the note's date wins, because staff correct dates there:
+* the ``_dispatch_schedule`` order note attribute (JSON) - what the customer picked.
+  When the note also has a date or ASAP answer for a line, the note wins,
+  because staff correct them there (Order info panel):
   {"method": "shipping"|"pickup",
    "lines": [{"title", "sku", "variant_id", "requested_date": "YYYY-MM-DD",
               "asap_if_ready_sooner": true|false}]}
@@ -205,16 +205,18 @@ def _apply(order: dict, node: dict) -> None:
         requested = parse_delivery_date(str((matched or {}).get("value") or "").strip())
         if requested is not None:
             source = "note"
-        if entry is not None:
-            if requested is None:
-                requested = _parse_iso(entry.get("requested_date"))
-            asap = _parse_yes_no(entry.get("asap_if_ready_sooner"))
-            source = "note+attribute" if source == "note" else "attribute"
-        if asap is None and asap_fields:
+        # Same for the ASAP answer: staff can switch it in the Order info panel.
+        if asap_fields:
             field = _note_field_for_line(line, asap_fields, len(products))
             asap = _parse_yes_no((field or {}).get("value"))
             if asap is not None and not source:
                 source = "note"
+        if entry is not None:
+            if requested is None:
+                requested = _parse_iso(entry.get("requested_date"))
+            if asap is None:
+                asap = _parse_yes_no(entry.get("asap_if_ready_sooner"))
+            source = "note+attribute" if source == "note" else "attribute"
         if source and not order_source:
             order_source = source
         line["requested_date"] = format_display_date(requested)
