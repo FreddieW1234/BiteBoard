@@ -521,7 +521,6 @@
     </div>
 
     <script>
-        const STAFF_IS_ADMIN = {{ 'true' if staff_is_admin else 'false' }};
         let allOrders = [];
         let orderIndicators = {};
         let sortMode = localStorage.getItem('orders-sort') || 'priority';
@@ -1000,9 +999,7 @@
             } else {
                 html += `<button type="button" class="btn-ghost order-cancel-btn" data-order-id="${id}" data-order-name="${name}"><i class="fas fa-ban"></i> Cancel order</button>`;
             }
-            if (STAFF_IS_ADMIN) {
-                html += `<button type="button" class="btn-ghost order-delete-btn" data-order-id="${id}" data-order-name="${name}"><i class="fas fa-trash-can"></i> Delete order</button>`;
-            }
+            html += `<button type="button" class="btn-ghost order-delete-btn" data-order-id="${id}" data-order-name="${name}"><i class="fas fa-trash-can"></i> Delete order</button>`;
             return html + '</div>';
         }
 

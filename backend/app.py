@@ -3643,16 +3643,13 @@ def api_order_cancel(order_id):
 
 @app.route("/api/orders/<order_id>/delete", methods=["POST"])
 def api_order_delete(order_id):
-    """Admins: permanently delete an order from Shopify (can't be undone).
+    """Staff: permanently delete an order from Shopify (can't be undone).
 
     Shopify only deletes some orders (manual payment, draft or test orders)
     and they normally have to be cancelled first; its message is passed on.
     """
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
-    from portal_auth import staff_is_admin  # type: ignore
-    if not staff_is_admin():
-        return jsonify({"success": False, "error": "Only admins can delete orders"}), 403
     oid = str(order_id).strip()
     if not oid.isdigit():
         return jsonify({"success": False, "error": "Invalid order"}), 400
