@@ -398,6 +398,35 @@
             box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
         }
         .order-info-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+
+        /* ---- Order info: compact. Groups flow side by side, boxes are one line
+           and grow with their text, so any number of fields packs tightly. ---- */
+        .order-info-form .order-info-panel {
+            display: flex; flex-wrap: wrap; align-items: flex-start;
+            gap: 14px 28px; padding: 12px 14px 14px;
+        }
+        .order-info-form .order-info-group { flex: 1 1 auto; min-width: 0; margin: 0; }
+        .order-info-form .order-info-group--wide { flex-basis: 100%; }
+        .order-info-form .order-info-group-title { margin: 0 0 6px; padding-bottom: 4px; }
+        .order-info-form .order-info-group + .order-info-group .order-info-group-title { margin-top: 0; }
+        .order-info-form .order-info-grid,
+        .order-info-form .order-info-top-dates {
+            display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px;
+        }
+        .order-info-form .order-info-field { flex: 1 1 190px; max-width: 300px; gap: 4px; }
+        .order-info-form .order-info-field.full-width { flex-basis: 100%; max-width: none; }
+        .order-info-form .order-info-field label { font-size: 0.66rem; }
+        .order-info-form .order-info-note-field,
+        .order-info-form .order-info-attr-input {
+            padding: 6px 9px;
+            min-height: 34px;
+            field-sizing: content;   /* grows with the text (Chrome / Edge) */
+            max-height: 14em;
+            resize: none;
+        }
+        .order-info-form .order-info-field.full-width .order-info-note-field,
+        .order-info-form .order-info-field.full-width .order-info-attr-input { min-height: 64px; resize: vertical; }
+        .order-info-form .order-info-top-dates .order-info-field { flex-basis: 150px; max-width: 240px; }
         .btn-save-order-info {
             background: #4f46e5;
             color: #fff;
@@ -820,7 +849,7 @@
 
         function renderOrderInfoField(f, inputClass, keyAttr, hideLabel) {
             const fw = f.full_width ? ' full-width' : '';
-            const rows = f.field_role === 'address' ? 1 : (f.full_width ? 4 : 2);
+            const rows = f.full_width && f.field_role !== 'address' ? 3 : 1;
             const restore = f.restore_heading ? ` data-restore-heading="${escapeHtml(f.restore_heading)}"` : '';
             const role = f.field_role ? ` data-field-role="${escapeHtml(f.field_role)}"` : '';
             return `<div class="order-info-field${fw}">
@@ -940,7 +969,8 @@
                     const sepClass = sec.separator_before ? ' has-separator' : '';
                     const hideFieldLabel = isAdditionalNotesHeading(sec.heading) && (sec.fields || []).length === 1;
                     const hiddenAttr = isAsapHeading(sec.heading) ? ' hidden' : '';
-                    html += `<div class="order-info-group order-info-note-group${sepClass}"${headingAttr}${hiddenAttr}>`;
+                    const wideClass = (sec.fields || []).some(f => f.full_width) ? ' order-info-group--wide' : '';
+                    html += `<div class="order-info-group order-info-note-group${sepClass}${wideClass}"${headingAttr}${hiddenAttr}>`;
                     if (sec.heading) html += `<h5 class="order-info-group-title">${escapeHtml(sec.heading)}</h5>`;
                     html += '<div class="order-info-grid">';
                     (sec.fields || []).forEach(f => { html += renderOrderInfoField(f, 'order-info-note-field', 'data-note-key', hideFieldLabel); });
