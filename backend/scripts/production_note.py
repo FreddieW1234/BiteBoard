@@ -6,11 +6,15 @@ import re
 from datetime import datetime
 
 from scripts.diary_helpers import (  # type: ignore
-    collect_delivery_date_fields,
     dispatch_display_for_line,
     format_display_date,
-    parse_delivery_date,
-    _match_field_for_line,
+)
+from scripts.dispatch_schedule import (  # type: ignore
+    SCHEDULE_HEADINGS,
+    asap_display,
+    heading_norm,
+    is_pickup,
+    line_requested_date,
 )
 from scripts.Diary import load_saved_entries  # type: ignore
 from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
@@ -72,11 +76,12 @@ def _product_note_sections(order_info: dict) -> list[dict]:
         if not heading:
             continue
         if heading in {
-            "REQUEST DELIVERY DATES",
-            "REQUESTED DELIVERY DATES",
             "ADDITIONAL NOTES",
             "DELIVERY CONTACT",
         }:
+            continue
+        # Delivery / collection dates and the ASAP choice are not product sections.
+        if heading_norm(heading) in SCHEDULE_HEADINGS:
             continue
         fields = sec.get("fields") or []
         if any(_norm_key(f.get("key") or "") in {"name", "address"} for f in fields):
@@ -355,10 +360,8 @@ def build_production_note(
     """Return prefilled field values for one product line item."""
     order_info = order.get("order_info") or {}
     product_section = _match_product_section(order_info, line)
-    date_fields = collect_delivery_date_fields(order_info)
-    matched_date = _match_field_for_line(line, date_fields)
-    delivery_raw = (matched_date.get("value") if matched_date else "") or ""
-    delivery_date = parse_delivery_date(str(delivery_raw).strip())
+    delivery_date = line_requested_date(order, line)
+    pickup = is_pickup(order)
     saved_entries = saved or {}
     expected_dispatch = dispatch_display_for_line(
         order.get("name") or "",
@@ -392,6 +395,12 @@ def build_production_note(
         "unit_price": _unit_price_display(line, order),
         "email_address": (order.get("customer_email") or "").strip(),
         "requested_delivery": format_display_date(delivery_date),
+        # Customer's requested date is a collection date on pickup orders.
+        "is_pickup": pickup,
+        "requested_label": "Requested Collection" if pickup else "Requested Delivery",
+        "dispatch_label": "Ready for collection by" if pickup else "Dispatch",
+        "asap_label": "Early collection if ready" if pickup else "ASAP if ready early",
+        "asap": asap_display(line.get("asap_if_ready_sooner")),
         "shipping_charged": (order.get("shipping_display") or "").strip(),
         "use_customers_delivery_note": _global_note_value(
             order_info,

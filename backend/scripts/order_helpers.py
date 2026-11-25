@@ -565,7 +565,15 @@ def _order_info_field_full_width(key: str, value: str = "") -> bool:
 _NOTE_LINE = re.compile(r"^(.+?):\s*(.*)$")
 
 _DELIVERY_DATE_KEY_NAMES = frozenset({"delivery date", "requested delivery date"})
-_REQUEST_DELIVERY_DATES_HEADINGS = frozenset({"request delivery dates", "requested delivery dates"})
+_REQUEST_DELIVERY_DATES_HEADINGS = frozenset({
+    "request delivery dates", "requested delivery dates",
+    # Pickup orders: same lines, the customer's requested collection date.
+    "request collection dates", "requested collection dates",
+})
+# Headings whose lines are "Product title (SKU): value" - one line per product.
+_SCHEDULE_SECTION_HEADINGS = _REQUEST_DELIVERY_DATES_HEADINGS | frozenset({
+    "dispatch asap if ready sooner", "early collection if ready sooner",
+})
 _ADDITIONAL_NOTES_HEADINGS = frozenset({"additional notes"})
 
 
@@ -754,7 +762,14 @@ def parse_order_note(note: str) -> list[dict]:
             i += 1
             continue
 
-        if inline_val.strip() and key_raw.upper() == key_raw and re.search(r"[A-Z]", key_raw):
+        # "PRODUCT TITLE (SKU): ..." in an all-caps title stays under its
+        # dates / ASAP heading instead of starting a section of its own.
+        in_schedule = (
+            bool(current)
+            and _section_heading_norm(current.get("heading")) in _SCHEDULE_SECTION_HEADINGS
+            and bool(re.search(r"\([^()]+\)\s*$", key_raw))
+        )
+        if inline_val.strip() and key_raw.upper() == key_raw and re.search(r"[A-Z]", key_raw) and not in_schedule:
             if current and current.get("fields"):
                 current = None
 
@@ -820,6 +835,17 @@ def serialize_order_note(sections: list[dict]) -> str:
                 heading += ":"
             out_lines.append(heading)
         for field in sec.get("fields") or []:
+            # The free text under ADDITIONAL NOTES: is held as a field named after
+            # the heading - write just the text, or a save turns it into
+            # "ADDITIONAL NOTES: ADDITIONAL NOTES: ...".
+            if (
+                _is_additional_notes_section(heading)
+                and _section_heading_norm(field.get("key")) == _section_heading_norm(heading)
+            ):
+                value = str(field.get("value") or "").replace("\r\n", "\n").replace("\r", "\n")
+                if value.strip():
+                    out_lines.extend(value.split("\n"))
+                continue
             _append_note_field_lines(out_lines, field)
     return "\n".join(out_lines).strip()
 
@@ -848,13 +874,21 @@ def group_order_info_attributes(attributes: list[dict]) -> list[dict]:
     return sections
 
 
+# Order attributes the storefront writes for Biteboard itself (JSON). Not shown
+# in the Order info panel, but sent back unchanged when staff save it.
+_HIDDEN_ORDER_ATTRIBUTES = frozenset({"_dispatch_schedule"})
+
+
 def format_order_info(node: dict) -> dict:
     note = (node.get("note") or "").strip()
-    attributes = _parse_attributes(node.get("customAttributes"))
+    all_attributes = _parse_attributes(node.get("customAttributes"))
+    attributes = [a for a in all_attributes if a["key"] not in _HIDDEN_ORDER_ATTRIBUTES]
+    hidden_attributes = [a for a in all_attributes if a["key"] in _HIDDEN_ORDER_ATTRIBUTES]
     note_sections = parse_order_note(note)
     return {
         "note": note,
         "attributes": attributes,
+        "hidden_attributes": hidden_attributes,
         "note_sections": note_sections,
         "sections": group_order_info_attributes(attributes),
         "structured": bool(note_sections) or bool(attributes),
@@ -1086,6 +1120,9 @@ def enrich_order(node: dict, base: dict) -> dict:
     base["payment"] = format_payment_method(node)
     base["order_info"] = format_order_info(node)
     base.update(format_order_totals(node))
+    from scripts.dispatch_schedule import apply_dispatch_schedule  # type: ignore
+
+    apply_dispatch_schedule(base, node)
     return base
 
 

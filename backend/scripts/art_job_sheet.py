@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from scripts.diary_helpers import (  # type: ignore
-    collect_delivery_date_fields,
     dispatch_display_for_line,
-    parse_delivery_date,
-    _match_field_for_line,
+    format_display_date,
+)
+from scripts.dispatch_schedule import (  # type: ignore
+    asap_display,
+    is_pickup,
+    line_requested_date,
 )
 from scripts.Diary import load_saved_entries  # type: ignore
 from scripts.order_helpers import fetch_order_by_id  # type: ignore
@@ -25,10 +28,8 @@ def build_art_job_sheet(
     """Return prefilled field values for one product line item."""
     order_info = order.get("order_info") or {}
     product_section = _match_product_section(order_info, line)
-    date_fields = collect_delivery_date_fields(order_info)
-    matched_date = _match_field_for_line(line, date_fields)
-    delivery_raw = (matched_date.get("value") if matched_date else "") or ""
-    delivery_date = parse_delivery_date(str(delivery_raw).strip())
+    delivery_date = line_requested_date(order, line)
+    pickup = is_pickup(order)
     saved_entries = saved or {}
     dispatch_date = dispatch_display_for_line(
         order.get("name") or "",
@@ -50,6 +51,10 @@ def build_art_job_sheet(
         "customer_supplier": (order.get("company") or "").strip(),
         "unit_quantity": qty_text,
         "dispatch_date": dispatch_date,
+        "requested_label": "REQUESTED COLLECTION DATE" if pickup else "REQUESTED DELIVERY DATE",
+        "requested_date": format_display_date(delivery_date),
+        "asap_label": "EARLY COLLECTION IF READY" if pickup else "ASAP IF READY EARLY",
+        "asap": asap_display(line.get("asap_if_ready_sooner")),
         "initial_proof_date": "",
         "additional_info": "",
         "rm_number": "",

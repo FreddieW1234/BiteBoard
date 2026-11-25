@@ -1761,6 +1761,11 @@
                     html += '</div></div>';
                 });
             }
+            // Attributes the storefront writes for Biteboard (e.g. _dispatch_schedule):
+            // not shown, but saved back unchanged so Shopify keeps them.
+            (info.hidden_attributes || []).forEach(a => {
+                html += `<input type="hidden" class="order-info-attr-input" data-attr-key="${escapeHtml(a.key)}" value="${escapeHtml(a.value || '')}">`;
+            });
             html += `</div><div class="order-info-actions">
                     <button type="submit" class="btn-save-order-info">Save order info</button>
                     <span class="order-info-msg" hidden></span>

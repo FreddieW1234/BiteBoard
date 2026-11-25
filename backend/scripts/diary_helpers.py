@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 
 import logging
 
+from scripts.dispatch_schedule import DATE_HEADINGS, line_requested_date  # type: ignore
 from scripts.office_api import item_key  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def collect_delivery_date_fields(order_info: dict) -> list[dict]:
                 if _is_date_field(field):
                     fields.append(field)
         heading = (sec.get("heading") or "").strip().rstrip(":").lower()
-        if heading in ("request delivery dates", "requested delivery dates"):
+        if heading in DATE_HEADINGS:  # delivery dates, or collection dates (pickup)
             for field in sec.get("fields") or []:
                 fields.append(field)
     return fields
@@ -222,8 +223,6 @@ def order_dispatch_display(order: dict, saved: dict[tuple[str, str], dict]) -> s
     order_name = (order.get("name") or "").strip()
     if not order_name:
         return ""
-    order_info = order.get("order_info") or {}
-    date_fields = collect_delivery_date_fields(order_info)
     dated: list[tuple[date, str]] = []
     seen: set[str] = set()
 
@@ -233,9 +232,7 @@ def order_dispatch_display(order: dict, saved: dict[tuple[str, str], dict]) -> s
         line_number = line.get("line_number")
         if line_number is None:
             continue
-        matched = _match_field_for_line(line, date_fields)
-        requested_raw = (matched.get("value") if matched else "") or ""
-        requested_date = parse_delivery_date(str(requested_raw).strip())
+        requested_date = line_requested_date(order, line)
         display = dispatch_display_for_line(
             order_name,
             line,
@@ -279,9 +276,7 @@ def build_diary_rows(orders: list[dict], saved: dict[tuple[str, str], dict]) -> 
                 int(line_number), line.get("title") or ""
             )
             matched = _match_field_for_line(line, date_fields)
-            requested_raw = (matched.get("value") if matched else "") or ""
-            requested_raw = str(requested_raw).strip()
-            requested_date = parse_delivery_date(requested_raw)
+            requested_date = line_requested_date(order, line)
 
             key = (order_name, item_id)
             entry, match_kind = lookup_saved_entry(saved, order_name, item_id)
