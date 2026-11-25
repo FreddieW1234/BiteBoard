@@ -3793,13 +3793,20 @@ def api_orders_indicators_batch():
     Body: {"orders": [{"id", "name", "lines": [{"line_number", "title", "office_item_id"}]}]}
     The client already has each order's lines from /api/orders, so this only
     asks the office server (in parallel) - no Shopify lookups per order.
+
+    With "full": true it also returns each order's whole tracking payload (the
+    same as GET /api/orders/<id>/tracking) under "tracking", so the page can
+    show an order's tracking the moment its dropdown opens. Orders with a line
+    that has no tracking yet are left out - opening them sets it up as before.
     """
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
     from concurrent.futures import ThreadPoolExecutor
     from scripts.office_api import item_key  # type: ignore
 
-    orders = (request.get_json(silent=True) or {}).get("orders") or []
+    body = request.get_json(silent=True) or {}
+    full = bool(body.get("full"))
+    orders = body.get("orders") or []
     orders = [o for o in orders if isinstance(o, dict) and o.get("id") and o.get("name")][:100]
 
     def one(o):
@@ -3818,20 +3825,57 @@ def api_orders_indicators_batch():
             if ln is None:
                 continue
             key = line.get("office_item_id") or item_key(ln, line.get("title") or "")
-            item = {"office": by_item.get(key)}
+            item = {"office": by_item.get(key), "line_number": ln, "office_item_id": key,
+                    "title": line.get("title") or ""}
             if item["office"] is None:
                 missing.append((key, line.get("title") or "", item))
             items.append(item)
         if missing and _is_new_order(o.get("processed_at")):
             _seed_new_order_tracking(str(o["name"]), missing)
-        return str(o["id"]), items
+        tracking = _tracking_payload_from_batch(o, items) if full else None
+        return str(o["id"]), [{"office": i["office"]} for i in items], tracking
 
-    results = {}
+    results, tracking_out = {}, {}
     with ThreadPoolExecutor(max_workers=10) as pool:
-        for oid, items in pool.map(one, orders):
+        for oid, items, tracking in pool.map(one, orders):
             if items is not None:
                 results[oid] = items
-    return jsonify({"success": True, "results": results})
+            if tracking is not None:
+                tracking_out[oid] = tracking
+    payload = {"success": True, "results": results}
+    if full:
+        payload["tracking"] = tracking_out
+    return jsonify(payload)
+
+
+def _tracking_payload_from_batch(o, items):
+    """The /tracking payload for one order, built from the batch's office data."""
+    import copy
+
+    if any(i["office"] is None for i in items):
+        return None  # a line has no tracking yet: opening the order sets it up
+    order_id = str(o["id"])
+    items_out = []
+    for i in items:
+        office = copy.deepcopy(i["office"])  # the office data is shared via the cache
+        _rewrite_office_files(office, order_id, i["office_item_id"], "/api/orders")
+        items_out.append({"line_number": i["line_number"], "office_item_id": i["office_item_id"],
+                          "title": i["title"], "office": office})
+    notify = {"order": o["name"], "enabled": True, "email": None, "updated_at": None}
+    try:
+        from scripts.office_api import get_notify  # type: ignore
+        notify = get_notify(str(o["name"]))
+    except Exception:
+        pass
+    return {
+        "success": True,
+        "order": o["name"],
+        "items": items_out,
+        "notify": notify,
+        "customer_email": str(o.get("customer_email") or "").strip(),
+        "customer_id": str(o.get("customer_id") or ""),
+        "customer_name": str(o.get("customer_name") or "").strip(),
+    }
 
 
 @app.route("/api/orders/<order_id>/indicator", methods=["GET"])

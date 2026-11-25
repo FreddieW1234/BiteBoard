@@ -1674,6 +1674,15 @@
         return promise;
     }
 
+    /** Store tracking the page already fetched in bulk, so opening the order is instant. */
+    function primeOrderTracking(orderId, data, apiPrefix, role) {
+        const key = String(orderId);
+        if (!data || orderTrackingCache[key]) return;  // never overwrite a fresher load
+        orderTrackingCache[key] = { status: 'done', data };
+        applyTrackingToDetails(orderId, data, apiPrefix, role, null);
+        syncOrderListBadge(orderId, data.items, role);
+    }
+
     function prefetchAllOrderTracking(orderIds, apiPrefix, role, onSettled, concurrency = 3) {
         const ids = [...new Set((orderIds || []).filter(Boolean).map(String))];
         if (!ids.length) return Promise.resolve();
@@ -2113,6 +2122,7 @@
         indicatorSortPriority,
         renderOrderIndicatorHtml,
         prefetchAllOrderTracking,
+        primeOrderTracking,
         applyCachedTrackingIn,
         applyPortalDeepLink,
         openProofFile,

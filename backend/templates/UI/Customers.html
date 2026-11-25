@@ -564,8 +564,8 @@
         .cu-orders-modal-body .line-head-left { min-width: 0; flex: 1 1 auto; }
         .cu-orders-modal-body .line-head-right {
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
+            flex-direction: row;  /* Print dropdown and price side by side */
+            align-items: center;
             gap: 6px;
             flex-shrink: 0;
         }
@@ -1482,7 +1482,7 @@
                         <option value="production">Production note</option>
                         <option value="artwork">Artwork job sheet</option>
                         <option value="sage">Sage info (whole order)</option>
-                    </select></div>`;
+                    </select></label>`;
             }
             html += `</div>
                         <span class="line-price">${escapeHtml(formatLinePrice(li))}</span>
@@ -2244,6 +2244,6 @@
     </script>
     <script src="/static/companies_panel.js?v=10"></script>
     <script src="/static/production_note_print.js?v=3"></script>
-    <script src="/static/office_tracking.js?v=45"></script>
+    <script src="/static/office_tracking.js?v=46"></script>
 </body>
 </html>
