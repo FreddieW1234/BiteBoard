@@ -101,14 +101,15 @@
         <table>
             <thead>
                 <tr>
-                    <th style="width:16%;">Product code / SKU</th>
+                    <th style="width:13%;">Product code / SKU</th>
                     <th>Product name</th>
+                    <th class="num" style="width:7%;">Case size</th>
                     <th style="width:11%;">Dispatch date</th>
-                    <th class="num" style="width:7%;">Qty</th>
-                    <th class="num" style="width:10%;">Unit price</th>
-                    <th class="num" style="width:8%;">Case size</th>
-                    <th class="num" style="width:10%;">Case price</th>
-                    <th class="num" style="width:11%;">Total</th>
+                    <th class="num" style="width:6%;">Qty</th>
+                    <th class="num" style="width:9%;">Unit price</th>
+                    <th class="num" style="width:7%;">Total cases</th>
+                    <th class="num" style="width:9%;">Case price</th>
+                    <th class="num" style="width:10%;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -116,10 +117,11 @@
                 <tr class="product">
                     <td class="code">{{ line.code or '-' }}</td>
                     <td>{{ line.name }}{% if line.options %}<div class="opts">{{ line.options }}</div>{% endif %}</td>
+                    <td class="num">{{ line.case_size }}</td>
                     <td>{{ line.dispatch or '-' }}</td>
                     <td class="num">{{ line.quantity }}</td>
                     <td class="num">{{ line.unit_price }}</td>
-                    <td class="num">{{ line.case_size }}</td>
+                    <td class="num">{{ line.total_cases }}</td>
                     <td class="num">{{ line.case_price }}</td>
                     <td class="num">{{ line.total }}</td>
                 </tr>
@@ -127,6 +129,7 @@
                 <tr class="fee">
                     <td class="code">{{ fee.code }}</td>
                     <td class="name">+ {{ fee.name }}</td>
+                    <td></td>
                     <td></td>
                     <td class="num">{{ fee.quantity }}</td>
                     <td class="num">{{ fee.unit_price }}</td>
@@ -137,11 +140,12 @@
                 {% endfor %}
                 {% endfor %}
                 {% if info.other_fees %}
-                <tr class="section"><td colspan="8">Other fees</td></tr>
+                <tr class="section"><td colspan="9">Other fees</td></tr>
                 {% for fee in info.other_fees %}
                 <tr class="fee">
                     <td class="code">{{ fee.code }}</td>
                     <td class="name">{{ fee.name }}</td>
+                    <td></td>
                     <td></td>
                     <td class="num">{{ fee.quantity }}</td>
                     <td class="num">{{ fee.unit_price }}</td>

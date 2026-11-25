@@ -148,6 +148,16 @@
             font-size: 9pt;
         }
 
+        /* Shopify order number, top right - same place as on the Sage info sheet. */
+        .order-ref {
+            text-align: right;
+            font-size: 12pt;
+            font-weight: 700;
+            line-height: 1;
+            height: 6mm;
+            margin-bottom: 1mm;
+        }
+
         .dispatch-box {
             vertical-align: middle;
             text-align: center;
@@ -259,6 +269,7 @@
 
     {% for note in notes %}
     <div class="sheet">
+        <div class="order-ref">{{ note.order_name }}</div>
         <div class="form-wrap">
         <table>
             <colgroup>

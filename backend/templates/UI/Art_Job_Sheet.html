@@ -97,6 +97,18 @@
             word-break: break-word;
         }
 
+        /* Shopify order number, top right - same place as on the Sage info sheet. */
+        .order-ref {
+            text-align: right;
+            font-size: 12pt;
+            font-weight: 700;
+            line-height: 1;
+            height: 6mm;
+            margin-bottom: 1mm;
+        }
+        /* The table fills the rest of the page under the order number. */
+        .sheet > table { height: calc(100% - 7mm); }
+
         .title-cell { height: 13mm; vertical-align: middle; }
         .designer-cell { height: 13mm; vertical-align: top; }
 
@@ -164,7 +176,7 @@
         {% if pdf %}
         /* Morning auto-print PDF: the renderer has no % heights. */
         .sheet { height: auto; max-height: none; overflow: visible; margin: 0; }
-        table { height: auto; }
+        table, .sheet > table { height: auto; }
         /* Taller rows so the sheet still fills the page, as it does in the browser. */
         .title-cell, .designer-cell { height: 22mm; }
         .h-md { height: 30mm; }
@@ -184,6 +196,7 @@
 
     {% for sheet in sheets %}
     <div class="sheet">
+        <div class="order-ref">{{ sheet.order_name }}</div>
         <table>
             <colgroup>
                 <col style="width:33.34%">

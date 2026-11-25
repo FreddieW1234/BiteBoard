@@ -10,7 +10,8 @@ from __future__ import annotations
 from scripts.order_helpers import fetch_order_by_id, format_gbp  # type: ignore
 from scripts.Diary import load_saved_entries  # type: ignore
 from scripts.production_note import (  # type: ignore
-    _format_order_date, _money, _parse_case_quantity, _po_number, build_production_note, sage_product_code,
+    _format_order_date, _money, _parse_case_quantity, _po_number, _total_cases, build_production_note,
+    sage_product_code,
 )
 
 
@@ -70,6 +71,7 @@ def build_sage_info(order: dict) -> dict:
             "quantity": line.get("quantity") if line.get("quantity") is not None else "",
             "unit_price": format_gbp(unit) if unit is not None else "",
             "case_size": case_qty or "",
+            "total_cases": _total_cases(line),
             "case_price": format_gbp(unit * case_qty) if (unit is not None and case_qty) else "",
             "total": format_gbp(total) if total is not None else "",
             "dispatch": dispatch,
