@@ -898,6 +898,25 @@ def _build_shopify_files_cache():
             _SHOPIFY_FILES_BUILDING = False
 
 
+def _warm_shopify_files_soon():
+    """Load the Files list shortly after boot so the first Product Creator open
+    after a deploy isn't left waiting on the scan (later requests are served
+    from the cache and refreshed in the background)."""
+    global _SHOPIFY_FILES_BUILDING
+    time.sleep(30)  # after the boot-time warm-ups and the first health checks
+    with _SHOPIFY_FILES_LOCK:
+        if _SHOPIFY_FILES_BUILDING or _SHOPIFY_FILES_CACHE.get("files") is not None:
+            return
+        _SHOPIFY_FILES_BUILDING = True
+    try:
+        _build_shopify_files_cache()
+    except Exception as exc:
+        print(f"[warn] Shopify Files warm-up skipped: {exc}", flush=True)
+
+
+threading.Thread(target=_warm_shopify_files_soon, name="files-warm", daemon=True).start()
+
+
 @app.route('/api/shopify/files')
 def api_shopify_files():
     global _SHOPIFY_FILES_BUILDING

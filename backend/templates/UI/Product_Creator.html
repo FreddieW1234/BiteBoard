@@ -3402,12 +3402,13 @@
 
         async function applyDefaultArtworkGuideline() {
             selectedGuideline = null;
-            try {
-                await ensureArtworkGuidelinesFiles();
+            if (artworkGuidelinesFilesCache.length) {
                 renderGuidelinesColumns(artworkGuidelinesFilesCache);
-            } catch (e) {
-                console.log('Could not apply default artwork guideline', e);
+                return;
             }
+            // Not loaded yet: don't hold the form open for Shopify Files - the list
+            // fills in (and picks the default) when it arrives.
+            ensureArtworkGuidelinesFiles().catch(e => console.log('Could not apply default artwork guideline', e));
         }
 
         async function applyNewProductPricingAndGuidelines() {
@@ -6145,10 +6146,26 @@
             await loadMetafields();
         }
 
+        // The blank template's fields (values cleared), fetched from Shopify once per
+        // page load. Create New Product rebuilds the form from this copy instantly.
+        let _templateMetafieldsCache = null;
+
+        function _cloneTemplateMetafields() {
+            return JSON.parse(JSON.stringify(_templateMetafieldsCache));
+        }
+
         // Load metafields automatically when page loads - using specific template product
         async function loadMetafields() {
             if (_loadMetafieldsPromise) return _loadMetafieldsPromise;
             _metafieldsUiReady = false;
+            if (_templateMetafieldsCache) {
+                try {
+                    displayMetafields(_cloneTemplateMetafields());
+                } finally {
+                    _metafieldsUiReady = true;
+                }
+                return;
+            }
             _loadMetafieldsPromise = (async () => {
             try {
                 console.log('Loading metafields from template product ID: 15285916696954...');
@@ -6224,8 +6241,11 @@
                         });
                     }
                     // Subcategory_2, subcategory_3 etc. are overflow keys only; one UI dropdown covers all
-                    
+
                     console.log('Displaying metafields with cleared values for new product');
+                    if ((productData.metafields || []).length) {
+                        _templateMetafieldsCache = JSON.parse(JSON.stringify(emptyMetafields));
+                    }
                     displayMetafields(emptyMetafields);
                 } else {
                     const errorText = await productResponse.text();
