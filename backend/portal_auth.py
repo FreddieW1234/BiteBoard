@@ -20,14 +20,36 @@ STAFF_DEV_ONLY_PATH_PREFIXES = (
 )
 
 
+# Pages / APIs only admins may open.
+STAFF_ADMIN_ONLY_PATH_PREFIXES = (
+    "/app/Users",
+    "/api/users",
+)
+
+
 def authenticate_staff(username: str, password: str) -> str | None:
-    """Return the matched username on success, else None."""
-    u = (username or "").strip()
-    p = password or ""
-    expected = STAFF_ACCOUNTS.get(u)
-    if expected is not None and p == expected:
-        return u
-    return None
+    """Return the matched username on success, else None (individual or built-in login)."""
+    from scripts.staff_users import authenticate  # type: ignore
+    return authenticate(username, password)
+
+
+def current_staff_account() -> dict | None:
+    """{"username", "role", "builtin"} for the signed-in staff member, or None
+    if they aren't signed in or their login has since been disabled/deleted."""
+    if not is_staff_authenticated():
+        return None
+    from scripts.staff_users import account  # type: ignore
+    return account(get_staff_username())
+
+
+def staff_is_admin() -> bool:
+    acc = current_staff_account()
+    return bool(acc and acc.get("role") == "admin")
+
+
+def is_staff_admin_only_path(path: str) -> bool:
+    p = path or ""
+    return any(p == prefix or p.startswith(prefix + "/") for prefix in STAFF_ADMIN_ONLY_PATH_PREFIXES)
 
 
 def check_staff_credentials(username: str, password: str) -> bool:
@@ -52,12 +74,12 @@ def staff_can_access_dev_tools() -> bool:
 
 
 def staff_user_type_label() -> str | None:
-    """Display label for the signed-in staff account: Dev or Staff."""
+    """Display label for the signed-in staff account: Dev, Admin or Staff."""
     if not is_staff_authenticated():
         return None
     if staff_can_access_dev_tools():
         return "Dev"
-    return "Staff"
+    return "Admin" if staff_is_admin() else "Staff"
 
 
 def is_staff_dev_only_path(path: str) -> bool:

@@ -195,6 +195,17 @@ def portal_auth_gate():
         if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Staff login required"}), 401
         return redirect(url_for("staff_login", next=path))
+    # A login that has been disabled or deleted is signed out straight away.
+    from portal_auth import current_staff_account, is_staff_admin_only_path, staff_is_admin  # type: ignore
+    if current_staff_account() is None:
+        logout_staff()
+        if path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Staff login required"}), 401
+        return redirect(url_for("staff_login", next=path))
+    if is_staff_admin_only_path(path) and not staff_is_admin():
+        if path.startswith("/api/"):
+            return jsonify({"success": False, "error": "Admins only"}), 403
+        return redirect(url_for("index"))
     # Files / Dev / Artwork Updater - only the dedicated "dev" staff account.
     if is_staff_dev_only_path(path) and not staff_can_access_dev_tools():
         if path.startswith("/api/"):
@@ -209,7 +220,16 @@ def inject_staff_ui_flags():
         "staff_username": get_staff_username(),
         "staff_show_dev_tabs": staff_can_access_dev_tools(),
         "staff_user_type": staff_user_type_label(),
+        "staff_is_admin": _safe_staff_is_admin(),
     }
+
+
+def _safe_staff_is_admin():
+    try:
+        from portal_auth import staff_is_admin  # type: ignore
+        return staff_is_admin()
+    except Exception:
+        return False
 
 
 @app.route("/staff/login", methods=["GET", "POST"])
@@ -238,6 +258,52 @@ def staff_login():
             in_iframe=in_iframe,
         )
     return render_template("UI/Staff_Login.html", next_url=next_url, in_iframe=in_iframe)
+
+
+# --------------------------------------------------------------------------- #
+# Users (admins only - enforced for /api/users* in before_request)
+# --------------------------------------------------------------------------- #
+
+@app.route("/api/users", methods=["GET", "POST"])
+def api_users():
+    from scripts.staff_users import UserError, create_user, list_users  # type: ignore
+    try:
+        if request.method == "GET":
+            return jsonify({"success": True, "users": list_users(), "me": get_staff_username() or ""})
+        data = request.get_json(silent=True) or {}
+        user = create_user(data.get("username") or "", data.get("password") or "",
+                           (data.get("role") or "staff").strip().lower(), by=get_staff_username() or "")
+        print(f"[users] {get_staff_username()} created {user['username']} ({user['role']})", flush=True)
+        return jsonify({"success": True, "user": user})
+    except UserError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Users unavailable: {exc}"}), 502
+
+
+@app.route("/api/users/<path:username>", methods=["PUT", "DELETE"])
+def api_user(username):
+    from scripts.staff_users import UserError, delete_user, update_user  # type: ignore
+    me = get_staff_username() or ""
+    try:
+        if request.method == "DELETE":
+            delete_user(username, by=me)
+            print(f"[users] {me} deleted {username}", flush=True)
+            return jsonify({"success": True})
+        data = request.get_json(silent=True) or {}
+        result = update_user(
+            username, by=me,
+            role=(data["role"].strip().lower() if isinstance(data.get("role"), str) else None),
+            active=(bool(data["active"]) if "active" in data else None),
+            password=(data["password"] if isinstance(data.get("password"), str) else None),
+        )
+        changed = ", ".join(k for k in ("role", "active", "password") if k in data)
+        print(f"[users] {me} updated {username}: {changed}", flush=True)
+        return jsonify({"success": True, "user": result})
+    except UserError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Users unavailable: {exc}"}), 502
 
 
 @app.route("/staff/logout")

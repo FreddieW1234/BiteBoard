@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users - BiteBoard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/theme.css?v=8" rel="stylesheet">
+    <link rel="stylesheet" href="/static/dark-auto.css?v=2">
+    <script src="/static/theme.js?v=6"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f6f8fa; min-height: 100vh; color: #1f2937; }
+        .app-layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 230px; flex-shrink: 0; max-height: 100vh; background: #fff; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 16px 0; overflow: hidden; transition: width 0.2s ease; }
+        .sidebar.collapsed { width: 64px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .app-tab span { display: none; }
+        .sidebar.collapsed .sidebar-brand a, .sidebar.collapsed .app-tab { justify-content: center; padding-left: 0; padding-right: 0; }
+        .sidebar.collapsed:hover { width: 230px; }
+        .sidebar.collapsed:hover .brand-text, .sidebar.collapsed:hover .app-tab span { display: inline; }
+        .sidebar.collapsed:hover .sidebar-brand a, .sidebar.collapsed:hover .app-tab { justify-content: flex-start; padding-left: 12px; padding-right: 12px; }
+        .sidebar-brand { flex-shrink: 0; padding: 0 16px 16px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+        .sidebar-brand a { font-size: 1.1rem; font-weight: 600; color: #111827; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .sidebar-brand a i { color: #4f46e5; }
+        .sidebar-nav { flex: 1; min-height: 0; padding: 0 8px; overflow-x: hidden; overflow-y: auto; }
+        .app-tabs { display: flex; flex-direction: column; gap: 2px; }
+        .app-tab { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; color: #374151; text-decoration: none; border-radius: 6px; font-size: 0.875rem; font-weight: 500; border: none; transition: background-color 0.15s, color 0.15s; width: 100%; text-align: left; }
+        .app-tab:hover { background: #f3f4f6; color: #111827; }
+        .app-tab.active { background: #4f46e5; color: #fff; }
+        .app-tab i { font-size: 1rem; color: #6b7280; width: 20px; text-align: center; }
+        .app-tab:hover i { color: #4f46e5; }
+        .app-tab.active i { color: #fff; }
+        .app-tab span { white-space: nowrap; }
+        .sidebar-footer { flex-shrink: 0; padding: 12px 8px 0; border-top: 1px solid #e5e7eb; margin-top: auto; }
+        .main-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 24px; gap: 16px; }
+        .page-title { font-size: 1.25rem; font-weight: 600; color: #111827; display: flex; align-items: center; gap: 10px; }
+        .page-title i { color: #4f46e5; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
+        .card h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; }
+        .muted { color: #6b7280; font-size: 0.8rem; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: 4px; }
+        .field label { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+        .field input, .field select { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 0.875rem; min-width: 200px; background: #fff; }
+        .btn { border: 1px solid #4f46e5; background: #4f46e5; color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 0.875rem; cursor: pointer; }
+        .btn:hover { background: #4338ca; }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .btn-danger { border: 1px solid #fecaca; background: #fff; color: #b91c1c; border-radius: 6px; padding: 5px 10px; font-size: 0.8rem; cursor: pointer; }
+        .btn-danger:hover { background: #fef2f2; }
+        .btn-small { border: 1px solid #e5e7eb; background: #fff; color: #374151; border-radius: 6px; padding: 5px 10px; font-size: 0.8rem; cursor: pointer; }
+        .btn-small:hover { background: #f9fafb; }
+        .msg { font-size: 0.85rem; margin-top: 10px; }
+        .msg.err { color: #b91c1c; }
+        .msg.ok { color: #166534; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; vertical-align: middle; }
+        th { font-size: 0.75rem; color: #6b7280; font-weight: 500; }
+        .table-wrap { overflow-x: auto; }
+        .pill { font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+        .pill.admin { background: #ede9fe; color: #5b21b6; }
+        .pill.staff { background: #e0f2fe; color: #075985; }
+        .pill.off { background: #fee2e2; color: #991b1b; }
+        .pill.builtin { background: #f3f4f6; color: #4b5563; }
+        .user-actions { display: flex; gap: 6px; align-items: center; }
+        .user-actions select { border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 0.8rem; background: #fff; }
+        .you { color: #6b7280; font-size: 0.75rem; margin-left: 4px; }
+        html[data-theme="dark"] .pill.admin { background: rgba(139, 92, 246, 0.2); color: #ddd6fe; }
+        html[data-theme="dark"] .pill.staff { background: rgba(14, 165, 233, 0.18); color: #bae6fd; }
+        html[data-theme="dark"] .pill.off { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+        html[data-theme="dark"] .pill.builtin { background: #21262d; color: #c9d1d9; }
+        html[data-theme="dark"] th, html[data-theme="dark"] td { border-bottom-color: #30363d; }
+        html[data-theme="dark"] .user-actions select, html[data-theme="dark"] .btn-small { background: #161b22; border-color: #30363d; color: #c9d1d9; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-brand"><a href="/"><i class="fas fa-store"></i><span class="brand-text">BiteBoard</span></a></div>
+            <nav class="sidebar-nav">
+                <div class="app-tabs">
+                    <a href="/" class="app-tab"><i class="fas fa-gauge-high"></i><span>Dashboard</span></a>
+                    <a href="/app/Products" class="app-tab"><i class="fas fa-box-open"></i><span>Products</span></a>
+                    <a href="/app/Orders" class="app-tab"><i class="fas fa-box"></i><span>Orders</span></a>
+                    <a href="/app/Diary" class="app-tab"><i class="fas fa-calendar-days"></i><span>Diary</span></a>
+                    <a href="/app/Customers" class="app-tab"><i class="fas fa-users"></i><span>Customers</span></a>
+                    <a href="/app/Menu" class="app-tab"><i class="fas fa-sitemap"></i><span>Menu</span></a>
+                    <a href="/app/Users" class="app-tab active"><i class="fas fa-user-gear"></i><span>Users</span></a>
+                    {% if staff_show_dev_tabs %}
+                    <a href="/app/Artwork_Updater" class="app-tab"><i class="fas fa-palette"></i><span>Artwork Updater</span></a>
+                    <a href="/app/Files" class="app-tab"><i class="fas fa-folder-open"></i><span>Files</span></a>
+                    {% endif %}
+                </div>
+            </nav>
+            <div class="sidebar-footer"></div>
+        </aside>
+        <script>(function(){if(window.location.pathname.indexOf('/app/')===0){var s=document.querySelector('.sidebar');if(s)s.classList.add('collapsed');}})();</script>
+
+        <div class="main-wrap">
+            <h1 class="page-title"><i class="fas fa-user-gear"></i> Users</h1>
+
+            <div class="card">
+                <h2>Add a user</h2>
+                <form id="add-form" class="row" autocomplete="off">
+                    <div class="field">
+                        <label for="add-username">Username</label>
+                        <input id="add-username" required maxlength="40" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label for="add-password">Password (at least 8 characters)</label>
+                        <input id="add-password" type="password" required minlength="8" autocomplete="new-password">
+                    </div>
+                    <div class="field">
+                        <label for="add-role">Access</label>
+                        <select id="add-role">
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin (can manage users)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn" id="add-btn"><i class="fas fa-user-plus"></i> Add user</button>
+                </form>
+                <div class="msg" id="add-msg" hidden></div>
+            </div>
+
+            <div class="card">
+                <h2>Everyone</h2>
+                <div class="msg" id="list-msg" hidden></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Username</th><th>Access</th><th>Status</th><th>Last signed in</th><th>Added</th><th></th></tr></thead>
+                        <tbody id="users-body"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+                <p class="muted" style="margin-top:10px">Built-in logins come from the server settings and count as admins. Once everyone has their own login, switch the shared one off here.</p>
+            </div>
+        </div>
+    </div>
+<script>
+(function () {
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const when = iso => {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return isNaN(d) ? iso : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+    let me = '';
+
+    function showMsg(el, text, ok) {
+        el.hidden = !text;
+        el.textContent = text || '';
+        el.className = 'msg ' + (ok ? 'ok' : 'err');
+    }
+
+    async function api(url, method, body) {
+        const res = await fetch(url, {
+            method,
+            credentials: 'same-origin',
+            headers: body ? { 'Content-Type': 'application/json' } : {},
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error(data.error || 'Something went wrong');
+        return data;
+    }
+
+    function actionsFor(u, isMe) {
+        const user = esc(u.username);
+        if (u.builtin) {
+            if (!u.can_disable || isMe) return '';
+            return `<button class="btn-small" data-act="toggle" data-user="${user}" data-active="${u.active ? 1 : 0}">${u.active ? 'Switch off' : 'Switch on'}</button>`;
+        }
+        const roleSelect = `<select data-act="role" data-user="${user}"${isMe ? ' disabled title="You can&#39;t change your own access"' : ''}>
+                <option value="staff"${u.role === 'staff' ? ' selected' : ''}>Staff</option>
+                <option value="admin"${u.role === 'admin' ? ' selected' : ''}>Admin</option>
+            </select>`;
+        const reset = `<button class="btn-small" data-act="password" data-user="${user}">Reset password</button>`;
+        if (isMe) return roleSelect + reset;
+        return roleSelect + reset
+            + `<button class="btn-small" data-act="toggle" data-user="${user}" data-active="${u.active ? 1 : 0}">${u.active ? 'Disable' : 'Enable'}</button>`
+            + `<button class="btn-danger" data-act="delete" data-user="${user}">Delete</button>`;
+    }
+
+    function render(users) {
+        const rows = users.map(u => {
+            const isMe = u.username.toLowerCase() === me.toLowerCase();
+            const status = u.active ? '<span class="muted">Active</span>' : '<span class="pill off">Disabled</span>';
+            const added = u.builtin ? 'Server settings' : esc(when(u.created_at)) + (u.created_by ? ' by ' + esc(u.created_by) : '');
+            return `<tr>
+                <td><strong>${esc(u.username)}</strong>${isMe ? '<span class="you">(you)</span>' : ''}</td>
+                <td><span class="pill ${u.role === 'admin' ? 'admin' : 'staff'}">${u.role === 'admin' ? 'Admin' : 'Staff'}</span>${u.builtin ? ' <span class="pill builtin">Built-in</span>' : ''}</td>
+                <td>${status}</td>
+                <td class="muted">${u.builtin ? '—' : esc(when(u.last_login))}</td>
+                <td class="muted">${added}</td>
+                <td><div class="user-actions">${actionsFor(u, isMe)}</div></td>
+            </tr>`;
+        });
+        $('users-body').innerHTML = rows.join('') || '<tr><td colspan="6" class="muted">No users yet</td></tr>';
+    }
+
+    async function load() {
+        try {
+            const data = await api('/api/users', 'GET');
+            me = data.me || '';
+            render(data.users || []);
+        } catch (err) {
+            showMsg($('list-msg'), err.message);
+        }
+    }
+
+    $('add-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        $('add-btn').disabled = true;
+        try {
+            const username = $('add-username').value.trim();
+            await api('/api/users', 'POST', { username, password: $('add-password').value, role: $('add-role').value });
+            showMsg($('add-msg'), `${username} added. Give them their username and password - they can sign in straight away.`, true);
+            $('add-form').reset();
+            load();
+        } catch (err) {
+            showMsg($('add-msg'), err.message);
+        } finally {
+            $('add-btn').disabled = false;
+        }
+    });
+
+    async function act(fn, okText) {
+        try {
+            await fn();
+            showMsg($('list-msg'), okText || '', true);
+        } catch (err) {
+            showMsg($('list-msg'), err.message);
+        }
+        load();
+    }
+
+    $('users-body').addEventListener('change', e => {
+        const sel = e.target.closest('select[data-act="role"]');
+        if (!sel) return;
+        act(() => api('/api/users/' + encodeURIComponent(sel.dataset.user), 'PUT', { role: sel.value }),
+            `${sel.dataset.user} is now ${sel.value === 'admin' ? 'an admin' : 'staff'}.`);
+    });
+
+    $('users-body').addEventListener('click', e => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        const user = btn.dataset.user;
+        const url = '/api/users/' + encodeURIComponent(user);
+        if (btn.dataset.act === 'toggle') {
+            const turnOn = btn.dataset.active !== '1';
+            act(() => api(url, 'PUT', { active: turnOn }), `${user} ${turnOn ? 'can sign in again' : 'can no longer sign in'}.`);
+        } else if (btn.dataset.act === 'password') {
+            const pw = prompt(`New password for ${user} (at least 8 characters):`);
+            if (pw) act(() => api(url, 'PUT', { password: pw }), `Password changed for ${user}.`);
+        } else if (btn.dataset.act === 'delete') {
+            if (confirm(`Delete ${user}? They won't be able to sign in any more.`)) act(() => api(url, 'DELETE'), `${user} deleted.`);
+        }
+    });
+
+    load();
+})();
+</script>
+</body>
+</html>

@@ -29,6 +29,10 @@
         else footer.appendChild(el);
     }
 
+    function escapeText(t) {
+        return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     function injectUserType(footer, data) {
         if (footer.querySelector('.sidebar-user-type')) return;
         var userType = (data && data.user_type) || '';
@@ -41,7 +45,11 @@
         var icon = userType === 'Dev' ? 'fa-code' : 'fa-user-tie';
         el.innerHTML =
             '<i class="fas ' + icon + '" aria-hidden="true"></i>' +
-            '<span class="sidebar-user-type-label">' + userType + '</span>';
+            '<span class="sidebar-user-type-label">' +
+            (username && username.toLowerCase() !== userType.toLowerCase()
+                ? escapeText(username) + ' · ' + userType
+                : userType) +
+            '</span>';
 
         var before =
             footer.querySelector('.sidebar-commit-info') ||

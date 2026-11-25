@@ -11,7 +11,7 @@
     <link href="/static/theme.css?v=8" rel="stylesheet">
     <link rel="stylesheet" href="/static/dark-auto.css?v=2">
     <link rel="stylesheet" href="/static/dashboard.css?v=1">
-    <script src="/static/theme.js?v=5"></script>
+    <script src="/static/theme.js?v=6"></script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -417,6 +417,7 @@
         // Static tools that don't require Python scripts
         const staticTools = ['Products', 'Orders', 'Diary', 'Menu', 'Customers', 'Files'];
         const staffShowDevTabs = {{ 'true' if staff_show_dev_tabs else 'false' }};
+        const staffIsAdmin = {{ 'true' if staff_is_admin else 'false' }};
 
         // Load live products count for header tile
         async function loadLiveProductsCount() {
@@ -461,6 +462,14 @@
                     a.className = 'app-tab';
                     a.innerHTML = `<i class="${data.icon}"></i><span>${data.name}</span>`;
                     appTabsEl.appendChild(a);
+                    // Users sits under Menu, for admins only.
+                    if (tool === 'Menu' && staffIsAdmin) {
+                        const u = document.createElement('a');
+                        u.href = '/app/Users';
+                        u.className = 'app-tab';
+                        u.innerHTML = '<i class="fas fa-user-gear"></i><span>Users</span>';
+                        appTabsEl.appendChild(u);
+                    }
                 });
             } catch (error) {
                 console.error('❌ Error loading tools:', error);
