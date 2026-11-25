@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 SNAPSHOT = "staff_users"
 ROLES = ("staff", "admin")
-MIN_PASSWORD = 8
+MIN_PASSWORD = 1  # no length rule - just not blank
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._@!-]{1,39}$")
 ALWAYS_ON_BUILTINS = frozenset({"dev"})
 
@@ -161,7 +161,7 @@ def _active_admins(data: dict) -> set[str]:
 
 def _check_password(password: str) -> None:
     if len(password or "") < MIN_PASSWORD:
-        raise UserError(f"Password must be at least {MIN_PASSWORD} characters")
+        raise UserError("Enter a password")
 
 
 def create_user(username: str, password: str, role: str, *, by: str) -> dict:

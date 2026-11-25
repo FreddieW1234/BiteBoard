@@ -107,8 +107,8 @@
                         <input id="add-username" required maxlength="40" autocomplete="off">
                     </div>
                     <div class="field">
-                        <label for="add-password">Password (at least 8 characters)</label>
-                        <input id="add-password" type="password" required minlength="8" autocomplete="new-password">
+                        <label for="add-password">Password</label>
+                        <input id="add-password" type="password" required autocomplete="new-password">
                     </div>
                     <div class="field">
                         <label for="add-role">Access</label>
@@ -250,7 +250,7 @@
             const turnOn = btn.dataset.active !== '1';
             act(() => api(url, 'PUT', { active: turnOn }), `${user} ${turnOn ? 'can sign in again' : 'can no longer sign in'}.`);
         } else if (btn.dataset.act === 'password') {
-            const pw = prompt(`New password for ${user} (at least 8 characters):`);
+            const pw = prompt(`New password for ${user}:`);
             if (pw) act(() => api(url, 'PUT', { password: pw }), `Password changed for ${user}.`);
         } else if (btn.dataset.act === 'delete') {
             if (confirm(`Delete ${user}? They won't be able to sign in any more.`)) act(() => api(url, 'DELETE'), `${user} deleted.`);
