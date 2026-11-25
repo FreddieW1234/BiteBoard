@@ -3662,6 +3662,46 @@ def _office_order_cached(order_name):
     return data
 
 
+# New orders get their order tracking set up as soon as the Orders list sees
+# them, instead of only when someone opens the order. Older orders that were
+# never opened are left alone so they don't suddenly appear as "not started".
+_AUTO_SEED_MAX_AGE_DAYS = 7
+
+
+def _is_new_order(processed_at) -> bool:
+    from datetime import datetime, timedelta, timezone
+
+    text = str(processed_at or "").strip()
+    if not text:
+        return False
+    try:
+        placed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if placed.tzinfo is None:
+        placed = placed.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - placed <= timedelta(days=_AUTO_SEED_MAX_AGE_DAYS)
+
+
+def _seed_new_order_tracking(order_name: str, missing: list) -> None:
+    """Create the office tracking item for each line that has none yet (the same
+    call opening the order makes). Fills each item's office view in place."""
+    import logging
+
+    from scripts.office_api import ensure_item, OfficeApiError  # type: ignore
+
+    seeded = False
+    for key, title, item in missing:
+        try:
+            item["office"] = ensure_item(order_name, key, title)
+            seeded = True
+        except OfficeApiError as exc:
+            logging.getLogger(__name__).warning("Auto-seed tracking failed for %s %s: %s", order_name, key, exc)
+    if seeded:
+        with _OFFICE_ORDER_CACHE_LOCK:
+            _OFFICE_ORDER_CACHE.pop(order_name, None)
+
+
 @app.route("/api/orders/indicators", methods=["POST"])
 def api_orders_indicators_batch():
     """Staff Orders list: progress for many orders in one request.
@@ -3688,12 +3728,18 @@ def api_orders_indicators_batch():
             if key:
                 by_item[key] = view
         items = []
+        missing = []
         for line in o.get("lines") or []:
             ln = line.get("line_number")
             if ln is None:
                 continue
             key = line.get("office_item_id") or item_key(ln, line.get("title") or "")
-            items.append({"office": by_item.get(key)})
+            item = {"office": by_item.get(key)}
+            if item["office"] is None:
+                missing.append((key, line.get("title") or "", item))
+            items.append(item)
+        if missing and _is_new_order(o.get("processed_at")):
+            _seed_new_order_tracking(str(o["name"]), missing)
         return str(o["id"]), items
 
     results = {}

@@ -1188,6 +1188,7 @@
                     orders: chunk.map(o => ({
                         id: String(o.id),
                         name: o.name,
+                        processed_at: o.processed_at || '',  // new orders get tracking set up automatically
                         lines: (o.order_items || []).map(li => ({
                             line_number: li.line_number, title: li.title, office_item_id: li.office_item_id || null,
                         })),
