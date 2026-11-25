@@ -439,7 +439,7 @@
                 const dynamicTools = await response.json();
                 const allTools = [...dynamicTools, ...staticTools];
                 const visibleTools = allTools.filter(t => t !== 'Field_Finder' && t !== 'Price_Manager' && t !== 'Templates_Uploader' && t !== 'Price_Bandit');
-                let tabOrder = ['Products', 'Orders', 'Diary', 'Customers', 'Artwork_Updater', 'Files', 'Menu'];
+                let tabOrder = ['Products', 'Orders', 'Diary', 'Customers', 'Menu', 'Artwork_Updater', 'Files'];  // dev-only tabs last (Users goes after Menu)
                 if (!staffShowDevTabs) {
                     tabOrder = tabOrder.filter(t => t !== 'Artwork_Updater' && t !== 'Files');
                 }
