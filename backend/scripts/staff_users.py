@@ -103,14 +103,42 @@ def authenticate(username: str, password: str) -> str | None:
 
 
 def _touch_login(key: str) -> None:
+    mark_active(key)
+
+
+# ---------------------------------------------------------------- last active
+# Any page opened or action taken counts. Kept in memory straight away and
+# saved to the office server at most every ACTIVE_SAVE_EVERY seconds a person.
+ACTIVE_SAVE_EVERY = 120
+_ACTIVE: dict[str, str] = {}       # lower name -> ISO time (latest seen)
+_ACTIVE_SAVED: dict[str, float] = {}
+
+
+def mark_active(username: str | None) -> None:
+    key = (username or "").strip().lower()
+    if not key:
+        return
+    _ACTIVE[key] = _now()
+    if time.time() - _ACTIVE_SAVED.get(key, 0) < ACTIVE_SAVE_EVERY:
+        return
+    _ACTIVE_SAVED[key] = time.time()
+    threading.Thread(target=_save_active, args=(key,), daemon=True).start()
+
+
+def _save_active(key: str) -> None:
     try:
         with _LOCK:
             data = _load_for_write()
-            if key in data["users"]:
-                data["users"][key]["last_login"] = _now()
-                _save(data, data["users"][key]["username"])
+            data.setdefault("last_active", {})[key] = _ACTIVE.get(key) or _now()
+            _save(data, "activity")
     except Exception as exc:
-        log.warning("Could not record last login: %s", exc)
+        log.warning("Could not record last active for %s: %s", key, exc)
+
+
+def _last_active(key: str, data: dict) -> str | None:
+    seen = [t for t in (_ACTIVE.get(key), (data.get("last_active") or {}).get(key),
+                        (data["users"].get(key) or {}).get("last_login")) if t]
+    return max(seen) if seen else None
 
 
 def account(username: str | None) -> dict | None:
@@ -143,12 +171,14 @@ def list_users() -> list[dict]:
             "username": name, "role": "admin", "builtin": True,
             "active": _builtin_enabled(name, data),
             "can_disable": name not in ALWAYS_ON_BUILTINS,
+            "last_active": _last_active(name.lower(), data),
         })
     for user in sorted(data["users"].values(), key=lambda x: x["username"].lower()):
         out.append({
             "username": user["username"], "role": user.get("role") or "staff", "builtin": False,
             "active": user.get("active", True), "created_at": user.get("created_at"),
-            "created_by": user.get("created_by"), "last_login": user.get("last_login"),
+            "created_by": user.get("created_by"),
+            "last_active": _last_active(user["username"].lower(), data),
         })
     return out
 

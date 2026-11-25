@@ -127,7 +127,7 @@
                 <div class="msg" id="list-msg" hidden></div>
                 <div class="table-wrap">
                     <table>
-                        <thead><tr><th>Username</th><th>Access</th><th>Status</th><th>Last signed in</th><th>Added</th><th></th></tr></thead>
+                        <thead><tr><th>Username</th><th>Access</th><th>Status</th><th>Last active</th><th>Added</th><th></th></tr></thead>
                         <tbody id="users-body"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
                     </table>
                 </div>
@@ -190,7 +190,7 @@
                 <td><strong>${esc(u.username)}</strong>${isMe ? '<span class="you">(you)</span>' : ''}</td>
                 <td><span class="pill ${u.role === 'admin' ? 'admin' : 'staff'}">${u.role === 'admin' ? 'Admin' : 'Staff'}</span>${u.builtin ? ' <span class="pill builtin">Built-in</span>' : ''}</td>
                 <td>${status}</td>
-                <td class="muted">${u.builtin ? '—' : esc(when(u.last_login))}</td>
+                <td class="muted">${esc(when(u.last_active))}</td>
                 <td class="muted">${added}</td>
                 <td><div class="user-actions">${actionsFor(u, isMe)}</div></td>
             </tr>`;

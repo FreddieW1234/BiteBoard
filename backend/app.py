@@ -202,6 +202,12 @@ def portal_auth_gate():
         if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Staff login required"}), 401
         return redirect(url_for("staff_login", next=path))
+    if request.method != "GET" or not path.startswith("/api/"):
+        try:
+            from scripts.staff_users import mark_active  # type: ignore
+            mark_active(get_staff_username())
+        except Exception:
+            pass
     if is_staff_admin_only_path(path) and not staff_is_admin():
         if path.startswith("/api/"):
             return jsonify({"success": False, "error": "Admins only"}), 403
