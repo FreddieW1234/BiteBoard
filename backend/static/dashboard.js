@@ -12,9 +12,12 @@
     let dispatchView = 'today';
     let lastData = null;
 
+    // "Good afternoon, Freddie" - the signed-in person's username.
     function greeting() {
         const h = new Date().getHours();
-        return h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+        const hello = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+        const user = ((document.getElementById('dash') || {}).dataset || {}).user || '';
+        return user ? `${hello}, ${esc(user)}` : hello;
     }
 
     function sectionError(data, key) {

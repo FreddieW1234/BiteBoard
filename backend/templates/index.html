@@ -329,7 +329,7 @@
                 <a href="/staff/logout" class="sidebar-sign-out"><i class="fas fa-right-from-bracket" aria-hidden="true"></i><span class="sidebar-sign-out-label">Sign out</span></a>
             </div>
         </aside>
-        <main class="main"><div class="dash" id="dash"></div></main>
+        <main class="main"><div class="dash" id="dash" data-user="{{ staff_username or '' }}"></div></main>
     </div>
 
     <script>
@@ -562,6 +562,6 @@
         // Refresh tools every 30 seconds
         setInterval(loadTools, 30000);
     </script>
-    <script src="/static/dashboard.js?v=2"></script>
+    <script src="/static/dashboard.js?v=3"></script>
 </body>
 </html>
