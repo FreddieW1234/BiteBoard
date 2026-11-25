@@ -1,7 +1,8 @@
 <!-- Bite Promotions - Production Update (Klaviyo HTML block)
-     Paste into your Flow email. Event properties from send_production_update().
+     Paste into your Flow email. Button uses {{ event.portal_url }} from the portal API.
+     Requires event.dispatch_date from backend (diary dispatch date, DD.MM.YYYY).
      event.dispatch_method is "pickup" for collection orders (collection wording),
-     otherwise "shipping" or blank (delivery wording, as before). -->
+     otherwise "shipping" or blank (delivery wording). -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
   <tr>
     <td align="center" style="padding:32px 24px;font-family:Helvetica,Arial,sans-serif;">
@@ -97,7 +98,7 @@
                     </tr>
                   </table>
 
-                  <!-- Status + Scheduled dispatch -->
+                  <!-- Status + Scheduled dispatch / Ready for collection -->
                   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td width="50%" valign="top" style="padding-right:12px;">
@@ -121,7 +122,7 @@
                       <td width="50%" valign="top" style="padding-left:12px;">
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                           <tr>
-                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">{% if event.dispatch_method == 'pickup' %}Ready for collection by{% else %}Scheduled to dispatch on{% endif %}</td>
+                            <td style="font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a8a8a;padding-bottom:6px;">{% if event.dispatch_method == 'pickup' %}Ready for collection by{% else %}Scheduled dispatch{% endif %}</td>
                           </tr>
                           <tr>
                             <td style="font-family:Helvetica,Arial,sans-serif;font-size:16px;font-weight:bold;color:#1a1a1a;">
