@@ -326,11 +326,6 @@
                 </div>
             </nav>
             <div class="sidebar-footer">
-                <div class="header-stat">
-                    <i class="fas fa-box-open"></i>
-                    <h3 id="live-products-count">–</h3>
-                    <p>Live Products</p>
-                </div>
                 <a href="/staff/logout" class="sidebar-sign-out"><i class="fas fa-right-from-bracket" aria-hidden="true"></i><span class="sidebar-sign-out-label">Sign out</span></a>
             </div>
         </aside>
@@ -547,7 +542,6 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             loadTools();
-            loadLiveProductsCount();
             // Add some interactive effects
             const cards = document.querySelectorAll('.tool-card, .header-stat');
             cards.forEach(card => {
