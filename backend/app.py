@@ -3606,6 +3606,28 @@ def _history(order_name, action, detail="", *, item=""):
         pass
 
 
+def _history_notify_change(order_name, before, enabled, email):
+    """Log update-email changes, but only real ones.
+
+    Opening an order whose setting was never saved quietly saves the default
+    (on, customer's email) - often several times as the page reloads its
+    tracking. That isn't a change, so it isn't logged.
+    """
+    if before is None:  # couldn't read the old setting - don't guess
+        return
+    explicit = bool(before.get("updated_at"))
+    old_enabled = bool(before.get("enabled")) if explicit else True  # default is on
+    old_email = (before.get("email") or "").strip().lower()
+    new_email = (email or "").strip()
+    if enabled != old_enabled:
+        if enabled:
+            _history(order_name, "Update emails turned on", new_email)
+        else:
+            _history(order_name, "Update emails turned off")
+    elif enabled and explicit and old_email and new_email.lower() != old_email:
+        _history(order_name, "Update email address changed", f"{before.get('email')} → {new_email}")
+
+
 def _office_item_context(order_id, item):
     entry = _office_access(order_id)
     if not entry:
@@ -3944,12 +3966,13 @@ def _office_notify_set(order_id):
     if enabled and not email and not is_staff_authenticated():
         email = (get_client_email() or "").strip()
     try:
-        from scripts.office_api import set_notify, OfficeApiError  # type: ignore
+        from scripts.office_api import get_notify, set_notify, OfficeApiError  # type: ignore
+        try:
+            before = get_notify(order_name) or {}
+        except Exception:
+            before = None
         notify = set_notify(order_name, enabled, email)
-        if enabled:
-            _history(order_name, "Update emails turned on", (notify or {}).get("email") or email)
-        else:
-            _history(order_name, "Update emails turned off")
+        _history_notify_change(order_name, before, enabled, (notify or {}).get("email") or email)
         return jsonify({"success": True, "notify": notify})
     except OfficeApiError as exc:
         msg = str(exc)
