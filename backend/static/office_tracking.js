@@ -1171,10 +1171,10 @@
             </label>
             ${emailField}
             ${isStaff ? renderCustomerPicker(orderId, customerId, customerName, customerEmail) : ''}
+            <span class="office-notify-msg" hidden></span>
             ${isStaff && typeof global.openOrderHistory === 'function'
                 ? `<button type="button" class="btn-order-history" data-order-id="${escapeHtml(orderId)}" data-order-name="${escapeHtml(orderName || '')}"><i class="fas fa-clock-rotate-left"></i> View change history</button>`
                 : ''}
-            <span class="office-notify-msg" hidden></span>
         </div>`;
     }
 
