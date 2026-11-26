@@ -171,12 +171,43 @@
 
         const a = data.autoprint || {};
         let print;
-        if (!a.finished_at) print = '<span class="pill neutral">No run since the last restart</span>';
+        if (!a.finished_at) print = '<span class="pill neutral">No runs recorded yet</span>';
         else if (a.success) print = `<span class="pill good"><i class="fas fa-check"></i> ${(a.printed || []).length} printed</span>`;
         else print = `<span class="pill bad"><i class="fas fa-xmark"></i> ${esc(a.error || ((a.failed || []).length + ' failed'))}</span>`;
+        const when = a.finished_at
+            ? ' ' + esc(new Date(a.finished_at).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))
+            : '';
         parts.push(`<h2 style="margin-top:18px">6am print run</h2><div class="meta" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:0.82rem;color:var(--d-muted)">
-            ${print}${a.finished_at ? ' ' + esc(new Date(a.finished_at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })) : ''}</div>`);
+            ${print}${when}</div>`);
+        if (a.finished_at) parts.push(printedSheetsList(a));
         return `<div class="dash-card span-5">${parts.join('')}</div>`;
+    }
+
+    // The sheets the last run printed, one line per order.
+    function printedSheetsList(a) {
+        let sheets = a.sheets;
+        if (!Array.isArray(sheets)) {  // older reports only have "Sage info #S1105" strings
+            sheets = (a.printed || []).map(s => {
+                const i = String(s).lastIndexOf(' ');
+                return i > 0 ? { sheet: s.slice(0, i), order: s.slice(i + 1) } : { sheet: s, order: '' };
+            });
+        }
+        const byOrder = new Map();
+        sheets.forEach(s => {
+            if (!byOrder.has(s.order)) byOrder.set(s.order, []);
+            byOrder.get(s.order).push(s.sheet);
+        });
+        const failed = (a.failed || []).map(f => `<li><span class="main-txt">${esc(f.order || '')}<small>${esc(f.error || 'Failed')}</small></span>
+            <span class="pill bad">Not printed</span></li>`);
+        if (!byOrder.size && !failed.length) {
+            return a.success ? '<div class="empty">Nothing new to print that morning.</div>' : '';
+        }
+        const LIMIT = 10;
+        const orders = [...byOrder.entries()];
+        const rows = orders.slice(0, LIMIT).map(([order, labels]) => `<li>
+            <span class="main-txt">${order ? `<a href="${orderUrl(order)}">${esc(order)}</a>` : '—'}<small>${esc(labels.join(' · '))}</small></span></li>`);
+        return '<ul class="dash-list" style="margin-top:10px">' + failed.join('') + rows.join('') + '</ul>'
+            + (orders.length > LIMIT ? `<div class="chart-foot">+ ${orders.length - LIMIT} more order${orders.length - LIMIT === 1 ? '' : 's'}</div>` : '');
     }
 
     function recentOrders(data) {

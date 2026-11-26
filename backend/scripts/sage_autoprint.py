@@ -34,6 +34,9 @@ _TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 
 _RUN_LOCK = threading.Lock()
 _LAST_REPORT: dict = {}
+# The last real run is also kept on the office server so the Dashboard can
+# show it after a restart/deploy (dry runs are never stored).
+LAST_RUN_SNAPSHOT = "autoprint_last_run"
 
 
 def print_window(today: date) -> tuple[datetime, datetime]:
@@ -144,7 +147,7 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
         today = today or datetime.now(LONDON).date()
         start, end = print_window(today)
         report = {"success": True, "dry_run": dry_run, "window": [start.isoformat(), end.isoformat()],
-                  "printed": [], "skipped": [], "failed": []}
+                  "printed": [], "sheets": [], "skipped": [], "failed": []}
         orders = orders_between(start, end)
         # All Sage sheets, then all art job sheets, then all production notes.
         for doc, label, kind in DOCUMENTS:
@@ -166,6 +169,7 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
                                       updated_by="sage-autoprint")
                     if pdf:
                         report["printed"].append(what)
+                        report["sheets"].append({"order": name, "sheet": label})
                         try:
                             from scripts.order_history import record  # type: ignore
                             record(name, "Printed automatically", f"{label} (6am print)", who="BiteBoard")
@@ -178,16 +182,56 @@ def run(*, today: date | None = None, dry_run: bool = False, reprint: bool = Fal
         print(f"[sage-autoprint] {'dry run' if dry_run else 'run'} {start.date()}..{end.date()}: "
               f"printed={len(report['printed'])} skipped={len(report['skipped'])} failed={len(report['failed'])}",
               flush=True)
-        _LAST_REPORT.clear()
-        _LAST_REPORT.update(report, finished_at=datetime.now(LONDON).isoformat())
+        report["finished_at"] = datetime.now(LONDON).isoformat()
+        if not dry_run:
+            _remember(report)
         return report
     except Exception as exc:
         print(f"[sage-autoprint] failed: {exc}", flush=True)
-        _LAST_REPORT.clear()
-        _LAST_REPORT.update({"success": False, "error": str(exc)[:300], "finished_at": datetime.now(LONDON).isoformat()})
-        return dict(_LAST_REPORT)
+        failed = {"success": False, "error": str(exc)[:300], "finished_at": datetime.now(LONDON).isoformat()}
+        if not dry_run:
+            _remember(failed)
+        return failed
     finally:
         _RUN_LOCK.release()
+
+
+def _remember(report: dict) -> None:
+    """Keep the last real run in memory and on the office server."""
+    _LAST_REPORT.clear()
+    _LAST_REPORT.update(report)
+    try:
+        from scripts.office_api import put_snapshot  # type: ignore
+        put_snapshot(LAST_RUN_SNAPSHOT, report, updated_by="sage-autoprint")
+    except Exception as exc:
+        print(f"[sage-autoprint] last run not saved: {exc}", flush=True)
+
+
+def _report_from_print_records() -> dict | None:
+    """Rebuild the last run from the per-sheet print records (for runs from
+    before the last run was saved). A run takes minutes, so every sheet printed
+    within an hour of the newest record counts as that run."""
+    from scripts.office_api import get_snapshot_items  # type: ignore
+
+    records = []
+    for order_rank, (_doc, label, kind) in enumerate(DOCUMENTS):
+        for item in get_snapshot_items(kind, include_payload=True) or []:
+            payload = item.get("payload") or {}
+            try:
+                at = datetime.fromisoformat(str(payload.get("printed_at") or ""))
+            except ValueError:
+                continue
+            if at.tzinfo is None:
+                at = at.replace(tzinfo=LONDON)
+            records.append((at, order_rank, label, payload.get("name") or "", bool(payload.get("nothing_to_print"))))
+    if not records:
+        return None
+    latest = max(r[0] for r in records)
+    run_records = sorted((r for r in records if latest - r[0] <= timedelta(hours=1) and not r[4]),
+                         key=lambda r: (r[1], r[0]))
+    sheets = [{"order": name, "sheet": label} for _at, _rank, label, name, _none in run_records]
+    return {"success": True, "finished_at": latest.isoformat(), "sheets": sheets,
+            "printed": [f"{s['sheet']} {s['order']}" for s in sheets], "failed": [], "from_records": True}
 
 
 def print_one(order_name: str) -> dict:
@@ -221,4 +265,19 @@ def run_async(**kwargs) -> None:
 
 
 def last_report() -> dict:
-    return dict(_LAST_REPORT)
+    """The last real run: from memory, else the office server (survives deploys)."""
+    if _LAST_REPORT:
+        return dict(_LAST_REPORT)
+    report = None
+    try:
+        from scripts.office_api import get_snapshot  # type: ignore
+        saved = get_snapshot(LAST_RUN_SNAPSHOT) or {}
+        report = saved.get("payload") or None
+        if not report:
+            report = _report_from_print_records()
+    except Exception as exc:
+        print(f"[sage-autoprint] last run unavailable: {exc}", flush=True)
+        return {}
+    if report and not _LAST_REPORT:
+        _LAST_REPORT.update(report)
+    return dict(report or {})
