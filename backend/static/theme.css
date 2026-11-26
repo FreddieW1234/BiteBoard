@@ -814,37 +814,6 @@ html[data-theme="dark"] .section-title,
 html[data-theme="dark"] .parent-child-diagram-section h3 {
     color: var(--bb-text) !important;
 }
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card {
-    background: var(--bb-surface-2) !important;
-    border-color: var(--bb-border) !important;
-    box-shadow: 0 1px 3px var(--bb-shadow) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card-header {
-    border-color: var(--bb-border) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card .parent-label,
-html[data-theme="dark"] .parent-child-diagram .no-children {
-    color: var(--bb-muted) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card .parent-title {
-    color: var(--bb-text) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card .children-list li {
-    color: var(--bb-text-secondary) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-card .children-list li::before {
-    color: var(--bb-muted) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-edit-btn {
-    background: var(--bb-surface) !important;
-    border-color: var(--bb-border) !important;
-    color: var(--bb-text-secondary) !important;
-}
-html[data-theme="dark"] .parent-child-diagram .diagram-parent-edit-btn:hover {
-    background: var(--bb-accent-soft) !important;
-    border-color: var(--bb-accent) !important;
-    color: var(--bb-accent) !important;
-}
 
 html[data-theme="dark"] .autocomplete-dropdown {
     background: var(--bb-surface) !important;

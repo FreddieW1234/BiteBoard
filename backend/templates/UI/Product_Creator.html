@@ -1666,82 +1666,56 @@
             overflow: visible;
         }
 
-        .parent-child-diagram-section { max-width: 100%; }
-        .parent-child-diagram {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            align-items: flex-start;
+        /* Product Families: one A-Z list, children indented under their parent. */
+        .parent-child-diagram-section { max-width: 980px; }
+        .fam-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+        .fam-search { position: relative; flex: 1 1 280px; max-width: 420px; }
+        .fam-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.85rem; }
+        .fam-search input {
+            width: 100%; box-sizing: border-box; padding: 9px 12px 9px 34px;
+            border: 1px solid #e5e7eb; border-radius: 8px; font: inherit; font-size: 0.88rem; background: #fff;
         }
-        .parent-child-diagram .diagram-parent-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 14px 18px;
-            min-width: 220px;
-            max-width: 320px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        .fam-search input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+        .fam-count { font-size: 0.8rem; color: #6b7280; }
+        .fam-list { border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; overflow: hidden; }
+        .fam-group + .fam-group { border-top: 1px solid #e5e7eb; }
+        .fam-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) 150px 90px 34px;
+            align-items: center; gap: 12px; padding: 7px 12px; cursor: pointer;
         }
-        .parent-child-diagram .diagram-parent-card-header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #e2e8f0;
+        .fam-row:hover { background: #f5f7ff; }
+        .fam-parent { background: #f8fafc; padding-top: 9px; padding-bottom: 9px; }
+        .fam-parent .fam-title { font-weight: 600; color: #1e293b; }
+        .fam-child { padding-left: 34px; }
+        .fam-child .fam-title { color: #475569; font-size: 0.88rem; position: relative; padding-left: 14px; }
+        .fam-child .fam-title::before {
+            content: ''; position: absolute; left: 0; top: -9px; bottom: 50%; width: 9px;
+            border-left: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;
         }
-        .parent-child-diagram .diagram-parent-card-header-left {
-            flex: 1;
-            min-width: 0;
+        .fam-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fam-sku { font-size: 0.78rem; color: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fam-meta { font-size: 0.78rem; color: #94a3b8; text-align: right; white-space: nowrap; }
+        .fam-meta.none { font-style: italic; }
+        .fam-edit {
+            width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; color: #64748b; background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
         }
-        .parent-child-diagram .diagram-parent-card .parent-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #64748b;
-            margin-bottom: 4px;
+        .fam-row:hover .fam-edit { color: #4f46e5; background: #eef2ff; border-color: #c7d2fe; }
+        .fam-empty { padding: 14px 12px; color: #94a3b8; font-size: 0.88rem; }
+        @media (max-width: 640px) {
+            .fam-row { grid-template-columns: minmax(0, 1fr) 34px; }
+            .fam-sku, .fam-meta { display: none; }
         }
-        .parent-child-diagram .diagram-parent-card .parent-title {
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 0;
-        }
-        .parent-child-diagram .diagram-parent-edit-btn {
-            flex-shrink: 0;
-            padding: 6px 10px;
-            font-size: 0.8rem;
-            color: #475569;
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: color 0.15s, background 0.15s, border-color 0.15s;
-        }
-        .parent-child-diagram .diagram-parent-edit-btn:hover {
-            color: #4f46e5;
-            background: #eef2ff;
-            border-color: #c7d2fe;
-        }
-        .parent-child-diagram .diagram-parent-card .children-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-        .parent-child-diagram .diagram-parent-card .children-list li {
-            padding: 4px 0 4px 16px;
-            position: relative;
-            font-size: 0.9rem;
-            color: #475569;
-        }
-        .parent-child-diagram .diagram-parent-card .children-list li::before {
-            content: '└';
-            position: absolute;
-            left: 0;
-            color: #94a3b8;
-        }
-        .parent-child-diagram .diagram-parent-card .children-list li:last-child::before { content: '└'; }
-        .parent-child-diagram .no-children { font-size: 0.85rem; color: #94a3b8; font-style: italic; }
+        html[data-theme="dark"] .fam-search input { background: var(--bb-surface); border-color: var(--bb-border); color: var(--bb-text); }
+        html[data-theme="dark"] .fam-list { background: var(--bb-surface); border-color: var(--bb-border); }
+        html[data-theme="dark"] .fam-group + .fam-group { border-color: var(--bb-border); }
+        html[data-theme="dark"] .fam-parent { background: var(--bb-surface-2); }
+        html[data-theme="dark"] .fam-row:hover { background: var(--bb-accent-soft); }
+        html[data-theme="dark"] .fam-parent .fam-title { color: var(--bb-text); }
+        html[data-theme="dark"] .fam-child .fam-title { color: var(--bb-text-secondary); }
+        html[data-theme="dark"] .fam-child .fam-title::before { border-color: var(--bb-border); }
+        html[data-theme="dark"] .fam-sku, html[data-theme="dark"] .fam-meta, html[data-theme="dark"] .fam-count { color: var(--bb-muted); }
+        html[data-theme="dark"] .fam-row:hover .fam-edit { color: var(--bb-accent); background: transparent; border-color: var(--bb-accent); }
 
         .pc-image-picker-popup {
             position: fixed;
@@ -2480,6 +2454,13 @@
                 <!-- Parent–child diagram (below the 4 buttons) -->
                 <div id="parent-child-diagram-section" class="parent-child-diagram-section" style="margin-top: 24px; margin-bottom: 24px;">
                     <h3 style="margin: 0 0 12px 0; font-size: 1.1rem; color: #374151;">Product Families</h3>
+                    <div class="fam-tools">
+                        <div class="fam-search">
+                            <i class="fas fa-search"></i>
+                            <input type="search" id="fam-search" placeholder="Find a family or product by name or SKU…" autocomplete="off">
+                        </div>
+                        <span class="fam-count" id="fam-count"></span>
+                    </div>
                     <div id="parent-child-diagram" class="parent-child-diagram">
                         <span class="muted">Loading…</span>
                     </div>
@@ -4020,46 +4001,88 @@
                 function esc(s) {
                     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 }
-                function renderProductFamilyDiagram(treeData) {
+                function famRowHtml(p, kind, meta, metaClass) {
+                    const id = p.id;
+                    const title = (p.title || '').trim() || (kind === 'parent' ? 'Untitled' : 'Product');
+                    const editable = id != null && id !== '' && !isNaN(Number(id));
+                    const attrs = editable ? ` data-product-id="${esc(String(id))}" data-product-title="${esc(title)}" title="Edit ${esc(title)}"` : '';
+                    return `<div class="fam-row fam-${kind}"${attrs}>
+                        <span class="fam-title">${esc(title)}</span>
+                        <span class="fam-sku">${esc(p.sku || '')}</span>
+                        <span class="fam-meta${metaClass ? ' ' + metaClass : ''}">${esc(meta || '')}</span>
+                        ${editable ? '<button type="button" class="fam-edit" tabindex="-1" aria-hidden="true"><i class="fas fa-pen"></i></button>' : '<span></span>'}
+                    </div>`;
+                }
+
+                let famTree = [];
+                let famLoadingChildren = false;
+                const byTitle = (a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'en', { sensitivity: 'base', numeric: true })
+                    || String(a.sku || '').localeCompare(String(b.sku || ''), 'en', { numeric: true });
+
+                function famMatches(p, term) {
+                    return !term || `${p.title || ''} ${p.sku || ''}`.toLowerCase().includes(term);
+                }
+
+                function drawProductFamilies() {
                     const diagramEl = document.getElementById('parent-child-diagram');
+                    const countEl = document.getElementById('fam-count');
                     if (!diagramEl) return;
-                    const tree = (treeData && treeData.tree) ? treeData.tree : [];
-                    if (tree.length === 0) {
+                    if (!famTree.length) {
                         diagramEl.innerHTML = '<span class="muted">No parent products found. Assign a product a "Parent" type to see it here.</span>';
+                        if (countEl) countEl.textContent = '';
                         return;
                     }
-                    const hasChildren = tree.some(item => (item.children || []).length > 0);
-                    diagramEl.innerHTML = tree.map(item => {
+                    const searchEl = document.getElementById('fam-search');
+                    const term = ((searchEl && searchEl.value) || '').trim().toLowerCase();
+                    let families = 0;
+                    const html = famTree.map(item => {
                         const parent = item.parent || {};
-                        const parentId = parent.id;
-                        const parentTitle = (parent.title || '').trim() || 'Untitled';
                         const children = item.children || [];
-                        let childrenHtml;
-                        if (children.length) {
-                            childrenHtml = `<ul class="children-list">${children.map(c => `<li>${esc(c.title || 'Product')}</li>`).join('')}</ul>`;
-                        } else if (!hasChildren && tree.length) {
-                            childrenHtml = '<p class="no-children">Loading products…</p>';
-                        } else {
-                            childrenHtml = '<p class="no-children">No child products yet</p>';
-                        }
-                        const editBtnHtml = (parentId != null && parentId !== '' && !isNaN(Number(parentId)))
-                            ? `<button type="button" class="diagram-parent-edit-btn" data-product-id="${esc(String(parentId))}" data-product-title="${esc(parentTitle)}" title="Edit parent product"><i class="fas fa-pen"></i></button>`
-                            : '';
-                        const headerHtml = `<div class="diagram-parent-card-header"><div class="diagram-parent-card-header-left"><div class="parent-label">Parent</div><div class="parent-title">${esc(parentTitle)}</div></div>${editBtnHtml}</div>`;
-                        return `<div class="diagram-parent-card">${headerHtml}${childrenHtml}</div>`;
+                        const parentHit = famMatches(parent, term);
+                        const shownChildren = parentHit ? children : children.filter(c => famMatches(c, term));
+                        if (!parentHit && !shownChildren.length) return '';
+                        families += 1;
+                        let meta, metaClass = '';
+                        if (children.length) meta = `${children.length} product${children.length === 1 ? '' : 's'}`;
+                        else if (famLoadingChildren) { meta = 'Loading…'; metaClass = 'none'; }
+                        else { meta = 'No children yet'; metaClass = 'none'; }
+                        return `<div class="fam-group">${famRowHtml(parent, 'parent', meta, metaClass)}${
+                            shownChildren.map(c => famRowHtml(c, 'child', '', '')).join('')}</div>`;
                     }).join('');
+                    diagramEl.innerHTML = html
+                        ? `<div class="fam-list">${html}</div>`
+                        : '<div class="fam-list"><div class="fam-empty">No families or products match your search.</div></div>';
+                    if (countEl) {
+                        countEl.textContent = term
+                            ? `${families} famil${families === 1 ? 'y' : 'ies'} match`
+                            : `${famTree.length} families · ${famTree.reduce((n, t) => n + 1 + (t.children || []).length, 0)} products`;
+                    }
+                }
+
+                function renderProductFamilyDiagram(treeData) {
+                    const tree = (treeData && treeData.tree) ? treeData.tree : [];
+                    // A parents-only copy (children not loaded yet) shows "Loading…".
+                    famLoadingChildren = tree.length > 0 && !tree.some(item => (item.children || []).length > 0);
+                    famTree = tree.map(item => ({
+                        parent: item.parent || {},
+                        children: (item.children || []).slice().sort(byTitle),
+                    })).sort((a, b) => byTitle(a.parent, b.parent));
+                    drawProductFamilies();
                 }
                 window.__renderProductFamilyDiagram = renderProductFamilyDiagram;
 
                 const diagramEl = document.getElementById('parent-child-diagram');
                 if (!diagramEl) return;
 
-                // Click on Edit button in a parent card -> same as Edit Existing Product then selecting that product
+                const famSearch = document.getElementById('fam-search');
+                if (famSearch) famSearch.addEventListener('input', drawProductFamilies);
+
+                // Click a parent or child row -> same as Edit Existing Product then selecting that product
                 diagramEl.addEventListener('click', function(e) {
-                    const btn = e.target.closest('.diagram-parent-edit-btn');
-                    if (!btn || !btn.dataset.productId) return;
-                    const id = Number(btn.dataset.productId);
-                    const title = (btn.dataset.productTitle || '').trim() || 'Product';
+                    const row = e.target.closest('.fam-row[data-product-id]');
+                    if (!row) return;
+                    const id = Number(row.dataset.productId);
+                    const title = (row.dataset.productTitle || '').trim() || 'Product';
                     if (typeof closeEditModal === 'function') closeEditModal();
                     if (typeof pcPopulateFromProduct === 'function') pcPopulateFromProduct(id, title);
                 });

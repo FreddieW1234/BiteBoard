@@ -71,6 +71,7 @@
         .search-box input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
         .count-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
         .toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
+        .ap-product-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: -6px 0 18px; }
         .btn-ghost { background: #fff; border: 1px solid #e5e7eb; color: #374151; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: background-color 0.15s, border-color 0.15s; }
         .btn-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
         .btn-ghost:disabled { opacity: 0.55; cursor: not-allowed; }
@@ -297,7 +298,7 @@
                 </span>
                 <div class="products-view-toggle" role="group" aria-label="Products view">
                     <button type="button" data-view="all" class="active" aria-pressed="true">All</button>
-                    <button type="button" data-view="manager" aria-pressed="false">Manager</button>
+                    <button type="button" data-view="manager" aria-pressed="false">Families</button>
                 </div>
             </div>
 
@@ -314,8 +315,15 @@
                     <button type="button" class="btn-ghost" id="ap-expand"><i class="fas fa-angles-down"></i> Expand all</button>
                     <button type="button" class="btn-ghost" id="ap-collapse"><i class="fas fa-angles-up"></i> Collapse all</button>
                     <button type="button" class="btn-ghost" id="ap-refresh"><i class="fas fa-rotate"></i> Refresh</button>
-                    <button type="button" class="btn-ghost" onclick="ProductQueue.open()" title="Background save queue"><i class="fas fa-list-check"></i> Queue <span class="pq-count"></span></button>
                 </div>
+            </div>
+
+            <div class="ap-product-actions" role="group" aria-label="Product actions">
+                <button type="button" class="btn-primary" data-manager-action="edit"><i class="fas fa-edit"></i> Edit Existing Product</button>
+                <button type="button" class="btn-primary" data-manager-action="create"><i class="fas fa-plus-circle"></i> Create New Product</button>
+                <button type="button" class="btn-primary" data-manager-action="duplicate"><i class="fas fa-copy"></i> Duplicate Existing Product</button>
+                <button type="button" class="btn-primary" data-manager-action="from-parent"><i class="fas fa-sitemap"></i> Create from Parent</button>
+                <button type="button" class="btn-ghost" onclick="ProductQueue.open()" title="Background save queue"><i class="fas fa-list-check"></i> Queue <span class="pq-count"></span></button>
             </div>
 
             <div class="ap-editbar" id="ap-editbar">
@@ -338,7 +346,7 @@
             </div>
 
             <div id="products-view-manager" hidden>
-                <iframe id="products-manager-frame" title="Product Manager"></iframe>
+                <iframe id="products-manager-frame" title="Product Families"></iframe>
             </div>
         </div>
     </div>
@@ -354,7 +362,7 @@
         <div class="ap-cat-dd-list"></div>
     </div>
 
-    <script src="/static/products_shell.js?v=40"></script>
+    <script src="/static/products_shell.js?v=41"></script>
     <script>
         let AP_DATA = { groups: [], unassigned: [], misaligned: [] };
 

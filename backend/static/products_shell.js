@@ -7,7 +7,7 @@
     var PREFETCH_TTL_MS = 5 * 60 * 1000;
     // Bump v= when Product_Creator.html changes so the warm manager iframe
     // does not keep serving a stale editor after deploy.
-    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=fast-new1';
+    var MANAGER_BASE_SRC = '/app/Product_Creator?embed=1&v=families1';
 
     function getParam(name) {
         return new URLSearchParams(window.location.search).get(name);
@@ -121,6 +121,58 @@
         try {
             sessionStorage.setItem(STORAGE_RETURN, view === 'manager' ? 'manager' : 'all');
         } catch (_) { /* ignore */ }
+    }
+
+    // The product buttons on All Products run the same actions as the buttons
+    // in Families: switch to Families, then call into its (pre-loaded) frame.
+    var MANAGER_ACTIONS = {
+        'edit': 'openEditModal',
+        'create': 'startNewProduct',
+        'duplicate': 'openDuplicateModal',
+        'from-parent': 'openCreateFromParentModal',
+    };
+
+    function managerFrameReady(frame, fnName) {
+        try {
+            var win = frame.contentWindow;
+            return !!(win && win.document && win.document.readyState === 'complete'
+                && typeof win[fnName] === 'function'
+                && (frame.getAttribute('data-src') || '').indexOf(MANAGER_BASE_SRC) === 0);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function runManagerAction(action) {
+        var fnName = MANAGER_ACTIONS[action];
+        var frame = document.getElementById('products-manager-frame');
+        if (!fnName || !frame) return;
+        setReturnView('all');
+        setView('manager', { returnView: 'all' });
+        var started = Date.now();
+        (function attempt() {
+            if (!managerFrameReady(frame, fnName)) {
+                if (Date.now() - started < 20000) setTimeout(attempt, 100);
+                return;
+            }
+            var win = frame.contentWindow;
+            var actions = win.document.getElementById('product-action-buttons');
+            var editorOpen = actions && actions.style.display === 'none';
+            if (editorOpen) {
+                // A product is already open in Families - don't throw it away unasked.
+                if (!window.confirm('A product is open in Families. Leave it and continue?')) return;
+                if (typeof win.resetProductCreatorHomeUI === 'function') win.resetProductCreatorHomeUI();
+            }
+            try { win[fnName](); } catch (err) { console.warn('Product action failed:', err); }
+        })();
+    }
+
+    function initManagerActionButtons() {
+        document.querySelectorAll('[data-manager-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                runManagerAction(btn.getAttribute('data-manager-action'));
+            });
+        });
     }
 
     function getReturnView() {
@@ -264,6 +316,7 @@
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             initToggle();
+            initManagerActionButtons();
             initFromUrl();
             if (getParam('view') !== 'manager') {
                 setTimeout(warmManagerFrame, 1500);
@@ -271,6 +324,7 @@
         });
     } else {
         initToggle();
+        initManagerActionButtons();
         initFromUrl();
         if (getParam('view') !== 'manager') {
             setTimeout(warmManagerFrame, 1500);
