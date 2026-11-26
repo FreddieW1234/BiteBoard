@@ -63,13 +63,13 @@ LINE_ITEM_FIELDS = """
               sku
               variantTitle
               customAttributes { key value }
+              product {
+                caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
+                originationFee: metafield(namespace: "custom", key: "origination") { value }
+                sageCodeAddons: metafield(namespace: "custom", key: "sage_code_addons") { value }
+              }
               variant {
                 legacyResourceId
-                product {
-                  caseQuantity: metafield(namespace: "custom", key: "case_quantity") { value }
-                  originationFee: metafield(namespace: "custom", key: "origination") { value }
-                  sageCodeAddons: metafield(namespace: "custom", key: "sage_code_addons") { value }
-                }
                 inventoryItem {
                   measurement {
                     weight {
@@ -484,7 +484,9 @@ def format_line_item(li: dict) -> dict:
     quantity = li.get("quantity") or 0
     weight_kg = _line_item_weight_kg(li)
     variant = li.get("variant") or {}
-    product = variant.get("product") or {}
+    # The line's own product link: it survives the ordered variant being
+    # deleted or replaced later (variant.product would then be missing).
+    product = li.get("product") or variant.get("product") or {}
     case_qty_raw = ((product.get("caseQuantity") or {}).get("value") or "").strip()
     case_quantity = None
     if case_qty_raw:
