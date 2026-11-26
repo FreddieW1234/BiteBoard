@@ -1949,9 +1949,83 @@
 
         function closeCustomerOrdersModal() {
             const modal = document.getElementById('cu-orders-modal');
+            const body = document.getElementById('cu-orders-modal-body');
+            // Changes may have been made in the window - load fresh next time.
+            if (body && body.dataset.customerId) delete CU_ORDERS_PREFETCH[body.dataset.customerId];
             modal.classList.remove('open');
             modal.setAttribute('aria-hidden', 'true');
             document.body.style.overflow = '';
+        }
+
+        // A customer's orders start loading as soon as the pointer is over their
+        // Orders button, so the window usually opens straight away. Kept until
+        // the window closes (then fetched fresh next time).
+        const CU_ORDERS_PREFETCH = {};
+        const CU_ORDERS_PREFETCH_MS = 60000;
+
+        function fetchCustomerOrders(customerId) {
+            const key = String(customerId);
+            const hit = CU_ORDERS_PREFETCH[key];
+            if (hit && Date.now() - hit.at < CU_ORDERS_PREFETCH_MS) return hit.promise;
+            const promise = fetch(`/api/customers/${encodeURIComponent(customerId)}/orders`, { credentials: 'same-origin' })
+                .then(async resp => {
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || !data.success) {
+                        throw new Error((data && data.error) ? data.error : 'Failed to load orders');
+                    }
+                    return data;
+                });
+            CU_ORDERS_PREFETCH[key] = { at: Date.now(), promise };
+            promise.catch(() => {
+                if (CU_ORDERS_PREFETCH[key] && CU_ORDERS_PREFETCH[key].promise === promise) delete CU_ORDERS_PREFETCH[key];
+            });
+            return promise;
+        }
+
+        // Colour key, stage and the whole order tracking for every order in one
+        // request, so expanding an order shows its tracking straight away.
+        async function loadCustomerOrdersTracking(body, orders, customer) {
+            if (!window.OfficeTracking) return;
+            const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ');
+            const done = new Set();
+            try {
+                const res = await fetch('/api/orders/indicators', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full: true,
+                        history: false,
+                        orders: orders.slice(0, 100).map(o => ({
+                            id: String(o.id),
+                            name: o.name,
+                            customer_id: o.customer_id || customer.id || '',
+                            customer_name: o.customer_name || name,
+                            customer_email: o.customer_email || customer.email || '',
+                            processed_at: o.processed_at || '',
+                            lines: (o.order_items || []).map(li => ({
+                                line_number: li.line_number, title: li.title, office_item_id: li.office_item_id || null,
+                            })),
+                        })),
+                    }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    Object.entries(data.tracking || {}).forEach(([id, payload]) => {
+                        OfficeTracking.primeOrderTracking(id, payload, '/api/orders', 'staff');
+                    });
+                    Object.entries(data.results || {}).forEach(([id, items]) => {
+                        OfficeTracking.updateOrderRowIndicator(id, OfficeTracking.computeOrderIndicator(items));
+                        OfficeTracking.updateOrderRowStatus(id, items);
+                        done.add(id);
+                    });
+                }
+            } catch (_) { /* fall back below */ }
+            // Anything the batch couldn't answer: the old one-at-a-time way.
+            if (typeof OfficeTracking.loadOrderIndicatorsIn !== 'function') return;
+            body.querySelectorAll('.order-status-indicator-slot[data-order-id]').forEach(slot => {
+                if (!done.has(String(slot.dataset.orderId))) OfficeTracking.loadOrderIndicatorsIn(slot.parentElement, '/api/orders');
+            });
         }
 
         async function openCustomerOrdersModal(customerId, customerName) {
@@ -1960,22 +2034,18 @@
             const title = document.getElementById('cu-orders-modal-title');
             title.textContent = customerName ? `Orders — ${customerName}` : 'Customer orders';
             body.innerHTML = '<div class="state-msg"><div class="spinner"></div>Loading orders…</div>';
+            body.dataset.customerId = String(customerId);
             modal.classList.add('open');
             modal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
 
             try {
-                const resp = await fetch(`/api/customers/${encodeURIComponent(customerId)}/orders`);
-                const data = await resp.json().catch(() => ({}));
-                if (!resp.ok || !data.success) {
-                    throw new Error((data && data.error) ? data.error : 'Failed to load orders');
-                }
+                const data = await fetchCustomerOrders(customerId);
+                if (body.dataset.customerId !== String(customerId)) return;  // another customer opened since
                 customerModalOrders = data.orders || [];
                 body.innerHTML = renderCustomerOrdersTable(customerModalOrders);
                 scheduleAddressTextareaFit(body);
-                if (window.OfficeTracking && typeof OfficeTracking.loadOrderIndicatorsIn === 'function') {
-                    OfficeTracking.loadOrderIndicatorsIn(body, '/api/orders');
-                }
+                void loadCustomerOrdersTracking(body, customerModalOrders, data.customer || {});
                 body.querySelectorAll('.data-row').forEach(row => {
                     row.addEventListener('click', () => {
                         const idx = row.getAttribute('data-order-idx');
@@ -1994,6 +2064,7 @@
                     });
                 });
             } catch (err) {
+                if (body.dataset.customerId !== String(customerId)) return;
                 body.innerHTML = `<div class="state-msg error-msg">${escapeHtml(err.message || 'Failed to load orders')}</div>`;
             }
         }
@@ -2206,6 +2277,13 @@
                 const sel = e.target.closest('.cu-type-tag-select');
                 if (!sel || sel.disabled) return;
                 updateCustomerTypeTag(sel.dataset.customerId, sel.value);
+            });
+            // Start loading a customer's orders when the pointer reaches the button.
+            ['mouseover', 'focusin'].forEach(evt => {
+                document.getElementById('cu-content').addEventListener(evt, function(e) {
+                    const btn = e.target.closest && e.target.closest('.cu-view-orders-btn');
+                    if (btn && btn.dataset.customerId) fetchCustomerOrders(btn.dataset.customerId).catch(() => {});
+                });
             });
             document.getElementById('cu-content').addEventListener('click', function(e) {
                 if (e.target.closest('.cu-type-tag-select')) {

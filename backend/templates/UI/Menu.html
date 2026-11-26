@@ -168,6 +168,13 @@
         });
         var initial = getParam('view');
         setView(initial === 'collections' ? 'collections' : DEFAULT_VIEW, { skipUrl: true });
+        // Load Collections in the background so switching to it is instant.
+        setTimeout(function () {
+            var colFrame = document.getElementById('menu-collections-frame');
+            if (colFrame && !colFrame.getAttribute('src')) {
+                colFrame.src = colFrame.getAttribute('data-src') || '/app/Collections?embed=1';
+            }
+        }, 1500);
 
         var spinner = document.getElementById('menu-save-spinner');
         var menuSaving = false;

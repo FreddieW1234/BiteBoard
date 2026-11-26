@@ -3988,7 +3988,7 @@ def api_orders_indicators_batch():
     orders = [o for o in orders if isinstance(o, dict) and o.get("id") and o.get("name")][:100]
 
     history_future = None
-    if full:
+    if full and body.get("history", True) is not False:
         try:
             from scripts.order_history import get_all_histories_async  # type: ignore
             history_future = get_all_histories_async()
@@ -3998,7 +3998,7 @@ def api_orders_indicators_batch():
     def one(o):
         data = _office_order_cached(str(o["name"]))
         if data is None:
-            return str(o["id"]), None
+            return str(o["id"]), None, None  # office server unreachable for this one
         by_item = {}
         for view in data.get("items") or []:
             key = str(view.get("item") or view.get("item_id") or view.get("id") or "").strip()
