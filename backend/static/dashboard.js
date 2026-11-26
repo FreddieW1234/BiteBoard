@@ -48,8 +48,7 @@
 
     function chartCard(data) {
         const s = data.sales;
-        const body = s ? `<div class="chart-wrap" id="dash-chart"></div>
-            <div class="chart-foot">Takings per day, excluding VAT. Last month in total: ${gbp.format(s.totals.last_month.net)}.</div>`
+        const body = s ? `<div class="chart-wrap" id="dash-chart"></div>`
             : sectionError(data, 'sales');
         return `<div class="dash-card span-8"><h2>Sales &ndash; last 30 days <a class="more" href="/app/Orders">All orders</a></h2>${body}</div>`;
     }
