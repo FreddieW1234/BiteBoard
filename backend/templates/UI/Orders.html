@@ -363,17 +363,15 @@
             overflow: visible;
             word-break: break-word;
         }
+        /* Shipping, billing and payment side by side; wraps on narrow screens. */
         .order-addresses-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px 18px;
-            align-items: start;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 24px;
+            align-items: flex-start;
         }
-        .order-addresses-grid .order-info-field:nth-child(3) {
-            grid-column: 1 / -1;
-            max-width: 320px;
-        }
-        .order-addresses-grid .order-info-field { min-width: 0; }
+        .order-addresses-grid .order-info-field { flex: 0 1 300px; min-width: 200px; }
+        .order-addresses-grid .order-info-field:nth-child(3) { flex: 0 0 auto; min-width: 0; max-width: 320px; }
         .order-info-value.payment-value {
             white-space: nowrap;
             min-height: unset;
