@@ -71,7 +71,14 @@
         .search-box input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
         .count-pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 6px 14px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
         .toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
-        .ap-product-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: -6px 0 18px; }
+        .ap-product-actions { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: -6px 0 18px; }
+        /* Same look as the buttons on the Families page. */
+        .ap-product-actions .btn-primary,
+        .ap-product-actions .btn-ghost {
+            padding: 10px 20px; border-radius: 6px; font-weight: 500; font-size: 0.875rem; gap: 8px;
+        }
+        .ap-product-actions .btn-ghost { border-color: #d1d5db; }
+        .ap-product-actions .btn-ghost:hover { border-color: #9ca3af; }
         .btn-ghost { background: #fff; border: 1px solid #e5e7eb; color: #374151; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; transition: background-color 0.15s, border-color 0.15s; }
         .btn-ghost:hover { background: #f9fafb; border-color: #d1d5db; }
         .btn-ghost:disabled { opacity: 0.55; cursor: not-allowed; }
