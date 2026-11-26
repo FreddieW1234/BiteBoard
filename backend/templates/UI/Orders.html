@@ -94,6 +94,22 @@
         tr.details-row.open { display: table-row; }
         tr.details-row td { padding: 0 !important; background: #f8fafc !important; border-bottom: 1px solid #e5e7eb; }
         .details-inner { padding: 16px 18px 18px; }
+        /* An open order always fits the visible width: it never stretches the
+           table, and if the table itself has to scroll sideways on a narrow
+           screen the open order stays put on screen. */
+        .list-card-scroll { container-type: inline-size; }
+        tr.details-row .details-inner {
+            box-sizing: border-box; width: 100cqi; max-width: 100cqi;
+            position: sticky; left: 0;
+        }
+        /* Long email addresses wrap (at the @ and dots) instead of widening the table. */
+        td.order-col-email { overflow-wrap: anywhere; min-width: 110px; }
+        td.order-col-date { white-space: nowrap; }
+        @media (max-width: 1500px) {
+            th, td { padding-left: 10px; padding-right: 10px; }
+            th.order-col-total, td.order-col-total { padding-right: 16px; }
+            table { min-width: 760px; }
+        }
         .detail-section { margin-bottom: 16px; }
         .detail-section:last-child { margin-bottom: 0; }
         .detail-section h4 {
@@ -1261,10 +1277,10 @@
                 html += `<tr class="data-row" data-order-id="${escapeHtml(orderId)}">
                     <td><strong>${escapeHtml(o.name)}</strong>${o.cancelled_at ? '<span class="order-cancelled-pill">Cancelled</span>' : ''}<i class="fas fa-chevron-down order-chevron"></i></td>
                     <td class="order-status-indicator-cell"><span class="order-status-indicator-slot" data-order-id="${escapeHtml(orderId)}">${indicatorHtml}</span></td>
-                    <td>${escapeHtml(formatDate(o.processed_at))}</td>
+                    <td class="order-col-date">${escapeHtml(formatDate(o.processed_at))}</td>
                     <td>${escapeHtml(o.company || '—')}</td>
                     <td>${escapeHtml(o.customer_name || '—')}</td>
-                    <td>${escapeHtml(o.customer_email || '—')}</td>
+                    <td class="order-col-email">${escapeHtml(o.customer_email || '—').replace(/@/g, '@<wbr>').replace(/\./g, '<wbr>.')}</td>
                     <td>${escapeHtml(o.landline_phone || '—')}</td>
                     <td>${escapeHtml(o.mobile_number || '—')}</td>
                     <td>${escapeHtml(o.dispatch_display || '—')}</td>
