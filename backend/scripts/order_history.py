@@ -98,10 +98,18 @@ def _append(key: str, event: dict) -> None:
             current = get_snapshot_item(KIND, key) or {}
             events = list((current.get("payload") or {}).get("events") or [])
             events.append(event)
-            put_snapshot_item(KIND, key, {"order": f"#{key}", "events": events[-MAX_EVENTS:]},
+            events = events[-MAX_EVENTS:]
+            put_snapshot_item(KIND, key, {"order": f"#{key}", "events": events},
                               updated_by=event.get("who") or "")
+        by_order = _ALL["by_order"]
+        if by_order is not None:
+            by_order[key] = _newest_first(events)  # keep the Orders-list copy current
     except Exception as exc:
         log.warning("Order history not saved for #%s (%s): %s", key, event.get("action"), exc)
+
+
+def _newest_first(events: list) -> list[dict]:
+    return sorted(events, key=lambda e: e.get("at") or "", reverse=True)
 
 
 def get_history(order_name: str) -> list[dict]:
@@ -109,9 +117,38 @@ def get_history(order_name: str) -> list[dict]:
     from scripts.office_api import get_snapshot_item  # type: ignore
 
     current = get_snapshot_item(KIND, _key(order_name)) or {}
-    events = list((current.get("payload") or {}).get("events") or [])
-    events.sort(key=lambda e: e.get("at") or "", reverse=True)
-    return events
+    return _newest_first(list((current.get("payload") or {}).get("events") or []))
+
+
+# ---- Every order's history at once (the Orders list loads it up front) ----
+ALL_TTL = 120  # seconds; this process's own changes are added straight away
+_ALL: dict = {"at": 0.0, "by_order": None}
+_ALL_FETCH_LOCK = threading.Lock()
+_ALL_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="order-history-all")
+
+
+def get_all_histories() -> dict[str, list]:
+    """{order name without '#': events newest first} - one office request, cached."""
+    import time
+
+    with _ALL_FETCH_LOCK:  # one fetch at a time; others wait and reuse it
+        if _ALL["by_order"] is not None and time.time() - _ALL["at"] < ALL_TTL:
+            return _ALL["by_order"]
+        from scripts.office_api import _SNAPSHOT_BULK_READ_TIMEOUT, get_snapshot_items  # type: ignore
+
+        items = get_snapshot_items(KIND, include_payload=True, timeout=_SNAPSHOT_BULK_READ_TIMEOUT)
+        by_order = {}
+        for it in items or []:
+            key = str(it.get("item_id") or "").strip()
+            if key:
+                by_order[key] = _newest_first(list((it.get("payload") or {}).get("events") or []))
+        _ALL.update(at=time.time(), by_order=by_order)
+        return by_order
+
+
+def get_all_histories_async():
+    """A Future for get_all_histories(), so callers can wait a limited time."""
+    return _ALL_POOL.submit(get_all_histories)
 
 
 def note_changes(old: str, new: str, limit: int = 12) -> str:

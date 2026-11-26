@@ -1439,6 +1439,9 @@
         }
 
         let trackingPrefetchToken = 0;
+        // Filled by the progress batch on page load (like order tracking), so
+        // "View change history" opens straight away.
+        let orderHistoryCache = {};
         const INDICATOR_STORE_KEY = 'bb_order_indicators_v1';
         const freshIndicatorIds = new Set();   // refreshed from the server this visit
 
@@ -1496,6 +1499,7 @@
                             OfficeTracking.primeOrderTracking(id, payload, '/api/orders', 'staff');
                         });
                     }
+                    Object.entries(data.history || {}).forEach(([id, h]) => { orderHistoryCache[id] = h; });
                     let changed = false;
                     Object.entries(data.results || {}).forEach(([id, items]) => {
                         freshIndicatorIds.add(id);
@@ -1556,6 +1560,7 @@
                 if (window.OfficeTracking && typeof OfficeTracking.clearOrderTrackingCache === 'function') {
                     OfficeTracking.clearOrderTrackingCache();
                 }
+                orderHistoryCache = {};
                 const filtered = filterOrders(document.getElementById('search-input').value);
                 renderOrdersView(filtered);
                 void prefetchTrackingForOrders(filtered);
@@ -1616,39 +1621,57 @@
             return modal;
         }
 
+        function renderOrderHistoryHtml(data) {
+            const items = data.items || {};
+            let html = '<ol class="order-history-list">';
+            (data.events || []).forEach(ev => {
+                const product = ev.item ? (items[ev.item] || ev.item) : '';
+                html += `<li class="order-history-event">
+                    <div class="order-history-meta">${escapeHtml(historyWhen(ev.at))} · ${escapeHtml(ev.who || '')}</div>
+                    <div class="order-history-action">${escapeHtml(ev.action || '')}${product ? ` <span class="order-history-item">${escapeHtml(product)}</span>` : ''}</div>
+                    ${ev.detail ? `<div class="order-history-detail">${escapeHtml(ev.detail)}</div>` : ''}
+                </li>`;
+            });
+            if (data.placed_at) {
+                html += `<li class="order-history-event">
+                    <div class="order-history-meta">${escapeHtml(historyWhen(data.placed_at))} · Shopify</div>
+                    <div class="order-history-action">Order placed</div>
+                </li>`;
+            }
+            html += '</ol>';
+            if (!(data.events || []).length) {
+                html = '<p class="order-history-empty">No changes recorded yet. Changes made in BiteBoard from now on will show here.</p>' + html;
+            }
+            return html;
+        }
+
         async function openOrderHistory(orderId, orderName) {
             const modal = ensureHistoryModal();
             const body = modal.querySelector('.order-history-body');
             modal.querySelector('#order-history-title').textContent = `Change history — ${orderName || ''}`;
-            body.innerHTML = '<p class="order-history-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</p>';
+            const id = String(orderId);
+            const cached = orderHistoryCache[id];
+            let shown = '';
+            if (cached) {
+                shown = renderOrderHistoryHtml(cached);
+                body.innerHTML = shown;
+            } else {
+                body.innerHTML = '<p class="order-history-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</p>';
+            }
+            body.dataset.orderId = id;
             modal.hidden = false;
+            // Check for anything newer (changes made since the page loaded).
             try {
                 const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/history`, { credentials: 'same-origin' });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'Could not load the history');
-                const items = data.items || {};
-                let html = '<ol class="order-history-list">';
-                (data.events || []).forEach(ev => {
-                    const product = ev.item ? (items[ev.item] || ev.item) : '';
-                    html += `<li class="order-history-event">
-                        <div class="order-history-meta">${escapeHtml(historyWhen(ev.at))} · ${escapeHtml(ev.who || '')}</div>
-                        <div class="order-history-action">${escapeHtml(ev.action || '')}${product ? ` <span class="order-history-item">${escapeHtml(product)}</span>` : ''}</div>
-                        ${ev.detail ? `<div class="order-history-detail">${escapeHtml(ev.detail)}</div>` : ''}
-                    </li>`;
-                });
-                if (data.placed_at) {
-                    html += `<li class="order-history-event">
-                        <div class="order-history-meta">${escapeHtml(historyWhen(data.placed_at))} · Shopify</div>
-                        <div class="order-history-action">Order placed</div>
-                    </li>`;
-                }
-                html += '</ol>';
-                if (!(data.events || []).length) {
-                    html = '<p class="order-history-empty">No changes recorded yet. Changes made in BiteBoard from now on will show here.</p>' + html;
-                }
-                body.innerHTML = html;
+                orderHistoryCache[id] = data;
+                const html = renderOrderHistoryHtml(data);
+                if (body.dataset.orderId === id && !modal.hidden && html !== shown) body.innerHTML = html;
             } catch (err) {
-                body.innerHTML = `<p class="order-history-empty">${escapeHtml(err.message)}</p>`;
+                if (!cached && body.dataset.orderId === id) {
+                    body.innerHTML = `<p class="order-history-empty">${escapeHtml(err.message)}</p>`;
+                }
             }
         }
 

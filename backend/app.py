@@ -3974,6 +3974,8 @@ def api_orders_indicators_batch():
     same as GET /api/orders/<id>/tracking) under "tracking", so the page can
     show an order's tracking the moment its dropdown opens. Orders with a line
     that has no tracking yet are left out - opening them sets it up as before.
+    "full" also adds "history" (the same as GET /api/orders/<id>/history) so
+    "View change history" opens straight away.
     """
     if not is_staff_authenticated():
         return jsonify({"success": False, "error": "Staff login required"}), 403
@@ -3984,6 +3986,14 @@ def api_orders_indicators_batch():
     full = bool(body.get("full"))
     orders = body.get("orders") or []
     orders = [o for o in orders if isinstance(o, dict) and o.get("id") and o.get("name")][:100]
+
+    history_future = None
+    if full:
+        try:
+            from scripts.order_history import get_all_histories_async  # type: ignore
+            history_future = get_all_histories_async()
+        except Exception:
+            history_future = None
 
     def one(o):
         data = _office_order_cached(str(o["name"]))
@@ -4021,6 +4031,28 @@ def api_orders_indicators_batch():
     payload = {"success": True, "results": results}
     if full:
         payload["tracking"] = tracking_out
+        history_out = {}
+        try:
+            # Don't hold the list up for it: if the office server is slow the
+            # page just loads an order's history when it's asked for.
+            all_history = history_future.result(timeout=6) if history_future else None
+        except Exception:
+            all_history = None
+        if all_history is not None:
+            for o in orders:
+                items = {}
+                for line in o.get("lines") or []:
+                    ln = line.get("line_number")
+                    if ln is None:
+                        continue
+                    items[line.get("office_item_id") or item_key(ln, line.get("title") or "")] = line.get("title") or ""
+                history_out[str(o["id"])] = {
+                    "order": str(o["name"]),
+                    "placed_at": o.get("processed_at") or "",
+                    "items": items,
+                    "events": all_history.get(str(o["name"]).strip().lstrip("#"), []),
+                }
+            payload["history"] = history_out
     return jsonify(payload)
 
 
