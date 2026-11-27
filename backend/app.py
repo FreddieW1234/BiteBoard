@@ -3706,28 +3706,32 @@ def api_order_set_customer(order_id):
         customer = ((result.get("order") or {}).get("customer")) or {}
         new_email = (customer.get("email") or "").strip()
 
-        # Make the order look like theirs: their email and default (shipping) address.
+        # Make the order look like theirs: their email. The shipping address the
+        # order was placed with is kept (often a drop-ship address) unless staff
+        # tick "use their saved address".
         # Shopify's API cannot change an order's billing address - staff do that in Shopify.
+        use_saved_address = bool(data.get("use_saved_address"))
         notes = []
         address_updated = False
         try:
-            cust = (_gql("""query($id: ID!) { customer(id: $id) { defaultAddress {
-                        firstName lastName company address1 address2 city provinceCode zip countryCodeV2 phone } } }""",
-                         {"id": f"gid://shopify/Customer/{cid}"}).get("customer") or {})
-            addr = cust.get("defaultAddress") or {}
             update = {"id": order_gid}
             if new_email:
                 update["email"] = new_email
-            if addr.get("address1"):
-                update["shippingAddress"] = {k: v for k, v in {
-                    "firstName": addr.get("firstName"), "lastName": addr.get("lastName"),
-                    "company": addr.get("company"), "address1": addr.get("address1"),
-                    "address2": addr.get("address2"), "city": addr.get("city"),
-                    "provinceCode": addr.get("provinceCode"), "zip": addr.get("zip"),
-                    "countryCode": addr.get("countryCodeV2"), "phone": addr.get("phone"),
-                }.items() if v}
-            else:
-                notes.append("They have no saved address, so the shipping address was left as it was.")
+            if use_saved_address:
+                cust = (_gql("""query($id: ID!) { customer(id: $id) { defaultAddress {
+                            firstName lastName company address1 address2 city provinceCode zip countryCodeV2 phone } } }""",
+                             {"id": f"gid://shopify/Customer/{cid}"}).get("customer") or {})
+                addr = cust.get("defaultAddress") or {}
+                if addr.get("address1"):
+                    update["shippingAddress"] = {k: v for k, v in {
+                        "firstName": addr.get("firstName"), "lastName": addr.get("lastName"),
+                        "company": addr.get("company"), "address1": addr.get("address1"),
+                        "address2": addr.get("address2"), "city": addr.get("city"),
+                        "provinceCode": addr.get("provinceCode"), "zip": addr.get("zip"),
+                        "countryCode": addr.get("countryCodeV2"), "phone": addr.get("phone"),
+                    }.items() if v}
+                else:
+                    notes.append("They have no saved address, so the shipping address was left as it was.")
             if len(update) > 1:
                 upd = _gql("""mutation($input: OrderInput!) { orderUpdate(input: $input) {
                                 userErrors { field message } } }""", {"input": update}).get("orderUpdate") or {}

@@ -985,6 +985,10 @@
                         <input type="checkbox" class="office-customer-updates-cb" checked>
                         <span class="office-customer-updates-text"></span>
                     </label>
+                    <label class="office-customer-updates office-customer-address">
+                        <input type="checkbox" class="office-customer-address-cb">
+                        <span>Replace the shipping address with their saved address</span>
+                    </label>
                     <p class="office-notify-msg err office-customer-error" hidden></p>
                     <div class="office-changes-modal-actions">
                         <button type="button" class="office-btn office-btn-approve office-customer-confirm-btn">Move order</button>
@@ -1086,7 +1090,8 @@
         modal.querySelector('.office-customer-confirm-lead').innerHTML =
             `Move this order to <strong>${escapeHtml(c.name || email)}</strong>${email ? ` (${escapeHtml(email)})` : ''}? ` +
             'It will show in their account on the website as if they placed it, and disappear from the current customer\'s. ' +
-            'Their saved address becomes the shipping address.';
+            'The shipping address stays as it was ordered unless you tick the box below.';
+        modal.querySelector('.office-customer-address-cb').checked = false;
         const updates = modal.querySelector('.office-customer-updates');
         const cb = modal.querySelector('.office-customer-updates-cb');
         updates.hidden = !email;
@@ -1105,6 +1110,7 @@
         const confirmBtn = modal.querySelector('.office-customer-confirm-btn');
         const err = modal.querySelector('.office-customer-error');
         const sendUpdates = modal.querySelector('.office-customer-updates-cb').checked && !!(c.email || '').trim();
+        const useSavedAddress = modal.querySelector('.office-customer-address-cb').checked;
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Moving…';
         try {
@@ -1112,7 +1118,7 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ customer_id: String(c.id) }),
+                body: JSON.stringify({ customer_id: String(c.id), use_saved_address: useSavedAddress }),
             });
             const data = await resp.json().catch(() => ({}));
             if (!resp.ok || !data.success) throw new Error(data.error || ('Request failed: ' + resp.status));
