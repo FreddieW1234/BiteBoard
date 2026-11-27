@@ -4918,6 +4918,55 @@ def apply_product_seo(product_id, product_data, current_handle=None, shopify_dom
         return {"success": False}
 
 
+
+def _product_created_since(title, since_ts, headers):
+    """A product with exactly this title created at/after since_ts (epoch secs), or None."""
+    from urllib.parse import quote
+    if not title:
+        return None
+    since_iso = datetime.fromtimestamp(since_ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    try:
+        resp = requests.get(
+            f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json"
+            f"?title={quote(title)}&created_at_min={quote(since_iso)}&limit=10",
+            headers=headers, timeout=20,
+        )
+        if resp.status_code != 200:
+            return None
+        for p in (resp.json() or {}).get("products") or []:
+            created = str(p.get("created_at") or "")
+            try:
+                created_ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                continue
+            if p.get("title") == title and created_ts >= since_ts:
+                print(f"[ok] Found the product this save created: '{title}' (ID: {p.get('id')})", flush=True)
+                return p
+    except Exception as e:
+        print(f"[warn] Could not look for the newly created product: {e}", flush=True)
+    return None
+
+
+def _retry_create_once(final_url, headers, payload):
+    """POST the create once more straight to where Shopify redirected us
+    (no redirects followed, so it can't turn into a GET). The product, or None."""
+    target = str(final_url or "").split("?")[0]
+    if not target.endswith("/products.json"):
+        return None
+    try:
+        time.sleep(1.0)
+        resp = requests.post(target, headers=headers, json=payload, allow_redirects=False, timeout=30)
+        body = resp.json() if resp.status_code in (200, 201) else {}
+        product = (body or {}).get("product")
+        if isinstance(product, dict) and product.get("id"):
+            print(f"[ok] Create retried at {target}: product {product.get('id')}", flush=True)
+            return product
+        print(f"[warn] Create retry at {target} returned {resp.status_code}", flush=True)
+    except Exception as e:
+        print(f"[warn] Create retry failed: {e}", flush=True)
+    return None
+
+
 def create_product(product_data):
     """
     Create a new product in Shopify using the Admin API, or update existing product if product_id is provided
@@ -5067,6 +5116,7 @@ def create_product(product_data):
         time.sleep(2.0)
         if did_parent_fetch:
             time.sleep(2.0)  # extra gap after parent product + metafields (2+ API calls)
+        create_started = time.time() - 10  # small allowance for clock differences
         # Extract the actual Shopify domain from redirects (if any)
         actual_shopify_domain = None
         response = None
@@ -5183,74 +5233,19 @@ def create_product(product_data):
                     if len(products_list) > 10:
                         print(f"   ... and {len(products_list) - 10} more products", flush=True)
                     
-                    # Try to find the product that matches the title we just created
-                    matching_product = None
-                    if expected_title:
-                        for p in products_list:
-                            if p.get("title") == expected_title:
-                                matching_product = p
-                                print(f"[ok] Found matching product by title: '{expected_title}' (ID: {p.get('id')})", flush=True)
-                                break
-                    
-                    # If no match found, try to fetch the product by making a separate API call
-                    if not matching_product and expected_title:
-                        print(f"[scan] Product not found in response array. Attempting to fetch product by title...", flush=True)
-                        try:
-                            # Try to get the product by searching for it by title
-                            from urllib.parse import quote
-                            search_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json?title={quote(expected_title)}"
-                            search_response = requests.get(search_url, headers=headers)
-                            if search_response.status_code == 200:
-                                search_result = search_response.json()
-                                if "products" in search_result and search_result["products"]:
-                                    for p in search_result["products"]:
-                                        if p.get("title") == expected_title:
-                                            matching_product = p
-                                            print(f"[ok] Found product via search: '{expected_title}' (ID: {p.get('id')})", flush=True)
-                                            break
-                        except Exception as e:
-                            print(f"[warn] Error searching for product: {str(e)}", flush=True)
-                        
-                        # If still not found, try getting the most recently created product (within last minute)
-                        if not matching_product:
-                            print(f"[scan] Trying to find most recently created product...", flush=True)
-                            try:
-                                from datetime import datetime, timedelta
-                                now = datetime.utcnow()
-                                one_minute_ago = now - timedelta(minutes=1)
-                                
-                                # Get products sorted by created_at descending, limit to 5
-                                recent_url = f"https://{STORE_DOMAIN}/admin/api/{API_VERSION}/products.json?limit=5&order=created_at desc"
-                                recent_response = requests.get(recent_url, headers=headers)
-                                if recent_response.status_code == 200:
-                                    recent_result = recent_response.json()
-                                    if "products" in recent_result and recent_result["products"]:
-                                        for p in recent_result["products"]:
-                                            created_str = p.get("created_at", "")
-                                            if created_str:
-                                                try:
-                                                    created_at = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-                                                    if created_at.replace(tzinfo=None) >= one_minute_ago:
-                                                        if p.get("title") == expected_title:
-                                                            matching_product = p
-                                                            print(f"[ok] Found recently created product: '{expected_title}' (ID: {p.get('id')})", flush=True)
-                                                            break
-                                                except:
-                                                    pass
-                            except Exception as e:
-                                print(f"[warn] Error finding recent product: {str(e)}", flush=True)
-                    
-                    # If still no match found, this is an error - Shopify didn't create our product
-                    if not matching_product:
-                        error_msg = f"Failed to create product: Shopify API returned a list of existing products instead of the newly created product. Expected title: '{expected_title}'. The product was not found in the response or via search. This suggests the product was not created. Please check Shopify API logs or try again."
-                        print(f"[error] {error_msg}", flush=True)
-                        print(f"[scan] Full response (first 1000 chars): {str(result)[:1000]}", flush=True)
-                        return {
-                            "success": False,
-                            "error": error_msg
-                        }
-                    
-                    product = matching_product
+                    # A list here means a redirect turned the create into a plain
+                    # "list products" request, so nothing was created. Never adopt an
+                    # existing product by title: a Create-from-Parent child has its
+                    # parent's title, and adopting it overwrote the parent with the
+                    # child's details (Choc Chip Cookie, 27 Nov 2026).
+                    product = _product_created_since(expected_title, create_started, headers)
+                    if not product:
+                        product = _retry_create_once(getattr(response, "url", "") or url, headers, payload)
+                    if not product:
+                        error_msg = ("Shopify did not create the product (nothing was changed). "
+                                     "Please try saving again.")
+                        print(f"[error] {error_msg} Response held {len(products_list)} existing product(s).", flush=True)
+                        return {"success": False, "error": error_msg}
                 else:
                     # For updates, we might get a products array - try to find the updated product
                     if products_list and len(products_list) > 0:
